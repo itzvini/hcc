@@ -59,7 +59,7 @@ header{padding:70px 0 50px;text-align:center;position:relative}
   display:inline-block;font-family:'Space Mono',monospace;font-weight:700;
   font-size:.72rem;letter-spacing:.32em;text-transform:uppercase;
   background:var(--ink);color:var(--lemon);padding:8px 16px;border-radius:30px;
-  margin-bottom:22px;transform:rotate(-2deg);
+  margin-bottom:22px;
 }
 h1{
   font-size:clamp(2.6rem,8vw,5rem);font-weight:700;line-height:.96;letter-spacing:-.02em;
@@ -103,8 +103,7 @@ p+p{margin-top:14px}
   background:var(--cream);border:3px solid var(--ink);border-radius:26px;
   padding:30px 28px;box-shadow:8px 8px 0 var(--ink);
 }
-.card.tilt{transform:rotate(-1deg)}
-.card.tilt2{transform:rotate(1deg)}
+.card.tilt,.card.tilt2{transform:none}
 
 /* "what is it" pills */
 .perks{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:26px}
@@ -183,7 +182,7 @@ footer{text-align:center;padding:56px 0 70px}
 .footer-creature .mouth{position:absolute;top:60%;left:50%;transform:translateX(-50%);width:24px;height:13px;border-bottom:4px solid var(--ink);border-radius:0 0 14px 14px}
 footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
 .stamp{font-family:'Space Mono',monospace;font-size:.72rem;letter-spacing:.2em;text-transform:uppercase;color:#9a8db5;margin-top:24px}
-.draft{display:inline-block;margin-top:8px;font-family:'Space Mono',monospace;font-size:.66rem;letter-spacing:.18em;background:var(--bubble);border:2px solid var(--ink);padding:5px 12px;border-radius:20px;transform:rotate(-2deg)}
+.draft{display:inline-block;margin-top:8px;font-family:'Space Mono',monospace;font-size:.66rem;letter-spacing:.18em;background:var(--bubble);border:2px solid var(--ink);padding:5px 12px;border-radius:20px}
 
 .divider{text-align:center;font-size:1.4rem;letter-spacing:.5em;color:var(--grape);padding:8px 0}
 @media(max-width:560px){
