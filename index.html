@@ -91,6 +91,23 @@ h1 .pop{
 .c-grape{background:var(--grape)}
 .c-lemon{background:var(--lemon)}
 
+/* page tabs */
+.page-tabs{position:sticky;top:0;z-index:20;padding:12px 0 14px;background:rgba(253,242,231,.88);backdrop-filter:blur(12px);border-top:1px solid rgba(20,8,40,.06);border-bottom:1px solid rgba(20,8,40,.08)}
+.tab-list{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+.page-tab{
+  min-width:132px;min-height:44px;border:2.5px solid var(--ink);border-radius:999px;background:#fff;color:var(--ink);
+  font-family:'Space Mono',monospace;font-weight:700;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;
+  box-shadow:4px 4px 0 var(--shadow);cursor:pointer;transition:transform .15s ease,box-shadow .15s ease,background .15s ease,color .15s ease;
+}
+.page-tab:hover{transform:translate(-1px,-1px);box-shadow:6px 6px 0 var(--shadow)}
+.page-tab.is-active{background:var(--ink);color:var(--lemon);box-shadow:4px 4px 0 var(--grape)}
+.tab-panel[hidden]{display:none}
+.roadmap-panel{padding:18px 0 10px}
+.roadmap-card{margin:24px auto 44px;text-align:center;position:relative;overflow:hidden}
+.roadmap-card h2{font-size:clamp(2rem,5.5vw,3.2rem);margin-bottom:12px}
+.roadmap-card .lead{margin:0 auto}
+.roadmap-badge{display:inline-flex;align-items:center;justify-content:center;width:74px;height:74px;border-radius:50%;border:4px solid var(--ink);background:var(--lemon);box-shadow:6px 6px 0 var(--shadow);font-size:2rem;margin-bottom:18px}
+
 /* SECTIONS */
 section{padding:40px 0}
 .eyebrow{font-family:'Space Mono',monospace;font-weight:700;font-size:.74rem;letter-spacing:.24em;text-transform:uppercase;color:var(--grape-deep);margin-bottom:10px}
@@ -214,6 +231,15 @@ footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
     </div>
   </div>
 </header>
+
+<nav class="page-tabs" aria-label="Main page tabs">
+  <div class="wrap tab-list" role="tablist" aria-label="Highrise Creature Club pages">
+    <button class="page-tab is-active" type="button" role="tab" id="tab-council" aria-selected="true" aria-controls="panel-council" data-tab="council">Council</button>
+    <button class="page-tab" type="button" role="tab" id="tab-roadmap" aria-selected="false" aria-controls="panel-roadmap" data-tab="roadmap">Roadmap</button>
+  </div>
+</nav>
+
+<main id="panel-council" class="tab-panel is-active" role="tabpanel" aria-labelledby="tab-council">
 
 <section class="wrap">
   <div class="eyebrow">Start here</div>
@@ -383,6 +409,19 @@ footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
   <details><summary>What does the Council actually start with?</summary><p>It starts advisory-leaning, and its "Decides" power grows release by release as it proves out. Think training wheels that come off over time, not everything on day one.</p></details>
 </section>
 
+</main>
+
+<main id="panel-roadmap" class="tab-panel roadmap-panel" role="tabpanel" aria-labelledby="tab-roadmap" hidden>
+  <section class="wrap">
+    <div class="card roadmap-card">
+      <div class="roadmap-badge" aria-hidden="true">🚧</div>
+      <div class="eyebrow">Roadmap</div>
+      <h2>Roadmap is under construction</h2>
+      <p class="lead">We're still shaping the next public version. Check back soon for milestones, drops, and council priorities.</p>
+    </div>
+  </section>
+</main>
+
 <footer>
   <div class="wrap">
     <div class="footer-creature"><div class="eyes"><span></span><span></span></div><div class="mouth"></div></div>
@@ -392,6 +431,37 @@ footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
     <div class="draft">Draft v1 — for community discussion</div>
   </div>
 </footer>
+
+<script>
+const tabButtons = document.querySelectorAll('[data-tab]');
+const tabPanels = document.querySelectorAll('.tab-panel');
+
+function selectTab(tabName, updateHash = true) {
+  tabButtons.forEach((button) => {
+    const isActive = button.dataset.tab === tabName;
+    button.classList.toggle('is-active', isActive);
+    button.setAttribute('aria-selected', String(isActive));
+  });
+
+  tabPanels.forEach((panel) => {
+    const isActive = panel.id === `panel-${tabName}`;
+    panel.classList.toggle('is-active', isActive);
+    panel.hidden = !isActive;
+  });
+
+  if (updateHash) {
+    history.replaceState(null, '', `#${tabName}`);
+  }
+}
+
+tabButtons.forEach((button) => {
+  button.addEventListener('click', () => selectTab(button.dataset.tab));
+});
+
+if (location.hash === '#roadmap') {
+  selectTab('roadmap', false);
+}
+</script>
 
 </body>
 </html>
