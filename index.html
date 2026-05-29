@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Highrise Creature Club — The Council</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#15102a;
+  --void:#0d0820;
+  --slime:#7df9a8;
+  --slime-deep:#34d17f;
+  --bubble:#ff8ad1;
+  --bubble-deep:#ff4fb0;
+  --grape:#9d7bff;
+  --grape-deep:#6c3fff;
+  --lemon:#ffe14d;
+  --cream:#fff7ef;
+  --paper:#fdf2e7;
+  --shadow:rgba(20,8,40,.18);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Fredoka',system-ui,sans-serif;
+  background:var(--paper);
+  color:var(--ink);
+  overflow-x:hidden;
+  line-height:1.5;
+}
+/* playful dotted backdrop */
+body::before{
+  content:"";position:fixed;inset:0;z-index:-2;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(157,123,255,.16), transparent 40%),
+    radial-gradient(circle at 88% 72%, rgba(255,138,209,.16), transparent 42%),
+    radial-gradient(circle at 50% 110%, rgba(125,249,168,.18), transparent 45%);
+}
+body::after{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background-image:radial-gradient(rgba(20,8,40,.05) 1.4px, transparent 1.4px);
+  background-size:22px 22px;
+}
+.wrap{max-width:920px;margin:0 auto;padding:0 22px}
+
+/* floating creature blobs */
+.blob{position:fixed;border-radius:50% 50% 48% 52%/55% 55% 45% 45%;filter:blur(.3px);opacity:.5;z-index:-1;animation:float 9s ease-in-out infinite}
+.blob.b1{width:120px;height:120px;background:var(--slime);top:14%;left:-40px;animation-delay:0s}
+.blob.b2{width:90px;height:90px;background:var(--bubble);top:42%;right:-30px;animation-delay:1.5s}
+.blob.b3{width:70px;height:70px;background:var(--grape);top:74%;left:4%;animation-delay:3s}
+@keyframes float{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-26px) rotate(4deg)}}
+
+/* HERO */
+header{padding:70px 0 50px;text-align:center;position:relative}
+.kicker{
+  display:inline-block;font-family:'Space Mono',monospace;font-weight:700;
+  font-size:.72rem;letter-spacing:.32em;text-transform:uppercase;
+  background:var(--ink);color:var(--lemon);padding:8px 16px;border-radius:30px;
+  margin-bottom:22px;transform:rotate(-2deg);
+}
+h1{
+  font-size:clamp(2.6rem,8vw,5rem);font-weight:700;line-height:.96;letter-spacing:-.02em;
+  margin-bottom:8px;
+}
+h1 .pop{
+  display:inline-block;
+  background:linear-gradient(120deg,var(--bubble-deep),var(--grape-deep) 50%,var(--slime-deep));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.sub{font-size:clamp(1.05rem,2.4vw,1.4rem);max-width:600px;margin:18px auto 0;color:#473a63;font-weight:400}
+.mascot-row{display:flex;justify-content:center;gap:14px;margin:38px 0 0;flex-wrap:wrap}
+.creature{
+  width:84px;height:84px;border-radius:50% 50% 46% 54%/58% 58% 42% 42%;
+  position:relative;box-shadow:0 10px 0 var(--shadow);
+  display:flex;align-items:center;justify-content:center;
+  animation:bob 3s ease-in-out infinite;
+}
+.creature:nth-child(2){animation-delay:.3s}
+.creature:nth-child(3){animation-delay:.6s}
+.creature:nth-child(4){animation-delay:.9s}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+.creature .eyes{position:absolute;top:34%;width:100%;display:flex;justify-content:center;gap:14px}
+.creature .eyes span{width:11px;height:14px;background:var(--ink);border-radius:50%}
+.creature .eyes span::after{content:"";position:absolute;width:4px;height:4px;background:#fff;border-radius:50%;margin:2px 0 0 2px}
+.creature .mouth{position:absolute;top:58%;width:16px;height:9px;border-bottom:3px solid var(--ink);border-radius:0 0 12px 12px}
+.c-slime{background:var(--slime)}
+.c-bubble{background:var(--bubble)}
+.c-grape{background:var(--grape)}
+.c-lemon{background:var(--lemon)}
+
+/* SECTIONS */
+section{padding:40px 0}
+.eyebrow{font-family:'Space Mono',monospace;font-weight:700;font-size:.74rem;letter-spacing:.24em;text-transform:uppercase;color:var(--grape-deep);margin-bottom:10px}
+h2{font-size:clamp(1.7rem,4.5vw,2.6rem);font-weight:700;letter-spacing:-.01em;line-height:1.05;margin-bottom:14px}
+.lead{font-size:1.12rem;color:#473a63;max-width:660px}
+p+p{margin-top:14px}
+
+/* card */
+.card{
+  background:var(--cream);border:3px solid var(--ink);border-radius:26px;
+  padding:30px 28px;box-shadow:8px 8px 0 var(--ink);
+}
+.card.tilt{transform:rotate(-1deg)}
+.card.tilt2{transform:rotate(1deg)}
+
+/* "what is it" pills */
+.perks{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:26px}
+.perk{
+  background:#fff;border:2.5px solid var(--ink);border-radius:20px;padding:20px;
+  box-shadow:5px 5px 0 var(--shadow);transition:transform .15s ease, box-shadow .15s ease;
+}
+.perk:hover{transform:translate(-2px,-2px);box-shadow:8px 8px 0 var(--shadow)}
+.perk .ico{font-size:1.7rem;display:block;margin-bottom:8px}
+.perk h4{font-size:1.05rem;font-weight:600;margin-bottom:4px}
+.perk p{font-size:.92rem;color:#5a4d75}
+
+/* timeline */
+.timeline{margin-top:30px;position:relative;padding-left:34px}
+.timeline::before{content:"";position:absolute;left:9px;top:8px;bottom:8px;width:4px;background:repeating-linear-gradient(var(--grape) 0 10px,transparent 10px 18px);border-radius:4px}
+.tnode{position:relative;margin-bottom:26px}
+.tnode::before{content:"";position:absolute;left:-34px;top:2px;width:22px;height:22px;border-radius:50%;border:4px solid var(--ink);background:var(--lemon)}
+.tnode.now::before{background:var(--slime);animation:pulse 1.8s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(52,209,127,.5)}50%{box-shadow:0 0 0 8px rgba(52,209,127,0)}}
+.tyear{font-family:'Space Mono',monospace;font-weight:700;font-size:.8rem;color:var(--grape-deep);letter-spacing:.1em}
+.tnode h4{font-size:1.2rem;font-weight:600;margin:2px 0 5px}
+.tnode p{font-size:.98rem;color:#574a73}
+
+/* honesty box */
+.honest{background:var(--ink);color:var(--cream);border-radius:26px;padding:34px 30px;position:relative;overflow:hidden}
+.honest::after{content:"🫧";position:absolute;font-size:8rem;right:-10px;bottom:-30px;opacity:.12}
+.honest h2{color:var(--lemon)}
+.honest p{color:#e6ddf2;font-size:1.06rem}
+
+/* council grid */
+.council-vis{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin:28px 0}
+.seat{
+  flex:1 1 180px;max-width:230px;min-width:0;padding:16px 14px;border-radius:18px;border:3px solid var(--ink);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-family:'Space Mono',monospace;font-weight:700;font-size:.66rem;letter-spacing:.04em;text-align:center;
+  box-shadow:4px 4px 0 var(--ink);line-height:1.25;overflow-wrap:anywhere;
+}
+.seat.elected{background:var(--slime)}
+.seat.appointed{background:var(--lemon)}
+.seat .big{font-size:1.7rem;font-family:'Fredoka';display:block;margin-bottom:2px}
+.seat .seat-label{display:block;max-width:100%;word-break:normal;overflow-wrap:anywhere}
+.legend{display:flex;gap:20px;justify-content:center;flex-wrap:wrap;margin-top:6px;font-size:.9rem;font-weight:500}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.dot{width:15px;height:15px;border-radius:5px;border:2px solid var(--ink)}
+.dot.e{background:var(--slime)}.dot.a{background:var(--lemon)}
+
+/* rights table */
+.rights{margin-top:26px;display:grid;gap:10px}
+.right-row{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;background:#fff;border:2.5px solid var(--ink);border-radius:16px;padding:14px 18px;box-shadow:4px 4px 0 var(--shadow)}
+.right-row span:first-child{font-weight:500;font-size:.98rem}
+.tag{font-family:'Space Mono',monospace;font-weight:700;font-size:.66rem;letter-spacing:.08em;padding:6px 11px;border-radius:20px;white-space:nowrap;border:2px solid var(--ink)}
+.tag.decides{background:var(--slime);color:var(--ink)}
+.tag.advises{background:var(--bubble);color:var(--ink)}
+.tag.informed{background:#fff;color:var(--ink)}
+
+/* facts strip */
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-top:26px}
+.fact{background:#fff;border:2.5px solid var(--ink);border-radius:18px;padding:18px;text-align:center;box-shadow:5px 5px 0 var(--shadow)}
+.fact .n{font-size:1.9rem;font-weight:700;color:var(--grape-deep);line-height:1}
+.fact .l{font-size:.84rem;color:#5a4d75;margin-top:5px;font-weight:500}
+
+/* faq */
+details{background:var(--cream);border:2.5px solid var(--ink);border-radius:18px;margin-top:12px;overflow:hidden;box-shadow:5px 5px 0 var(--shadow)}
+summary{padding:18px 22px;font-weight:600;font-size:1.05rem;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:12px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";font-size:1.6rem;color:var(--grape-deep);transition:transform .2s}
+details[open] summary::after{transform:rotate(45deg)}
+details p{padding:0 22px 20px;color:#574a73;font-size:.98rem}
+
+/* footer */
+footer{text-align:center;padding:56px 0 70px}
+.footer-creature{width:110px;height:110px;margin:0 auto 20px;border-radius:50% 50% 46% 54%/58% 58% 42% 42%;background:linear-gradient(160deg,var(--slime),var(--grape));position:relative;box-shadow:0 12px 0 var(--shadow);animation:bob 3s ease-in-out infinite}
+.footer-creature .eyes{position:absolute;top:34%;width:100%;display:flex;justify-content:center;gap:18px}
+.footer-creature .eyes span{width:14px;height:18px;background:var(--ink);border-radius:50%;position:relative}
+.footer-creature .eyes span::after{content:"";position:absolute;width:5px;height:5px;background:#fff;border-radius:50%;top:3px;left:3px}
+.footer-creature .mouth{position:absolute;top:60%;left:50%;transform:translateX(-50%);width:24px;height:13px;border-bottom:4px solid var(--ink);border-radius:0 0 14px 14px}
+footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
+.stamp{font-family:'Space Mono',monospace;font-size:.72rem;letter-spacing:.2em;text-transform:uppercase;color:#9a8db5;margin-top:24px}
+.draft{display:inline-block;margin-top:8px;font-family:'Space Mono',monospace;font-size:.66rem;letter-spacing:.18em;background:var(--bubble);border:2px solid var(--ink);padding:5px 12px;border-radius:20px;transform:rotate(-2deg)}
+
+.divider{text-align:center;font-size:1.4rem;letter-spacing:.5em;color:var(--grape);padding:8px 0}
+@media(max-width:560px){
+  .card{padding:24px 20px;box-shadow:6px 6px 0 var(--ink)}
+  .council-vis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:stretch}
+  .seat{width:100%;max-width:none;padding:14px 8px;font-size:clamp(.52rem,2.8vw,.64rem);letter-spacing:0}
+  .seat .big{font-size:1.45rem}
+  .right-row{grid-template-columns:1fr;gap:8px}
+}
+@media(max-width:380px){.council-vis{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="blob b1"></div>
+<div class="blob b2"></div>
+<div class="blob b3"></div>
+
+<header>
+  <div class="wrap">
+    <span class="kicker">Highrise Creature Club</span>
+    <h1>Creatures + LAND get a <span class="pop">voice.</span></h1>
+    <p class="sub">A friendly guide to what HCC is, how Creatures and LAND came together, and the new <strong>Player Council</strong> that puts holders in the room where creative decisions get made.</p>
+    <div class="mascot-row">
+      <div class="creature c-slime"><div class="eyes"><span></span><span></span></div><div class="mouth"></div></div>
+      <div class="creature c-bubble"><div class="eyes"><span></span><span></span></div><div class="mouth"></div></div>
+      <div class="creature c-grape"><div class="eyes"><span></span><span></span></div><div class="mouth"></div></div>
+      <div class="creature c-lemon"><div class="eyes"><span></span><span></span></div><div class="mouth"></div></div>
+    </div>
+  </div>
+</header>
+
+<section class="wrap">
+  <div class="eyebrow">Start here</div>
+  <h2>So… what is the Creature Club?</h2>
+  <p class="lead">The Highrise Creature Club is built from two collectible NFT concepts: <strong>11,111 one-of-a-kind creature avatars</strong> and the <strong>Highrise LAND NFTs</strong> that were brought into the same club. Hold either one and you're a member, with perks woven right into Highrise.</p>
+  <div class="perks">
+    <div class="perk"><span class="ico">👗</span><h4>Wear the look</h4><p>Every item on your creature is yours to wear inside Highrise.</p></div>
+    <div class="perk"><span class="ico">🪙</span><h4>Creature Coins</h4><p>Earn coins daily to spin exclusive grabs only members can reach.</p></div>
+    <div class="perk"><span class="ico">🎁</span><h4>Drops &amp; airdrops</h4><p>Early and free access to fresh creature content as it ships.</p></div>
+    <div class="perk"><span class="ico">🚪</span><h4>Members-only spaces</h4><p>An exclusive club room and a real seat at the community table.</p></div>
+  </div>
+
+  <div class="card tilt2" style="margin-top:30px;background:#fff">
+    <div class="eyebrow">The other half of the family</div>
+    <h2 style="font-size:1.7rem">🗺️ Highrise LAND NFTs</h2>
+    <p style="color:#473a63;margin-top:8px">LAND NFTs are the club's collection of virtual parcels in the Highrise universe, in <strong>Standard</strong> and <strong>Premium</strong> tiers — and most LAND owners also have an adorable <strong>slime pet</strong> to go with their plot. LAND's original standalone plan changed, so the project was folded into the Creature Club family: owning LAND now makes you a member too.</p>
+    <div class="perks" style="margin-top:20px">
+      <div class="perk"><span class="ico">🐸</span><h4>Slime pets</h4><p>Your pet stays yours — a collectible creature companion all its own.</p></div>
+      <div class="perk"><span class="ico">🏠</span><h4>Room boosts</h4><p>Link a plot to a room to raise its capacity — 75 for Standard, 120 for Premium.</p></div>
+      <div class="perk"><span class="ico">💎</span><h4>Premium = 3×</h4><p>Premium LAND earns triple the Creature Coins of Standard, like Legendary creatures do.</p></div>
+      <div class="perk"><span class="ico">🤝</span><h4>Full Creature perks</h4><p>LAND NFT owners now earn Creature Coins and join in club drops and giveaways.</p></div>
+    </div>
+  </div>
+</section>
+
+<div class="divider">• • •</div>
+
+<section class="wrap">
+  <div class="eyebrow">The journey</div>
+  <h2>How HCC got here</h2>
+  <p class="lead">No spin — just the honest arc of where the club has been and where it's headed.</p>
+  <div class="timeline">
+    <div class="tnode">
+      <div class="tyear">2021 — THE MINT</div>
+      <h4>11,111 creatures are born</h4>
+      <p>HCC launches as Highrise's first collectible avatar project: programmatically generated creatures, each with a wearable set of items and a promise of perks for holders.</p>
+    </div>
+    <div class="tnode">
+      <div class="tyear">2022 — LAND ARRIVES</div>
+      <h4>A second collectible: Highrise LAND</h4>
+      <p>LAND launches as virtual parcels of the Highrise universe, in Standard and Premium tiers — with daily Land Tokens, room capacity boosts, an exclusive shop, and slime pets. The original dream: custom, monetizable corners of Highrise you could run yourself.</p>
+    </div>
+    <div class="tnode">
+      <div class="tyear">2022–2024 — THE WOBBLE</div>
+      <h4>Big ideas, uneven follow-through</h4>
+      <p>Lots of ambition across both projects, but consistency, communication and follow-through didn't meet the standard holders deserved. We heard the frustration loud and clear.</p>
+    </div>
+    <div class="tnode">
+      <div class="tyear">2023 — LAND JOINS THE CLUB</div>
+      <h4>One family, not two</h4>
+      <p>The original "custom monetizable Highrise" plan for LAND was wound down, and LAND owners were brought into Creature Club benefits. Land Tokens converted to Creature Coins, pets stayed with their owners, Premium LAND mirrored higher-tier Creature benefits at 3×, and a compensation path covered owners who did not want the new direction.</p>
+    </div>
+    <div class="tnode">
+      <div class="tyear">2024 — THE MERGE SHIPS</div>
+      <h4>LAND benefits become real HCC benefits</h4>
+      <p>Regular updates confirmed the practical merge: Discord access opened to LAND owners, Highrise+ eligibility and Creature Coins applied to eligible players, exclusive LAND and Creature giveaways continued, and Gen 2 / shop work moved forward under one HCC update rhythm.</p>
+    </div>
+    <div class="tnode">
+      <div class="tyear">2025 — THE BLOCKCHAIN RESET</div>
+      <h4>An honest reset</h4>
+      <p>Creature Club publicly moved away from building around blockchain constraints while preserving tradeable value and official asset support. The message was simple: keep ownership safe, reduce platform friction, and make the club easier for Highrise to support.</p>
+    </div>
+    <div class="tnode">
+      <div class="tyear">DEC 2025 — THE DELIVERY RESET</div>
+      <h4>Back to visible follow-through</h4>
+      <p>A dedicated artist put permanently on finishing Gen 1 &amp; Gen 2. Bi-weekly updates. Monthly shop refreshes. Quarterly drops. A clear commitment to communication, delivery, and rebuilding trust one update at a time.</p>
+    </div>
+    <div class="tnode now">
+      <div class="tyear">NOW — THE COUNCIL</div>
+      <h4>Holders get a real voice</h4>
+      <p>The next step: a holder-led Player Council that helps shape what gets made — across Creatures and LAND alike. This page is all about that. 👇</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider">• • •</div>
+
+<section class="wrap">
+  <div class="honest">
+    <div class="eyebrow" style="color:var(--slime)">Straight talk</div>
+    <h2>Why we're doing this</h2>
+    <p>Trust doesn't come back from promises — it comes from consistent delivery <em>and</em> from actually listening. The Council exists so HCC holders aren't just told what's coming next, but help decide it. It's a sounding board with real teeth on creative direction, run alongside the team that builds.</p>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="eyebrow">Where we're headed</div>
+  <h2>One club: Creatures <span class="pop">+</span> LAND, together</h2>
+  <p class="lead">For a long time, Creatures and LAND lived as two separate NFT projects with two separate stories. The goal now is to unify them into <strong>a single Creature Club concept</strong> — one community, one set of benefits, one roadmap, and one holder voice.</p>
+  <div class="perks" style="margin-top:24px">
+    <div class="perk"><span class="ico">🪙</span><h4>One currency</h4><p>Land Tokens became Creature Coins, so everyone earns and spends the same way.</p></div>
+    <div class="perk"><span class="ico">🎟️</span><h4>One membership</h4><p>Hold a Creature NFT <em>or</em> LAND NFT and you're a full member with the same core perks.</p></div>
+    <div class="perk"><span class="ico">🗺️</span><h4>One roadmap</h4><p>Drops, Gen 2 and shop updates serve the whole club, not two parallel tracks.</p></div>
+    <div class="perk"><span class="ico">🗳️</span><h4>One voice</h4><p>The Player Council represents Creature <em>and</em> LAND holders alike.</p></div>
+  </div>
+  <p style="margin-top:18px;font-size:.95rem;color:#5a4d75">Your assets don't change — your creature, your LAND plot, and your slime pet stay exactly as they are. Unifying is about the <em>experience</em> around them: one family that's easier to grow, support and build for.</p>
+</section>
+
+<section class="wrap">
+  <div class="eyebrow">The big idea</div>
+  <h2>Meet the Player Council</h2>
+  <p class="lead">A small, holder-led group that works with a dedicated PM and the art team to finish Gen 2 and run the steady drops. It's <strong>advisory with teeth</strong> — a real say on creative, not a vote on the business.</p>
+
+  <div class="council-vis">
+    <div class="seat elected"><span class="big">4</span><span class="seat-label">ELECTED BY HOLDERS</span></div>
+    <div class="seat appointed"><span class="big">3</span><span class="seat-label">APPOINTED FOR CONTINUITY</span></div>
+  </div>
+  <div class="legend">
+    <span><span class="dot e"></span> Elected — chosen by a holder vote</span>
+    <span><span class="dot a"></span> Appointed — 2 from Pocket Worlds + 1 trusted holder</span>
+  </div>
+
+  <div class="facts">
+    <div class="fact"><div class="n">7</div><div class="l">seats, kept small on purpose</div></div>
+    <div class="fact"><div class="n">1 = 1</div><div class="l">one holder, one vote — never whale-weighted</div></div>
+    <div class="fact"><div class="n">6 mo</div><div class="l">terms, so it stays fresh</div></div>
+  </div>
+</section>
+
+<div class="divider">• • •</div>
+
+<section class="wrap">
+  <div class="eyebrow">Who decides what</div>
+  <h2>Where the Council has real power</h2>
+  <p class="lead">Some calls the Council makes. Some it advises on. A few it's simply kept in the loop on — and that scope grows as it proves out.</p>
+  <div class="rights">
+    <div class="right-row"><span>Theme &amp; aesthetic of upcoming drops</span><span class="tag decides">Decides</span></div>
+    <div class="right-row"><span>Which creatures &amp; variants make a Gen 2 set</span><span class="tag decides">Decides</span></div>
+    <div class="right-row"><span>The exclusive holder items in each drop</span><span class="tag decides">Decides</span></div>
+    <div class="right-row"><span>Drop cadence, timing &amp; roadmap priorities</span><span class="tag advises">Advises</span></div>
+    <div class="right-row"><span>Community announcements &amp; tone</span><span class="tag advises">Advises</span></div>
+    <div class="right-row"><span>Pricing &amp; value framing</span><span class="tag advises">Advises</span></div>
+    <div class="right-row"><span>Economy, Gold distribution, brand &amp; safety</span><span class="tag informed">Informed</span></div>
+  </div>
+  <p style="margin-top:18px;font-size:.92rem;color:#5a4d75">Pocket Worlds stays the executor and keeps final say on anything touching the economy, brand or legal guardrails — so the things that protect the whole club stay protected.</p>
+</section>
+
+<div class="divider">• • •</div>
+
+<section class="wrap">
+  <div class="card tilt">
+    <div class="eyebrow">How a seat works</div>
+    <h2 style="font-size:1.8rem">Fair, simple, and yours</h2>
+    <div class="perks" style="margin-top:18px">
+      <div class="perk"><span class="ico">🎟️</span><h4>Hold to vote</h4><p>Own at least 1 HCC asset, Creature or LAND, to vote; 5 combined HCC assets to run for a seat.</p></div>
+      <div class="perk"><span class="ico">🔒</span><h4>Seats can't be sold</h4><p>A Council seat is tied to you — never bought or traded, same spirit as the club itself.</p></div>
+      <div class="perk"><span class="ico">🗳️</span><h4>You nominate, you vote</h4><p>A self-nomination window opens, then holders vote. Clean and open.</p></div>
+      <div class="perk"><span class="ico">🔄</span><h4>Fresh blood</h4><p>Six-month terms, max two in a row for elected seats. No entrenchment.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="card tilt2" style="background:var(--ink);color:var(--cream)">
+    <div class="eyebrow" style="color:var(--lemon)">The rhythm</div>
+    <h2 style="font-size:1.8rem;color:#fff">How decisions move</h2>
+    <p style="color:#e6ddf2;margin-top:10px">The PM owns the roadmap and brings the Council clear, scoped questions — each with a "done looks like this" attached. The Council weighs in on specific decisions, not endless open debate.</p>
+    <p style="color:#e6ddf2"><strong style="color:var(--slime)">Cadence:</strong> a quick check-in every two weeks, plus a live call once a month. <strong style="color:var(--bubble)">Where:</strong> a private holder channel to start, with token-gated holder-wide votes for the bigger questions down the line.</p>
+  </div>
+</section>
+
+<div class="divider">• • •</div>
+
+<section class="wrap">
+  <div class="eyebrow">Quick answers</div>
+  <h2>Questions you might have</h2>
+  <details><summary>Is this a DAO? Do I own part of the company now?</summary><p>No. The Council is advisory — a powerful sounding board on creative and roadmap decisions. Pocket Worlds remains the executor and keeps final say on the business, the economy and the brand.</p></details>
+  <details><summary>Will big holders just take over?</summary><p>No. It's one holder, one vote — never weighted by how many Creature or LAND assets you own. And 4 of the 7 seats are elected directly by holders, with 3 appointed for continuity and competence. We're stating that split openly rather than pretending it's purely democratic.</p></details>
+  <details><summary>What about Gen 1 and Gen 2?</summary><p>A dedicated artist is on finishing them, and the Council helps decide which creatures and variants make each Gen 2 set — picking from the options the art team can actually build.</p></details>
+  <details><summary>I own LAND, not a Creature — am I in the club?</summary><p>Yes. LAND owners are full Creature Club members. Your Land Tokens became Creature Coins, you earn daily Coins (Premium plots at 3×), and you take part in club drops and giveaways. Your plot and your slime pet stay exactly as they are.</p></details>
+  <details><summary>Is my creature's ownership safe?</summary><p>Yes. Plans to migrate creatures off the blockchain have been cancelled following Steam approval. If that ever needs to change, we'll tell you early and clearly — no surprises.</p></details>
+  <details><summary>What does the Council actually start with?</summary><p>It starts advisory-leaning, and its "Decides" power grows release by release as it proves out. Think training wheels that come off over time, not everything on day one.</p></details>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-creature"><div class="eyes"><span></span><span></span></div><div class="mouth"></div></div>
+    <h2 style="font-size:1.6rem">Built with the club, for the club.</h2>
+    <p>This is the start of HCC holders having a real hand in what gets made. More to come — every two weeks, like we promised.</p>
+    <div class="stamp">Highrise Creature Club · Player Council</div>
+    <div class="draft">Draft v1 — for community discussion</div>
+  </div>
+</footer>
+
+</body>
+</html>

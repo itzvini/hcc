@@ -1,0 +1,14 @@
+{
+  "name": "hcc-player-council",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static HCC Player Council announcement site for Railway deployment.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
