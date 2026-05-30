@@ -221,6 +221,13 @@ footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
 .dist-card .eyebrow{margin-bottom:14px}
 .holders-updated{text-align:center;font-family:'Space Mono',monospace;font-size:.7rem;letter-spacing:.14em;color:#9a8db5;margin-top:24px;text-transform:uppercase}
 .stale-badge{display:inline-block;font-family:'Space Mono',monospace;font-size:.62rem;letter-spacing:.1em;background:var(--lemon);border:2px solid var(--ink);padding:3px 10px;border-radius:20px;margin-left:8px;vertical-align:middle;animation:pulse 1.8s infinite}
+
+/* language switcher */
+.page-nav-bar{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap}
+.lang-switcher{display:flex;gap:4px;align-items:center}
+.lang-btn{font-family:'Space Mono',monospace;font-weight:700;font-size:.62rem;letter-spacing:.12em;padding:5px 10px;border:2px solid var(--ink);border-radius:20px;background:#fff;color:var(--ink);cursor:pointer;transition:background .15s,color .15s,box-shadow .15s}
+.lang-btn:hover{background:var(--cream)}
+.lang-btn.is-active{background:var(--ink);color:var(--lemon)}
 </style>
 </head>
 <body>
@@ -231,9 +238,9 @@ footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
 
 <header>
   <div class="wrap">
-    <span class="kicker">Highrise Creature Club</span>
-    <h1>Creatures + LAND get a <span class="pop">voice.</span></h1>
-    <p class="sub">A friendly guide to what HCC is, how Creatures and LAND came together, and the new <strong>Player Council</strong> that puts holders in the room where creative decisions get made.</p>
+    <span class="kicker" data-i18n="hero.kicker">Highrise Creature Club</span>
+    <h1><span data-i18n="hero.h1">Creatures + LAND get a </span><span class="pop" data-i18n="hero.pop">voice.</span></h1>
+    <p class="sub" data-i18n-html="hero.subtitle">A friendly guide to what HCC is, how Creatures and LAND came together, and the new <strong>Player Council</strong> that puts holders in the room where creative decisions get made.</p>
     <div class="mascot-row">
       <div class="creature c-slime"><div class="eyes"><span></span><span></span></div><div class="mouth"></div></div>
       <div class="creature c-bubble"><div class="eyes"><span></span><span></span></div><div class="mouth"></div></div>
@@ -244,35 +251,46 @@ footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
 </header>
 
 <nav class="page-tabs" aria-label="Main page tabs">
-  <div class="wrap tab-list" role="tablist" aria-label="Highrise Creature Club pages">
-    <button class="page-tab is-active" type="button" role="tab" id="tab-council" aria-selected="true" aria-controls="panel-council" data-tab="council">Council</button>
-    <button class="page-tab" type="button" role="tab" id="tab-roadmap" aria-selected="false" aria-controls="panel-roadmap" data-tab="roadmap">Roadmap</button>
-    <button class="page-tab" type="button" role="tab" id="tab-holders" aria-selected="false" aria-controls="panel-holders" data-tab="holders">Holders</button>
+  <div class="wrap page-nav-bar">
+    <div class="tab-list" role="tablist" aria-label="Highrise Creature Club pages">
+      <button class="page-tab is-active" type="button" role="tab" id="tab-council" aria-selected="true" aria-controls="panel-council" data-tab="council" data-i18n="nav.council">Council</button>
+      <button class="page-tab" type="button" role="tab" id="tab-roadmap" aria-selected="false" aria-controls="panel-roadmap" data-tab="roadmap" data-i18n="nav.roadmap">Roadmap</button>
+      <button class="page-tab" type="button" role="tab" id="tab-holders" aria-selected="false" aria-controls="panel-holders" data-tab="holders" data-i18n="nav.holders">Holders</button>
+    </div>
+    <div class="lang-switcher" role="group" aria-label="Language">
+      <button class="lang-btn is-active" data-lang="en">EN</button>
+      <button class="lang-btn" data-lang="pt">PT</button>
+      <button class="lang-btn" data-lang="es">ES</button>
+      <button class="lang-btn" data-lang="ru">RU</button>
+      <button class="lang-btn" data-lang="fr">FR</button>
+      <button class="lang-btn" data-lang="de">DE</button>
+      <button class="lang-btn" data-lang="tr">TR</button>
+    </div>
   </div>
 </nav>
 
 <main id="panel-council" class="tab-panel is-active" role="tabpanel" aria-labelledby="tab-council">
 
 <section class="wrap">
-  <div class="eyebrow">Start here</div>
-  <h2>So… what is the Creature Club?</h2>
-  <p class="lead">The Highrise Creature Club is built from two collectible NFT concepts: <strong>11,111 one-of-a-kind creature avatars</strong> and the <strong>Highrise LAND NFTs</strong> that were brought into the same club. Hold either one and you're a member, with perks woven right into Highrise.</p>
+  <div class="eyebrow" data-i18n="s1.eyebrow">Start here</div>
+  <h2 data-i18n="s1.h2">So… what is the Creature Club?</h2>
+  <p class="lead" data-i18n-html="s1.lead">The Highrise Creature Club is built from two collectible NFT concepts: <strong>11,111 one-of-a-kind creature avatars</strong> and the <strong>Highrise LAND NFTs</strong> that were brought into the same club. Hold either one and you're a member, with perks woven right into Highrise.</p>
   <div class="perks">
-    <div class="perk"><span class="ico">👗</span><h4>Wear the look</h4><p>Every item on your creature is yours to wear inside Highrise.</p></div>
-    <div class="perk"><span class="ico">🪙</span><h4>Creature Coins</h4><p>Earn coins daily to spin exclusive grabs only members can reach.</p></div>
-    <div class="perk"><span class="ico">🎁</span><h4>Drops &amp; airdrops</h4><p>Early and free access to fresh creature content as it ships.</p></div>
-    <div class="perk"><span class="ico">🚪</span><h4>Members-only spaces</h4><p>An exclusive club room and a real seat at the community table.</p></div>
+    <div class="perk"><span class="ico">👗</span><h4 data-i18n="s1.p1h">Wear the look</h4><p data-i18n="s1.p1p">Every item on your creature is yours to wear inside Highrise.</p></div>
+    <div class="perk"><span class="ico">🪙</span><h4 data-i18n="s1.p2h">Creature Coins</h4><p data-i18n="s1.p2p">Earn coins daily to spin exclusive grabs only members can reach.</p></div>
+    <div class="perk"><span class="ico">🎁</span><h4 data-i18n="s1.p3h">Drops &amp; airdrops</h4><p data-i18n="s1.p3p">Early and free access to fresh creature content as it ships.</p></div>
+    <div class="perk"><span class="ico">🚪</span><h4 data-i18n="s1.p4h">Members-only spaces</h4><p data-i18n="s1.p4p">An exclusive club room and a real seat at the community table.</p></div>
   </div>
 
   <div class="card tilt2" style="margin-top:30px;background:#fff">
-    <div class="eyebrow">The other half of the family</div>
+    <div class="eyebrow" data-i18n="land.eyebrow">The other half of the family</div>
     <h2 style="font-size:1.7rem">🗺️ Highrise LAND NFTs</h2>
-    <p style="color:#473a63;margin-top:8px">LAND NFTs are the club's collection of virtual parcels in the Highrise universe, in <strong>Standard</strong> and <strong>Premium</strong> tiers — and most LAND owners also have an adorable <strong>slime pet</strong> to go with their plot. LAND's original standalone plan changed, so the project was folded into the Creature Club family: owning LAND now makes you a member too.</p>
+    <p style="color:#473a63;margin-top:8px" data-i18n-html="land.body">LAND NFTs are the club's collection of virtual parcels in the Highrise universe, in <strong>Standard</strong> and <strong>Premium</strong> tiers — and most LAND owners also have an adorable <strong>slime pet</strong> to go with their plot. LAND's original standalone plan changed, so the project was folded into the Creature Club family: owning LAND now makes you a member too.</p>
     <div class="perks" style="margin-top:20px">
-      <div class="perk"><span class="ico">🐸</span><h4>Slime pets</h4><p>Your pet stays yours — a collectible creature companion all its own.</p></div>
-      <div class="perk"><span class="ico">🏠</span><h4>Room boosts</h4><p>Link a plot to a room to raise its capacity — 75 for Standard, 120 for Premium.</p></div>
-      <div class="perk"><span class="ico">💎</span><h4>Premium = 3×</h4><p>Premium LAND earns triple the Creature Coins of Standard, like Legendary creatures do.</p></div>
-      <div class="perk"><span class="ico">🤝</span><h4>Full Creature perks</h4><p>LAND NFT owners now earn Creature Coins and join in club drops and giveaways.</p></div>
+      <div class="perk"><span class="ico">🐸</span><h4 data-i18n="land.p1h">Slime pets</h4><p data-i18n="land.p1p">Your pet stays yours — a collectible creature companion all its own.</p></div>
+      <div class="perk"><span class="ico">🏠</span><h4 data-i18n="land.p2h">Room boosts</h4><p data-i18n="land.p2p">Link a plot to a room to raise its capacity — 75 for Standard, 120 for Premium.</p></div>
+      <div class="perk"><span class="ico">💎</span><h4 data-i18n="land.p3h">Premium = 3×</h4><p data-i18n="land.p3p">Premium LAND earns triple the Creature Coins of Standard, like Legendary creatures do.</p></div>
+      <div class="perk"><span class="ico">🤝</span><h4 data-i18n="land.p4h">Full Creature perks</h4><p data-i18n="land.p4p">LAND NFT owners now earn Creature Coins and join in club drops and giveaways.</p></div>
     </div>
   </div>
 </section>
@@ -280,44 +298,44 @@ footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
 <div class="divider">• • •</div>
 
 <section class="wrap">
-  <div class="eyebrow">The journey</div>
-  <h2>How HCC got here</h2>
-  <p class="lead">No spin — just the honest arc of where the club has been and where it's headed.</p>
+  <div class="eyebrow" data-i18n="journey.eyebrow">The journey</div>
+  <h2 data-i18n="journey.h2">How HCC got here</h2>
+  <p class="lead" data-i18n="journey.lead">No spin — just the honest arc of where the club has been and where it's headed.</p>
   <div class="timeline">
     <div class="tnode">
-      <div class="tyear">2021 — THE MINT</div>
-      <h4>11,111 creatures are born</h4>
-      <p>HCC launches as Highrise's first collectible avatar project: programmatically generated creatures, each with a wearable set of items and a promise of perks for holders.</p>
+      <div class="tyear" data-i18n="t1.year">2021 — THE MINT</div>
+      <h4 data-i18n="t1.h">11,111 creatures are born</h4>
+      <p data-i18n="t1.p">HCC launches as Highrise's first collectible avatar project: programmatically generated creatures, each with a wearable set of items and a promise of perks for holders.</p>
     </div>
     <div class="tnode">
-      <div class="tyear">2022 — LAND ARRIVES</div>
-      <h4>A second collectible: Highrise LAND</h4>
-      <p>LAND launches as virtual parcels of the Highrise universe, in Standard and Premium tiers — with daily Land Tokens, room capacity boosts, an exclusive shop, and slime pets. The original dream: custom, monetizable corners of Highrise you could run yourself.</p>
+      <div class="tyear" data-i18n="t2.year">2022 — LAND ARRIVES</div>
+      <h4 data-i18n="t2.h">A second collectible: Highrise LAND</h4>
+      <p data-i18n="t2.p">LAND launches as virtual parcels of the Highrise universe, in Standard and Premium tiers — with daily Land Tokens, room capacity boosts, an exclusive shop, and slime pets. The original dream: custom, monetizable corners of Highrise you could run yourself.</p>
     </div>
     <div class="tnode">
-      <div class="tyear">2022–2024 — THE WOBBLE</div>
-      <h4>Big ideas, uneven follow-through</h4>
-      <p>Lots of ambition across both projects, but consistency, communication and follow-through didn't meet the standard holders deserved. We heard the frustration loud and clear.</p>
+      <div class="tyear" data-i18n="t3.year">2022–2024 — THE WOBBLE</div>
+      <h4 data-i18n="t3.h">Big ideas, uneven follow-through</h4>
+      <p data-i18n="t3.p">Lots of ambition across both projects, but consistency, communication and follow-through didn't meet the standard holders deserved. We heard the frustration loud and clear.</p>
     </div>
     <div class="tnode">
-      <div class="tyear">2023 — LAND JOINS THE CLUB</div>
-      <h4>One family, not two</h4>
-      <p>The original "custom monetizable Highrise" plan for LAND was wound down, and LAND owners were brought into Creature Club benefits. Land Tokens converted to Creature Coins, pets stayed with their owners, Premium LAND mirrored higher-tier Creature benefits at 3×, and a compensation path covered owners who did not want the new direction.</p>
+      <div class="tyear" data-i18n="t4.year">2023 — LAND JOINS THE CLUB</div>
+      <h4 data-i18n="t4.h">One family, not two</h4>
+      <p data-i18n="t4.p">The original "custom monetizable Highrise" plan for LAND was wound down, and LAND owners were brought into Creature Club benefits. Land Tokens converted to Creature Coins, pets stayed with their owners, Premium LAND mirrored higher-tier Creature benefits at 3×, and a compensation path covered owners who did not want the new direction.</p>
     </div>
     <div class="tnode">
-      <div class="tyear">2024 — THE MERGE SHIPS</div>
-      <h4>LAND benefits become real HCC benefits</h4>
-      <p>Regular updates confirmed the practical merge: Discord access opened to LAND owners, Highrise+ eligibility and Creature Coins applied to eligible players, exclusive LAND and Creature giveaways continued, and Gen 2 / shop work moved forward under one HCC update rhythm.</p>
+      <div class="tyear" data-i18n="t5.year">2024 — THE MERGE SHIPS</div>
+      <h4 data-i18n="t5.h">LAND benefits become real HCC benefits</h4>
+      <p data-i18n="t5.p">Regular updates confirmed the practical merge: Discord access opened to LAND owners, Highrise+ eligibility and Creature Coins applied to eligible players, exclusive LAND and Creature giveaways continued, and Gen 2 / shop work moved forward under one HCC update rhythm.</p>
     </div>
     <div class="tnode">
-      <div class="tyear">DEC 2025 — THE DELIVERY RESET</div>
-      <h4>Back to visible follow-through</h4>
-      <p>A dedicated artist put permanently on finishing Gen 1 &amp; Gen 2. Bi-weekly updates. Monthly shop refreshes. Quarterly drops. A clear commitment to communication, delivery, and rebuilding trust one update at a time.</p>
+      <div class="tyear" data-i18n="t6.year">DEC 2025 — THE DELIVERY RESET</div>
+      <h4 data-i18n="t6.h">Back to visible follow-through</h4>
+      <p data-i18n="t6.p">A dedicated artist put permanently on finishing Gen 1 &amp; Gen 2. Bi-weekly updates. Monthly shop refreshes. Quarterly drops. A clear commitment to communication, delivery, and rebuilding trust one update at a time.</p>
     </div>
     <div class="tnode now">
-      <div class="tyear">NOW — THE COUNCIL</div>
-      <h4>Holders get a real voice</h4>
-      <p>The next step: a holder-led Player Council that helps shape what gets made — across Creatures and LAND alike. This page is all about that. 👇</p>
+      <div class="tyear" data-i18n="t7.year">NOW — THE COUNCIL</div>
+      <h4 data-i18n="t7.h">Holders get a real voice</h4>
+      <p data-i18n="t7.p">The next step: a holder-led Player Council that helps shape what gets made — across Creatures and LAND alike. This page is all about that. 👇</p>
     </div>
   </div>
 </section>
@@ -326,99 +344,99 @@ footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
 
 <section class="wrap">
   <div class="honest">
-    <div class="eyebrow" style="color:var(--slime)">Straight talk</div>
-    <h2>Why we're doing this</h2>
-    <p>Trust doesn't come back from promises — it comes from consistent delivery <em>and</em> from actually listening. The Council exists so HCC holders aren't just told what's coming next, but help decide it. It's a sounding board with real teeth on creative direction, run alongside the team that builds.</p>
+    <div class="eyebrow" style="color:var(--slime)" data-i18n="honest.eyebrow">Straight talk</div>
+    <h2 data-i18n="honest.h2">Why we're doing this</h2>
+    <p data-i18n-html="honest.p">Trust doesn't come back from promises — it comes from consistent delivery <em>and</em> from actually listening. The Council exists so HCC holders aren't just told what's coming next, but help decide it. It's a sounding board with real teeth on creative direction, run alongside the team that builds.</p>
   </div>
 </section>
 
 <section class="wrap">
-  <div class="eyebrow">Where we're headed</div>
-  <h2>One club: Creatures <span class="pop">+</span> LAND, together</h2>
-  <p class="lead">For a long time, Creatures and LAND lived as two separate NFT projects with two separate stories. The goal now is to unify them into <strong>a single Creature Club concept</strong> — one community, one set of benefits, one roadmap, and one holder voice.</p>
+  <div class="eyebrow" data-i18n="unify.eyebrow">Where we're headed</div>
+  <h2 data-i18n-html="unify.h2">One club: Creatures <span class="pop">+</span> LAND, together</h2>
+  <p class="lead" data-i18n-html="unify.lead">For a long time, Creatures and LAND lived as two separate NFT projects with two separate stories. The goal now is to unify them into <strong>a single Creature Club concept</strong> — one community, one set of benefits, one roadmap, and one holder voice.</p>
   <div class="perks" style="margin-top:24px">
-    <div class="perk"><span class="ico">🪙</span><h4>One currency</h4><p>Land Tokens became Creature Coins, so everyone earns and spends the same way.</p></div>
-    <div class="perk"><span class="ico">🎟️</span><h4>One membership</h4><p>Hold a Creature NFT <em>or</em> LAND NFT and you're a full member with the same core perks.</p></div>
-    <div class="perk"><span class="ico">🗺️</span><h4>One roadmap</h4><p>Drops, Gen 2 and shop updates serve the whole club, not two parallel tracks.</p></div>
-    <div class="perk"><span class="ico">🗳️</span><h4>One voice</h4><p>The Player Council represents Creature <em>and</em> LAND holders alike.</p></div>
+    <div class="perk"><span class="ico">🪙</span><h4 data-i18n="unify.p1h">One currency</h4><p data-i18n="unify.p1p">Land Tokens became Creature Coins, so everyone earns and spends the same way.</p></div>
+    <div class="perk"><span class="ico">🎟️</span><h4 data-i18n="unify.p2h">One membership</h4><p data-i18n-html="unify.p2p">Hold a Creature NFT <em>or</em> LAND NFT and you're a full member with the same core perks.</p></div>
+    <div class="perk"><span class="ico">🗺️</span><h4 data-i18n="unify.p3h">One roadmap</h4><p data-i18n="unify.p3p">Drops, Gen 2 and shop updates serve the whole club, not two parallel tracks.</p></div>
+    <div class="perk"><span class="ico">🗳️</span><h4 data-i18n="unify.p4h">One voice</h4><p data-i18n-html="unify.p4p">The Player Council represents Creature <em>and</em> LAND holders alike.</p></div>
   </div>
-  <p style="margin-top:18px;font-size:.95rem;color:#5a4d75">Your assets don't change — your creature, your LAND plot, and your slime pet stay exactly as they are. Unifying is about the <em>experience</em> around them: one family that's easier to grow, support and build for.</p>
+  <p style="margin-top:18px;font-size:.95rem;color:#5a4d75" data-i18n-html="unify.note">Your assets don't change — your creature, your LAND plot, and your slime pet stay exactly as they are. Unifying is about the <em>experience</em> around them: one family that's easier to grow, support and build for.</p>
 </section>
 
 <section class="wrap">
-  <div class="eyebrow">The big idea</div>
-  <h2>Meet the Player Council</h2>
-  <p class="lead">A small, holder-led group that works with a dedicated PM and the art team to finish Gen 2 and run the steady drops. It's <strong>advisory with teeth</strong> — a real say on creative, not a vote on the business.</p>
+  <div class="eyebrow" data-i18n="council.eyebrow">The big idea</div>
+  <h2 data-i18n="council.h2">Meet the Player Council</h2>
+  <p class="lead" data-i18n-html="council.lead">A small, holder-led group that works with a dedicated PM and the art team to finish Gen 2 and run the steady drops. It's <strong>advisory with teeth</strong> — a real say on creative, not a vote on the business.</p>
 
   <div class="council-vis">
-    <div class="seat elected"><span class="big">4</span><span class="seat-label">ELECTED BY HOLDERS</span></div>
-    <div class="seat appointed"><span class="big">3</span><span class="seat-label">APPOINTED FOR CONTINUITY</span></div>
+    <div class="seat elected"><span class="big">4</span><span class="seat-label" data-i18n="council.seat.elected">ELECTED BY HOLDERS</span></div>
+    <div class="seat appointed"><span class="big">3</span><span class="seat-label" data-i18n="council.seat.appointed">APPOINTED FOR CONTINUITY</span></div>
   </div>
   <div class="legend">
-    <span><span class="dot e"></span> Elected — chosen by a holder vote</span>
-    <span><span class="dot a"></span> Appointed — 2 from Pocket Worlds + 1 trusted holder</span>
+    <span><span class="dot e"></span><span data-i18n="council.legend.elected"> Elected — chosen by a holder vote</span></span>
+    <span><span class="dot a"></span><span data-i18n="council.legend.appointed"> Appointed — 2 from Pocket Worlds + 1 trusted holder</span></span>
   </div>
 
   <div class="facts">
-    <div class="fact"><div class="n">7</div><div class="l">seats, kept small on purpose</div></div>
-    <div class="fact"><div class="n">1 = 1</div><div class="l">one holder, one vote — never whale-weighted</div></div>
-    <div class="fact"><div class="n">6 mo</div><div class="l">terms, so it stays fresh</div></div>
+    <div class="fact"><div class="n">7</div><div class="l" data-i18n="council.fact1">seats, kept small on purpose</div></div>
+    <div class="fact"><div class="n">1 = 1</div><div class="l" data-i18n="council.fact2">one holder, one vote — never whale-weighted</div></div>
+    <div class="fact"><div class="n">6 mo</div><div class="l" data-i18n="council.fact3">terms, so it stays fresh</div></div>
   </div>
 </section>
 
 <div class="divider">• • •</div>
 
 <section class="wrap">
-  <div class="eyebrow">Who decides what</div>
-  <h2>Where the Council has real power</h2>
-  <p class="lead">Some calls the Council makes. Some it advises on. A few it's simply kept in the loop on — and that scope grows as it proves out.</p>
+  <div class="eyebrow" data-i18n="power.eyebrow">Who decides what</div>
+  <h2 data-i18n="power.h2">Where the Council has real power</h2>
+  <p class="lead" data-i18n="power.lead">Some calls the Council makes. Some it advises on. A few it's simply kept in the loop on — and that scope grows as it proves out.</p>
   <div class="rights">
-    <div class="right-row"><span>Theme &amp; aesthetic of upcoming drops</span><span class="tag decides">Decides</span></div>
-    <div class="right-row"><span>Which creatures &amp; variants make a Gen 2 set</span><span class="tag decides">Decides</span></div>
-    <div class="right-row"><span>The exclusive holder items in each drop</span><span class="tag decides">Decides</span></div>
-    <div class="right-row"><span>Drop cadence, timing &amp; roadmap priorities</span><span class="tag advises">Advises</span></div>
-    <div class="right-row"><span>Community announcements &amp; tone</span><span class="tag advises">Advises</span></div>
-    <div class="right-row"><span>Pricing &amp; value framing</span><span class="tag advises">Advises</span></div>
-    <div class="right-row"><span>Economy, Gold distribution, brand &amp; safety</span><span class="tag informed">Informed</span></div>
+    <div class="right-row"><span data-i18n="power.row1">Theme &amp; aesthetic of upcoming drops</span><span class="tag decides" data-i18n="power.decides">Decides</span></div>
+    <div class="right-row"><span data-i18n="power.row2">Which creatures &amp; variants make a Gen 2 set</span><span class="tag decides" data-i18n="power.decides">Decides</span></div>
+    <div class="right-row"><span data-i18n="power.row3">The exclusive holder items in each drop</span><span class="tag decides" data-i18n="power.decides">Decides</span></div>
+    <div class="right-row"><span data-i18n="power.row4">Drop cadence, timing &amp; roadmap priorities</span><span class="tag advises" data-i18n="power.advises">Advises</span></div>
+    <div class="right-row"><span data-i18n="power.row5">Community announcements &amp; tone</span><span class="tag advises" data-i18n="power.advises">Advises</span></div>
+    <div class="right-row"><span data-i18n="power.row6">Pricing &amp; value framing</span><span class="tag advises" data-i18n="power.advises">Advises</span></div>
+    <div class="right-row"><span data-i18n="power.row7">Economy, Gold distribution, brand &amp; safety</span><span class="tag informed" data-i18n="power.informed">Informed</span></div>
   </div>
-  <p style="margin-top:18px;font-size:.92rem;color:#5a4d75">Pocket Worlds stays the executor and keeps final say on anything touching the economy, brand or legal guardrails — so the things that protect the whole club stay protected.</p>
+  <p style="margin-top:18px;font-size:.92rem;color:#5a4d75" data-i18n="power.note">Pocket Worlds stays the executor and keeps final say on anything touching the economy, brand or legal guardrails — so the things that protect the whole club stay protected.</p>
 </section>
 
 <div class="divider">• • •</div>
 
 <section class="wrap">
   <div class="card tilt">
-    <div class="eyebrow">How a seat works</div>
-    <h2 style="font-size:1.8rem">Fair, simple, and yours</h2>
+    <div class="eyebrow" data-i18n="seat.eyebrow">How a seat works</div>
+    <h2 style="font-size:1.8rem" data-i18n="seat.h2">Fair, simple, and yours</h2>
     <div class="perks" style="margin-top:18px">
-      <div class="perk"><span class="ico">🎟️</span><h4>Hold to vote</h4><p>Own at least 1 HCC asset, Creature or LAND, to vote; 5 combined HCC assets to run for a seat.</p></div>
-      <div class="perk"><span class="ico">🔒</span><h4>Seats can't be sold</h4><p>A Council seat is tied to you — never bought or traded, same spirit as the club itself.</p></div>
-      <div class="perk"><span class="ico">🗳️</span><h4>You nominate, you vote</h4><p>A self-nomination window opens, then holders vote. Clean and open.</p></div>
-      <div class="perk"><span class="ico">🔄</span><h4>Fresh blood</h4><p>Six-month terms, max two in a row for elected seats. No entrenchment.</p></div>
+      <div class="perk"><span class="ico">🎟️</span><h4 data-i18n="seat.p1h">Hold to vote</h4><p data-i18n="seat.p1p">Own at least 1 HCC asset, Creature or LAND, to vote; 5 combined HCC assets to run for a seat.</p></div>
+      <div class="perk"><span class="ico">🔒</span><h4 data-i18n="seat.p2h">Seats can't be sold</h4><p data-i18n="seat.p2p">A Council seat is tied to you — never bought or traded, same spirit as the club itself.</p></div>
+      <div class="perk"><span class="ico">🗳️</span><h4 data-i18n="seat.p3h">You nominate, you vote</h4><p data-i18n="seat.p3p">A self-nomination window opens, then holders vote. Clean and open.</p></div>
+      <div class="perk"><span class="ico">🔄</span><h4 data-i18n="seat.p4h">Fresh blood</h4><p data-i18n="seat.p4p">Six-month terms, max two in a row for elected seats. No entrenchment.</p></div>
     </div>
   </div>
 </section>
 
 <section class="wrap">
   <div class="card tilt2" style="background:var(--ink);color:var(--cream)">
-    <div class="eyebrow" style="color:var(--lemon)">The rhythm</div>
-    <h2 style="font-size:1.8rem;color:#fff">How decisions move</h2>
-    <p style="color:#e6ddf2;margin-top:10px">The PM owns the roadmap and brings the Council clear, scoped questions — each with a "done looks like this" attached. The Council weighs in on specific decisions, not endless open debate.</p>
-    <p style="color:#e6ddf2"><strong style="color:var(--slime)">Cadence:</strong> a quick check-in every two weeks, plus a live call once a month. <strong style="color:var(--bubble)">Where:</strong> a private holder channel to start, with token-gated holder-wide votes for the bigger questions down the line.</p>
+    <div class="eyebrow" style="color:var(--lemon)" data-i18n="rhythm.eyebrow">The rhythm</div>
+    <h2 style="font-size:1.8rem;color:#fff" data-i18n="rhythm.h2">How decisions move</h2>
+    <p style="color:#e6ddf2;margin-top:10px" data-i18n="rhythm.p1">The PM owns the roadmap and brings the Council clear, scoped questions — each with a "done looks like this" attached. The Council weighs in on specific decisions, not endless open debate.</p>
+    <p style="color:#e6ddf2" data-i18n-html="rhythm.p2"><strong style="color:var(--slime)">Cadence:</strong> a quick check-in every two weeks, plus a live call once a month. <strong style="color:var(--bubble)">Where:</strong> a private holder channel to start, with token-gated holder-wide votes for the bigger questions down the line.</p>
   </div>
 </section>
 
 <div class="divider">• • •</div>
 
 <section class="wrap">
-  <div class="eyebrow">Quick answers</div>
-  <h2>Questions you might have</h2>
-  <details><summary>Is this a DAO? Do I own part of the company now?</summary><p>No. The Council is advisory — a powerful sounding board on creative and roadmap decisions. Pocket Worlds remains the executor and keeps final say on the business, the economy and the brand.</p></details>
-  <details><summary>Will big holders just take over?</summary><p>No. It's one holder, one vote — never weighted by how many Creature or LAND assets you own. And 4 of the 7 seats are elected directly by holders, with 3 appointed for continuity and competence. We're stating that split openly rather than pretending it's purely democratic.</p></details>
-  <details><summary>What about Gen 1 and Gen 2?</summary><p>A dedicated artist is on finishing them, and the Council helps decide which creatures and variants make each Gen 2 set — picking from the options the art team can actually build.</p></details>
-  <details><summary>I own LAND, not a Creature — am I in the club?</summary><p>Yes. LAND owners are full Creature Club members. Your Land Tokens became Creature Coins, you earn daily Coins (Premium plots at 3×), and you take part in club drops and giveaways. Your plot and your slime pet stay exactly as they are.</p></details>
-  <details><summary>Is my creature's ownership safe?</summary><p>Yes. Plans to migrate creatures off the blockchain have been cancelled following Steam approval. If that ever needs to change, we'll tell you early and clearly — no surprises.</p></details>
-  <details><summary>What does the Council actually start with?</summary><p>It starts advisory-leaning, and its "Decides" power grows release by release as it proves out. Think training wheels that come off over time, not everything on day one.</p></details>
+  <div class="eyebrow" data-i18n="faq.eyebrow">Quick answers</div>
+  <h2 data-i18n="faq.h2">Questions you might have</h2>
+  <details><summary data-i18n="faq.q1">Is this a DAO? Do I own part of the company now?</summary><p data-i18n="faq.a1">No. The Council is advisory — a powerful sounding board on creative and roadmap decisions. Pocket Worlds remains the executor and keeps final say on the business, the economy and the brand.</p></details>
+  <details><summary data-i18n="faq.q2">Will big holders just take over?</summary><p data-i18n="faq.a2">No. It's one holder, one vote — never weighted by how many Creature or LAND assets you own. And 4 of the 7 seats are elected directly by holders, with 3 appointed for continuity and competence. We're stating that split openly rather than pretending it's purely democratic.</p></details>
+  <details><summary data-i18n="faq.q3">What about Gen 1 and Gen 2?</summary><p data-i18n="faq.a3">A dedicated artist is on finishing them, and the Council helps decide which creatures and variants make each Gen 2 set — picking from the options the art team can actually build.</p></details>
+  <details><summary data-i18n="faq.q4">I own LAND, not a Creature — am I in the club?</summary><p data-i18n="faq.a4">Yes. LAND owners are full Creature Club members. Your Land Tokens became Creature Coins, you earn daily Coins (Premium plots at 3×), and you take part in club drops and giveaways. Your plot and your slime pet stay exactly as they are.</p></details>
+  <details><summary data-i18n="faq.q5">Is my creature's ownership safe?</summary><p data-i18n="faq.a5">Yes. Plans to migrate creatures off the blockchain have been cancelled following Steam approval. If that ever needs to change, we'll tell you early and clearly — no surprises.</p></details>
+  <details><summary data-i18n="faq.q6">What does the Council actually start with?</summary><p data-i18n="faq.a6">It starts advisory-leaning, and its "Decides" power grows release by release as it proves out. Think training wheels that come off over time, not everything on day one.</p></details>
 </section>
 
 </main>
@@ -427,22 +445,22 @@ footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
   <section class="wrap">
     <div class="card roadmap-card">
       <div class="roadmap-badge" aria-hidden="true">🚧</div>
-      <div class="eyebrow">Roadmap</div>
-      <h2>Roadmap is under construction</h2>
-      <p class="lead">We're still shaping the next public version. Check back soon for milestones, drops, and council priorities.</p>
+      <div class="eyebrow" data-i18n="roadmap.eyebrow">Roadmap</div>
+      <h2 data-i18n="roadmap.h2">Roadmap is under construction</h2>
+      <p class="lead" data-i18n="roadmap.lead">We're still shaping the next public version. Check back soon for milestones, drops, and council priorities.</p>
     </div>
   </section>
 </main>
 
 <main id="panel-holders" class="tab-panel" role="tabpanel" aria-labelledby="tab-holders" hidden>
   <section class="wrap">
-    <div class="eyebrow">Community snapshot</div>
-    <h2>Who holds what</h2>
-    <p class="lead">A live look at current HCC wallets — how many hold Creatures, LAND, or both collections.</p>
+    <div class="eyebrow" data-i18n="holders.eyebrow">Community snapshot</div>
+    <h2 data-i18n="holders.h2">Who holds what</h2>
+    <p class="lead" data-i18n="holders.lead">A live look at current HCC wallets — how many hold Creatures, LAND, or both collections.</p>
 
     <div id="holders-loading" class="holders-state">
       <div class="holders-spinner"></div>
-      <p id="holders-loading-msg">Fetching holder data from the blockchain…</p>
+      <p id="holders-loading-msg" data-i18n="holders.loading">Fetching holder data from the blockchain…</p>
     </div>
 
     <div id="holders-error" class="holders-state" hidden>
@@ -454,26 +472,26 @@ footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
         <canvas id="holders-chart"></canvas>
       </div>
       <div class="facts" style="margin-top:26px">
-        <div class="fact"><div class="n" id="stat-creature-holders">—</div><div class="l">Creature holders</div></div>
-        <div class="fact"><div class="n" id="stat-land-holders">—</div><div class="l">LAND holders</div></div>
-        <div class="fact"><div class="n" id="stat-total-holders">—</div><div class="l">unique wallets</div></div>
+        <div class="fact"><div class="n" id="stat-creature-holders">—</div><div class="l" data-i18n="holders.stat.creatures">Creature holders</div></div>
+        <div class="fact"><div class="n" id="stat-land-holders">—</div><div class="l" data-i18n="holders.stat.land">LAND holders</div></div>
+        <div class="fact"><div class="n" id="stat-total-holders">—</div><div class="l" data-i18n="holders.stat.total">unique wallets</div></div>
       </div>
 
       <div class="divider" style="padding:24px 0 8px">• • •</div>
-      <div class="eyebrow" style="text-align:center;margin-bottom:4px">Holding distribution</div>
-      <p style="text-align:center;font-size:.95rem;color:#5a4d75;margin-bottom:0">How many NFTs each wallet holds — broken down by collection.</p>
+      <div class="eyebrow" style="text-align:center;margin-bottom:4px" data-i18n="holders.dist.eyebrow">Holding distribution</div>
+      <p style="text-align:center;font-size:.95rem;color:#5a4d75;margin-bottom:0" data-i18n="holders.dist.lead">How many NFTs each wallet holds — broken down by collection.</p>
 
       <div class="dist-grid">
         <div class="dist-card">
-          <div class="eyebrow">🐾 Creatures</div>
+          <div class="eyebrow" data-i18n="holders.dist.creatures">🐾 Creatures</div>
           <canvas id="chart-creature-dist"></canvas>
         </div>
         <div class="dist-card">
-          <div class="eyebrow">🗺️ LAND</div>
+          <div class="eyebrow" data-i18n="holders.dist.land">🗺️ LAND</div>
           <canvas id="chart-land-dist"></canvas>
         </div>
         <div class="dist-card">
-          <div class="eyebrow">✨ All HCC assets</div>
+          <div class="eyebrow" data-i18n="holders.dist.combined">✨ All HCC assets</div>
           <canvas id="chart-combined-dist"></canvas>
         </div>
       </div>
@@ -486,15 +504,61 @@ footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
 <footer>
   <div class="wrap">
     <div class="footer-creature"><div class="eyes"><span></span><span></span></div><div class="mouth"></div></div>
-    <h2 style="font-size:1.6rem">Built with the club, for the club.</h2>
-    <p>This is the start of HCC holders having a real hand in what gets made. More to come — every two weeks, like we promised.</p>
-    <div class="stamp">Highrise Creature Club · Player Council</div>
-    <div class="draft">Draft v1 — for community discussion</div>
+    <h2 style="font-size:1.6rem" data-i18n="footer.h2">Built with the club, for the club.</h2>
+    <p data-i18n="footer.p">This is the start of HCC holders having a real hand in what gets made. More to come — every two weeks, like we promised.</p>
+    <div class="stamp" data-i18n="footer.stamp">Highrise Creature Club · Player Council</div>
+    <div class="draft" data-i18n="footer.draft">Draft v1 — for community discussion</div>
   </div>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
 <script>
+// --- i18n ---
+const SUPPORTED_LANGS = ['en', 'pt', 'es', 'ru', 'fr', 'de', 'tr'];
+let translations = {};
+
+function t(key) { return translations[key] || key; }
+
+function applyTranslations() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => {
+    el.innerHTML = t(el.dataset.i18nHtml);
+  });
+}
+
+async function setLanguage(lang) {
+  if (!SUPPORTED_LANGS.includes(lang)) lang = 'en';
+  try {
+    const res = await fetch(`/locales/${lang}.json`);
+    if (!res.ok) throw new Error();
+    translations = await res.json();
+  } catch {
+    if (lang !== 'en') { await setLanguage('en'); return; }
+  }
+  localStorage.setItem('hcc-lang', lang);
+  document.documentElement.lang = lang;
+  applyTranslations();
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    btn.classList.toggle('is-active', btn.dataset.lang === lang);
+  });
+}
+
+async function initI18n() {
+  const saved   = localStorage.getItem('hcc-lang');
+  const browser = (navigator.language || '').split('-')[0];
+  const lang    = saved || (SUPPORTED_LANGS.includes(browser) ? browser : 'en');
+  await setLanguage(lang);
+}
+
+document.querySelectorAll('.lang-btn').forEach(btn => {
+  btn.addEventListener('click', () => setLanguage(btn.dataset.lang));
+});
+
+initI18n();
+
+// --- tabs ---
 const tabButtons = document.querySelectorAll('[data-tab]');
 const tabPanels = document.querySelectorAll('.tab-panel');
 let holdersLoaded = false;
@@ -530,15 +594,15 @@ const initialTab = ['roadmap', 'holders'].find(t => location.hash === `#${t}`);
 if (initialTab) selectTab(initialTab, false);
 
 function getProgressMessage(p) {
-  if (p.phase === 'computing') return 'Crunching the numbers…';
+  if (p.phase === 'computing') return t('progress.computing');
   if (p.phase === 'fetching') {
     const c = p.creaturePages, l = p.landPages;
-    if (c > 0 && l > 0) return `Scanning wallets — Creatures: page ${c} · LAND: page ${l}…`;
-    if (c > 0) return `Fetching Creature holders — page ${c}…`;
-    if (l > 0) return `Fetching LAND holders — page ${l}…`;
-    return 'Connecting to blockchain explorers…';
+    if (c > 0 && l > 0) return t('progress.both').replace('{c}', c).replace('{l}', l);
+    if (c > 0) return t('progress.creatures').replace('{n}', c);
+    if (l > 0) return t('progress.land').replace('{n}', l);
+    return t('progress.connecting');
   }
-  return 'Fetching holder data from the blockchain…';
+  return t('holders.loading');
 }
 
 async function loadHoldersChart() {
@@ -572,13 +636,13 @@ async function loadHoldersChart() {
     const d = new Date(data.lastFetched);
     const dateStr = d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
     const updatedEl = document.getElementById('holders-updated');
-    updatedEl.innerHTML = `Data as of ${dateStr}${data.stale ? ' <span class="stale-badge">REFRESHING</span>' : ''}`;
+    updatedEl.innerHTML = `Data as of ${dateStr}${data.stale ? ` <span class="stale-badge">${t('stale.badge')}</span>` : ''}`;
 
     // Doughnut: who holds what
     new Chart(document.getElementById('holders-chart'), {
       type: 'doughnut',
       data: {
-        labels: ['Creatures only', 'LAND only', 'Both collections'],
+        labels: [t('chart.creaturesOnly'), t('chart.landOnly'), t('chart.both')],
         datasets: [{
           data: [data.creaturesOnly, data.landOnly, data.both],
           backgroundColor: ['#7df9a8', '#ffe14d', '#9d7bff'],
@@ -605,7 +669,7 @@ async function loadHoldersChart() {
               label(ctx) {
                 const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
                 const pct = ((ctx.parsed / total) * 100).toFixed(1);
-                return `  ${ctx.parsed.toLocaleString()} wallets (${pct}%)`;
+                return `  ${ctx.parsed.toLocaleString()} ${t('chart.wallets')} (${pct}%)`;
               },
             },
           },
@@ -636,7 +700,7 @@ async function loadHoldersChart() {
             legend: { display: false },
             tooltip: {
               callbacks: {
-                label(ctx) { return `  ${ctx.parsed.y.toLocaleString()} wallets`; },
+                label(ctx) { return `  ${ctx.parsed.y.toLocaleString()} ${t('chart.wallets')}`; },
               },
             },
           },
@@ -664,7 +728,7 @@ async function loadHoldersChart() {
     clearInterval(poll);
     loadingEl.hidden = true;
     errorEl.hidden = false;
-    errorMsg.textContent = err.message || 'Failed to load holder data. Try refreshing.';
+    errorMsg.textContent = err.message || t('holders.error');
   }
 }
 </script>
