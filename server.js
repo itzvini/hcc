@@ -12,11 +12,13 @@ const LAND_HOLDERS_URL        = 'https://eth.blockscout.com/api/v2/tokens/0x8bf3
 const HOLDER_CACHE_TTL_MS     = 30 * 60 * 1000;
 const DIST_THRESHOLDS         = [1, 2, 5, 10]; // bucket breakpoints
 
-const holderCache = { data: null, fetchedAt: 0, inFlight: null };
+const holderCache    = { data: null, fetchedAt: 0, inFlight: null };
+const fetchProgress  = { phase: 'idle', creaturePages: 0, landPages: 0 };
 
 // Fetch all pages from any Blockscout-style /holders endpoint.
 // Returns Map<lowercaseAddress, nftCount>.
-async function fetchHolderCounts(baseUrl) {
+// onPage() is called after each page is received.
+async function fetchHolderCounts(baseUrl, onPage) {
   const counts = new Map();
   let pageParams = null;
 
@@ -32,6 +34,7 @@ async function fetchHolderCounts(baseUrl) {
       const addr = item.address?.hash;
       if (typeof addr === 'string') counts.set(addr.toLowerCase(), Number(item.value) || 1);
     }
+    if (onPage) onPage();
     pageParams = body.next_page_params ?? null;
   } while (pageParams);
 
@@ -57,10 +60,16 @@ function computeDistribution(countMap) {
 }
 
 async function computeHolderStats() {
+  fetchProgress.phase = 'fetching';
+  fetchProgress.creaturePages = 0;
+  fetchProgress.landPages = 0;
+
   const [creatureCounts, landCounts] = await Promise.all([
-    fetchHolderCounts(CREATURE_HOLDERS_URL),
-    fetchHolderCounts(LAND_HOLDERS_URL),
+    fetchHolderCounts(CREATURE_HOLDERS_URL, () => fetchProgress.creaturePages++),
+    fetchHolderCounts(LAND_HOLDERS_URL,     () => fetchProgress.landPages++),
   ]);
+
+  fetchProgress.phase = 'computing';
 
   // Combined: total HCC assets per wallet (creature + land)
   const combinedCounts = new Map(creatureCounts);
@@ -148,6 +157,15 @@ function resolveFile(requestUrl) {
 }
 
 const server = http.createServer((request, response) => {
+  if (request.url === '/api/holders/progress') {
+    response.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+    });
+    response.end(JSON.stringify(fetchProgress));
+    return;
+  }
+
   if (request.url.startsWith('/api/holders')) {
     getHolderStats()
       .then(data => {

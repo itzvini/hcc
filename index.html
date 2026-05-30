@@ -442,7 +442,7 @@ footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
 
     <div id="holders-loading" class="holders-state">
       <div class="holders-spinner"></div>
-      <p>Fetching holder data from the blockchain…</p>
+      <p id="holders-loading-msg">Fetching holder data from the blockchain…</p>
     </div>
 
     <div id="holders-error" class="holders-state" hidden>
@@ -529,14 +529,36 @@ tabButtons.forEach((button) => {
 const initialTab = ['roadmap', 'holders'].find(t => location.hash === `#${t}`);
 if (initialTab) selectTab(initialTab, false);
 
+function getProgressMessage(p) {
+  if (p.phase === 'computing') return 'Crunching the numbers…';
+  if (p.phase === 'fetching') {
+    const c = p.creaturePages, l = p.landPages;
+    if (c > 0 && l > 0) return `Scanning wallets — Creatures: page ${c} · LAND: page ${l}…`;
+    if (c > 0) return `Fetching Creature holders — page ${c}…`;
+    if (l > 0) return `Fetching LAND holders — page ${l}…`;
+    return 'Connecting to blockchain explorers…';
+  }
+  return 'Fetching holder data from the blockchain…';
+}
+
 async function loadHoldersChart() {
-  const loadingEl  = document.getElementById('holders-loading');
-  const errorEl    = document.getElementById('holders-error');
-  const errorMsg   = document.getElementById('holders-error-msg');
+  const loadingEl   = document.getElementById('holders-loading');
+  const loadingMsg  = document.getElementById('holders-loading-msg');
+  const errorEl     = document.getElementById('holders-error');
+  const errorMsg    = document.getElementById('holders-error-msg');
   const chartWrapEl = document.getElementById('holders-chart-wrap');
+
+  const poll = setInterval(async () => {
+    try {
+      const r = await fetch('/api/holders/progress');
+      const p = await r.json();
+      loadingMsg.textContent = getProgressMessage(p);
+    } catch {}
+  }, 600);
 
   try {
     const res = await fetch('/api/holders');
+    clearInterval(poll);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
 
@@ -639,6 +661,7 @@ async function loadHoldersChart() {
     makeBarChart('chart-combined-dist', data.combinedDistribution, '#9d7bff');
 
   } catch (err) {
+    clearInterval(poll);
     loadingEl.hidden = true;
     errorEl.hidden = false;
     errorMsg.textContent = err.message || 'Failed to load holder data. Try refreshing.';
