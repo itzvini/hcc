@@ -210,6 +210,13 @@ footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
   .right-row{grid-template-columns:1fr;gap:8px}
 }
 @media(max-width:380px){.council-vis{grid-template-columns:1fr}}
+
+/* holders tab */
+.holders-state{text-align:center;padding:60px 20px;color:#5a4d75}
+.holders-spinner{width:48px;height:48px;border:5px solid rgba(157,123,255,.2);border-top-color:var(--grape);border-radius:50%;animation:spin .9s linear infinite;margin:0 auto 20px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.chart-container{max-width:460px;margin:32px auto 0}
+.holders-updated{text-align:center;font-family:'Space Mono',monospace;font-size:.7rem;letter-spacing:.14em;color:#9a8db5;margin-top:20px;text-transform:uppercase}
 </style>
 </head>
 <body>
@@ -236,6 +243,7 @@ footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
   <div class="wrap tab-list" role="tablist" aria-label="Highrise Creature Club pages">
     <button class="page-tab is-active" type="button" role="tab" id="tab-council" aria-selected="true" aria-controls="panel-council" data-tab="council">Council</button>
     <button class="page-tab" type="button" role="tab" id="tab-roadmap" aria-selected="false" aria-controls="panel-roadmap" data-tab="roadmap">Roadmap</button>
+    <button class="page-tab" type="button" role="tab" id="tab-holders" aria-selected="false" aria-controls="panel-holders" data-tab="holders">Holders</button>
   </div>
 </nav>
 
@@ -422,6 +430,35 @@ footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
   </section>
 </main>
 
+<main id="panel-holders" class="tab-panel" role="tabpanel" aria-labelledby="tab-holders" hidden>
+  <section class="wrap">
+    <div class="eyebrow">Community snapshot</div>
+    <h2>Who holds what</h2>
+    <p class="lead">A live look at current HCC wallets — how many hold Creatures, LAND, or both collections.</p>
+
+    <div id="holders-loading" class="holders-state">
+      <div class="holders-spinner"></div>
+      <p>Fetching holder data from the blockchain…</p>
+    </div>
+
+    <div id="holders-error" class="holders-state" hidden>
+      <p id="holders-error-msg" style="color:#5a4d75"></p>
+    </div>
+
+    <div id="holders-chart-wrap" hidden>
+      <div class="chart-container">
+        <canvas id="holders-chart"></canvas>
+      </div>
+      <div class="facts" style="margin-top:26px">
+        <div class="fact"><div class="n" id="stat-creature-holders">—</div><div class="l">Creature holders</div></div>
+        <div class="fact"><div class="n" id="stat-land-holders">—</div><div class="l">LAND holders</div></div>
+        <div class="fact"><div class="n" id="stat-total-holders">—</div><div class="l">unique wallets</div></div>
+      </div>
+      <p class="holders-updated" id="holders-updated"></p>
+    </div>
+  </section>
+</main>
+
 <footer>
   <div class="wrap">
     <div class="footer-creature"><div class="eyes"><span></span><span></span></div><div class="mouth"></div></div>
@@ -432,9 +469,11 @@ footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
   </div>
 </footer>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
 <script>
 const tabButtons = document.querySelectorAll('[data-tab]');
 const tabPanels = document.querySelectorAll('.tab-panel');
+let holdersLoaded = false;
 
 function selectTab(tabName, updateHash = true) {
   tabButtons.forEach((button) => {
@@ -449,6 +488,11 @@ function selectTab(tabName, updateHash = true) {
     panel.hidden = !isActive;
   });
 
+  if (tabName === 'holders' && !holdersLoaded) {
+    holdersLoaded = true;
+    loadHoldersChart();
+  }
+
   if (updateHash) {
     history.replaceState(null, '', `#${tabName}`);
   }
@@ -458,8 +502,75 @@ tabButtons.forEach((button) => {
   button.addEventListener('click', () => selectTab(button.dataset.tab));
 });
 
-if (location.hash === '#roadmap') {
-  selectTab('roadmap', false);
+const initialTab = ['roadmap', 'holders'].find(t => location.hash === `#${t}`);
+if (initialTab) selectTab(initialTab, false);
+
+async function loadHoldersChart() {
+  const loadingEl = document.getElementById('holders-loading');
+  const errorEl = document.getElementById('holders-error');
+  const errorMsg = document.getElementById('holders-error-msg');
+  const chartWrapEl = document.getElementById('holders-chart-wrap');
+
+  try {
+    const res = await fetch('/api/holders');
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    loadingEl.hidden = true;
+    chartWrapEl.hidden = false;
+
+    document.getElementById('stat-creature-holders').textContent = data.totalCreatureHolders.toLocaleString();
+    document.getElementById('stat-land-holders').textContent = data.totalLandHolders.toLocaleString();
+    document.getElementById('stat-total-holders').textContent = data.totalUniqueHolders.toLocaleString();
+
+    const d = new Date(data.lastFetched);
+    document.getElementById('holders-updated').textContent =
+      `Data as of ${d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`;
+
+    new Chart(document.getElementById('holders-chart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Creatures only', 'LAND only', 'Both collections'],
+        datasets: [{
+          data: [data.creaturesOnly, data.landOnly, data.both],
+          backgroundColor: ['#7df9a8', '#ffe14d', '#9d7bff'],
+          borderColor: '#15102a',
+          borderWidth: 3,
+          hoverOffset: 10,
+        }],
+      },
+      options: {
+        animation: { duration: 700 },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              font: { family: "'Space Mono', monospace", size: 11, weight: '700' },
+              color: '#15102a',
+              padding: 22,
+              usePointStyle: true,
+              pointStyleWidth: 14,
+            },
+          },
+          tooltip: {
+            callbacks: {
+              label(ctx) {
+                const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                const pct = ((ctx.parsed / total) * 100).toFixed(1);
+                return `  ${ctx.parsed.toLocaleString()} wallets (${pct}%)`;
+              },
+            },
+          },
+        },
+        cutout: '58%',
+        radius: '88%',
+      },
+    });
+  } catch (err) {
+    loadingEl.hidden = true;
+    errorEl.hidden = false;
+    errorMsg.textContent = err.message || 'Failed to load holder data. Try refreshing.';
+  }
 }
 </script>
 
