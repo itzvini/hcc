@@ -7,80 +7,93 @@ const port = Number(process.env.PORT || 3000);
 const host = '0.0.0.0';
 
 // --- Holder stats ---
-const CREATURE_HOLDERS_URL = 'https://explorer.immutable.com/api/v2/tokens/0xCf44b1cBC959295bbBb49935B1b339cC0AA77cdA/holders';
-const LAND_COLLECTION = '0x8bf3a40ea2337e6e4f6e540680ea6390cb3b4e11';
-const HOLDER_CACHE_TTL_MS = 30 * 60 * 1000;
+const CREATURE_HOLDERS_URL    = 'https://explorer.immutable.com/api/v2/tokens/0xCf44b1cBC959295bbBb49935B1b339cC0AA77cdA/holders';
+const LAND_HOLDERS_URL        = 'https://eth.blockscout.com/api/v2/tokens/0x8bf3a40ea2337e6e4f6e540680ea6390cb3b4e11/holders';
+const HOLDER_CACHE_TTL_MS     = 30 * 60 * 1000;
+const DIST_THRESHOLDS         = [1, 2, 5, 10]; // bucket breakpoints
 
 const holderCache = { data: null, fetchedAt: 0, inFlight: null };
 
-async function fetchAllCreatureHolders() {
-  const holders = new Set();
+// Fetch all pages from any Blockscout-style /holders endpoint.
+// Returns Map<lowercaseAddress, nftCount>.
+async function fetchHolderCounts(baseUrl) {
+  const counts = new Map();
   let pageParams = null;
 
   do {
-    const url = new URL(CREATURE_HOLDERS_URL);
+    const url = new URL(baseUrl);
     if (pageParams) {
       for (const [k, v] of Object.entries(pageParams)) url.searchParams.set(k, v);
     }
     const res = await fetch(url.toString(), { signal: AbortSignal.timeout(15000) });
-    if (!res.ok) throw new Error(`Explorer API ${res.status}`);
+    if (!res.ok) throw new Error(`Blockscout API ${res.status} for ${baseUrl}`);
     const body = await res.json();
     for (const item of (body.items ?? [])) {
       const addr = item.address?.hash;
-      if (typeof addr === 'string') holders.add(addr.toLowerCase());
+      if (typeof addr === 'string') counts.set(addr.toLowerCase(), Number(item.value) || 1);
     }
     pageParams = body.next_page_params ?? null;
   } while (pageParams);
 
-  return holders;
+  return counts;
 }
 
-async function fetchAllLandHolders() {
-  const holders = new Set();
-  let continuation = null;
-
-  do {
-    const url = new URL('https://api.reservoir.tools/owners/v2');
-    url.searchParams.set('collection', LAND_COLLECTION);
-    url.searchParams.set('limit', '500');
-    if (continuation) url.searchParams.set('continuation', continuation);
-    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(15000) });
-    if (!res.ok) throw new Error(`Reservoir API ${res.status}`);
-    const body = await res.json();
-    for (const owner of (body.owners ?? [])) {
-      if (typeof owner.address === 'string') holders.add(owner.address.toLowerCase());
+function computeDistribution(countMap) {
+  const sorted = [...DIST_THRESHOLDS].sort((a, b) => a - b);
+  const buckets = sorted.map((t, i) => ({
+    min: t,
+    max: i < sorted.length - 1 ? sorted[i + 1] - 1 : Infinity,
+    count: 0,
+  }));
+  for (const n of countMap.values()) {
+    for (let i = buckets.length - 1; i >= 0; i--) {
+      if (n >= buckets[i].min) { buckets[i].count++; break; }
     }
-    continuation = body.continuation ?? null;
-  } while (continuation);
-
-  return holders;
+  }
+  return buckets.map(b => ({
+    label: b.max === Infinity ? `${b.min}+` : b.min === b.max ? `${b.min}` : `${b.min}–${b.max}`,
+    count: b.count,
+  }));
 }
 
 async function computeHolderStats() {
-  const [creatureHolders, landHolders] = await Promise.all([
-    fetchAllCreatureHolders(),
-    fetchAllLandHolders(),
+  const [creatureCounts, landCounts] = await Promise.all([
+    fetchHolderCounts(CREATURE_HOLDERS_URL),
+    fetchHolderCounts(LAND_HOLDERS_URL),
   ]);
-  let both = 0;
-  for (const addr of creatureHolders) {
-    if (landHolders.has(addr)) both++;
+
+  // Combined: total HCC assets per wallet (creature + land)
+  const combinedCounts = new Map(creatureCounts);
+  for (const [addr, count] of landCounts) {
+    combinedCounts.set(addr, (combinedCounts.get(addr) || 0) + count);
   }
+
+  let both = 0;
+  for (const addr of creatureCounts.keys()) {
+    if (landCounts.has(addr)) both++;
+  }
+
   return {
-    creaturesOnly: creatureHolders.size - both,
-    landOnly: landHolders.size - both,
+    creaturesOnly: creatureCounts.size - both,
+    landOnly: landCounts.size - both,
     both,
-    totalUniqueHolders: creatureHolders.size + landHolders.size - both,
-    totalCreatureHolders: creatureHolders.size,
-    totalLandHolders: landHolders.size,
+    totalUniqueHolders: combinedCounts.size,
+    totalCreatureHolders: creatureCounts.size,
+    totalLandHolders: landCounts.size,
+    creatureDistribution: computeDistribution(creatureCounts),
+    landDistribution: computeDistribution(landCounts),
+    combinedDistribution: computeDistribution(combinedCounts),
+    stale: false,
     lastFetched: new Date().toISOString(),
   };
 }
 
 function getHolderStats() {
   const now = Date.now();
-  if (holderCache.data && (now - holderCache.fetchedAt) < HOLDER_CACHE_TTL_MS) {
-    return Promise.resolve(holderCache.data);
-  }
+  const isFresh = holderCache.data && (now - holderCache.fetchedAt) < HOLDER_CACHE_TTL_MS;
+  if (isFresh) return Promise.resolve(holderCache.data);
+
+  // Kick off background refresh if not already running
   if (!holderCache.inFlight) {
     holderCache.inFlight = computeHolderStats()
       .then(data => {
@@ -91,9 +104,15 @@ function getHolderStats() {
       })
       .catch(err => {
         holderCache.inFlight = null;
+        console.error('Holder stats fetch failed:', err.message);
         throw err;
       });
   }
+
+  // Stale data exists — return it immediately; refresh runs in background
+  if (holderCache.data) return Promise.resolve({ ...holderCache.data, stale: true });
+
+  // Cold start — must wait for first fetch
   return holderCache.inFlight;
 }
 
@@ -138,9 +157,9 @@ const server = http.createServer((request, response) => {
         });
         response.end(JSON.stringify(data));
       })
-      .catch(() => {
+      .catch(err => {
         response.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
-        response.end(JSON.stringify({ error: 'Holder data temporarily unavailable. Try again in a moment.' }));
+        response.end(JSON.stringify({ error: err.message || 'Holder data temporarily unavailable.' }));
       });
     return;
   }

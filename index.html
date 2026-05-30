@@ -216,7 +216,11 @@ footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
 .holders-spinner{width:48px;height:48px;border:5px solid rgba(157,123,255,.2);border-top-color:var(--grape);border-radius:50%;animation:spin .9s linear infinite;margin:0 auto 20px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .chart-container{max-width:460px;margin:32px auto 0}
-.holders-updated{text-align:center;font-family:'Space Mono',monospace;font-size:.7rem;letter-spacing:.14em;color:#9a8db5;margin-top:20px;text-transform:uppercase}
+.dist-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-top:30px}
+.dist-card{background:#fff;border:3px solid var(--ink);border-radius:22px;padding:22px 20px;box-shadow:6px 6px 0 var(--ink)}
+.dist-card .eyebrow{margin-bottom:14px}
+.holders-updated{text-align:center;font-family:'Space Mono',monospace;font-size:.7rem;letter-spacing:.14em;color:#9a8db5;margin-top:24px;text-transform:uppercase}
+.stale-badge{display:inline-block;font-family:'Space Mono',monospace;font-size:.62rem;letter-spacing:.1em;background:var(--lemon);border:2px solid var(--ink);padding:3px 10px;border-radius:20px;margin-left:8px;vertical-align:middle;animation:pulse 1.8s infinite}
 </style>
 </head>
 <body>
@@ -454,6 +458,26 @@ footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
         <div class="fact"><div class="n" id="stat-land-holders">—</div><div class="l">LAND holders</div></div>
         <div class="fact"><div class="n" id="stat-total-holders">—</div><div class="l">unique wallets</div></div>
       </div>
+
+      <div class="divider" style="padding:24px 0 8px">• • •</div>
+      <div class="eyebrow" style="text-align:center;margin-bottom:4px">Holding distribution</div>
+      <p style="text-align:center;font-size:.95rem;color:#5a4d75;margin-bottom:0">How many NFTs each wallet holds — broken down by collection.</p>
+
+      <div class="dist-grid">
+        <div class="dist-card">
+          <div class="eyebrow">🐾 Creatures</div>
+          <canvas id="chart-creature-dist"></canvas>
+        </div>
+        <div class="dist-card">
+          <div class="eyebrow">🗺️ LAND</div>
+          <canvas id="chart-land-dist"></canvas>
+        </div>
+        <div class="dist-card">
+          <div class="eyebrow">✨ All HCC assets</div>
+          <canvas id="chart-combined-dist"></canvas>
+        </div>
+      </div>
+
       <p class="holders-updated" id="holders-updated"></p>
     </div>
   </section>
@@ -506,9 +530,9 @@ const initialTab = ['roadmap', 'holders'].find(t => location.hash === `#${t}`);
 if (initialTab) selectTab(initialTab, false);
 
 async function loadHoldersChart() {
-  const loadingEl = document.getElementById('holders-loading');
-  const errorEl = document.getElementById('holders-error');
-  const errorMsg = document.getElementById('holders-error-msg');
+  const loadingEl  = document.getElementById('holders-loading');
+  const errorEl    = document.getElementById('holders-error');
+  const errorMsg   = document.getElementById('holders-error-msg');
   const chartWrapEl = document.getElementById('holders-chart-wrap');
 
   try {
@@ -524,9 +548,11 @@ async function loadHoldersChart() {
     document.getElementById('stat-total-holders').textContent = data.totalUniqueHolders.toLocaleString();
 
     const d = new Date(data.lastFetched);
-    document.getElementById('holders-updated').textContent =
-      `Data as of ${d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`;
+    const dateStr = d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    const updatedEl = document.getElementById('holders-updated');
+    updatedEl.innerHTML = `Data as of ${dateStr}${data.stale ? ' <span class="stale-badge">REFRESHING</span>' : ''}`;
 
+    // Doughnut: who holds what
     new Chart(document.getElementById('holders-chart'), {
       type: 'doughnut',
       data: {
@@ -566,6 +592,52 @@ async function loadHoldersChart() {
         radius: '88%',
       },
     });
+
+    // Bar charts: holding distribution
+    function makeBarChart(canvasId, distribution, color) {
+      new Chart(document.getElementById(canvasId), {
+        type: 'bar',
+        data: {
+          labels: distribution.map(b => b.label),
+          datasets: [{
+            data: distribution.map(b => b.count),
+            backgroundColor: color,
+            borderColor: '#15102a',
+            borderWidth: 2.5,
+            borderRadius: 8,
+            borderSkipped: false,
+          }],
+        },
+        options: {
+          animation: { duration: 700 },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label(ctx) { return `  ${ctx.parsed.y.toLocaleString()} wallets`; },
+              },
+            },
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              border: { display: false },
+              ticks: { font: { family: "'Space Mono', monospace", size: 10 }, color: '#5a4d75' },
+            },
+            y: {
+              grid: { color: 'rgba(20,8,40,.06)' },
+              border: { display: false },
+              ticks: { font: { family: "'Space Mono', monospace", size: 10 }, color: '#5a4d75', maxTicksLimit: 5 },
+            },
+          },
+        },
+      });
+    }
+
+    makeBarChart('chart-creature-dist', data.creatureDistribution, '#7df9a8');
+    makeBarChart('chart-land-dist',     data.landDistribution,     '#ffe14d');
+    makeBarChart('chart-combined-dist', data.combinedDistribution, '#9d7bff');
+
   } catch (err) {
     loadingEl.hidden = true;
     errorEl.hidden = false;
