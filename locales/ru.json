@@ -2,6 +2,7 @@
   "nav.council": "Совет",
   "nav.roadmap": "Роадмап",
   "nav.holders": "Холдеры",
+  "nav.changelog": "Changelog",
 
   "hero.kicker": "Highrise Creature Club",
   "hero.h1": "Creatures + LAND получают ",
@@ -165,5 +166,15 @@
   "progress.both": "Сканируем кошельки — Creatures: стр. {c} · LAND: стр. {l}…",
   "progress.computing": "Считаем цифры…",
 
-  "stale.badge": "ОБНОВЛЯЕТСЯ"
+  "stale.badge": "ОБНОВЛЯЕТСЯ",
+
+  "changelog.eyebrow": "История изменений",
+  "changelog.h2": "Что изменилось",
+  "changelog.club.eyebrow": "Обновления клуба",
+  "changelog.club.h2": "Creature Club",
+  "changelog.site.eyebrow": "Обновления сайта",
+  "changelog.site.h2": "Эта страница",
+  "changelog.order": "сначала новые",
+  "changelog.latest": "НОВОЕ",
+  "changelog.empty": "Пока ничего нет."
 }

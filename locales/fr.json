@@ -2,6 +2,7 @@
   "nav.council": "Conseil",
   "nav.roadmap": "Roadmap",
   "nav.holders": "Holders",
+  "nav.changelog": "Changelog",
 
   "hero.kicker": "Highrise Creature Club",
   "hero.h1": "Creatures + LAND ont désormais ",
@@ -165,5 +166,15 @@
   "progress.both": "Scan des portefeuilles — Creatures : page {c} · LAND : page {l}…",
   "progress.computing": "Calcul des chiffres…",
 
-  "stale.badge": "ACTUALISATION"
+  "stale.badge": "ACTUALISATION",
+
+  "changelog.eyebrow": "Historique",
+  "changelog.h2": "Ce qui a changé",
+  "changelog.club.eyebrow": "Mises à jour du club",
+  "changelog.club.h2": "Creature Club",
+  "changelog.site.eyebrow": "Mises à jour du site",
+  "changelog.site.h2": "Cette page",
+  "changelog.order": "plus récent en premier",
+  "changelog.latest": "RÉCENT",
+  "changelog.empty": "Rien ici pour l'instant."
 }

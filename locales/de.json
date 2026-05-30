@@ -2,6 +2,7 @@
   "nav.council": "Rat",
   "nav.roadmap": "Roadmap",
   "nav.holders": "Holder",
+  "nav.changelog": "Changelog",
 
   "hero.kicker": "Highrise Creature Club",
   "hero.h1": "Creatures + LAND bekommen eine ",
@@ -165,5 +166,15 @@
   "progress.both": "Scanne Wallets — Creatures: Seite {c} · LAND: Seite {l}…",
   "progress.computing": "Berechne die Zahlen…",
 
-  "stale.badge": "WIRD AKTUALISIERT"
+  "stale.badge": "WIRD AKTUALISIERT",
+
+  "changelog.eyebrow": "Verlauf",
+  "changelog.h2": "Was sich geändert hat",
+  "changelog.club.eyebrow": "Club-Updates",
+  "changelog.club.h2": "Creature Club",
+  "changelog.site.eyebrow": "Seiten-Updates",
+  "changelog.site.h2": "Diese Seite",
+  "changelog.order": "neueste zuerst",
+  "changelog.latest": "NEU",
+  "changelog.empty": "Noch nichts hier."
 }

@@ -1,0 +1,42 @@
+{
+  "club": [
+    {
+      "date": "May 28, 2026",
+      "title": "Player Council announced",
+      "body": "HCC is launching a holder-led Player Council: 4 elected seats + 3 appointed seats. Holders will have a structured way to give feedback, make creative recommendations, and participate in scoped decisions around Gen 2, drop themes, Creature Shop, and roadmap direction. Not a DAO — Pocket Worlds keeps final say on business, economy, and safety.",
+      "tag": "council"
+    },
+    {
+      "date": "May 28, 2026",
+      "title": "ItsVini takes over as project lead",
+      "body": "Vinicius Cabral (ItsVini) has taken full responsibility and accountability for HCC — decisions, delivery, and community management. Tom, the previous lead, built the foundation this project stands on.",
+      "tag": "announcement"
+    },
+    {
+      "date": "May 28, 2026",
+      "title": "Council site open sourced",
+      "body": "The HCC Player Council site is now public on GitHub. Community members can open Issues to flag typos, suggest changes, or request content. Developers can fork the repo and submit Pull Requests. Nothing goes live without review first.",
+      "tag": "update"
+    }
+  ],
+  "site": [
+    {
+      "date": "May 2026",
+      "title": "Player Council page launches",
+      "body": "Initial release covering Club overview, Council structure, holder stats, and roadmap.",
+      "tag": "update"
+    },
+    {
+      "date": "May 2026",
+      "title": "Multilingual support — 7 languages",
+      "body": "Full page translations live in English, Portuguese, Spanish, Russian, French, German, and Turkish.",
+      "tag": "update"
+    },
+    {
+      "date": "May 2026",
+      "title": "Changelog added",
+      "body": "Separate tracking for Club matters and Site content updates.",
+      "tag": "update"
+    }
+  ]
+}
