@@ -1,10 +1,10 @@
 import { initI18n, setLanguage } from './i18n.js';
 import { loadHoldersChart } from './holders.js';
-import { loadChangelog } from './changelog.js';
+import { loadChangelog, rerenderChangelog } from './changelog.js';
 
-// Language switcher
+// Language switcher — re-render changelog after language change
 document.querySelectorAll('.lang-btn').forEach(btn => {
-  btn.addEventListener('click', () => setLanguage(btn.dataset.lang));
+  btn.addEventListener('click', () => setLanguage(btn.dataset.lang).then(rerenderChangelog));
 });
 
 // Tabs
@@ -34,4 +34,4 @@ tabButtons.forEach(btn => btn.addEventListener('click', () => selectTab(btn.data
 const initialTab = ['roadmap', 'holders', 'changelog'].find(name => location.hash === `#${name}`);
 if (initialTab) selectTab(initialTab, false);
 
-initI18n();
+initI18n().then(rerenderChangelog);

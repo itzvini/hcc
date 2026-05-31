@@ -1,5 +1,8 @@
 const SUPPORTED_LANGS = ['en', 'pt', 'es', 'ru', 'fr', 'de', 'tr'];
 let translations = {};
+let currentLang = 'en';
+
+export function getCurrentLang() { return currentLang; }
 
 export function t(key) {
   return translations[key] || key;
@@ -23,6 +26,7 @@ export async function setLanguage(lang) {
   } catch {
     if (lang !== 'en') { await setLanguage('en'); return; }
   }
+  currentLang = lang;
   localStorage.setItem('hcc-lang', lang);
   document.documentElement.lang = lang;
   applyTranslations();

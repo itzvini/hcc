@@ -4,19 +4,115 @@
       "date": "May 30, 2026",
       "title": "Council site open sourced",
       "body": "The HCC Player Council site is now public on GitHub. Community members can open Issues to flag typos, suggest changes, or request content. Developers can fork the repo and submit Pull Requests. Nothing goes live without review first.",
-      "tag": "update"
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "30 de mai. de 2026",
+          "title": "Site do conselho disponível como open source",
+          "body": "O site do HCC Player Council está agora público no GitHub. Membros da comunidade podem abrir Issues para sinalizar erros, sugerir mudanças ou pedir conteúdo. Desenvolvedores podem fazer fork do repositório e enviar Pull Requests. Nada vai ao ar sem revisão."
+        },
+        "es": {
+          "date": "30 may. 2026",
+          "title": "Sitio del consejo disponible como código abierto",
+          "body": "El sitio del HCC Player Council es ahora público en GitHub. Los miembros de la comunidad pueden abrir Issues para reportar errores, sugerir cambios o solicitar contenido. Los desarrolladores pueden hacer fork del repositorio y enviar Pull Requests. Nada se publica sin revisión."
+        },
+        "fr": {
+          "date": "30 mai 2026",
+          "title": "Site du conseil rendu open source",
+          "body": "Le site du HCC Player Council est maintenant public sur GitHub. Les membres de la communauté peuvent ouvrir des Issues pour signaler des fautes, suggérer des modifications ou demander du contenu. Les développeurs peuvent forker le dépôt et soumettre des Pull Requests. Rien n'est mis en ligne sans révision."
+        },
+        "de": {
+          "date": "30. Mai 2026",
+          "title": "Council-Website als Open Source veröffentlicht",
+          "body": "Die HCC Player Council Website ist jetzt öffentlich auf GitHub. Community-Mitglieder können Issues öffnen, um Tippfehler zu melden, Änderungen vorzuschlagen oder Inhalte anzufordern. Entwickler können das Repository forken und Pull Requests einreichen. Nichts wird ohne Review veröffentlicht."
+        },
+        "ru": {
+          "date": "30 мая 2026",
+          "title": "Сайт совета открыт как open source",
+          "body": "Сайт HCC Player Council теперь публичен на GitHub. Члены сообщества могут открывать Issues, чтобы сообщать об ошибках, предлагать изменения или запрашивать контент. Разработчики могут сделать форк репозитория и отправить Pull Request. Ничего не публикуется без проверки."
+        },
+        "tr": {
+          "date": "30 Mayıs 2026",
+          "title": "Konsey sitesi açık kaynak olarak yayınlandı",
+          "body": "HCC Player Council sitesi artık GitHub'da kamuya açık. Topluluk üyeleri yazım hatalarını bildirmek, değişiklik önermek veya içerik talep etmek için Issue açabilir. Geliştiriciler depoyu fork edip Pull Request gönderebilir. Hiçbir şey inceleme yapılmadan yayınlanmaz."
+        }
+      }
     },
     {
       "date": "May 30, 2026",
       "title": "ItsVini takes over as project lead",
       "body": "Vinicius Cabral (ItsVini) has taken full responsibility and accountability for HCC — decisions, delivery, and community management. Tom, the previous lead, built the foundation this project stands on.",
-      "tag": "announcement"
+      "tag": "announcement",
+      "i18n": {
+        "pt": {
+          "date": "30 de mai. de 2026",
+          "title": "ItsVini assume como líder do projeto",
+          "body": "Vinicius Cabral (ItsVini) assumiu total responsabilidade pelo HCC — decisões, entrega e gestão da comunidade. Tom, o líder anterior, construiu a base sobre a qual este projeto se sustenta."
+        },
+        "es": {
+          "date": "30 may. 2026",
+          "title": "ItsVini asume como líder del proyecto",
+          "body": "Vinicius Cabral (ItsVini) ha asumido total responsabilidad por HCC — decisiones, entrega y gestión de la comunidad. Tom, el líder anterior, construyó los cimientos sobre los que se sostiene este proyecto."
+        },
+        "fr": {
+          "date": "30 mai 2026",
+          "title": "ItsVini prend la tête du projet",
+          "body": "Vinicius Cabral (ItsVini) a pris l'entière responsabilité du HCC — décisions, livraison et gestion de la communauté. Tom, l'ancien responsable, a construit les fondations sur lesquelles ce projet repose."
+        },
+        "de": {
+          "date": "30. Mai 2026",
+          "title": "ItsVini übernimmt als Projektleiter",
+          "body": "Vinicius Cabral (ItsVini) hat die volle Verantwortung für HCC übernommen — Entscheidungen, Umsetzung und Community-Management. Tom, der frühere Leiter, hat das Fundament gebaut, auf dem dieses Projekt steht."
+        },
+        "ru": {
+          "date": "30 мая 2026",
+          "title": "ItsVini принимает руководство проектом",
+          "body": "Виниций Кабрал (ItsVini) принял на себя полную ответственность за HCC — решения, поставки и управление сообществом. Том, предыдущий руководитель, заложил фундамент, на котором стоит этот проект."
+        },
+        "tr": {
+          "date": "30 Mayıs 2026",
+          "title": "ItsVini proje lideri olarak görevi devraldı",
+          "body": "Vinicius Cabral (ItsVini), HCC için — kararlar, teslimat ve topluluk yönetimi konularında — tam sorumluluğu üstlendi. Önceki lider Tom, bu projenin üzerinde durduğu temeli inşa etti."
+        }
+      }
     },
     {
       "date": "May 28, 2026",
       "title": "Player Council announced",
       "body": "HCC is launching a holder-led Player Council: 4 elected seats + 3 appointed seats. Holders will have a structured way to give feedback, make creative recommendations, and participate in scoped decisions around Gen 2, drop themes, Creature Shop, and roadmap direction. Not a DAO — Pocket Worlds keeps final say on business, economy, and safety.",
-      "tag": "council"
+      "tag": "council",
+      "i18n": {
+        "pt": {
+          "date": "28 de mai. de 2026",
+          "title": "Player Council anunciado",
+          "body": "O HCC está lançando um Player Council liderado por holders: 4 cadeiras eleitas + 3 designadas. Os holders terão uma forma estruturada de dar feedback, fazer recomendações criativas e participar de decisões sobre Gen 2, temas de drops, Creature Shop e direção do roadmap. Não é uma DAO — a Pocket Worlds mantém a palavra final sobre negócios, economia e segurança."
+        },
+        "es": {
+          "date": "28 may. 2026",
+          "title": "Player Council anunciado",
+          "body": "HCC está lanzando un Player Council liderado por holders: 4 asientos elegidos + 3 designados. Los holders tendrán una forma estructurada de dar feedback, hacer recomendaciones creativas y participar en decisiones sobre Gen 2, temas de drops, Creature Shop y dirección del roadmap. No es una DAO — Pocket Worlds mantiene la última palabra en negocios, economía y seguridad."
+        },
+        "fr": {
+          "date": "28 mai 2026",
+          "title": "Annonce du Player Council",
+          "body": "HCC lance un Player Council dirigé par les holders : 4 sièges élus + 3 désignés. Les holders auront un moyen structuré de donner des retours, faire des recommandations créatives et participer aux décisions sur Gen 2, les thèmes des drops, la Creature Shop et la direction du roadmap. Ce n'est pas une DAO — Pocket Worlds garde le dernier mot sur les affaires, l'économie et la sécurité."
+        },
+        "de": {
+          "date": "28. Mai 2026",
+          "title": "Spielerrat angekündigt",
+          "body": "HCC startet einen von Holdern geführten Spielerrat: 4 gewählte + 3 ernannte Sitze. Holder erhalten eine strukturierte Möglichkeit, Feedback zu geben, kreative Empfehlungen zu machen und an Entscheidungen zu Gen 2, Drop-Themen, Creature Shop und Roadmap-Richtung teilzunehmen. Keine DAO — Pocket Worlds behält das letzte Wort bei Geschäft, Wirtschaft und Sicherheit."
+        },
+        "ru": {
+          "date": "28 мая 2026",
+          "title": "Объявлен Совет Игроков",
+          "body": "HCC запускает Совет Игроков под руководством холдеров: 4 выборных + 3 назначенных места. Холдеры получат структурированный способ давать обратную связь, вносить творческие рекомендации и участвовать в решениях по Gen 2, темам дропов, Creature Shop и направлению роадмапа. Не DAO — Pocket Worlds сохраняет последнее слово в бизнесе, экономике и безопасности."
+        },
+        "tr": {
+          "date": "28 Mayıs 2026",
+          "title": "Player Council duyuruldu",
+          "body": "HCC, holder liderliğinde bir Player Council başlatıyor: 4 seçilmiş + 3 atanmış koltuk. Holderlar Gen 2, drop temaları, Creature Shop ve roadmap yönü hakkındaki kararlara geri bildirim vermenin, yaratıcı önerilerde bulunmanın ve katılmanın yapılandırılmış bir yoluna sahip olacak. DAO değil — Pocket Worlds iş, ekonomi ve güvenlik konularında son sözü saklı tutar."
+        }
+      }
     }
   ],
   "site": [
@@ -24,25 +120,153 @@
       "date": "May 31, 2026",
       "title": "Roadmap published",
       "body": "The Roadmap tab is now live with 8 milestones: Pink Anniversary Drop → Educational NFT Content → Council Final Definition → Council Timelines Published → First Election → Council's First Decisions → Gen 2 Community Preview → Gen 2 Launch.",
-      "tag": "update"
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "31 de mai. de 2026",
+          "title": "Roadmap publicado",
+          "body": "A aba Roadmap está agora ativa com 8 marcos: Pink Anniversary Drop → Conteúdo Educacional NFT → Definição Final do Conselho → Cronograma do Conselho Publicado → Primeira Eleição → Primeiras Decisões do Conselho → Prévia do Gen 2 para a Comunidade → Lançamento do Gen 2."
+        },
+        "es": {
+          "date": "31 may. 2026",
+          "title": "Roadmap publicado",
+          "body": "La pestaña Roadmap está ahora activa con 8 hitos: Pink Anniversary Drop → Contenido Educativo NFT → Definición Final del Consejo → Cronograma del Consejo Publicado → Primera Elección → Primeras Decisiones del Consejo → Vista Previa Comunitaria de Gen 2 → Lanzamiento de Gen 2."
+        },
+        "fr": {
+          "date": "31 mai 2026",
+          "title": "Roadmap publié",
+          "body": "L'onglet Roadmap est maintenant en ligne avec 8 jalons : Pink Anniversary Drop → Contenu Éducatif NFT → Définition Finale du Conseil → Calendrier du Conseil Publié → Première Élection → Premières Décisions du Conseil → Aperçu Communautaire du Gen 2 → Lancement du Gen 2."
+        },
+        "de": {
+          "date": "31. Mai 2026",
+          "title": "Roadmap veröffentlicht",
+          "body": "Der Roadmap-Tab ist jetzt live mit 8 Meilensteinen: Pink Anniversary Drop → Pädagogische NFT-Inhalte → Abschließende Ratsdefinition → Rat-Zeitplan Veröffentlicht → Erste Wahl → Erste Ratsentscheidungen → Gen-2-Community-Vorschau → Gen-2-Launch."
+        },
+        "ru": {
+          "date": "31 мая 2026",
+          "title": "Роадмап опубликован",
+          "body": "Вкладка Роадмап теперь активна с 8 этапами: Pink Anniversary Drop → Образовательный контент об NFT → Окончательное определение совета → Сроки совета опубликованы → Первые выборы → Первые решения совета → Предпросмотр Gen 2 для сообщества → Запуск Gen 2."
+        },
+        "tr": {
+          "date": "31 Mayıs 2026",
+          "title": "Yol haritası yayınlandı",
+          "body": "Roadmap sekmesi artık 8 kilometre taşıyla yayında: Pink Anniversary Drop → NFT Eğitim İçeriği → Konsey Nihai Tanımı → Konsey Zaman Çizelgesi Yayınlandı → İlk Seçim → Konseyin İlk Kararları → Gen 2 Topluluk Önizlemesi → Gen 2 Lansmanı."
+        }
+      }
     },
     {
       "date": "May 30, 2026",
       "title": "Changelog added",
       "body": "Separate tracking for Club matters and Site content updates.",
-      "tag": "update"
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "30 de mai. de 2026",
+          "title": "Changelog adicionado",
+          "body": "Rastreamento separado para atualizações do Clube e atualizações de conteúdo do Site."
+        },
+        "es": {
+          "date": "30 may. 2026",
+          "title": "Changelog añadido",
+          "body": "Seguimiento separado para actualizaciones del Club y actualizaciones de contenido del Sitio."
+        },
+        "fr": {
+          "date": "30 mai 2026",
+          "title": "Changelog ajouté",
+          "body": "Suivi séparé pour les mises à jour du Club et les mises à jour du contenu du Site."
+        },
+        "de": {
+          "date": "30. Mai 2026",
+          "title": "Changelog hinzugefügt",
+          "body": "Separate Verfolgung für Club-Updates und Site-Inhaltsupdates."
+        },
+        "ru": {
+          "date": "30 мая 2026",
+          "title": "Добавлен журнал изменений",
+          "body": "Отдельное отслеживание для обновлений Клуба и обновлений контента Сайта."
+        },
+        "tr": {
+          "date": "30 Mayıs 2026",
+          "title": "Changelog eklendi",
+          "body": "Kulüp güncellemeleri ve Site içerik güncellemeleri için ayrı takip."
+        }
+      }
     },
     {
       "date": "May 30, 2026",
       "title": "Multilingual support — 7 languages",
       "body": "Full page translations live in English, Portuguese, Spanish, Russian, French, German, and Turkish.",
-      "tag": "update"
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "30 de mai. de 2026",
+          "title": "Suporte multilíngue — 7 idiomas",
+          "body": "Traduções completas disponíveis em inglês, português, espanhol, russo, francês, alemão e turco."
+        },
+        "es": {
+          "date": "30 may. 2026",
+          "title": "Soporte multilingüe — 7 idiomas",
+          "body": "Traducciones completas disponibles en inglés, portugués, español, ruso, francés, alemán y turco."
+        },
+        "fr": {
+          "date": "30 mai 2026",
+          "title": "Support multilingue — 7 langues",
+          "body": "Traductions complètes disponibles en anglais, portugais, espagnol, russe, français, allemand et turc."
+        },
+        "de": {
+          "date": "30. Mai 2026",
+          "title": "Mehrsprachige Unterstützung — 7 Sprachen",
+          "body": "Vollständige Seitenübersetzungen verfügbar auf Englisch, Portugiesisch, Spanisch, Russisch, Französisch, Deutsch und Türkisch."
+        },
+        "ru": {
+          "date": "30 мая 2026",
+          "title": "Многоязычная поддержка — 7 языков",
+          "body": "Полные переводы страницы доступны на английском, португальском, испанском, русском, французском, немецком и турецком."
+        },
+        "tr": {
+          "date": "30 Mayıs 2026",
+          "title": "Çok dilli destek — 7 dil",
+          "body": "Tam sayfa çevirileri İngilizce, Portekizce, İspanyolca, Rusça, Fransızca, Almanca ve Türkçe olarak yayında."
+        }
+      }
     },
     {
       "date": "May 28, 2026",
       "title": "Player Council page launches",
       "body": "Initial release covering Club overview, Council structure, holder stats, and roadmap.",
-      "tag": "update"
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "28 de mai. de 2026",
+          "title": "Página do Player Council lançada",
+          "body": "Lançamento inicial cobrindo visão geral do Clube, estrutura do Conselho, estatísticas de holders e roadmap."
+        },
+        "es": {
+          "date": "28 may. 2026",
+          "title": "Página del Player Council lanzada",
+          "body": "Lanzamiento inicial que cubre la descripción general del Club, estructura del Consejo, estadísticas de holders y roadmap."
+        },
+        "fr": {
+          "date": "28 mai 2026",
+          "title": "Lancement de la page du Player Council",
+          "body": "Version initiale couvrant la vue d'ensemble du Club, la structure du Conseil, les statistiques des holders et le roadmap."
+        },
+        "de": {
+          "date": "28. Mai 2026",
+          "title": "Player Council Seite gestartet",
+          "body": "Erstveröffentlichung mit Club-Übersicht, Ratsstruktur, Holder-Statistiken und Roadmap."
+        },
+        "ru": {
+          "date": "28 мая 2026",
+          "title": "Запуск страницы Совета Игроков",
+          "body": "Первоначальный выпуск, включающий обзор Клуба, структуру Совета, статистику холдеров и роадмап."
+        },
+        "tr": {
+          "date": "28 Mayıs 2026",
+          "title": "Player Council sayfası yayına girdi",
+          "body": "Kulüp genel bakışı, Konsey yapısı, holder istatistikleri ve roadmap'i kapsayan ilk sürüm."
+        }
+      }
     }
   ]
 }
