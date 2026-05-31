@@ -3,12 +3,10 @@
   "nav.roadmap": "Yol Haritası",
   "nav.holders": "Holderlar",
   "nav.changelog": "Changelog",
-
   "hero.kicker": "Highrise Creature Club",
   "hero.h1": "Creatures + LAND bir ",
   "hero.pop": "ses kazanıyor.",
   "hero.subtitle": "HCC'nin ne olduğu, Creatures ve LAND'in nasıl bir araya geldiği ve yaratıcı kararların alındığı odaya holder'ları yerleştiren yeni <strong>Oyuncu Konseyi</strong> hakkında kolay bir rehber.",
-
   "s1.eyebrow": "Buradan başla",
   "s1.h2": "Peki… Creature Club nedir?",
   "s1.lead": "Highrise Creature Club, iki koleksiyonluk NFT konseptinden oluşur: <strong>11.111 eşsiz yaratık avatarı</strong> ve aynı kulübe dahil edilen <strong>Highrise LAND NFT'leri</strong>. Herhangi birini sahiplen ve Highrise'a entegre ayrıcalıklarla üye ol.",
@@ -20,7 +18,6 @@
   "s1.p3p": "Yeni yaratık içeriklerine erken ve ücretsiz erişim.",
   "s1.p4h": "Yalnızca üyelere özel alanlar",
   "s1.p4p": "Özel bir kulüp odası ve topluluk masasında gerçek bir yer.",
-
   "land.eyebrow": "Ailenin diğer yarısı",
   "land.body": "LAND NFT'leri, Highrise evrenindeki sanal parsellerin koleksiyonudur; <strong>Standard</strong> ve <strong>Premium</strong> seviyeleriyle — LAND sahiplerinin çoğunun ayrıca parselleriyle birlikte sevimli bir <strong>slime pet</strong>'i vardır. LAND'in özgün bağımsız planı değişti ve proje Creature Club ailesine dahil edildi: artık LAND'e sahip olmak da seni üye yapıyor.",
   "land.p1h": "Slime pet'ler",
@@ -31,7 +28,6 @@
   "land.p3p": "Premium LAND, Standard'ın üç katı Creature Coin kazandırır; tıpkı Efsanevi yaratıklar gibi.",
   "land.p4h": "Tam Creature ayrıcalıkları",
   "land.p4p": "LAND NFT sahipleri artık Creature Coin kazanıyor ve kulüp drop'larına ve çekilişlerine katılıyor.",
-
   "journey.eyebrow": "Yolculuk",
   "journey.h2": "HCC buraya nasıl geldi",
   "journey.lead": "Süslü söylem yok — kulübün geçtiği yerlerin ve yöneldiği istikametin dürüst özeti.",
@@ -56,11 +52,9 @@
   "t7.year": "ŞİMDİ — KONSEY",
   "t7.h": "Holder'lar gerçek bir ses kazanıyor",
   "t7.p": "Bir sonraki adım: Creatures ve LAND için nelerin yaratılacağını şekillendirmeye yardımcı olan holder liderliğinde bir Oyuncu Konseyi. Bu sayfa tamamen bu hakkında. 👇",
-
   "honest.eyebrow": "Dürüst konuşma",
   "honest.h2": "Neden bunu yapıyoruz",
   "honest.p": "Güven söz vermelerden geri gelmez — tutarlı teslimat <em>ve</em> gerçekten dinlemekten gelir. Konsey, HCC holder'larının bundan sonra ne geleceğini yalnızca duymak yerine bunu belirlemeye yardımcı olmaları için var. İnşa eden ekibin yanında çalışan, yaratıcı yönde gerçek ağırlığı olan bir danışma kurulunun ta kendisidir.",
-
   "unify.eyebrow": "Nereye gidiyoruz",
   "unify.h2": "Tek bir kulüp: Creatures <span class=\"pop\">+</span> LAND, birlikte",
   "unify.lead": "Uzun bir süre Creatures ve LAND iki ayrı NFT projesi olarak iki farklı hikâyeyle var oldu. Hedef şimdi onları <strong>tek bir Creature Club konsepti</strong> olarak birleştirmek — tek bir topluluk, tek bir ayrıcalık seti, tek bir yol haritası ve tek bir holder sesi.",
@@ -73,7 +67,6 @@
   "unify.p4h": "Tek ses",
   "unify.p4p": "Oyuncu Konseyi Creature <em>ve</em> LAND holder'larını eşit şekilde temsil eder.",
   "unify.note": "Varlıklarını değişmiyor — yaratığın, LAND parselini ve slime pet'in tam olarak oldukları gibi kalır. Birleşmek, onların etrafındaki <em>deneyim</em> ile ilgili: büyütmesi, desteklemesi ve inşa etmesi daha kolay bir aile.",
-
   "council.eyebrow": "Büyük fikir",
   "council.h2": "Oyuncu Konseyi ile tanış",
   "council.lead": "Gen 2'yi tamamlamak ve düzenli drop'ları sürdürmek için adanmış bir PM ve sanat ekibiyle çalışan, holder liderliğinde küçük bir grup. Bu <strong>dişleri olan danışmanlık</strong> — iş kararlarında oy hakkı değil, yaratıcı konularda gerçek söz hakkı.",
@@ -84,7 +77,6 @@
   "council.fact1": "koltuk, kasıtlı olarak küçük tutuldu",
   "council.fact2": "bir holder, bir oy — balinalar ağırlıklı değil",
   "council.fact3": "dönem, taze kalması için",
-
   "power.eyebrow": "Kim ne karar veriyor",
   "power.h2": "Konseyin gerçek gücünün olduğu yer",
   "power.lead": "Bazı kararları Konsey alır. Bazılarında danışmanlık yapar. Birkaçında ise yalnızca bilgi sahibi olur — ve bu kapsam, Konsey kendini kanıtladıkça büyür.",
@@ -99,7 +91,6 @@
   "power.advises": "Danışmanlık yapar",
   "power.informed": "Bilgilendirilir",
   "power.note": "Pocket Worlds uygulayıcı olarak kalır ve ekonomiyi, markayı veya yasal sınırları ilgilendiren her konuda son sözü söyler — tüm kulübü koruyan şeylerin korunmaya devam etmesi için.",
-
   "seat.eyebrow": "Bir koltuğun nasıl çalıştığı",
   "seat.h2": "Adil, basit ve senin",
   "seat.p1h": "Oy kullanmak için sahiplen",
@@ -110,12 +101,10 @@
   "seat.p3p": "Öz-aday olma penceresi açılır, ardından holder'lar oy kullanır. Temiz ve şeffaf.",
   "seat.p4h": "Taze kan",
   "seat.p4p": "Altı aylık dönemler, seçilmiş koltuklar için art arda en fazla iki dönem. Yerleşme yok.",
-
   "rhythm.eyebrow": "Ritim",
   "rhythm.h2": "Kararlar nasıl ilerliyor",
   "rhythm.p1": "PM yol haritasına sahiptir ve Konseye her birine \"bitmişi böyle görünüyor\" eklenmiş açık, kapsamlı sorular getirir. Konsey, sonsuz açık tartışmalar değil belirli kararlar üzerinde görüş bildirir.",
   "rhythm.p2": "<strong style=\"color:var(--slime)\">Sıklık:</strong> iki haftada bir hızlı check-in, ayda bir canlı arama. <strong style=\"color:var(--bubble)\">Nerede:</strong> başlangıçta özel bir holder kanalı, ileride büyük sorular için token korumalı kapsamlı holder oylamaları.",
-
   "faq.eyebrow": "Hızlı yanıtlar",
   "faq.h2": "Aklına gelebilecek sorular",
   "faq.q1": "Bu bir DAO mu? Artık şirketin bir parçasına sahip miyim?",
@@ -130,48 +119,35 @@
   "faq.a5": "Evet. Yaratıkları blok zincirinden taşıma planları Steam onayının ardından iptal edildi. Bu durum hiçbir zaman değişmek zorunda kalırsa, seni erken ve açık bir şekilde bilgilendireceğiz — sürpriz yok.",
   "faq.q6": "Konsey aslında ne ile başlıyor?",
   "faq.a6": "Daha danışmanlık ağırlıklı başlar ve 'Karar verir' gücü, kendini kanıtladıkça sürümden sürüme büyür. Birinci günden itibaren her şey değil, zamanla çıkarılan yardımcı tekerlekler gibi düşün.",
-
   "roadmap.eyebrow": "Neler geliyor",
   "roadmap.h2": "Önümüzdeki yol",
   "roadmap.lead": "Bir sonraki drop'tan Gen 2'ye — sırayla üzerinde çalıştığımız her kilometre taşı.",
-
   "rm.status.now": "Şimdi",
   "rm.status.next": "Sıradaki",
   "rm.status.soon": "Yakında",
   "rm.status.later": "Sonra",
   "rm.status.goal": "Hedef",
-
   "rm.cat.content": "İçerik",
   "rm.cat.governance": "Yönetim",
   "rm.cat.utility": "Fayda",
   "rm.cat.product": "Ürün",
-
   "rm.m1.h": "Pink Anniversary Drop",
-  "rm.m1.p": "The 4th anniversary recolour grab is dropping next — pink and white recolours, exclusive to HCC members.",
-
+  "rm.m1.p": "4. yıl dönümü yeniden renklendirme grabı geliyor — pembe ve beyaz yeniden renkler, yalnızca HCC üyelerine özel.",
   "rm.medu.h": "NFT Eğitim İçeriği",
-  "rm.medu.p": "Clear, accessible content explaining what HCC NFTs are, how they work, and what holding one actually means — lowering the barrier for new and existing members alike.",
-
-  "rm.m2.h": "Council Final Definition",
-  "rm.m2.p": "Finalising the council rules: candidacy eligibility, the appointed seat process, and anti-gaming guardrails. The structure needs to be right before the clock starts.",
-
-  "rm.m3.h": "Council Timelines Published",
-  "rm.m3.p": "Application window, campaign period, and voting date — all locked in and published here. No more guessing when.",
-
-  "rm.m4.h": "First Election",
-  "rm.m4.p": "Self-nominations open, community votes. 4 seats filled by holders, 3 appointed for continuity. One holder, one vote.",
-
-  "rm.m7.h": "Council's First Decisions",
-  "rm.m7.p": "The council weighs in on its first real creative questions: next drop theme, Gen 2 variants, Creature Shop priorities.",
-
-  "rm.m9.h": "Gen 2 Community Preview",
-  "rm.m9.p": "The council reviews Gen 2 designs before they're final. Structured feedback from holders, not a leaked WIP.",
-
-  "rm.m10.h": "Gen 2 Launch",
-  "rm.m10.p": "Gen 2 Creatures released as a proper event — not a quiet drop. Marketing, a community launch moment, and a clear Gen 1 vs Gen 2 utility story.",
-
+  "rm.medu.p": "HCC NFT'lerinin ne olduğunu, nasıl çalıştığını ve bir tanesine sahip olmanın gerçekte ne anlama geldiğini açıklayan net, erişilebilir içerik — yeni ve mevcut üyeler için engeli düşürüyor.",
+  "rm.m2.h": "Konsey Nihai Tanımı",
+  "rm.m2.p": "Konsey kurallarının sonlandırılması: aday uygunluğu, atanan koltuk süreci ve manipülasyon önleme güvenceleri. Saat başlamadan önce yapının doğru olması gerekiyor.",
+  "rm.m3.h": "Konsey Zaman Çizelgesi Yayınlandı",
+  "rm.m3.p": "Başvuru penceresi, kampanya dönemi ve oy tarihi — hepsi burada onaylandı ve yayınlandı. Artık ne zaman olacağını tahmin etmeye gerek yok.",
+  "rm.m4.h": "İlk Seçim",
+  "rm.m4.p": "Öz adaylıklar açılıyor, topluluk oy kullanıyor. 4 koltuk holderlar tarafından doldurulur, 3 süreklilik için atanır. Bir holder, bir oy.",
+  "rm.m7.h": "Konseyin İlk Kararları",
+  "rm.m7.p": "Konsey ilk gerçek yaratıcı sorularını ele alıyor: bir sonraki drop teması, Gen 2 varyantları, Creature Shop öncelikleri.",
+  "rm.m9.h": "Gen 2 Topluluk Önizlemesi",
+  "rm.m9.p": "Konsey, Gen 2 tasarımlarını nihai hale getirilmeden önce inceler. Holderlardan yapılandırılmış geri bildirim — sızdırılmış bir WIP değil.",
+  "rm.m10.h": "Gen 2 Lansmanı",
+  "rm.m10.p": "Gen 2 Yaratıkları gerçek bir etkinlik olarak yayınlanıyor — sessiz bir drop değil. Pazarlama, bir topluluk lansmanı anı ve net bir Gen 1 vs Gen 2 fayda hikayesi.",
   "rm.note": "Kilometre taşları yaklaşık sırayla — tarihler onaylandıkça duyurulacak",
-
   "holders.eyebrow": "Topluluk anlık görüntüsü",
   "holders.h2": "Kim ne tutuyor",
   "holders.lead": "Mevcut HCC cüzdanlarına canlı bir bakış — kaçı Creatures, LAND veya her iki koleksiyonu tutuyor.",
@@ -185,26 +161,21 @@
   "holders.dist.creatures": "🐾 Creatures",
   "holders.dist.land": "🗺️ LAND",
   "holders.dist.combined": "✨ Tüm HCC varlıkları",
-
   "chart.creaturesOnly": "Yalnızca Creatures",
   "chart.landOnly": "Yalnızca LAND",
   "chart.both": "Her iki koleksiyon",
   "chart.wallets": "cüzdan",
-
   "footer.h2": "Kulüple birlikte, kulüp için inşa edildi.",
   "footer.p": "Bu, HCC holder'larının yaratılanlar üzerinde gerçek bir etkiye sahip olmasının başlangıcıdır. Daha fazlası geliyor — söz verdiğimiz gibi, iki haftada bir.",
   "footer.stamp": "Highrise Creature Club · Oyuncu Konseyi",
   "footer.draft": "Taslak v1 — topluluk tartışması için",
-
   "progress.default": "Holder verileri blok zincirinden alınıyor…",
   "progress.connecting": "Blok zinciri kaşiflerine bağlanılıyor…",
   "progress.creatures": "Creatures holder'ları alınıyor — sayfa {n}…",
   "progress.land": "LAND holder'ları alınıyor — sayfa {n}…",
   "progress.both": "Cüzdanlar taranıyor — Creatures: sayfa {c} · LAND: sayfa {l}…",
   "progress.computing": "Sayılar hesaplanıyor…",
-
   "stale.badge": "YENİLENİYOR",
-
   "changelog.eyebrow": "Geçmiş",
   "changelog.h2": "Ne değişti",
   "changelog.club.eyebrow": "Kulüp güncellemeleri",

@@ -3,12 +3,10 @@
   "nav.roadmap": "Roadmap",
   "nav.holders": "Holders",
   "nav.changelog": "Changelog",
-
   "hero.kicker": "Highrise Creature Club",
   "hero.h1": "Creatures + LAND ont désormais ",
   "hero.pop": "la parole.",
   "hero.subtitle": "Un guide sur ce qu'est le HCC, comment Creatures et LAND se sont réunis, et le nouveau <strong>Conseil des Joueurs</strong> qui place les holders dans la salle où se prennent les décisions créatives.",
-
   "s1.eyebrow": "Commencer ici",
   "s1.h2": "Alors… qu'est-ce que le Creature Club ?",
   "s1.lead": "Le Highrise Creature Club est constitué de deux concepts de NFT collectibles : <strong>11 111 avatars de créatures uniques</strong> et les <strong>Highrise LAND NFTs</strong> intégrés au même club. Possédez-en un et vous devenez membre, avec des avantages intégrés directement dans Highrise.",
@@ -20,7 +18,6 @@
   "s1.p3p": "Accès anticipé et gratuit aux nouveaux contenus de créatures à leur sortie.",
   "s1.p4h": "Espaces membres exclusifs",
   "s1.p4p": "Une salle de club exclusive et une vraie place à la table de la communauté.",
-
   "land.eyebrow": "L'autre moitié de la famille",
   "land.body": "Les LAND NFTs sont la collection de parcelles virtuelles dans l'univers Highrise, en niveaux <strong>Standard</strong> et <strong>Premium</strong> — et la plupart des propriétaires de LAND ont aussi un adorable <strong>slime pet</strong>. Le plan initial indépendant du LAND a changé, et le projet a été intégré à la famille Creature Club : posséder un LAND vous rend membre à part entière.",
   "land.p1h": "Slime pets",
@@ -31,7 +28,6 @@
   "land.p3p": "Le LAND Premium rapporte trois fois plus de Creature Coins que le Standard, comme les créatures Légendaires.",
   "land.p4h": "Avantages Creature complets",
   "land.p4p": "Les détenteurs de LAND NFT gagnent maintenant des Creature Coins et participent aux drops et giveaways du club.",
-
   "journey.eyebrow": "Le parcours",
   "journey.h2": "Comment le HCC en est arrivé là",
   "journey.lead": "Sans détour — juste l'histoire honnête de l'évolution du club et de sa direction.",
@@ -56,11 +52,9 @@
   "t7.year": "MAINTENANT — LE CONSEIL",
   "t7.h": "Les holders ont une vraie voix",
   "t7.p": "L'étape suivante : un Conseil des Joueurs mené par des holders, qui aide à façonner ce qui est créé — pour les Creatures et le LAND. Cette page porte là-dessus. 👇",
-
   "honest.eyebrow": "Parlons franchement",
   "honest.h2": "Pourquoi nous faisons ça",
   "honest.p": "La confiance ne revient pas des promesses — elle revient d'une exécution constante <em>et</em> d'une vraie écoute. Le Conseil existe pour que les holders du HCC ne soient pas seulement informés de la suite, mais qu'ils l'aident à décider. C'est un organe consultatif avec un vrai poids sur la direction créative, travaillant aux côtés de l'équipe qui construit.",
-
   "unify.eyebrow": "Vers où l'on va",
   "unify.h2": "Un seul club : Creatures <span class=\"pop\">+</span> LAND, ensemble",
   "unify.lead": "Longtemps, Creatures et LAND ont existé comme deux projets NFT distincts avec deux histoires séparées. L'objectif est maintenant de les unifier en <strong>un seul concept de Creature Club</strong> — une communauté, un ensemble d'avantages, un roadmap et une voix collective des holders.",
@@ -73,7 +67,6 @@
   "unify.p4h": "Une seule voix",
   "unify.p4p": "Le Conseil des Joueurs représente les holders de Creature <em>et</em> de LAND à égalité.",
   "unify.note": "Vos actifs ne changent pas — votre créature, votre parcelle LAND et votre slime pet restent exactement tels quels. Unifier, c'est parler de l'<em>expérience</em> autour d'eux : une famille plus facile à faire grandir, soutenir et construire.",
-
   "council.eyebrow": "La grande idée",
   "council.h2": "Rencontrez le Conseil des Joueurs",
   "council.lead": "Un petit groupe mené par des holders qui travaille avec un PM dédié et l'équipe artistique pour finaliser Gen 2 et maintenir des drops réguliers. C'est <strong>consultatif avec du poids</strong> — une vraie voix sur le créatif, pas un vote sur les affaires.",
@@ -84,7 +77,6 @@
   "council.fact1": "sièges, délibérément petit",
   "council.fact2": "un holder, un vote — sans pondération par les baleines",
   "council.fact3": "mandats pour garder de la fraîcheur",
-
   "power.eyebrow": "Qui décide quoi",
   "power.h2": "Où le Conseil a un vrai pouvoir",
   "power.lead": "Certaines décisions sont prises par le Conseil. D'autres, il conseille. Sur quelques-unes, il est simplement informé — et cette portée grandit avec le temps.",
@@ -99,7 +91,6 @@
   "power.advises": "Conseille",
   "power.informed": "Informé",
   "power.note": "Pocket Worlds reste l'exécutant et garde le dernier mot sur tout ce qui touche à l'économie, la marque ou les garde-fous légaux — pour que ce qui protège l'ensemble du club reste protégé.",
-
   "seat.eyebrow": "Comment fonctionne un siège",
   "seat.h2": "Juste, simple et à vous",
   "seat.p1h": "Possédez pour voter",
@@ -110,12 +101,10 @@
   "seat.p3p": "Une fenêtre d'auto-nomination s'ouvre, puis les holders votent. Clair et ouvert.",
   "seat.p4h": "Sang neuf",
   "seat.p4p": "Mandats de six mois, deux consécutifs maximum pour les sièges élus. Pas d'enracinement.",
-
   "rhythm.eyebrow": "Le rythme",
   "rhythm.h2": "Comment les décisions avancent",
   "rhythm.p1": "Le PM est propriétaire du roadmap et soumet au Conseil des questions claires et délimitées — chacune avec un « voilà à quoi ressemble le résultat » attaché. Le Conseil intervient sur des décisions spécifiques, pas sur un débat ouvert sans fin.",
   "rhythm.p2": "<strong style=\"color:var(--slime)\">Cadence :</strong> un point rapide toutes les deux semaines, plus un appel en direct une fois par mois. <strong style=\"color:var(--bubble)\">Où :</strong> un canal privé pour les holders pour commencer, avec des votes élargis à l'ensemble des holders pour les grandes questions à venir.",
-
   "faq.eyebrow": "Réponses rapides",
   "faq.h2": "Questions que vous pourriez vous poser",
   "faq.q1": "Est-ce une DAO ? Je possède maintenant une partie de la société ?",
@@ -130,48 +119,35 @@
   "faq.a5": "Oui. Les plans de migration des créatures hors de la blockchain ont été annulés suite à l'approbation sur Steam. Si cela venait à changer, nous vous le dirons à l'avance et clairement — sans surprises.",
   "faq.q6": "Par quoi le Conseil commence-t-il vraiment ?",
   "faq.a6": "Il commence de façon consultative, et son pouvoir « Décide » grandit à chaque version au fur et à mesure qu'il fait ses preuves. Pensez à des roues d'entraînement qui s'enlèvent avec le temps, pas à tout d'un coup dès le premier jour.",
-
   "roadmap.eyebrow": "Ce qui arrive",
   "roadmap.h2": "La voie à suivre",
   "roadmap.lead": "Du prochain drop au Gen 2 — chaque jalon que nous construisons, dans l'ordre.",
-
   "rm.status.now": "Maintenant",
   "rm.status.next": "Suivant",
   "rm.status.soon": "Bientôt",
   "rm.status.later": "Plus tard",
   "rm.status.goal": "L'Objectif",
-
   "rm.cat.content": "Contenu",
   "rm.cat.governance": "Gouvernance",
   "rm.cat.utility": "Utilité",
   "rm.cat.product": "Produit",
-
   "rm.m1.h": "Pink Anniversary Drop",
-  "rm.m1.p": "The 4th anniversary recolour grab is dropping next — pink and white recolours, exclusive to HCC members.",
-
+  "rm.m1.p": "Le grab de recoloration du 4ème anniversaire arrive — recolorations rose et blanc, exclusives aux membres HCC.",
   "rm.medu.h": "Contenu Éducatif sur les NFT",
-  "rm.medu.p": "Clear, accessible content explaining what HCC NFTs are, how they work, and what holding one actually means — lowering the barrier for new and existing members alike.",
-
-  "rm.m2.h": "Council Final Definition",
-  "rm.m2.p": "Finalising the council rules: candidacy eligibility, the appointed seat process, and anti-gaming guardrails. The structure needs to be right before the clock starts.",
-
-  "rm.m3.h": "Council Timelines Published",
-  "rm.m3.p": "Application window, campaign period, and voting date — all locked in and published here. No more guessing when.",
-
-  "rm.m4.h": "First Election",
-  "rm.m4.p": "Self-nominations open, community votes. 4 seats filled by holders, 3 appointed for continuity. One holder, one vote.",
-
-  "rm.m7.h": "Council's First Decisions",
-  "rm.m7.p": "The council weighs in on its first real creative questions: next drop theme, Gen 2 variants, Creature Shop priorities.",
-
-  "rm.m9.h": "Gen 2 Community Preview",
-  "rm.m9.p": "The council reviews Gen 2 designs before they're final. Structured feedback from holders, not a leaked WIP.",
-
-  "rm.m10.h": "Gen 2 Launch",
-  "rm.m10.p": "Gen 2 Creatures released as a proper event — not a quiet drop. Marketing, a community launch moment, and a clear Gen 1 vs Gen 2 utility story.",
-
+  "rm.medu.p": "Un contenu clair et accessible expliquant ce que sont les NFT HCC, comment ils fonctionnent et ce que détenir l'un d'eux signifie vraiment — pour réduire les obstacles pour les membres nouveaux et existants.",
+  "rm.m2.h": "Définition Finale du Conseil",
+  "rm.m2.p": "Finalisation des règles du conseil : éligibilité des candidatures, processus de désignation des sièges et mesures anti-manipulation. La structure doit être correcte avant que le compte à rebours commence.",
+  "rm.m3.h": "Calendrier du Conseil Publié",
+  "rm.m3.p": "Fenêtre de candidature, période de campagne et date de vote — tout est confirmé et publié ici. Plus de questions sur le « quand ».",
+  "rm.m4.h": "Première Élection",
+  "rm.m4.p": "Les auto-candidatures s'ouvrent, la communauté vote. 4 sièges pourvus par les holders, 3 désignés pour la continuité. Un holder, un vote.",
+  "rm.m7.h": "Premières Décisions du Conseil",
+  "rm.m7.p": "Le conseil se prononce sur ses premières vraies questions créatives : thème du prochain drop, variantes Gen 2, priorités de la Creature Shop.",
+  "rm.m9.h": "Aperçu Communautaire du Gen 2",
+  "rm.m9.p": "Le conseil examine les designs Gen 2 avant qu'ils soient finalisés. Des retours structurés des holders, pas un WIP fuité.",
+  "rm.m10.h": "Lancement du Gen 2",
+  "rm.m10.p": "Les Créatures Gen 2 lancées comme un vrai événement — pas un drop discret. Marketing, un moment de lancement communautaire et une histoire claire sur l'utilité Gen 1 vs Gen 2.",
   "rm.note": "Jalons dans l'ordre approximatif — dates annoncées dès confirmation",
-
   "holders.eyebrow": "Instantané de la communauté",
   "holders.h2": "Qui possède quoi",
   "holders.lead": "Un aperçu en direct des portefeuilles HCC — combien détiennent des Creatures, du LAND ou les deux collections.",
@@ -185,26 +161,21 @@
   "holders.dist.creatures": "🐾 Creatures",
   "holders.dist.land": "🗺️ LAND",
   "holders.dist.combined": "✨ Tous les actifs HCC",
-
   "chart.creaturesOnly": "Creatures uniquement",
   "chart.landOnly": "LAND uniquement",
   "chart.both": "Les deux collections",
   "chart.wallets": "portefeuilles",
-
   "footer.h2": "Construit avec le club, pour le club.",
   "footer.p": "C'est le début de la participation réelle des holders du HCC à ce qui est créé. À suivre — toutes les deux semaines, comme promis.",
   "footer.stamp": "Highrise Creature Club · Conseil des Joueurs",
   "footer.draft": "Brouillon v1 — pour discussion communautaire",
-
   "progress.default": "Récupération des données de holders depuis la blockchain…",
   "progress.connecting": "Connexion aux explorateurs blockchain…",
   "progress.creatures": "Récupération des holders de Creatures — page {n}…",
   "progress.land": "Récupération des holders de LAND — page {n}…",
   "progress.both": "Scan des portefeuilles — Creatures : page {c} · LAND : page {l}…",
   "progress.computing": "Calcul des chiffres…",
-
   "stale.badge": "ACTUALISATION",
-
   "changelog.eyebrow": "Historique",
   "changelog.h2": "Ce qui a changé",
   "changelog.club.eyebrow": "Mises à jour du club",
