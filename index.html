@@ -247,6 +247,37 @@ footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
 .cl-order-hint{font-family:'Space Mono',monospace;font-size:.65rem;letter-spacing:.12em;color:#9a8db5;text-transform:uppercase;margin:6px 0 22px}
 .cl-order-hint::before{content:"↓ "}
 .cl-latest-badge{font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.1em;padding:2px 8px;border-radius:20px;border:2px solid var(--ink);background:var(--slime);color:var(--ink);font-weight:700;text-transform:uppercase;margin-left:8px;vertical-align:middle}
+
+/* roadmap milestones */
+.rm-track{margin-top:34px;position:relative;padding-left:48px}
+.rm-track::before{content:"";position:absolute;left:13px;top:16px;bottom:16px;width:4px;background:repeating-linear-gradient(var(--grape) 0 10px,transparent 10px 18px);border-radius:4px}
+.rm-item{position:relative;margin-bottom:22px}
+.rm-dot{position:absolute;left:-48px;top:16px;width:28px;height:28px;border-radius:50%;border:4px solid var(--ink);background:var(--lemon);box-shadow:3px 3px 0 var(--ink);z-index:1}
+.rm-item.rm-now .rm-dot{background:var(--slime);animation:pulse 1.8s infinite}
+.rm-item.rm-later .rm-dot,.rm-item.rm-goal .rm-dot{background:var(--grape)}
+.rm-card{background:#fff;border:3px solid var(--ink);border-radius:22px;padding:22px 22px 18px;box-shadow:6px 6px 0 var(--ink)}
+.rm-item.rm-now .rm-card{background:var(--cream);box-shadow:6px 6px 0 var(--slime-deep)}
+.rm-item.rm-goal .rm-card{background:var(--ink);color:var(--cream);box-shadow:6px 6px 0 var(--grape-deep)}
+.rm-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px}
+.rm-emoji{font-size:1.8rem;line-height:1;margin-top:2px}
+.rm-badge{font-family:'Space Mono',monospace;font-weight:700;font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;padding:4px 12px;border-radius:20px;border:2.5px solid var(--ink);white-space:nowrap}
+.rm-badge-now{background:var(--slime)}
+.rm-badge-next{background:var(--lemon)}
+.rm-badge-soon{background:var(--bubble)}
+.rm-badge-later{background:var(--grape);color:#fff;border-color:var(--grape-deep)}
+.rm-badge-goal{background:var(--slime);color:var(--ink)}
+.rm-item.rm-goal .rm-badge-goal{border-color:var(--slime)}
+.rm-cat{display:inline-block;font-family:'Space Mono',monospace;font-size:.58rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:3px 10px;border-radius:20px;border:2px solid var(--ink);margin-bottom:8px}
+.rm-cat-content{background:var(--bubble)}
+.rm-cat-governance{background:var(--lemon)}
+.rm-cat-utility{background:var(--slime)}
+.rm-cat-product{background:var(--grape)}
+.rm-item.rm-goal .rm-cat{border-color:rgba(255,255,255,.3)}
+.rm-title{font-size:1.15rem;font-weight:600;margin-bottom:6px;line-height:1.25}
+.rm-item.rm-goal .rm-title{color:var(--lemon)}
+.rm-desc{font-size:.93rem;color:#574a73;line-height:1.5}
+.rm-item.rm-goal .rm-desc{color:#e6ddf2}
+.rm-note{margin-top:28px;text-align:center;font-family:'Space Mono',monospace;font-size:.67rem;letter-spacing:.1em;color:#9a8db5;text-transform:uppercase}
 </style>
 </head>
 <body>
@@ -463,12 +494,119 @@ footer p{color:#5a4d75;font-size:.95rem;max-width:420px;margin:0 auto}
 
 <main id="panel-roadmap" class="tab-panel roadmap-panel" role="tabpanel" aria-labelledby="tab-roadmap" hidden>
   <section class="wrap">
-    <div class="card roadmap-card">
-      <div class="roadmap-badge" aria-hidden="true">🚧</div>
-      <div class="eyebrow" data-i18n="roadmap.eyebrow">Roadmap</div>
-      <h2 data-i18n="roadmap.h2">Roadmap is under construction</h2>
-      <p class="lead" data-i18n="roadmap.lead">We're still shaping the next public version. Check back soon for milestones, drops, and council priorities.</p>
+    <div class="eyebrow" data-i18n="roadmap.eyebrow">What's coming</div>
+    <h2 data-i18n="roadmap.h2">The path ahead</h2>
+    <p class="lead" data-i18n="roadmap.lead">From the next drop to Gen 2 — every milestone we're working toward, in order.</p>
+
+    <div class="rm-track">
+
+      <div class="rm-item rm-now">
+        <div class="rm-dot"></div>
+        <div class="rm-card">
+          <div class="rm-card-top">
+            <span class="rm-emoji">🩷</span>
+            <span class="rm-badge rm-badge-now" data-i18n="rm.status.now">Now</span>
+          </div>
+          <div><span class="rm-cat rm-cat-content" data-i18n="rm.cat.content">Content</span></div>
+          <h4 class="rm-title" data-i18n="rm.m1.h">Pink Anniversary Drop</h4>
+          <p class="rm-desc" data-i18n="rm.m1.p">The 4th anniversary recolour grab is dropping next — pink and white recolours, exclusive to HCC members.</p>
+        </div>
+      </div>
+
+      <div class="rm-item rm-next">
+        <div class="rm-dot"></div>
+        <div class="rm-card">
+          <div class="rm-card-top">
+            <span class="rm-emoji">📚</span>
+            <span class="rm-badge rm-badge-next" data-i18n="rm.status.next">Next</span>
+          </div>
+          <div><span class="rm-cat rm-cat-content" data-i18n="rm.cat.content">Content</span></div>
+          <h4 class="rm-title" data-i18n="rm.medu.h">Educational NFT Content</h4>
+          <p class="rm-desc" data-i18n="rm.medu.p">Clear, accessible content explaining what HCC NFTs are, how they work, and what holding one actually means — lowering the barrier for new and existing members alike.</p>
+        </div>
+      </div>
+
+      <div class="rm-item rm-next">
+        <div class="rm-dot"></div>
+        <div class="rm-card">
+          <div class="rm-card-top">
+            <span class="rm-emoji">⚖️</span>
+            <span class="rm-badge rm-badge-next" data-i18n="rm.status.next">Next</span>
+          </div>
+          <div><span class="rm-cat rm-cat-governance" data-i18n="rm.cat.governance">Governance</span></div>
+          <h4 class="rm-title" data-i18n="rm.m2.h">Council Final Definition</h4>
+          <p class="rm-desc" data-i18n="rm.m2.p">Finalising the council rules: candidacy eligibility, the appointed seat process, and anti-gaming guardrails. The structure needs to be right before the clock starts.</p>
+        </div>
+      </div>
+
+      <div class="rm-item rm-next">
+        <div class="rm-dot"></div>
+        <div class="rm-card">
+          <div class="rm-card-top">
+            <span class="rm-emoji">📅</span>
+            <span class="rm-badge rm-badge-next" data-i18n="rm.status.next">Next</span>
+          </div>
+          <div><span class="rm-cat rm-cat-governance" data-i18n="rm.cat.governance">Governance</span></div>
+          <h4 class="rm-title" data-i18n="rm.m3.h">Council Timelines Published</h4>
+          <p class="rm-desc" data-i18n="rm.m3.p">Application window, campaign period, and voting date — all locked in and published here. No more guessing when.</p>
+        </div>
+      </div>
+
+      <div class="rm-item rm-soon">
+        <div class="rm-dot"></div>
+        <div class="rm-card">
+          <div class="rm-card-top">
+            <span class="rm-emoji">🗳️</span>
+            <span class="rm-badge rm-badge-soon" data-i18n="rm.status.soon">Soon</span>
+          </div>
+          <div><span class="rm-cat rm-cat-governance" data-i18n="rm.cat.governance">Governance</span></div>
+          <h4 class="rm-title" data-i18n="rm.m4.h">First Election</h4>
+          <p class="rm-desc" data-i18n="rm.m4.p">Self-nominations open, community votes. 4 seats filled by holders, 3 appointed for continuity. One holder, one vote.</p>
+        </div>
+      </div>
+
+      <div class="rm-item rm-soon">
+        <div class="rm-dot"></div>
+        <div class="rm-card">
+          <div class="rm-card-top">
+            <span class="rm-emoji">🤝</span>
+            <span class="rm-badge rm-badge-soon" data-i18n="rm.status.soon">Soon</span>
+          </div>
+          <div><span class="rm-cat rm-cat-governance" data-i18n="rm.cat.governance">Governance</span></div>
+          <h4 class="rm-title" data-i18n="rm.m7.h">Council's First Decisions</h4>
+          <p class="rm-desc" data-i18n="rm.m7.p">The council weighs in on its first real creative questions: next drop theme, Gen 2 variants, Creature Shop priorities.</p>
+        </div>
+      </div>
+
+      <div class="rm-item rm-later">
+        <div class="rm-dot"></div>
+        <div class="rm-card">
+          <div class="rm-card-top">
+            <span class="rm-emoji">🧬</span>
+            <span class="rm-badge rm-badge-later" data-i18n="rm.status.later">Later</span>
+          </div>
+          <div><span class="rm-cat rm-cat-product" data-i18n="rm.cat.product">Product</span></div>
+          <h4 class="rm-title" data-i18n="rm.m9.h">Gen 2 Community Preview</h4>
+          <p class="rm-desc" data-i18n="rm.m9.p">The council reviews Gen 2 designs before they're final. Structured feedback from holders, not a leaked WIP.</p>
+        </div>
+      </div>
+
+      <div class="rm-item rm-goal">
+        <div class="rm-dot"></div>
+        <div class="rm-card">
+          <div class="rm-card-top">
+            <span class="rm-emoji">✨</span>
+            <span class="rm-badge rm-badge-goal" data-i18n="rm.status.goal">The Goal</span>
+          </div>
+          <div><span class="rm-cat rm-cat-product" data-i18n="rm.cat.product">Product</span></div>
+          <h4 class="rm-title" data-i18n="rm.m10.h">Gen 2 Launch</h4>
+          <p class="rm-desc" data-i18n="rm.m10.p">Gen 2 Creatures released as a proper event — not a quiet drop. Marketing, a community launch moment, and a clear Gen 1 vs Gen 2 utility story.</p>
+        </div>
+      </div>
+
     </div>
+
+    <p class="rm-note" data-i18n="rm.note">Milestones in approximate order — dates announced as confirmed</p>
   </section>
 </main>
 

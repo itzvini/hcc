@@ -131,9 +131,46 @@
   "faq.q6": "Konsey aslında ne ile başlıyor?",
   "faq.a6": "Daha danışmanlık ağırlıklı başlar ve 'Karar verir' gücü, kendini kanıtladıkça sürümden sürüme büyür. Birinci günden itibaren her şey değil, zamanla çıkarılan yardımcı tekerlekler gibi düşün.",
 
-  "roadmap.eyebrow": "Yol Haritası",
-  "roadmap.h2": "Yol haritası yapım aşamasında",
-  "roadmap.lead": "Bir sonraki genel sürümü hâlâ şekillendiriyoruz. Dönüm noktaları, drop'lar ve konsey öncelikleri için yakında tekrar gel.",
+  "roadmap.eyebrow": "Neler geliyor",
+  "roadmap.h2": "Önümüzdeki yol",
+  "roadmap.lead": "Bir sonraki drop'tan Gen 2'ye — sırayla üzerinde çalıştığımız her kilometre taşı.",
+
+  "rm.status.now": "Şimdi",
+  "rm.status.next": "Sıradaki",
+  "rm.status.soon": "Yakında",
+  "rm.status.later": "Sonra",
+  "rm.status.goal": "Hedef",
+
+  "rm.cat.content": "İçerik",
+  "rm.cat.governance": "Yönetim",
+  "rm.cat.utility": "Fayda",
+  "rm.cat.product": "Ürün",
+
+  "rm.m1.h": "Pink Anniversary Drop",
+  "rm.m1.p": "The 4th anniversary recolour grab is dropping next — pink and white recolours, exclusive to HCC members.",
+
+  "rm.medu.h": "NFT Eğitim İçeriği",
+  "rm.medu.p": "Clear, accessible content explaining what HCC NFTs are, how they work, and what holding one actually means — lowering the barrier for new and existing members alike.",
+
+  "rm.m2.h": "Council Final Definition",
+  "rm.m2.p": "Finalising the council rules: candidacy eligibility, the appointed seat process, and anti-gaming guardrails. The structure needs to be right before the clock starts.",
+
+  "rm.m3.h": "Council Timelines Published",
+  "rm.m3.p": "Application window, campaign period, and voting date — all locked in and published here. No more guessing when.",
+
+  "rm.m4.h": "First Election",
+  "rm.m4.p": "Self-nominations open, community votes. 4 seats filled by holders, 3 appointed for continuity. One holder, one vote.",
+
+  "rm.m7.h": "Council's First Decisions",
+  "rm.m7.p": "The council weighs in on its first real creative questions: next drop theme, Gen 2 variants, Creature Shop priorities.",
+
+  "rm.m9.h": "Gen 2 Community Preview",
+  "rm.m9.p": "The council reviews Gen 2 designs before they're final. Structured feedback from holders, not a leaked WIP.",
+
+  "rm.m10.h": "Gen 2 Launch",
+  "rm.m10.p": "Gen 2 Creatures released as a proper event — not a quiet drop. Marketing, a community launch moment, and a clear Gen 1 vs Gen 2 utility story.",
+
+  "rm.note": "Kilometre taşları yaklaşık sırayla — tarihler onaylandıkça duyurulacak",
 
   "holders.eyebrow": "Topluluk anlık görüntüsü",
   "holders.h2": "Kim ne tutuyor",
