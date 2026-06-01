@@ -117,6 +117,120 @@
   ],
   "site": [
     {
+      "date": "June 1, 2026",
+      "title": "Highrise Design System — full dark-mode rework",
+      "body": "The site is now built on the official Highrise Design System: dark surfaces, Museo Sans Rounded font, mint green accent, no gradients. Brand logos replace emojis in the Guides toolkit and links grid.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "1 de jun. de 2026",
+          "title": "Highrise Design System — redesign completo no modo escuro",
+          "body": "O site agora usa o Highrise Design System oficial: superfícies escuras, fonte Museo Sans Rounded, acento verde menta e sem gradientes. Logos de marcas substituem emojis no kit de ferramentas e na grade de links dos Guias."
+        },
+        "es": {
+          "date": "1 jun. 2026",
+          "title": "Highrise Design System — rediseño completo en modo oscuro",
+          "body": "El sitio ahora está construido con el Highrise Design System oficial: superficies oscuras, fuente Museo Sans Rounded, acento verde menta y sin gradientes. Los logos de marcas reemplazan los emojis en el kit de herramientas y la cuadrícula de enlaces de las Guías."
+        },
+        "fr": {
+          "date": "1 juin 2026",
+          "title": "Highrise Design System — refonte complète en mode sombre",
+          "body": "Le site est désormais construit avec le Highrise Design System officiel : surfaces sombres, police Museo Sans Rounded, accent vert menthe, sans dégradés. Les logos des marques remplacent les emojis dans la boîte à outils et la grille de liens des Guides."
+        },
+        "de": {
+          "date": "1. Juni 2026",
+          "title": "Highrise Design System — vollständiges Dunkel-Redesign",
+          "body": "Die Website basiert jetzt auf dem offiziellen Highrise Design System: dunkle Oberflächen, Museo Sans Rounded Schrift, mintgrüner Akzent, keine Verläufe. Markenlogos ersetzen Emojis in der Toolkit- und Link-Ansicht der Anleitungen."
+        },
+        "ru": {
+          "date": "1 июня 2026",
+          "title": "Highrise Design System — полный редизайн в тёмном режиме",
+          "body": "Сайт теперь построен на официальной системе дизайна Highrise: тёмные поверхности, шрифт Museo Sans Rounded, мятно-зелёный акцент, без градиентов. Логотипы брендов заменили эмодзи в разделах инструментов и ссылок Гайдов."
+        },
+        "tr": {
+          "date": "1 Haziran 2026",
+          "title": "Highrise Design System — tam karanlık mod yeniden tasarımı",
+          "body": "Site artık resmi Highrise Design System üzerine kurulu: koyu yüzeyler, Museo Sans Rounded yazı tipi, nane yeşili vurgu, gradyan yok. Rehberler araç seti ve bağlantı görünümünde markalar logolarla değiştirildi."
+        }
+      }
+    },
+    {
+      "date": "June 1, 2026",
+      "title": "Navigation hub, Guides sub-tabs & community videos live",
+      "body": "The Council tab now opens with a clickable hub to jump to any section. The Guides tab is split into four sub-tabs: Basics, Walkthroughs, Stay safe, and Links. All 5 community walkthrough videos are embedded. External links added: Highrise LAND, TokenTrove, OpenSea, Immutable X Explorer, MetaMask.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "1 de jun. de 2026",
+          "title": "Hub de navegação, sub-abas dos Guias e vídeos da comunidade no ar",
+          "body": "A aba Conselho agora abre com um hub clicável para ir direto a qualquer seção. A aba Guias foi dividida em quatro sub-abas: Básico, Tutoriais, Fique seguro e Links. Todos os 5 vídeos tutoriais da comunidade estão incorporados. Links externos adicionados: Highrise LAND, TokenTrove, OpenSea, Immutable X Explorer, MetaMask."
+        },
+        "es": {
+          "date": "1 jun. 2026",
+          "title": "Hub de navegación, sub-pestañas de Guías y videos comunitarios en vivo",
+          "body": "La pestaña Consejo ahora se abre con un hub en el que puedes hacer clic para ir a cualquier sección. La pestaña Guías se divide en cuatro sub-pestañas: Lo básico, Tutoriales, Mantente seguro y Enlaces. Los 5 videos tutoriales de la comunidad están integrados. Enlaces externos añadidos: Highrise LAND, TokenTrove, OpenSea, Immutable X Explorer, MetaMask."
+        },
+        "fr": {
+          "date": "1 juin 2026",
+          "title": "Hub de navigation, sous-onglets Guides et vidéos communautaires en ligne",
+          "body": "L'onglet Conseil s'ouvre maintenant avec un hub cliquable pour accéder directement à n'importe quelle section. L'onglet Guides est divisé en quatre sous-onglets : Les bases, Tutoriels, Restez en sécurité et Liens. Les 5 vidéos tutoriels de la communauté sont intégrées. Liens externes ajoutés : Highrise LAND, TokenTrove, OpenSea, Immutable X Explorer, MetaMask."
+        },
+        "de": {
+          "date": "1. Juni 2026",
+          "title": "Navigations-Hub, Anleitungen-Sub-Tabs und Community-Videos live",
+          "body": "Der Rat-Tab öffnet sich jetzt mit einem anklickbaren Hub zum direkten Sprung in jeden Bereich. Der Anleitungen-Tab ist in vier Sub-Tabs aufgeteilt: Grundlagen, Anleitungen, Bleib sicher und Links. Alle 5 Community-Video-Anleitungen sind eingebettet. Externe Links hinzugefügt: Highrise LAND, TokenTrove, OpenSea, Immutable X Explorer, MetaMask."
+        },
+        "ru": {
+          "date": "1 июня 2026",
+          "title": "Навигационный хаб, подвкладки Гайдов и видео сообщества в эфире",
+          "body": "Вкладка «Совет» теперь открывается с кликабельным хабом для перехода в любой раздел. Вкладка «Гайды» разделена на четыре подвкладки: Основы, Руководства, Безопасность и Ссылки. Все 5 видео-руководств сообщества встроены. Добавлены внешние ссылки: Highrise LAND, TokenTrove, OpenSea, Immutable X Explorer, MetaMask."
+        },
+        "tr": {
+          "date": "1 Haziran 2026",
+          "title": "Navigasyon hub'ı, Rehberler alt sekmeleri ve topluluk videoları yayında",
+          "body": "Konsey sekmesi artık herhangi bir bölüme atlamak için tıklanabilir bir hub ile açılıyor. Rehberler sekmesi dört alt sekmeye bölündü: Temel Bilgiler, Anlatımlar, Güvende kal ve Bağlantılar. 5 topluluk video rehberi yerleştirildi. Harici bağlantılar eklendi: Highrise LAND, TokenTrove, OpenSea, Immutable X Explorer, MetaMask."
+        }
+      }
+    },
+    {
+      "date": "June 1, 2026",
+      "title": "Guides tab added",
+      "body": "A new Guides tab is live: step-by-step walkthroughs for linking your wallet, bridging funds, and buying, selling, and transferring creatures — plus asset-safety tips. Built from community videos.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "1 de jun. de 2026",
+          "title": "Aba Guias adicionada",
+          "body": "Uma nova aba Guias está no ar: tutoriais passo a passo para conectar sua carteira, transferir fundos via bridge e comprar, vender e transferir criaturas — além de dicas de segurança dos seus ativos. Feita a partir de vídeos da comunidade."
+        },
+        "es": {
+          "date": "1 jun. 2026",
+          "title": "Pestaña Guías añadida",
+          "body": "Una nueva pestaña Guías está activa: tutoriales paso a paso para conectar tu billetera, transferir fondos mediante bridge y comprar, vender y transferir criaturas — además de consejos de seguridad para tus activos. Creada a partir de vídeos de la comunidad."
+        },
+        "fr": {
+          "date": "1 juin 2026",
+          "title": "Onglet Guides ajouté",
+          "body": "Un nouvel onglet Guides est en ligne : des tutoriels pas à pas pour connecter votre portefeuille, transférer des fonds via le bridge et acheter, vendre et transférer des créatures — ainsi que des conseils de sécurité pour vos actifs. Créé à partir de vidéos de la communauté."
+        },
+        "de": {
+          "date": "1. Juni 2026",
+          "title": "Anleitungen-Tab hinzugefügt",
+          "body": "Ein neuer Anleitungen-Tab ist live: Schritt-für-Schritt-Anleitungen zum Verbinden deiner Wallet, zum Bridgen von Guthaben und zum Kaufen, Verkaufen und Übertragen von Kreaturen — plus Tipps zur Sicherheit deiner Assets. Erstellt aus Community-Videos."
+        },
+        "ru": {
+          "date": "1 июня 2026",
+          "title": "Добавлена вкладка «Гайды»",
+          "body": "Новая вкладка «Гайды» уже доступна: пошаговые инструкции по подключению кошелька, переводу средств через bridge, а также покупке, продаже и передаче существ — плюс советы по безопасности активов. Создано на основе видео сообщества."
+        },
+        "tr": {
+          "date": "1 Haziran 2026",
+          "title": "Rehberler sekmesi eklendi",
+          "body": "Yeni bir Rehberler sekmesi yayında: cüzdanını bağlama, fonları bridge ile aktarma ve yaratıkları satın alma, satma ve transfer etme için adım adım rehberler — ayrıca varlık güvenliği ipuçları. Topluluk videolarından oluşturuldu."
+        }
+      }
+    },
+    {
       "date": "May 31, 2026",
       "title": "Roadmap published",
       "body": "The Roadmap tab is now live with 8 milestones: Pink Anniversary Drop → Educational NFT Content → Council Final Definition → Council Timelines Published → First Election → Council's First Decisions → Gen 2 Community Preview → Gen 2 Launch.",

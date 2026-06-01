@@ -31,7 +31,31 @@ function selectTab(name, updateHash = true) {
 
 tabButtons.forEach(btn => btn.addEventListener('click', () => selectTab(btn.dataset.tab)));
 
-const initialTab = ['roadmap', 'holders', 'changelog'].find(name => location.hash === `#${name}`);
+// Landing hub cards — jump to a tab and return to the top
+document.querySelectorAll('[data-goto]').forEach(el => {
+  el.addEventListener('click', () => {
+    selectTab(el.dataset.goto);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+});
+
+// Guides sub-tabs (Basics / Walkthroughs / Stay safe / Links)
+const subTabs   = document.querySelectorAll('[data-subtab]');
+const subPanels = document.querySelectorAll('[data-subpanel]');
+function selectSubTab(name) {
+  subTabs.forEach(btn => {
+    const active = btn.dataset.subtab === name;
+    btn.classList.toggle('is-active', active);
+    btn.setAttribute('aria-selected', String(active));
+  });
+  subPanels.forEach(p => { p.hidden = p.dataset.subpanel !== name; });
+}
+subTabs.forEach(btn => btn.addEventListener('click', () => {
+  selectSubTab(btn.dataset.subtab);
+  document.getElementById('guides-top')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}));
+
+const initialTab = ['roadmap', 'guides', 'holders', 'changelog'].find(name => location.hash === `#${name}`);
 if (initialTab) selectTab(initialTab, false);
 
 initI18n().then(rerenderChangelog);

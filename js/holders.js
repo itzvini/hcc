@@ -20,8 +20,8 @@ function makeBarChart(canvasId, distribution, color) {
       datasets: [{
         data: distribution.map(b => b.count),
         backgroundColor: color,
-        borderColor: '#15102a',
-        borderWidth: 2.5,
+        borderColor: '#141317',
+        borderWidth: 2,
         borderRadius: 8,
         borderSkipped: false,
       }],
@@ -40,12 +40,12 @@ function makeBarChart(canvasId, distribution, color) {
         x: {
           grid: { display: false },
           border: { display: false },
-          ticks: { font: { family: "'Space Mono', monospace", size: 10 }, color: '#5a4d75' },
+          ticks: { font: { family: "'Museo Sans Rounded', sans-serif", size: 10, weight: '700' }, color: '#7D7C88' },
         },
         y: {
-          grid: { color: 'rgba(20,8,40,.06)' },
+          grid: { color: 'rgba(255,255,255,0.08)' },
           border: { display: false },
-          ticks: { font: { family: "'Space Mono', monospace", size: 10 }, color: '#5a4d75', maxTicksLimit: 5 },
+          ticks: { font: { family: "'Museo Sans Rounded', sans-serif", size: 10, weight: '700' }, color: '#7D7C88', maxTicksLimit: 5 },
         },
       },
     },
@@ -91,8 +91,8 @@ export async function loadHoldersChart() {
         labels: [t('chart.creaturesOnly'), t('chart.landOnly'), t('chart.both')],
         datasets: [{
           data: [data.creaturesOnly, data.landOnly, data.both],
-          backgroundColor: ['#7df9a8', '#ffe14d', '#9d7bff'],
-          borderColor: '#15102a',
+          backgroundColor: ['#51FFA5', '#FFF95F', '#8561FF'],
+          borderColor: '#141317',
           borderWidth: 3,
           hoverOffset: 10,
         }],
@@ -103,8 +103,8 @@ export async function loadHoldersChart() {
           legend: {
             position: 'bottom',
             labels: {
-              font: { family: "'Space Mono', monospace", size: 11, weight: '700' },
-              color: '#15102a',
+              font: { family: "'Museo Sans Rounded', sans-serif", size: 11, weight: '700' },
+              color: '#CCCADC',
               padding: 22,
               usePointStyle: true,
               pointStyleWidth: 14,
@@ -125,9 +125,9 @@ export async function loadHoldersChart() {
       },
     });
 
-    makeBarChart('chart-creature-dist', data.creatureDistribution, '#7df9a8');
-    makeBarChart('chart-land-dist',     data.landDistribution,     '#ffe14d');
-    makeBarChart('chart-combined-dist', data.combinedDistribution, '#9d7bff');
+    makeBarChart('chart-creature-dist', data.creatureDistribution, '#51FFA5');
+    makeBarChart('chart-land-dist',     data.landDistribution,     '#FFF95F');
+    makeBarChart('chart-combined-dist', data.combinedDistribution, '#8561FF');
 
   } catch (err) {
     clearInterval(poll);
