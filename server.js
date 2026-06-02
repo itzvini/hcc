@@ -155,6 +155,27 @@ const marketCache = { data: null, fetchedAt: 0, inFlight: null };
 
 const round4 = n => Math.round(n * 1e4) / 1e4;
 
+// Fetch an Immutable endpoint with retries on transient 5xx / network errors —
+// the orderbook occasionally returns 500s that succeed on a quick retry. 4xx
+// (a malformed request on our side) fails fast.
+async function imxFetch(url) {
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
+      if (res.ok) return res.json();
+      const err = new Error(`Immutable API ${res.status} for ${url}`);
+      if (res.status < 500) throw err; // our fault — retrying won't help
+      lastErr = err;
+    } catch (err) {
+      if (err.message?.startsWith('Immutable API 4')) throw err;
+      lastErr = err;
+    }
+    if (attempt < 2) await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+  }
+  throw lastErr;
+}
+
 // Page through Immutable orderbook/activities until the cursor runs out.
 async function imxPaged(baseUrl, params, onItems) {
   let cursor = null, pages = 0;
@@ -162,9 +183,7 @@ async function imxPaged(baseUrl, params, onItems) {
     const url = new URL(baseUrl);
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
     if (cursor) url.searchParams.set('page_cursor', cursor);
-    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(20000) });
-    if (!res.ok) throw new Error(`Immutable API ${res.status} for ${baseUrl}`);
-    const body = await res.json();
+    const body = await imxFetch(url.toString());
     onItems(body.result ?? []);
     cursor = body.page?.next_cursor ?? null;
     pages++;
@@ -187,19 +206,22 @@ async function fetchCreatureSales() {
   return sales;
 }
 
-// Lowest active ETH listing = current Creature floor (in ETH).
+// Lowest active ETH listing = current Creature floor (in ETH). A single sorted
+// request (cheapest ETH listing first) instead of paging every active listing —
+// far lighter on the orderbook API, which keeps it well clear of the transient
+// 500s that deep queries can trigger.
 async function fetchCreatureFloorEth() {
-  const base = `https://api.immutable.com/v1/chains/${IMX_ZKEVM_CHAIN}/orders/listings`;
-  let floor = null;
-  await imxPaged(base, { sell_item_contract_address: CREATURE_CONTRACT, status: 'ACTIVE', page_size: '100' }, items => {
-    for (const o of items) {
-      const buy = o.buy?.[0];
-      if (!buy || (buy.contract_address || '').toLowerCase() !== IMX_ETH_TOKEN) continue;
-      const v = Number(buy.amount) / 1e18;
-      if (Number.isFinite(v) && v > 0 && (floor === null || v < floor)) floor = v;
-    }
-  });
-  return floor;
+  const url = new URL(`https://api.immutable.com/v1/chains/${IMX_ZKEVM_CHAIN}/orders/listings`);
+  url.searchParams.set('sell_item_contract_address', CREATURE_CONTRACT);
+  url.searchParams.set('buy_item_contract_address', IMX_ETH_TOKEN);
+  url.searchParams.set('status', 'ACTIVE');
+  url.searchParams.set('sort_by', 'buy_item_amount');
+  url.searchParams.set('sort_direction', 'asc');
+  url.searchParams.set('page_size', '1');
+  const body = await imxFetch(url.toString());
+  const buy = (body.result ?? [])[0]?.buy?.[0];
+  const v = buy ? Number(buy.amount) / 1e18 : null;
+  return Number.isFinite(v) && v > 0 ? v : null;
 }
 
 // Daily ETH→USD lookup from CoinGecko (free). Returns { at(ts), current }.
@@ -354,9 +376,11 @@ async function computeMarketStats() {
   const cutoff = Date.now() - HISTORY_MS;
   const cutoff30d = Date.now() - 30 * DAY_MS;
 
+  // Each source degrades independently — a transient failure in one (e.g. the
+  // orderbook 500ing) blanks just that figure instead of taking down the whole tab.
   const [creatureSales, creatureFloor, land, ethUsd] = await Promise.all([
-    fetchCreatureSales(),
-    fetchCreatureFloorEth(),
+    fetchCreatureSales().catch(err => { console.error('Creature sales failed:', err.message); return []; }),
+    fetchCreatureFloorEth().catch(err => { console.error('Creature floor failed:', err.message); return null; }),
     fetchLandData(cutoff).catch(err => { console.error('LAND market data failed:', err.message); return null; }),
     fetchEthUsd().catch(err => { console.error('ETH/USD rate failed:', err.message); return { at: () => null, current: null }; }),
   ]);
