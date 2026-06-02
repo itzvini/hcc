@@ -1,30 +1,57 @@
 import { initI18n, setLanguage } from './i18n.js';
 import { loadHoldersChart } from './holders.js';
+import { loadMarketChart, rerenderMarket } from './market.js';
 import { loadChangelog, rerenderChangelog } from './changelog.js';
 
-// Language switcher — re-render changelog after language change
+// Language switcher — re-render dynamic views after language change
 document.querySelectorAll('.lang-btn').forEach(btn => {
-  btn.addEventListener('click', () => setLanguage(btn.dataset.lang).then(rerenderChangelog));
+  btn.addEventListener('click', () => setLanguage(btn.dataset.lang).then(() => {
+    rerenderChangelog();
+    rerenderMarket();
+  }));
 });
 
 // Tabs
 const tabButtons = document.querySelectorAll('[data-tab]');
 const tabPanels  = document.querySelectorAll('.tab-panel');
+const navDrawer  = document.getElementById('nav-drawer');
+const navToggle  = document.getElementById('nav-toggle');
+const navCurrent = document.getElementById('nav-current');
 let holdersLoaded   = false;
+let marketLoaded    = false;
 let changelogLoaded = false;
+
+// Mobile drawer open/close
+function setDrawer(open) {
+  navDrawer.classList.toggle('is-open', open);
+  navToggle.setAttribute('aria-expanded', String(open));
+}
+navToggle.addEventListener('click', () => setDrawer(!navDrawer.classList.contains('is-open')));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') setDrawer(false); });
+document.addEventListener('click', e => {
+  if (navDrawer.classList.contains('is-open') &&
+      !navDrawer.contains(e.target) && !navToggle.contains(e.target)) setDrawer(false);
+});
 
 function selectTab(name, updateHash = true) {
   tabButtons.forEach(btn => {
     const active = btn.dataset.tab === name;
     btn.classList.toggle('is-active', active);
     btn.setAttribute('aria-selected', String(active));
+    // Mirror the active section into the compact mobile bar (keeps i18n in sync)
+    if (active && navCurrent) {
+      navCurrent.textContent = btn.textContent;
+      if (btn.dataset.i18n) navCurrent.dataset.i18n = btn.dataset.i18n;
+    }
   });
+  setDrawer(false);
   tabPanels.forEach(panel => {
     const active = panel.id === `panel-${name}`;
     panel.classList.toggle('is-active', active);
     panel.hidden = !active;
   });
   if (name === 'holders'   && !holdersLoaded)   { holdersLoaded   = true; loadHoldersChart(); }
+  if (name === 'market'    && !marketLoaded)    { marketLoaded    = true; loadMarketChart(); }
   if (name === 'changelog' && !changelogLoaded) { changelogLoaded = true; loadChangelog(); }
   if (updateHash) history.replaceState(null, '', `#${name}`);
 }
@@ -55,7 +82,7 @@ subTabs.forEach(btn => btn.addEventListener('click', () => {
   document.getElementById('guides-top')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }));
 
-const initialTab = ['roadmap', 'guides', 'perks', 'holders', 'changelog'].find(name => location.hash === `#${name}`);
+const initialTab = ['roadmap', 'guides', 'perks', 'holders', 'market', 'changelog'].find(name => location.hash === `#${name}`);
 if (initialTab) selectTab(initialTab, false);
 
 initI18n().then(rerenderChangelog);

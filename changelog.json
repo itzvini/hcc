@@ -1,6 +1,44 @@
 {
   "club": [
     {
+      "date": "June 2, 2026",
+      "title": "Roadmap progress — Council up next",
+      "body": "Two milestones are done and crossed off the roadmap: the Pink Anniversary Drop shipped and the Educational NFT content is live. Next up is the Council Final Definition — locking the rules before the first election.",
+      "tag": "council",
+      "i18n": {
+        "pt": {
+          "date": "2 de jun. de 2026",
+          "title": "Progresso do roadmap — Conselho é o próximo",
+          "body": "Dois marcos foram concluídos e riscados do roadmap: o Pink Anniversary Drop foi lançado e o conteúdo educacional sobre NFTs está no ar. O próximo é a Definição Final do Conselho — fixar as regras antes da primeira eleição."
+        },
+        "es": {
+          "date": "2 jun. 2026",
+          "title": "Progreso del roadmap — el Consejo es lo siguiente",
+          "body": "Dos hitos están completados y tachados del roadmap: el Pink Anniversary Drop se lanzó y el contenido educativo sobre NFTs está activo. Lo siguiente es la Definición Final del Consejo — fijar las reglas antes de la primera elección."
+        },
+        "fr": {
+          "date": "2 juin 2026",
+          "title": "Progrès du roadmap — le Conseil est la prochaine étape",
+          "body": "Deux jalons sont terminés et barrés du roadmap : le Pink Anniversary Drop est sorti et le contenu éducatif sur les NFT est en ligne. La suite est la Définition Finale du Conseil — fixer les règles avant la première élection."
+        },
+        "de": {
+          "date": "2. Juni 2026",
+          "title": "Roadmap-Fortschritt — der Rat ist als Nächstes dran",
+          "body": "Zwei Meilensteine sind erledigt und auf der Roadmap durchgestrichen: Der Pink Anniversary Drop ist erschienen und die pädagogischen NFT-Inhalte sind live. Als Nächstes folgt die abschließende Ratsdefinition — die Regeln festlegen, bevor die erste Wahl beginnt."
+        },
+        "ru": {
+          "date": "2 июня 2026",
+          "title": "Прогресс роадмапа — далее Совет",
+          "body": "Два этапа выполнены и вычеркнуты из роадмапа: Pink Anniversary Drop выпущен, а образовательный контент об NFT доступен. Далее — окончательное определение Совета: зафиксировать правила до первых выборов."
+        },
+        "tr": {
+          "date": "2 Haziran 2026",
+          "title": "Yol haritası ilerliyor — sırada Konsey var",
+          "body": "İki kilometre taşı tamamlandı ve yol haritasından çizildi: Pink Anniversary Drop yayınlandı ve NFT eğitim içeriği yayında. Sırada Konsey Nihai Tanımı var — ilk seçimden önce kuralların belirlenmesi."
+        }
+      }
+    },
+    {
       "date": "May 30, 2026",
       "title": "Council site open sourced",
       "body": "The HCC Player Council site is now public on GitHub. Community members can open Issues to flag typos, suggest changes, or request content. Developers can fork the repo and submit Pull Requests. Nothing goes live without review first.",
@@ -116,6 +154,82 @@
     }
   ],
   "site": [
+    {
+      "date": "June 2, 2026",
+      "title": "Mobile navigation redesign",
+      "body": "On phones, the section tabs and language switcher now collapse into a compact bar with a slide-down menu. It frees up the screen and scales cleanly as new sections are added.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "2 de jun. de 2026",
+          "title": "Redesign da navegação no celular",
+          "body": "No celular, as abas de seção e o seletor de idioma agora se recolhem em uma barra compacta com um menu deslizante. Isso libera espaço na tela e escala bem conforme novas seções são adicionadas."
+        },
+        "es": {
+          "date": "2 jun. 2026",
+          "title": "Rediseño de la navegación en móvil",
+          "body": "En el móvil, las pestañas de sección y el selector de idioma ahora se contraen en una barra compacta con un menú desplegable. Libera espacio en la pantalla y escala bien a medida que se añaden nuevas secciones."
+        },
+        "fr": {
+          "date": "2 juin 2026",
+          "title": "Refonte de la navigation mobile",
+          "body": "Sur mobile, les onglets de section et le sélecteur de langue se replient désormais dans une barre compacte avec un menu déroulant. Cela libère de l'espace à l'écran et s'adapte proprement à mesure que de nouvelles sections sont ajoutées."
+        },
+        "de": {
+          "date": "2. Juni 2026",
+          "title": "Mobile Navigation neu gestaltet",
+          "body": "Auf dem Handy klappen sich die Bereichs-Tabs und der Sprachumschalter jetzt in eine kompakte Leiste mit ausklappbarem Menü zusammen. Das schafft Platz auf dem Bildschirm und skaliert sauber, wenn neue Bereiche hinzukommen."
+        },
+        "ru": {
+          "date": "2 июня 2026",
+          "title": "Переработка навигации на телефоне",
+          "body": "На телефонах вкладки разделов и переключатель языка теперь сворачиваются в компактную панель с выпадающим меню. Это освобождает место на экране и аккуратно масштабируется при добавлении новых разделов."
+        },
+        "tr": {
+          "date": "2 Haziran 2026",
+          "title": "Mobil gezinme yeniden tasarlandı",
+          "body": "Telefonlarda bölüm sekmeleri ve dil değiştirici artık açılır menülü kompakt bir çubukta toplanıyor. Bu, ekranda yer açar ve yeni bölümler eklendikçe düzgün şekilde ölçeklenir."
+        }
+      }
+    },
+    {
+      "date": "June 2, 2026",
+      "title": "Market tab — live floor prices & sale history",
+      "body": "A new Market tab tracks live Creature and LAND floor prices, 30-day sale counts, and a weekly floor-price chart with a USD/ETH toggle and 1M to all-time ranges.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "2 de jun. de 2026",
+          "title": "Aba Mercado — preços de piso ao vivo e histórico de vendas",
+          "body": "Uma nova aba Mercado acompanha os preços de piso ao vivo de Creatures e LAND, a contagem de vendas dos últimos 30 dias e um gráfico semanal de preço de piso com alternância USD/ETH e intervalos de 1M até todo o período."
+        },
+        "es": {
+          "date": "2 jun. 2026",
+          "title": "Pestaña Mercado — precios mínimos en vivo e historial de ventas",
+          "body": "Una nueva pestaña Mercado sigue los precios mínimos en vivo de Creatures y LAND, el recuento de ventas de los últimos 30 días y un gráfico semanal de precio mínimo con alternancia USD/ETH e intervalos de 1M hasta todo el periodo."
+        },
+        "fr": {
+          "date": "2 juin 2026",
+          "title": "Onglet Marché — prix planchers en direct et historique des ventes",
+          "body": "Un nouvel onglet Marché suit les prix planchers en direct des Creatures et du LAND, le nombre de ventes sur 30 jours et un graphique hebdomadaire du prix plancher avec bascule USD/ETH et plages de 1M à tout l'historique."
+        },
+        "de": {
+          "date": "2. Juni 2026",
+          "title": "Markt-Tab — Live-Bodenpreise und Verkaufshistorie",
+          "body": "Ein neuer Markt-Tab zeigt Live-Bodenpreise für Creatures und LAND, die Verkaufszahlen der letzten 30 Tage und ein wöchentliches Bodenpreis-Diagramm mit USD/ETH-Umschalter und Zeiträumen von 1M bis gesamt."
+        },
+        "ru": {
+          "date": "2 июня 2026",
+          "title": "Вкладка «Рынок» — живые минимальные цены и история продаж",
+          "body": "Новая вкладка «Рынок» отслеживает живые минимальные цены на Creatures и LAND, число продаж за 30 дней и недельный график минимальной цены с переключателем USD/ETH и диапазонами от 1М до всего периода."
+        },
+        "tr": {
+          "date": "2 Haziran 2026",
+          "title": "Market sekmesi — canlı taban fiyatları ve satış geçmişi",
+          "body": "Yeni bir Market sekmesi; Creatures ve LAND için canlı taban fiyatlarını, son 30 günlük satış sayılarını ve USD/ETH geçişi ile 1A'dan tüm zamanlara kadar aralıkları olan haftalık bir taban fiyat grafiğini izliyor."
+        }
+      }
+    },
     {
       "date": "June 1, 2026",
       "title": "Highrise Design System — full dark-mode rework",

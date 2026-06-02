@@ -28,22 +28,32 @@
 
 <nav class="page-tabs" aria-label="Main page tabs">
   <div class="wrap page-nav-bar">
-    <div class="tab-list" role="tablist" aria-label="Highrise Creature Club pages">
-      <button class="page-tab is-active" type="button" role="tab" id="tab-council" aria-selected="true" aria-controls="panel-council" data-tab="council" data-i18n="nav.council">Council</button>
-      <button class="page-tab" type="button" role="tab" id="tab-roadmap" aria-selected="false" aria-controls="panel-roadmap" data-tab="roadmap" data-i18n="nav.roadmap">Roadmap</button>
-      <button class="page-tab" type="button" role="tab" id="tab-guides" aria-selected="false" aria-controls="panel-guides" data-tab="guides" data-i18n="nav.guides">Guides</button>
-      <button class="page-tab" type="button" role="tab" id="tab-perks" aria-selected="false" aria-controls="panel-perks" data-tab="perks" data-i18n="nav.perks">Perks</button>
-      <button class="page-tab" type="button" role="tab" id="tab-holders" aria-selected="false" aria-controls="panel-holders" data-tab="holders" data-i18n="nav.holders">Holders</button>
-      <button class="page-tab" type="button" role="tab" id="tab-changelog" aria-selected="false" aria-controls="panel-changelog" data-tab="changelog" data-i18n="nav.changelog">Changelog</button>
+    <div class="nav-mobile-bar">
+      <span class="nav-brand" aria-hidden="true">HCC</span>
+      <span class="nav-current" id="nav-current" data-i18n="nav.council">Council</span>
+      <button class="nav-toggle" type="button" id="nav-toggle" aria-expanded="false" aria-controls="nav-drawer" aria-label="Open navigation menu">
+        <span class="nav-toggle-bars"></span>
+      </button>
     </div>
-    <div class="lang-switcher" role="group" aria-label="Language">
-      <button class="lang-btn is-active" data-lang="en">EN</button>
-      <button class="lang-btn" data-lang="pt">PT</button>
-      <button class="lang-btn" data-lang="es">ES</button>
-      <button class="lang-btn" data-lang="ru">RU</button>
-      <button class="lang-btn" data-lang="fr">FR</button>
-      <button class="lang-btn" data-lang="de">DE</button>
-      <button class="lang-btn" data-lang="tr">TR</button>
+    <div class="nav-drawer" id="nav-drawer">
+      <div class="tab-list" role="tablist" aria-label="Highrise Creature Club pages">
+        <button class="page-tab is-active" type="button" role="tab" id="tab-council" aria-selected="true" aria-controls="panel-council" data-tab="council" data-i18n="nav.council">Council</button>
+        <button class="page-tab" type="button" role="tab" id="tab-roadmap" aria-selected="false" aria-controls="panel-roadmap" data-tab="roadmap" data-i18n="nav.roadmap">Roadmap</button>
+        <button class="page-tab" type="button" role="tab" id="tab-guides" aria-selected="false" aria-controls="panel-guides" data-tab="guides" data-i18n="nav.guides">Guides</button>
+        <button class="page-tab" type="button" role="tab" id="tab-perks" aria-selected="false" aria-controls="panel-perks" data-tab="perks" data-i18n="nav.perks">Perks</button>
+        <button class="page-tab" type="button" role="tab" id="tab-holders" aria-selected="false" aria-controls="panel-holders" data-tab="holders" data-i18n="nav.holders">Holders</button>
+        <button class="page-tab" type="button" role="tab" id="tab-market" aria-selected="false" aria-controls="panel-market" data-tab="market" data-i18n="nav.market">Market</button>
+        <button class="page-tab" type="button" role="tab" id="tab-changelog" aria-selected="false" aria-controls="panel-changelog" data-tab="changelog" data-i18n="nav.changelog">Changelog</button>
+      </div>
+      <div class="lang-switcher" role="group" aria-label="Language">
+        <button class="lang-btn is-active" data-lang="en">EN</button>
+        <button class="lang-btn" data-lang="pt">PT</button>
+        <button class="lang-btn" data-lang="es">ES</button>
+        <button class="lang-btn" data-lang="ru">RU</button>
+        <button class="lang-btn" data-lang="fr">FR</button>
+        <button class="lang-btn" data-lang="de">DE</button>
+        <button class="lang-btn" data-lang="tr">TR</button>
+      </div>
     </div>
   </div>
 </nav>
@@ -76,6 +86,12 @@
       <span class="hub-ico">📊</span>
       <span class="hub-t" data-i18n="nav.holders">Holders</span>
       <span class="hub-d" data-i18n="hub.holders.d">A live look at who holds what.</span>
+      <span class="hub-arrow">→</span>
+    </button>
+    <button class="hub-card" type="button" data-goto="market">
+      <span class="hub-ico">📈</span>
+      <span class="hub-t" data-i18n="nav.market">Market</span>
+      <span class="hub-d" data-i18n="hub.market.d">Floor prices &amp; real sale history.</span>
       <span class="hub-arrow">→</span>
     </button>
     <button class="hub-card" type="button" data-goto="changelog">
@@ -238,12 +254,12 @@
 
     <div class="rm-track">
 
-      <div class="rm-item rm-now">
+      <div class="rm-item rm-done">
         <div class="rm-dot"></div>
         <div class="rm-card">
           <div class="rm-card-top">
             <span class="rm-emoji">🩷</span>
-            <span class="rm-badge rm-badge-now" data-i18n="rm.status.now">Now</span>
+            <span class="rm-badge rm-badge-done" data-i18n="rm.status.done">Done</span>
           </div>
           <div><span class="rm-cat rm-cat-content" data-i18n="rm.cat.content">Content</span></div>
           <h4 class="rm-title" data-i18n="rm.m1.h">Pink Anniversary Drop</h4>
@@ -251,12 +267,12 @@
         </div>
       </div>
 
-      <div class="rm-item rm-next">
+      <div class="rm-item rm-done">
         <div class="rm-dot"></div>
         <div class="rm-card">
           <div class="rm-card-top">
             <span class="rm-emoji">📚</span>
-            <span class="rm-badge rm-badge-next" data-i18n="rm.status.next">Next</span>
+            <span class="rm-badge rm-badge-done" data-i18n="rm.status.done">Done</span>
           </div>
           <div><span class="rm-cat rm-cat-content" data-i18n="rm.cat.content">Content</span></div>
           <h4 class="rm-title" data-i18n="rm.medu.h">Educational NFT Content</h4>
@@ -264,12 +280,12 @@
         </div>
       </div>
 
-      <div class="rm-item rm-next">
+      <div class="rm-item rm-now">
         <div class="rm-dot"></div>
         <div class="rm-card">
           <div class="rm-card-top">
             <span class="rm-emoji">⚖️</span>
-            <span class="rm-badge rm-badge-next" data-i18n="rm.status.next">Next</span>
+            <span class="rm-badge rm-badge-now" data-i18n="rm.status.now">Now</span>
           </div>
           <div><span class="rm-cat rm-cat-governance" data-i18n="rm.cat.governance">Governance</span></div>
           <h4 class="rm-title" data-i18n="rm.m2.h">Council Final Definition</h4>
@@ -660,6 +676,62 @@
       </div>
 
       <p class="holders-updated" id="holders-updated"></p>
+    </div>
+  </section>
+</main>
+
+<main id="panel-market" class="tab-panel" role="tabpanel" aria-labelledby="tab-market" hidden>
+  <section class="wrap">
+    <div class="eyebrow" data-i18n="market.eyebrow">Market snapshot</div>
+    <h2 data-i18n="market.h2">Floor price over time</h2>
+    <p class="lead" data-i18n="market.lead">Live floor prices, plus real Creature sale-price history pulled straight from the blockchain.</p>
+
+    <div id="market-loading" class="holders-state">
+      <div class="holders-spinner"></div>
+      <p data-i18n="market.loading">Fetching market data…</p>
+    </div>
+
+    <div id="market-error" class="holders-state" hidden>
+      <p id="market-error-msg" style="color:var(--hr-fg-2)"></p>
+    </div>
+
+    <div id="market-content" hidden>
+      <div class="facts">
+        <div class="fact"><div class="n" id="stat-creature-floor">—</div><div class="l" data-i18n="market.stat.creatureFloor">Creature floor</div></div>
+        <div class="fact"><div class="n" id="stat-land-floor">—</div><div class="l" data-i18n="market.stat.landFloor">LAND floor</div></div>
+        <div class="fact"><div class="n" id="stat-creature-sales">—</div><div class="l" data-i18n="market.stat.creatureSales">Creature sales · 30d</div></div>
+        <div class="fact"><div class="n" id="stat-land-sales">—</div><div class="l" data-i18n="market.stat.landSales">LAND sales · 30d</div></div>
+      </div>
+
+      <div class="dist-card market-chart-card" id="market-chart-card" style="margin-top:28px">
+        <div class="market-chart-head">
+          <div>
+            <div class="eyebrow" data-i18n="market.chart.eyebrow">📈 Weekly floor price</div>
+            <p style="font-size:.92rem;color:var(--hr-fg-2);margin:0" data-i18n="market.chart.lead">The weekly floor — lowest real sale each week — for Creatures and LAND.</p>
+          </div>
+          <div class="market-controls">
+            <div class="seg" id="market-currency" role="group" aria-label="Currency">
+              <button type="button" class="seg-btn is-active" data-cur="usd">USD</button>
+              <button type="button" class="seg-btn" data-cur="eth">ETH</button>
+            </div>
+            <div class="seg" id="market-range" role="group" aria-label="Time range">
+              <button type="button" class="seg-btn" data-range="1m">1M</button>
+              <button type="button" class="seg-btn" data-range="3m">3M</button>
+              <button type="button" class="seg-btn" data-range="6m">6M</button>
+              <button type="button" class="seg-btn" data-range="1y">1Y</button>
+              <button type="button" class="seg-btn is-active" data-range="all" data-i18n="market.range.all">All</button>
+            </div>
+          </div>
+        </div>
+        <div class="market-chart-box">
+          <canvas id="market-price-chart"></canvas>
+        </div>
+      </div>
+
+      <div class="guide-note market-land-note" id="market-land-note" data-i18n="market.land.note">🗺️ LAND price history is on the way. For now, here's LAND's current floor from OpenSea — its full sale history will light up here soon.</div>
+
+      <p class="holders-updated" id="market-updated"></p>
+      <p class="holders-updated" style="margin-top:6px;opacity:.7" data-i18n="market.source">Creatures via Immutable · LAND via OpenSea</p>
     </div>
   </section>
 </main>
