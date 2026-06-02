@@ -173,27 +173,16 @@ h1 .pop { color: var(--hr-primary); }
   color: var(--hr-fg-2);
 }
 
-/* ---------- CREATURES ---------- */
-.mascot-row { display: flex; justify-content: center; gap: 14px; margin: 38px 0 0; flex-wrap: wrap; }
-.creature {
-  width: 84px; height: 84px;
-  border-radius: 50% 50% 46% 54%/58% 58% 42% 42%;
-  position: relative; box-shadow: var(--hr-shadow-2);
-  display: flex; align-items: center; justify-content: center;
-  animation: bob 3s ease-in-out infinite;
-}
-.creature:nth-child(2){animation-delay:.3s}
-.creature:nth-child(3){animation-delay:.6s}
-.creature:nth-child(4){animation-delay:.9s}
+/* ---------- PETS ---------- */
+.mascot-row { display: flex; justify-content: center; align-items: flex-end; gap: 14px; margin: 38px 0 0; flex-wrap: wrap; }
+.pet-wrap { width: 84px; height: 100px; animation: bob 3s ease-in-out infinite; cursor: pointer; }
+.pet-wrap:nth-child(2){animation-delay:.3s}
+.pet-wrap:nth-child(3){animation-delay:.6s}
+.pet-wrap:nth-child(4){animation-delay:.9s}
+.pet-wrap object, .pet-wrap svg { width: 100%; height: 100%; display: block; pointer-events: none; }
+.pet-wrap.is-jumping{animation:pet-jump .55s cubic-bezier(.28,.84,.42,1) !important}
 @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
-.creature .eyes { position: absolute; top: 34%; width: 100%; display: flex; justify-content: center; gap: 14px; }
-.creature .eyes span { width: 11px; height: 14px; background: #0d0b10; border-radius: 50%; position: relative; }
-.creature .eyes span::after { content: ""; position: absolute; width: 4px; height: 4px; background: #fff; border-radius: 50%; top: 2px; left: 2px; }
-.creature .mouth { position: absolute; top: 58%; width: 16px; height: 9px; border-bottom: 3px solid #0d0b10; border-radius: 0 0 12px 12px; }
-.c-slime  { background: var(--hr-primary);   }
-.c-bubble { background: var(--hr-alert);      }
-.c-grape  { background: var(--hr-secondary);  }
-.c-lemon  { background: var(--hr-banana);     }
+@keyframes pet-jump{0%{transform:translateY(0)}20%{transform:translateY(-20px)}45%{transform:translateY(-24px)}68%{transform:translateY(3px)}82%{transform:translateY(-8px)}100%{transform:translateY(0)}}
 
 /* ---------- NAV TABS ---------- */
 .page-tabs {
@@ -259,9 +248,7 @@ h1 .pop { color: var(--hr-primary); }
   background: var(--hr-bg-3); border: 1px solid var(--hr-line);
   border-radius: var(--hr-radius-lg); padding: 20px;
   box-shadow: var(--hr-shadow-1);
-  transition: transform .15s cubic-bezier(.2,0,0,1), box-shadow .15s;
 }
-.perk:hover { transform: translateY(-2px); box-shadow: var(--hr-shadow-2); }
 .perk .ico { font-size: 1.7rem; display: block; margin-bottom: 8px; }
 .perk h4 { font: 700 15px/1.3 var(--hr-sans); color: var(--hr-fg-0); margin-bottom: 4px; }
 .perk p  { font-size: 13px; color: var(--hr-fg-2); }

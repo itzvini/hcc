@@ -59,3 +59,39 @@ const initialTab = ['roadmap', 'guides', 'holders', 'changelog'].find(name => lo
 if (initialTab) selectTab(initialTab, false);
 
 initI18n().then(rerenderChangelog);
+
+// Jump animation on hover / click / tap
+document.querySelectorAll('.pet-wrap').forEach(pet => {
+  function jumpPet() {
+    pet.classList.remove('is-jumping');
+    void pet.offsetWidth; // force reflow so re-triggering restarts the animation
+    pet.classList.add('is-jumping');
+  }
+  pet.addEventListener('mouseenter', jumpPet);
+  pet.addEventListener('click', jumpPet);
+  pet.addEventListener('animationend', e => {
+    if (e.animationName === 'pet-jump') pet.classList.remove('is-jumping');
+  });
+});
+
+// Fetch and inline pet SVGs so internal <g transform> paths render in document context
+(async () => {
+  const pets = document.querySelectorAll('.pet-wrap object[data]');
+  await Promise.all([...pets].map(async obj => {
+    try {
+      const data = obj.getAttribute('data');
+      const base = data.replace(/[^/]+$/, '');
+      const res = await fetch(data);
+      const text = await res.text();
+      const svg = new DOMParser().parseFromString(text, 'image/svg+xml').documentElement;
+      svg.querySelectorAll('image[href]').forEach(img => {
+        const href = img.getAttribute('href');
+        if (href && !href.startsWith('/') && !href.startsWith('http')) {
+          img.setAttribute('href', base + href);
+        }
+      });
+      svg.style.cssText = 'width:100%;height:100%;display:block;pointer-events:none';
+      obj.replaceWith(svg);
+    } catch {}
+  }));
+})();
