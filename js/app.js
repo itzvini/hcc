@@ -55,7 +55,7 @@ subTabs.forEach(btn => btn.addEventListener('click', () => {
   document.getElementById('guides-top')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }));
 
-const initialTab = ['roadmap', 'guides', 'holders', 'changelog'].find(name => location.hash === `#${name}`);
+const initialTab = ['roadmap', 'guides', 'perks', 'holders', 'changelog'].find(name => location.hash === `#${name}`);
 if (initialTab) selectTab(initialTab, false);
 
 initI18n().then(rerenderChangelog);

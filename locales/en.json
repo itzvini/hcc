@@ -2,6 +2,7 @@
   "nav.council": "Council",
   "nav.roadmap": "Roadmap",
   "nav.guides": "Guides",
+  "nav.perks": "Perks",
   "nav.holders": "Holders",
   "nav.changelog": "Changelog",
 
@@ -176,6 +177,32 @@
 
   "rm.note": "Milestones in approximate order — dates announced as confirmed",
 
+  "perks.eyebrow": "Perks & benefits",
+  "perks.h2": "What are the perks of owning a Creature?",
+  "perks.lead": "These are some of the perks and benefits of owning a Highrise Creature or LAND.",
+  "perks.p1h": "Wear your whole outfit",
+  "perks.p1p": "Wear each item in your Creature outfit inside the Highrise Metaverse.",
+  "perks.p2h": "Members-only spaces",
+  "perks.p2p": "Access to the exclusive Creature Club Room in Highrise and the Creature-Club Discord channel.",
+  "perks.p3h": "Daily Creature Coins",
+  "perks.p3p": "Daily Creature Coins based on your eligible NFTs; Premium LAND grants 75 Creature Coins instead of 25.",
+  "perks.p4h": "Highrise+ each month",
+  "perks.p4p": "Highrise+ Tier 1 each month when eligibility is met: keep a Creature or LAND NFT linked for at least 30 uninterrupted days before renewal and log in for seven consecutive days leading up to the new month. Subscriptions renew only on the first day of each month.",
+  "perks.p5h": "Surprise airdrops",
+  "perks.p5p": "Exclusive Creature-themed content airdropped to your inventory's gift section at surprise intervals.",
+
+  "coins.eyebrow": "Creature Coins",
+  "coins.h2": "What are Creature Coins?",
+  "coins.lead": "Creature Coins are special tokens awarded daily to all owners of a Creature or LAND, to spin exclusive grabs within the Highrise app.",
+  "coins.req.eyebrow": "To earn them",
+  "coins.req": "To receive these coins, you must own at least one Highrise Creature Club NFT and have your wallet connected to the <a href=\"https://highrise.game/\" target=\"_blank\" rel=\"noopener noreferrer\">Highrise website</a>.",
+  "coins.epic.h": "Epic Creature — 25 / day",
+  "coins.epic.p": "Each Epic Creature owned awards 25 Creature Coins daily.",
+  "coins.epic.ex": "1 Creature = 25 coins · 10 Creatures = 250 coins",
+  "coins.legendary.h": "Legendary Creature — 75 / day",
+  "coins.legendary.p": "Each Legendary Creature owned awards 75 Creature Coins daily.",
+  "coins.legendary.ex": "1 Legendary = 75 coins · 10 Legendaries = 750 coins",
+
   "holders.eyebrow": "Community snapshot",
   "holders.h2": "Who holds what",
   "holders.lead": "A live look at current HCC wallets — how many hold Creatures, LAND, or both collections.",
@@ -324,6 +351,7 @@
   "hub.h2": "Where do you want to go?",
   "hub.roadmap.d": "What's shipping next, in order.",
   "hub.guides.d": "How to buy, sell, and secure your NFTs.",
+  "hub.perks.d": "Benefits of holding, and how Creature Coins work.",
   "hub.holders.d": "A live look at who holds what.",
   "hub.changelog.d": "Everything we've shipped so far.",
 

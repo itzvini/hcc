@@ -32,6 +32,7 @@
       <button class="page-tab is-active" type="button" role="tab" id="tab-council" aria-selected="true" aria-controls="panel-council" data-tab="council" data-i18n="nav.council">Council</button>
       <button class="page-tab" type="button" role="tab" id="tab-roadmap" aria-selected="false" aria-controls="panel-roadmap" data-tab="roadmap" data-i18n="nav.roadmap">Roadmap</button>
       <button class="page-tab" type="button" role="tab" id="tab-guides" aria-selected="false" aria-controls="panel-guides" data-tab="guides" data-i18n="nav.guides">Guides</button>
+      <button class="page-tab" type="button" role="tab" id="tab-perks" aria-selected="false" aria-controls="panel-perks" data-tab="perks" data-i18n="nav.perks">Perks</button>
       <button class="page-tab" type="button" role="tab" id="tab-holders" aria-selected="false" aria-controls="panel-holders" data-tab="holders" data-i18n="nav.holders">Holders</button>
       <button class="page-tab" type="button" role="tab" id="tab-changelog" aria-selected="false" aria-controls="panel-changelog" data-tab="changelog" data-i18n="nav.changelog">Changelog</button>
     </div>
@@ -63,6 +64,12 @@
       <span class="hub-ico">📘</span>
       <span class="hub-t" data-i18n="nav.guides">Guides</span>
       <span class="hub-d" data-i18n="hub.guides.d">How to buy, sell, and secure your NFTs.</span>
+      <span class="hub-arrow">→</span>
+    </button>
+    <button class="hub-card" type="button" data-goto="perks">
+      <span class="hub-ico">🎁</span>
+      <span class="hub-t" data-i18n="nav.perks">Perks</span>
+      <span class="hub-d" data-i18n="hub.perks.d">Benefits of holding, and how Creature Coins work.</span>
       <span class="hub-arrow">→</span>
     </button>
     <button class="hub-card" type="button" data-goto="holders">
@@ -562,6 +569,48 @@
       <div class="eyebrow" data-i18n="guide.cta.eyebrow">Need a hand?</div>
       <h2 style="font-size:1.8rem" data-i18n="guide.cta.h">Still stuck?</h2>
       <p style="margin-top:10px;color:var(--hr-fg-2)" data-i18n="guide.cta.p">Hop into the Highrise Discord and ask — the community and team are happy to help you get set up.</p>
+    </div>
+  </section>
+</main>
+
+<main id="panel-perks" class="tab-panel" role="tabpanel" aria-labelledby="tab-perks" hidden>
+  <section class="wrap" id="perks-top">
+    <div class="eyebrow" data-i18n="perks.eyebrow">Perks &amp; benefits</div>
+    <h2 data-i18n="perks.h2">What are the perks of owning a Creature?</h2>
+    <p class="lead" data-i18n="perks.lead">These are some of the perks and benefits of owning a Highrise Creature or LAND.</p>
+    <div class="perks">
+      <div class="perk"><span class="ico">👗</span><h4 data-i18n="perks.p1h">Wear your whole outfit</h4><p data-i18n="perks.p1p">Wear each item in your Creature outfit inside the Highrise Metaverse.</p></div>
+      <div class="perk"><span class="ico">🚪</span><h4 data-i18n="perks.p2h">Members-only spaces</h4><p data-i18n="perks.p2p">Access to the exclusive Creature Club Room in Highrise and the Creature-Club Discord channel.</p></div>
+      <div class="perk"><span class="ico">🪙</span><h4 data-i18n="perks.p3h">Daily Creature Coins</h4><p data-i18n="perks.p3p">Daily Creature Coins based on your eligible NFTs; Premium LAND grants 75 Creature Coins instead of 25.</p></div>
+      <div class="perk"><span class="ico">⭐</span><h4 data-i18n="perks.p4h">Highrise+ each month</h4><p data-i18n="perks.p4p">Highrise+ Tier 1 each month when eligibility is met: keep a Creature or LAND NFT linked for at least 30 uninterrupted days before renewal and log in for seven consecutive days leading up to the new month. Subscriptions renew only on the first day of each month.</p></div>
+      <div class="perk"><span class="ico">🎁</span><h4 data-i18n="perks.p5h">Surprise airdrops</h4><p data-i18n="perks.p5p">Exclusive Creature-themed content airdropped to your inventory's gift section at surprise intervals.</p></div>
+    </div>
+  </section>
+
+  <div class="divider">• • •</div>
+
+  <section class="wrap" id="coins-top">
+    <div class="eyebrow" data-i18n="coins.eyebrow">Creature Coins</div>
+    <h2 data-i18n="coins.h2">What are Creature Coins?</h2>
+    <p class="lead" data-i18n="coins.lead">Creature Coins are special tokens awarded daily to all owners of a Creature or LAND, to spin exclusive grabs within the Highrise app.</p>
+    <div class="honest" style="margin-top:20px">
+      <div class="eyebrow" data-i18n="coins.req.eyebrow">To earn them</div>
+      <p data-i18n-html="coins.req">To receive these coins, you must own at least one Highrise Creature Club NFT and have your wallet connected to the <a href="https://highrise.game/" target="_blank" rel="noopener noreferrer">Highrise website</a>.</p>
+    </div>
+
+    <div class="perks" style="margin-top:26px">
+      <div class="perk">
+        <span class="ico">🪙</span>
+        <h4 data-i18n="coins.epic.h">Epic Creature — 25 / day</h4>
+        <p data-i18n="coins.epic.p">Each Epic Creature owned awards 25 Creature Coins daily.</p>
+        <p style="margin-top:8px;font-size:12px;color:var(--hr-fg-3)" data-i18n="coins.epic.ex">1 Creature = 25 coins · 10 Creatures = 250 coins</p>
+      </div>
+      <div class="perk">
+        <span class="ico">🏆</span>
+        <h4 data-i18n="coins.legendary.h">Legendary Creature — 75 / day</h4>
+        <p data-i18n="coins.legendary.p">Each Legendary Creature owned awards 75 Creature Coins daily.</p>
+        <p style="margin-top:8px;font-size:12px;color:var(--hr-fg-3)" data-i18n="coins.legendary.ex">1 Legendary = 75 coins · 10 Legendaries = 750 coins</p>
+      </div>
     </div>
   </section>
 </main>
