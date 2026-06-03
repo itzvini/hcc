@@ -233,6 +233,10 @@ h1 .pop { color: var(--hr-primary); }
 
 /* ---------- MOBILE NAV (hamburger drawer) ---------- */
 @media (max-width: 760px) {
+  /* Keep all slime pets on a single line, scaling to fit narrow screens */
+  .mascot-row { flex-wrap: nowrap; gap: 8px; }
+  .pet-wrap { width: clamp(56px, 21vw, 84px); height: auto; aspect-ratio: 84 / 100; }
+
   .page-tabs { padding: 8px 0; }
 
   /* Compact bar: brand · current section · menu toggle */
