@@ -1,6 +1,44 @@
 {
   "club": [
     {
+      "date": "June 4, 2026",
+      "title": "Player Council — model update",
+      "body": "An update to the Council model, open for feedback: voting now requires holding an HCC NFT continuously for the last 3 months; the 4 elected seats are split into 3 brackets by holdings (2 seats for 1 NFT, 1 for 2–4, 1 for 5+) so every holder size has a path to run; it stays one vote per seat; and a Voting Advice Application will help match voters to candidates.",
+      "tag": "council",
+      "i18n": {
+        "pt": {
+          "date": "4 de jun. de 2026",
+          "title": "Player Council — atualização do modelo",
+          "body": "Uma atualização do modelo do Conselho, aberta a feedback: votar agora exige manter um NFT do HCC continuamente pelos últimos 3 meses; as 4 cadeiras eleitas são divididas em 3 faixas por quantidade de ativos (2 cadeiras para 1 NFT, 1 para 2–4, 1 para 5+) para que cada tamanho de holder tenha um caminho para concorrer; continua um voto por cadeira; e uma Voting Advice Application ajudará a combinar eleitores e candidatos."
+        },
+        "es": {
+          "date": "4 jun. 2026",
+          "title": "Player Council — actualización del modelo",
+          "body": "Una actualización del modelo del Consejo, abierta a comentarios: votar ahora requiere mantener un NFT de HCC de forma continua durante los últimos 3 meses; los 4 asientos elegidos se dividen en 3 tramos por cantidad de activos (2 asientos para 1 NFT, 1 para 2–4, 1 para 5+) para que cada tamaño de holder tenga una vía para postularse; sigue siendo un voto por asiento; y una Voting Advice Application ayudará a emparejar a votantes y candidatos."
+        },
+        "fr": {
+          "date": "4 juin 2026",
+          "title": "Player Council — mise à jour du modèle",
+          "body": "Une mise à jour du modèle du Conseil, ouverte aux retours : voter nécessite désormais de détenir un NFT HCC en continu pendant les 3 derniers mois ; les 4 sièges élus sont répartis en 3 tranches selon les avoirs (2 sièges pour 1 NFT, 1 pour 2–4, 1 pour 5+) afin que chaque taille de holder ait une voie pour se présenter ; cela reste un vote par siège ; et une Voting Advice Application aidera à faire correspondre électeurs et candidats."
+        },
+        "de": {
+          "date": "4. Juni 2026",
+          "title": "Player Council — Modell-Update",
+          "body": "Ein Update des Rat-Modells, offen für Feedback: Zum Abstimmen muss man jetzt 3 Monate lang durchgehend ein HCC-NFT halten; die 4 gewählten Sitze sind nach Bestand in 3 Stufen aufgeteilt (2 Sitze für 1 NFT, 1 für 2–4, 1 für 5+), damit jede Holder-Größe kandidieren kann; es bleibt eine Stimme pro Sitz; und eine Voting Advice Application hilft, Wähler und Kandidaten zu matchen."
+        },
+        "ru": {
+          "date": "4 июня 2026",
+          "title": "Совет Игроков — обновление модели",
+          "body": "Обновление модели Совета, открытое для обратной связи: чтобы голосовать, теперь нужно непрерывно держать NFT HCC последние 3 месяца; 4 выборных места разделены на 3 категории по количеству активов (2 места за 1 NFT, 1 за 2–4, 1 за 5+), чтобы у каждого размера холдинга был путь баллотироваться; сохраняется один голос на место; а Voting Advice Application поможет сопоставить избирателей и кандидатов."
+        },
+        "tr": {
+          "date": "4 Haziran 2026",
+          "title": "Player Council — model güncellemesi",
+          "body": "Konsey modeline, geri bildirime açık bir güncelleme: oy kullanmak için artık son 3 ay boyunca kesintisiz bir HCC NFT'si tutmak gerekiyor; 4 seçilmiş koltuk, varlık miktarına göre 3 kademeye ayrıldı (1 NFT için 2 koltuk, 2–4 için 1, 5+ için 1), böylece her holder büyüklüğünün aday olma yolu var; koltuk başına tek oy korunuyor; ve bir Voting Advice Application seçmenleri adaylarla eşleştirmeye yardımcı olacak."
+        }
+      }
+    },
+    {
       "date": "June 2, 2026",
       "title": "Roadmap progress — Council up next",
       "body": "Two milestones are done and crossed off the roadmap: the Pink Anniversary Drop shipped and the Educational NFT content is live. Next up is the Council Final Definition — locking the rules before the first election.",
@@ -154,6 +192,82 @@
     }
   ],
   "site": [
+    {
+      "date": "June 4, 2026",
+      "title": "Council page rebuilt for the new model",
+      "body": "The Council tab now explains the 3 candidacy brackets, how voting works (one candidate per seat, one vote each), and the Voting Advice Application that helps you find your best-matching candidate.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "4 de jun. de 2026",
+          "title": "Página do Conselho reformulada para o novo modelo",
+          "body": "A aba Conselho agora explica as 3 faixas de candidatura, como funciona a votação (um candidato por cadeira, um voto cada) e a Voting Advice Application que ajuda a encontrar o candidato mais compatível com você."
+        },
+        "es": {
+          "date": "4 jun. 2026",
+          "title": "Página del Consejo rehecha para el nuevo modelo",
+          "body": "La pestaña Consejo ahora explica los 3 tramos de candidatura, cómo funciona la votación (un candidato por asiento, un voto cada uno) y la Voting Advice Application que te ayuda a encontrar el candidato más afín a ti."
+        },
+        "fr": {
+          "date": "4 juin 2026",
+          "title": "Page du Conseil refaite pour le nouveau modèle",
+          "body": "L'onglet Conseil explique désormais les 3 tranches de candidature, le fonctionnement du vote (un candidat par siège, une voix chacun) et la Voting Advice Application qui vous aide à trouver le candidat qui vous correspond le mieux."
+        },
+        "de": {
+          "date": "4. Juni 2026",
+          "title": "Rat-Seite für das neue Modell überarbeitet",
+          "body": "Der Rat-Tab erklärt jetzt die 3 Kandidatur-Stufen, wie die Abstimmung funktioniert (ein Kandidat pro Sitz, je eine Stimme) und die Voting Advice Application, die dir hilft, den am besten passenden Kandidaten zu finden."
+        },
+        "ru": {
+          "date": "4 июня 2026",
+          "title": "Страница Совета переработана под новую модель",
+          "body": "Вкладка «Совет» теперь объясняет 3 категории кандидатов, как проходит голосование (один кандидат на место, по одному голосу) и Voting Advice Application, которое помогает найти наиболее подходящего вам кандидата."
+        },
+        "tr": {
+          "date": "4 Haziran 2026",
+          "title": "Konsey sayfası yeni modele göre yeniden yapıldı",
+          "body": "Konsey sekmesi artık 3 adaylık kademesini, oylamanın nasıl işlediğini (koltuk başına bir aday, birer oy) ve sana en uygun adayı bulmana yardımcı olan Voting Advice Application'ı açıklıyor."
+        }
+      }
+    },
+    {
+      "date": "June 4, 2026",
+      "title": "Terms of Participation & Privacy Policy added",
+      "body": "Two new pages, linked in the footer: the Terms of Participation for voters and candidates, and a Privacy Policy covering what data we use and how.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "4 de jun. de 2026",
+          "title": "Termos de Participação e Política de Privacidade adicionados",
+          "body": "Duas novas páginas, com links no rodapé: os Termos de Participação para eleitores e candidatos e uma Política de Privacidade que cobre quais dados usamos e como."
+        },
+        "es": {
+          "date": "4 jun. 2026",
+          "title": "Términos de Participación y Política de Privacidad añadidos",
+          "body": "Dos nuevas páginas, enlazadas en el pie de página: los Términos de Participación para votantes y candidatos y una Política de Privacidad que cubre qué datos usamos y cómo."
+        },
+        "fr": {
+          "date": "4 juin 2026",
+          "title": "Conditions de Participation et Politique de Confidentialité ajoutées",
+          "body": "Deux nouvelles pages, accessibles depuis le pied de page : les Conditions de Participation pour les électeurs et les candidats, et une Politique de Confidentialité expliquant quelles données nous utilisons et comment."
+        },
+        "de": {
+          "date": "4. Juni 2026",
+          "title": "Teilnahmebedingungen und Datenschutzrichtlinie hinzugefügt",
+          "body": "Zwei neue Seiten, im Footer verlinkt: die Teilnahmebedingungen für Wähler und Kandidaten und eine Datenschutzrichtlinie, die erklärt, welche Daten wir nutzen und wie."
+        },
+        "ru": {
+          "date": "4 июня 2026",
+          "title": "Добавлены Условия участия и Политика конфиденциальности",
+          "body": "Две новые страницы со ссылками в подвале: Условия участия для избирателей и кандидатов и Политика конфиденциальности о том, какие данные мы используем и как."
+        },
+        "tr": {
+          "date": "4 Haziran 2026",
+          "title": "Katılım Koşulları ve Gizlilik Politikası eklendi",
+          "body": "Alt bilgide bağlantılanan iki yeni sayfa: seçmenler ve adaylar için Katılım Koşulları ve hangi verileri nasıl kullandığımızı açıklayan bir Gizlilik Politikası."
+        }
+      }
+    },
     {
       "date": "June 2, 2026",
       "title": "Mobile navigation redesign",
