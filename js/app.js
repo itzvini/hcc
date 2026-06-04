@@ -82,7 +82,18 @@ subTabs.forEach(btn => btn.addEventListener('click', () => {
   document.getElementById('guides-top')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }));
 
-const initialTab = ['roadmap', 'guides', 'perks', 'holders', 'market', 'changelog'].find(name => location.hash === `#${name}`);
+const HASH_TABS = ['council', 'roadmap', 'guides', 'perks', 'holders', 'market', 'changelog', 'terms', 'privacy'];
+
+// Footer / in-page links like #terms and #privacy switch tabs (and deep-links on load)
+window.addEventListener('hashchange', () => {
+  const name = location.hash.slice(1);
+  if (HASH_TABS.includes(name)) {
+    selectTab(name, false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+});
+
+const initialTab = HASH_TABS.filter(n => n !== 'council').find(name => location.hash === `#${name}`);
 if (initialTab) selectTab(initialTab, false);
 
 initI18n().then(rerenderChangelog);
