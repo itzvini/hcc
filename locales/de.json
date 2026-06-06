@@ -1,4 +1,5 @@
 {
+  "nav.club": "Der Club",
   "nav.council": "Rat",
   "nav.roadmap": "Roadmap",
   "nav.holders": "Holder",
@@ -73,7 +74,7 @@
   "t6.p": "Ein dedizierter Künstler ist dauerhaft mit der Fertigstellung von Gen 1 und Gen 2 beschäftigt. Zweiwöchentliche Updates. Monatliche Shop-Auffrischungen. Vierteljährliche Drops. Ein klares Bekenntnis zu Kommunikation, Lieferung und Vertrauenswiederaufbau — Schritt für Schritt.",
   "t7.year": "JETZT — DER RAT",
   "t7.h": "Holder bekommen eine echte Stimme",
-  "t7.p": "Der nächste Schritt: ein Spielerrat unter Führung der Holder, der mitgestaltet, was erschaffen wird — für Kreaturen und LAND gleichermaßen. Um genau das geht es auf dieser Seite. 👇",
+  "t7.p": "Der nächste Schritt: ein Spielerrat unter Führung der Holder, der mitgestaltet, was erschaffen wird — für Kreaturen und LAND gleichermaßen. Auf der Rat-Seite siehst du, wie das funktioniert.",
   "honest.eyebrow": "Klare Worte",
   "honest.h2": "Warum wir das tun",
   "honest.p": "Vertrauen kommt nicht durch Versprechen zurück — es kommt durch konsequente Umsetzung <em>und</em> echtes Zuhören. Der Rat existiert, damit HCC-Holder nicht nur erfahren, was als nächstes kommt, sondern es mitentscheiden. Es ist ein beratendes Gremium mit echtem Einfluss auf die kreative Richtung, das neben dem bauenden Team arbeitet.",
@@ -417,6 +418,8 @@
   "hub.perks.d": "Vorteile des Besitzes und wie Creature Coins funktionieren.",
   "hub.holders.d": "Ein Live-Blick darauf, wer was hält.",
   "hub.changelog.d": "Alles, was wir bisher geliefert haben.",
+  "hub.council.d": "Der Spielerrat – seine Rolle, die Sitze und wie abgestimmt wird.",
+  "club.cta": "Den Spielerrat erkunden →",
   "guide.sub.basics": "Grundlagen",
   "guide.sub.walkthroughs": "Anleitungen",
   "guide.sub.safety": "Bleib sicher",

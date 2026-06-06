@@ -29,14 +29,15 @@
   <div class="wrap page-nav-bar">
     <div class="nav-mobile-bar">
       <span class="nav-brand" aria-hidden="true">HCC</span>
-      <span class="nav-current" id="nav-current" data-i18n="nav.council">Council</span>
+      <span class="nav-current" id="nav-current" data-i18n="nav.club">The Club</span>
       <button class="nav-toggle" type="button" id="nav-toggle" aria-expanded="false" aria-controls="nav-drawer" aria-label="Open navigation menu">
         <span class="nav-toggle-bars"></span>
       </button>
     </div>
     <div class="nav-drawer" id="nav-drawer">
       <div class="tab-list" role="tablist" aria-label="Highrise Creature Club pages">
-        <button class="page-tab is-active" type="button" role="tab" id="tab-council" aria-selected="true" aria-controls="panel-council" data-tab="council" data-i18n="nav.council">Council</button>
+        <button class="page-tab is-active" type="button" role="tab" id="tab-club" aria-selected="true" aria-controls="panel-club" data-tab="club" data-i18n="nav.club">The Club</button>
+        <button class="page-tab" type="button" role="tab" id="tab-council" aria-selected="false" aria-controls="panel-council" data-tab="council" data-i18n="nav.council">Council</button>
         <button class="page-tab" type="button" role="tab" id="tab-roadmap" aria-selected="false" aria-controls="panel-roadmap" data-tab="roadmap" data-i18n="nav.roadmap">Roadmap</button>
         <button class="page-tab" type="button" role="tab" id="tab-guides" aria-selected="false" aria-controls="panel-guides" data-tab="guides" data-i18n="nav.guides">Guides</button>
         <button class="page-tab" type="button" role="tab" id="tab-perks" aria-selected="false" aria-controls="panel-perks" data-tab="perks" data-i18n="nav.perks">Perks</button>
@@ -57,12 +58,18 @@
   </div>
 </nav>
 
-<main id="panel-council" class="tab-panel is-active" role="tabpanel" aria-labelledby="tab-council">
+<main id="panel-club" class="tab-panel is-active" role="tabpanel" aria-labelledby="tab-club">
 
-<section class="wrap" id="council-top">
+<section class="wrap" id="club-top">
   <div class="eyebrow" data-i18n="hub.eyebrow">Find your way around</div>
   <h2 data-i18n="hub.h2">Where do you want to go?</h2>
   <div class="hub">
+    <button class="hub-card" type="button" data-goto="council">
+      <span class="hub-ico">🏛️</span>
+      <span class="hub-t" data-i18n="nav.council">Council</span>
+      <span class="hub-d" data-i18n="hub.council.d">The Player Council — its role, seats, and how voting works.</span>
+      <span class="hub-arrow">→</span>
+    </button>
     <button class="hub-card" type="button" data-goto="roadmap">
       <span class="hub-ico">🧭</span>
       <span class="hub-t" data-i18n="nav.roadmap">Roadmap</span>
@@ -161,12 +168,24 @@
     <div class="tnode now">
       <div class="tyear" data-i18n="t7.year">NOW — THE COUNCIL</div>
       <h4 data-i18n="t7.h">Holders get a real voice</h4>
-      <p data-i18n="t7.p">The next step: a holder-led Player Council that helps shape what gets made — across Creatures and LAND alike. This page is all about that. 👇</p>
+      <p data-i18n="t7.p">The next step: a holder-led Player Council that helps shape what gets made — across Creatures and LAND alike. Head to the Council page to see how it works.</p>
     </div>
+  </div>
+  <div style="text-align:center;margin-top:34px">
+    <a href="#council" style="display:inline-block;padding:13px 28px;border-radius:999px;background:var(--hr-primary);color:var(--hr-on-primary);font:700 15px/1 var(--hr-sans)" data-i18n="club.cta">Explore the Player Council →</a>
   </div>
 </section>
 
-<div class="divider">• • •</div>
+<section class="wrap">
+  <div class="eyebrow" data-i18n="faq.eyebrow">Quick answers</div>
+  <h2 data-i18n="faq.h2">Questions you might have</h2>
+  <details><summary data-i18n="faq.q4">I own LAND, not a Creature — am I in the club?</summary><p data-i18n="faq.a4">Yes. LAND owners are full Creature Club members. Your Land Tokens became Creature Coins, you earn daily Coins (Premium plots at 3×), and you take part in club drops and giveaways. Your plot and your slime pet stay exactly as they are.</p></details>
+  <details><summary data-i18n="faq.q5">Is my creature's ownership safe?</summary><p data-i18n="faq.a5">Yes. Plans to migrate creatures off the blockchain have been cancelled following Steam approval. If that ever needs to change, we'll tell you early and clearly — no surprises.</p></details>
+</section>
+
+</main>
+
+<main id="panel-council" class="tab-panel" role="tabpanel" aria-labelledby="tab-council" hidden>
 
 <section class="wrap">
   <div class="honest">
@@ -279,8 +298,6 @@
   <details><summary data-i18n="faq.q1">Is this a DAO? Do I own part of the company now?</summary><p data-i18n="faq.a1">No. The Council is advisory — a powerful sounding board on creative and roadmap decisions. Pocket Worlds remains the executor and keeps final say on the business, the economy and the brand.</p></details>
   <details><summary data-i18n="faq.q2">Will big holders just take over?</summary><p data-i18n="faq.a2">No. It's one holder, one vote in every seat — never weighted by how many Creature or LAND assets you own. How many you hold only affects which seat you can run for — we reserve seats for different holder sizes so everyone is represented — never how much your vote counts. And 4 of the 7 seats are elected directly by holders, with 3 appointed for continuity and competence. We're stating that split openly rather than pretending it's purely democratic.</p></details>
   <details><summary data-i18n="faq.q3">What about Gen 1 and Gen 2?</summary><p data-i18n="faq.a3">A dedicated artist is on finishing them, and the Council helps decide which creatures and variants make each Gen 2 set — picking from the options the art team can actually build.</p></details>
-  <details><summary data-i18n="faq.q4">I own LAND, not a Creature — am I in the club?</summary><p data-i18n="faq.a4">Yes. LAND owners are full Creature Club members. Your Land Tokens became Creature Coins, you earn daily Coins (Premium plots at 3×), and you take part in club drops and giveaways. Your plot and your slime pet stay exactly as they are.</p></details>
-  <details><summary data-i18n="faq.q5">Is my creature's ownership safe?</summary><p data-i18n="faq.a5">Yes. Plans to migrate creatures off the blockchain have been cancelled following Steam approval. If that ever needs to change, we'll tell you early and clearly — no surprises.</p></details>
   <details><summary data-i18n="faq.q6">What does the Council actually start with?</summary><p data-i18n="faq.a6">It starts advisory-leaning, and its "Decides" power grows release by release as it proves out. Think training wheels that come off over time, not everything on day one.</p></details>
 </section>
 

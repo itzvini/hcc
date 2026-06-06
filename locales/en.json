@@ -1,4 +1,5 @@
 {
+  "nav.club": "The Club",
   "nav.council": "Council",
   "nav.roadmap": "Roadmap",
   "nav.guides": "Guides",
@@ -77,7 +78,7 @@
   "t6.p": "A dedicated artist put permanently on finishing Gen 1 & Gen 2. Bi-weekly updates. Monthly shop refreshes. Quarterly drops. A clear commitment to communication, delivery, and rebuilding trust one update at a time.",
   "t7.year": "NOW — THE COUNCIL",
   "t7.h": "Holders get a real voice",
-  "t7.p": "The next step: a holder-led Player Council that helps shape what gets made — across Creatures and LAND alike. This page is all about that. 👇",
+  "t7.p": "The next step: a holder-led Player Council that helps shape what gets made — across Creatures and LAND alike. Head to the Council page to see how it works.",
 
   "honest.eyebrow": "Straight talk",
   "honest.h2": "Why we're doing this",
@@ -457,6 +458,8 @@
   "hub.perks.d": "Benefits of holding, and how Creature Coins work.",
   "hub.holders.d": "A live look at who holds what.",
   "hub.changelog.d": "Everything we've shipped so far.",
+  "hub.council.d": "The Player Council — its role, seats, and how voting works.",
+  "club.cta": "Explore the Player Council →",
 
   "guide.sub.basics": "Basics",
   "guide.sub.walkthroughs": "Walkthroughs",

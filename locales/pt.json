@@ -1,4 +1,5 @@
 {
+  "nav.club": "O Clube",
   "nav.council": "Conselho",
   "nav.roadmap": "Roadmap",
   "nav.holders": "Holders",
@@ -73,7 +74,7 @@
   "t6.p": "Um artista dedicado foi permanentemente alocado para finalizar a Gen 1 e Gen 2. Atualizações quinzenais. Renovações mensais da loja. Drops trimestrais. Um compromisso claro de comunicação, entrega e reconstrução da confiança, uma atualização de cada vez.",
   "t7.year": "AGORA — O CONSELHO",
   "t7.h": "Os holders ganham voz de verdade",
-  "t7.p": "O próximo passo: um Conselho de Jogadores liderado por holders que ajuda a moldar o que é criado — tanto para Creatures quanto para LAND. Esta página é tudo sobre isso. 👇",
+  "t7.p": "O próximo passo: um Conselho de Jogadores liderado por holders que ajuda a moldar o que é criado — tanto para Creatures quanto para LAND. Acesse a página do Conselho para ver como funciona.",
   "honest.eyebrow": "Papo reto",
   "honest.h2": "Por que estamos fazendo isso",
   "honest.p": "A confiança não volta por promessas — ela volta pela entrega consistente <em>e</em> por realmente ouvir. O Conselho existe para que os holders do HCC não apenas sejam informados sobre o que vem a seguir, mas ajudem a decidir. É um conselho com força real na direção criativa, atuando junto à equipe que constrói.",
@@ -411,6 +412,8 @@
   "hub.perks.d": "Os benefícios de ter um, e como funcionam as Creature Coins.",
   "hub.holders.d": "Uma visão ao vivo de quem tem o quê.",
   "hub.changelog.d": "Tudo o que entregamos até agora.",
+  "hub.council.d": "O Conselho de Jogadores — seu papel, as cadeiras e como funciona a votação.",
+  "club.cta": "Conheça o Conselho de Jogadores →",
   "guide.sub.basics": "Básico",
   "guide.sub.walkthroughs": "Tutoriais",
   "guide.sub.safety": "Fique seguro",

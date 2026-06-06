@@ -1,4 +1,5 @@
 {
+  "nav.club": "Kulüp",
   "nav.council": "Konsey",
   "nav.roadmap": "Yol Haritası",
   "nav.holders": "Holderlar",
@@ -73,7 +74,7 @@
   "t6.p": "Gen 1 ve Gen 2'yi bitirmeye kalıcı olarak atanmış özel bir sanatçı. İki haftada bir güncellemeler. Aylık mağaza yenilemeleri. Üç ayda bir drop'lar. İletişim, teslimat ve güveni yeniden inşa etme konusundaki net bir taahhüt — bir güncelleme, bir adım.",
   "t7.year": "ŞİMDİ — KONSEY",
   "t7.h": "Holder'lar gerçek bir ses kazanıyor",
-  "t7.p": "Bir sonraki adım: Creatures ve LAND için nelerin yaratılacağını şekillendirmeye yardımcı olan holder liderliğinde bir Oyuncu Konseyi. Bu sayfa tamamen bu hakkında. 👇",
+  "t7.p": "Bir sonraki adım: Creatures ve LAND için nelerin yaratılacağını şekillendirmeye yardımcı olan holder liderliğinde bir Oyuncu Konseyi. Nasıl işlediğini görmek için Konsey sayfasına git.",
   "honest.eyebrow": "Dürüst konuşma",
   "honest.h2": "Neden bunu yapıyoruz",
   "honest.p": "Güven söz vermelerden geri gelmez — tutarlı teslimat <em>ve</em> gerçekten dinlemekten gelir. Konsey, HCC holder'larının bundan sonra ne geleceğini yalnızca duymak yerine bunu belirlemeye yardımcı olmaları için var. İnşa eden ekibin yanında çalışan, yaratıcı yönde gerçek ağırlığı olan bir danışma kurulunun ta kendisidir.",
@@ -418,6 +419,8 @@
   "hub.perks.d": "Sahip olmanın getirdiği avantajlar ve Creature Coins'in nasıl çalıştığı.",
   "hub.holders.d": "Kimin neyi tuttuğuna canlı bir bakış.",
   "hub.changelog.d": "Şimdiye kadar yayınladığımız her şey.",
+  "hub.council.d": "Oyuncu Konseyi — rolü, koltukları ve oylamanın işleyişi.",
+  "club.cta": "Oyuncu Konseyi'ni keşfet →",
   "guide.sub.basics": "Temeller",
   "guide.sub.walkthroughs": "Anlatımlar",
   "guide.sub.safety": "Güvende kal",

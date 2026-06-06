@@ -193,6 +193,44 @@
   ],
   "site": [
     {
+      "date": "June 6, 2026",
+      "title": "Creature Club & Council split into two pages",
+      "body": "The old Council page was doing too much, so it's now two focused tabs. The Club covers what HCC is, the LAND collection, and the full history; the Council tab is dedicated to the council's role, seats, brackets, and how voting works.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "6 de jun. de 2026",
+          "title": "Creature Club e Conselho divididos em duas páginas",
+          "body": "A antiga página do Conselho fazia coisas demais, então agora são duas abas focadas. O Clube cobre o que é o HCC, a coleção LAND e toda a história; a aba Conselho é dedicada ao papel do conselho, às cadeiras, às faixas e a como funciona a votação."
+        },
+        "es": {
+          "date": "6 jun. 2026",
+          "title": "Creature Club y Consejo divididos en dos páginas",
+          "body": "La antigua página del Consejo hacía demasiado, así que ahora son dos pestañas enfocadas. El Club cubre qué es HCC, la colección LAND y toda la historia; la pestaña Consejo se dedica a la función del consejo, los puestos, los tramos y cómo funciona la votación."
+        },
+        "fr": {
+          "date": "6 juin 2026",
+          "title": "Creature Club et Conseil séparés en deux pages",
+          "body": "L'ancienne page du Conseil en faisait trop, ce sont donc désormais deux onglets dédiés. Le Club présente ce qu'est le HCC, la collection LAND et toute l'histoire ; l'onglet Conseil est consacré au rôle du conseil, aux sièges, aux tranches et au fonctionnement du vote."
+        },
+        "de": {
+          "date": "6. Juni 2026",
+          "title": "Creature Club und Rat in zwei Seiten aufgeteilt",
+          "body": "Die alte Rat-Seite machte zu viel, jetzt sind es zwei fokussierte Tabs. Der Club erklärt, was HCC ist, die LAND-Sammlung und die ganze Geschichte; der Rat-Tab widmet sich der Rolle des Rats, den Sitzen, den Stufen und wie die Abstimmung funktioniert."
+        },
+        "ru": {
+          "date": "6 июня 2026",
+          "title": "Creature Club и Совет разделены на две страницы",
+          "body": "Старая страница Совета делала слишком много, поэтому теперь это две отдельные вкладки. «Клуб» рассказывает, что такое HCC, о коллекции LAND и всей истории; вкладка «Совет» посвящена роли совета, местам, категориям и тому, как проходит голосование."
+        },
+        "tr": {
+          "date": "6 Haziran 2026",
+          "title": "Creature Club ve Konsey iki sayfaya ayrıldı",
+          "body": "Eski Konsey sayfası çok fazla iş yapıyordu, bu yüzden artık iki odaklı sekme var. Kulüp; HCC'nin ne olduğunu, LAND koleksiyonunu ve tüm geçmişi anlatır; Konsey sekmesi ise konseyin rolüne, koltuklara, bracket'lara ve oylamanın nasıl işlediğine ayrılmıştır."
+        }
+      }
+    },
+    {
       "date": "June 4, 2026",
       "title": "Council page rebuilt for the new model",
       "body": "The Council tab now explains the 3 candidacy brackets, how voting works (one candidate per seat, one vote each), and the Voting Advice Application that helps you find your best-matching candidate.",
