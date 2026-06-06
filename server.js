@@ -1,6 +1,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 
 // Load .env into process.env if present, so the OpenSea key works no matter how the
 // server is launched (node server.js, npm start, IDE). No-op in production, where
@@ -757,15 +758,32 @@ const server = http.createServer((request, response) => {
     }
 
     const extension = path.extname(filePath).toLowerCase();
-    // Code & content (html/js/css/json/locales) have no content-hashed names, so they
-    // must revalidate or stale copies linger after every deploy. Only fingerprint-stable
-    // media (fonts/images) is safe to cache long-term.
-    const longCache = new Set(['.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.otf', '.ttf', '.woff', '.woff2']);
+
+    // Content-hash ETag. This is the validator that was missing: with it, `no-cache`
+    // revalidation is deterministic (304 when unchanged, full body when changed) instead
+    // of undefined-across-browsers, which is what left users on days-old copies.
+    const etag = 'W/"' + crypto.createHash('sha1').update(data).digest('base64').slice(0, 27) + '"';
+
+    // Files have no content-hashed names, so nothing may be frozen with `immutable`
+    // (that previously pinned media for a year). Binary media gets a short cache then
+    // revalidates; everything that defines a "page" (html/css/js/json/svg) revalidates
+    // every load so a new deploy is picked up immediately.
+    const media = new Set(['.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.otf', '.ttf', '.woff', '.woff2']);
+    const cacheControl = media.has(extension)
+      ? 'public, max-age=3600, must-revalidate'
+      : 'no-cache';
+
+    // Honour conditional requests — cheap 304 when the browser already has this content.
+    if (request.headers['if-none-match'] === etag) {
+      response.writeHead(304, { ETag: etag, 'Cache-Control': cacheControl });
+      response.end();
+      return;
+    }
+
     response.writeHead(200, {
       'Content-Type': contentTypes[extension] || 'application/octet-stream',
-      'Cache-Control': longCache.has(extension)
-        ? 'public, max-age=31536000, immutable'
-        : 'no-cache',
+      'Cache-Control': cacheControl,
+      ETag: etag,
     });
     response.end(data);
   });
