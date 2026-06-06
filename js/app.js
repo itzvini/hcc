@@ -100,7 +100,14 @@ window.addEventListener('hashchange', () => {
 const initialTab = HASH_TABS.filter(n => n !== 'club').find(name => location.hash === `#${name}`);
 if (initialTab) selectTab(initialTab, false);
 
-initI18n().then(rerenderChangelog);
+// Re-render dynamic views once translations are loaded. A deep-link to #apply (e.g.
+// the OAuth callback redirect) triggers loadApply() before initI18n() resolves, so
+// without this the panel would show raw keys until the next language switch.
+initI18n().then(() => {
+  rerenderChangelog();
+  rerenderApply();
+  rerenderMarket();
+});
 
 // Jump animation on hover / click / tap
 document.querySelectorAll('.pet-wrap').forEach(pet => {

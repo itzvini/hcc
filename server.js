@@ -535,43 +535,55 @@ async function handleAuthApi(request, response, url) {
       return redirectToApp(request, response, 'state');
     }
 
-    const token = await auth.exchangeCode(code, request);
-    const profile = await auth.fetchDiscordUser(token.access_token);
-    const wallet = await auth.fetchHighriseWallet(profile.id);
+    // Track which step fails so the logs pinpoint config/connectivity issues
+    // (token exchange, Discord, Highrise, holder lookup, or DB).
+    let stage = 'exchangeCode';
+    try {
+      const token = await auth.exchangeCode(code, request);
+      stage = 'fetchDiscordUser';
+      const profile = await auth.fetchDiscordUser(token.access_token);
+      stage = 'fetchHighriseWallet';
+      const wallet = await auth.fetchHighriseWallet(profile.id);
 
-    let holdings = { creatureCount: 0, landCount: 0, holdersAvailable: false };
-    if (wallet.ethWallet) holdings = await getWalletHoldings(wallet.ethWallet);
+      let holdings = { creatureCount: 0, landCount: 0, holdersAvailable: false };
+      if (wallet.ethWallet) { stage = 'getWalletHoldings'; holdings = await getWalletHoldings(wallet.ethWallet); }
 
-    const eligibility = {
-      linked: wallet.linked,
-      ethWallet: wallet.ethWallet,
-      holdersAvailable: holdings.holdersAvailable,
-      ...computeEligibility(holdings),
-    };
+      const eligibility = {
+        linked: wallet.linked,
+        ethWallet: wallet.ethWallet,
+        holdersAvailable: holdings.holdersAvailable,
+        ...computeEligibility(holdings),
+      };
 
-    const sessionProfile = { id: profile.id, username: profile.username, avatar: profile.avatar };
-    const sid = await db.createSession(profile.id, sessionProfile, eligibility);
-    await db.upsertApplicant({
-      discordId: profile.id,
-      discordUsername: profile.username,
-      ethWallet: wallet.ethWallet,
-      creatureCount: eligibility.creatureCount,
-      landCount: eligibility.landCount,
-      totalCount: eligibility.totalCount,
-      bracket: eligibility.bracket,
-      canRun: eligibility.canRun,
-    });
+      const sessionProfile = { id: profile.id, username: profile.username, avatar: profile.avatar };
+      stage = 'createSession';
+      const sid = await db.createSession(profile.id, sessionProfile, eligibility);
+      stage = 'upsertApplicant';
+      await db.upsertApplicant({
+        discordId: profile.id,
+        discordUsername: profile.username,
+        ethWallet: wallet.ethWallet,
+        creatureCount: eligibility.creatureCount,
+        landCount: eligibility.landCount,
+        totalCount: eligibility.totalCount,
+        bracket: eligibility.bracket,
+        canRun: eligibility.canRun,
+      });
 
-    const secure = auth.isSecure(request);
-    response.writeHead(302, {
-      Location: '/#apply',
-      'Set-Cookie': [
-        auth.serializeCookie(auth.SESSION_COOKIE, sid, { maxAge: SESSION_MAX_AGE, secure }),
-        auth.serializeCookie(auth.STATE_COOKIE, '', { maxAge: 0, secure }),
-      ],
-      'Cache-Control': 'no-store',
-    });
-    response.end();
+      const secure = auth.isSecure(request);
+      response.writeHead(302, {
+        Location: '/#apply',
+        'Set-Cookie': [
+          auth.serializeCookie(auth.SESSION_COOKIE, sid, { maxAge: SESSION_MAX_AGE, secure }),
+          auth.serializeCookie(auth.STATE_COOKIE, '', { maxAge: 0, secure }),
+        ],
+        'Cache-Control': 'no-store',
+      });
+      response.end();
+    } catch (err) {
+      console.error(`OAuth callback failed at stage "${stage}":`, err.message);
+      redirectToApp(request, response, 'failed');
+    }
     return;
   }
 
