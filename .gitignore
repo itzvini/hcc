@@ -1,8 +1,16 @@
 node_modules/
+# Never commit secrets — ignore every .env variant
 .env
+.env.*
+*.env
 .DS_Store
 .railway/
 .claude/
+.tmp/
+
+# Local-only dev auth bypass — never commit/deploy the active file.
+# The committed lib/dev-login.example.js is the inert template; copy it to enable.
+lib/dev-login.js
 
 # Highrise Design System assets (local reference only)
 Highrise Design System/

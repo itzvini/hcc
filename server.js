@@ -7,6 +7,20 @@ const path = require('node:path');
 // Railway injects real env vars and there is no .env file.
 try { process.loadEnvFile(); } catch { /* no .env — fine */ }
 
+const db = require('./lib/db');
+const auth = require('./lib/auth');
+const { computeEligibility } = require('./lib/eligibility');
+
+db.init().catch(err => console.error('DB init failed:', err.message));
+
+// Optional local dev-login helper for testing eligibility screens without a real
+// wallet. The active file (lib/dev-login.js) is gitignored, so it is ABSENT from
+// the deployed build — the auth bypass cannot exist in production regardless of env
+// vars. See lib/dev-login.example.js for how to enable it locally.
+let devLogin = null;
+try { devLogin = require('./lib/dev-login.js'); } catch { /* not present — normal in production */ }
+if (devLogin) console.warn('[dev] lib/dev-login.js loaded — /api/auth/dev-login active locally. Never commit or deploy this file.');
+
 const root = __dirname;
 const port = Number(process.env.PORT || 3000);
 const host = '0.0.0.0';
@@ -19,6 +33,9 @@ const DIST_THRESHOLDS         = [1, 2, 5, 10]; // bucket breakpoints
 
 const holderCache    = { data: null, fetchedAt: 0, inFlight: null };
 const fetchProgress  = { phase: 'idle', creaturePages: 0, landPages: 0 };
+// Raw per-address counts from the latest successful fetch, kept so the Council
+// eligibility check can look up a single wallet without re-querying the chain.
+const holderCounts   = { creature: new Map(), land: new Map(), fetchedAt: 0 };
 
 // Fetch all pages from any Blockscout-style /holders endpoint.
 // Returns Map<lowercaseAddress, nftCount>.
@@ -87,6 +104,11 @@ async function computeHolderStats() {
     if (landCounts.has(addr)) both++;
   }
 
+  // Retain the raw maps for single-wallet eligibility lookups.
+  holderCounts.creature = creatureCounts;
+  holderCounts.land = landCounts;
+  holderCounts.fetchedAt = Date.now();
+
   return {
     creaturesOnly: creatureCounts.size - both,
     landOnly: landCounts.size - both,
@@ -128,6 +150,19 @@ function getHolderStats() {
 
   // Cold start — must wait for first fetch
   return holderCache.inFlight;
+}
+
+// Look up a single wallet's HCC holdings (Creature + LAND counts) from the cached
+// holder maps. Ensures the holder data has been fetched at least once first.
+async function getWalletHoldings(address) {
+  if (!holderCounts.fetchedAt) await getHolderStats();
+  const addr = (address || '').toLowerCase();
+  return {
+    creatureCount: holderCounts.creature.get(addr) || 0,
+    landCount: holderCounts.land.get(addr) || 0,
+    holdersAvailable: holderCounts.fetchedAt > 0,
+    holdersFetchedAt: holderCounts.fetchedAt ? new Date(holderCounts.fetchedAt).toISOString() : null,
+  };
 }
 
 // Warm up cache in the background on startup
@@ -460,6 +495,122 @@ function getMarketStats() {
 // Warm up market cache in the background on startup
 getMarketStats().catch(err => console.error('Market stats prefetch failed:', err.message));
 
+// --- Council auth + eligibility API ---
+const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // seconds, mirrors db.js SESSION_TTL_MS
+
+function sendJson(response, status, obj) {
+  response.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+  });
+  response.end(JSON.stringify(obj));
+}
+
+// Send the user back to the Apply panel; `error` (if set) is read by the front-end.
+function redirectToApp(request, response, error) {
+  const location = error ? `/?auth=${encodeURIComponent(error)}#apply` : '/#apply';
+  response.writeHead(302, { Location: location, 'Cache-Control': 'no-store' });
+  response.end();
+}
+
+async function handleAuthApi(request, response, url) {
+  const { pathname } = url;
+
+  // Step 1 — begin OAuth: redirect to Discord with a CSRF state cookie.
+  if (pathname === '/api/auth/discord/login') {
+    if (!auth.isConfigured()) { sendJson(response, 503, { error: 'Discord login is not configured.' }); return; }
+    const { location, stateCookie } = auth.buildLoginRedirect(request);
+    response.writeHead(302, { Location: location, 'Set-Cookie': stateCookie, 'Cache-Control': 'no-store' });
+    response.end();
+    return;
+  }
+
+  // Step 2 — OAuth callback: verify state, exchange code, look up wallet + eligibility.
+  if (pathname === '/api/auth/discord/callback') {
+    const cookies = auth.parseCookies(request);
+    if (url.searchParams.get('error')) return redirectToApp(request, response, 'denied');
+    const code = url.searchParams.get('code');
+    const state = url.searchParams.get('state');
+    if (!code || !state || state !== cookies[auth.STATE_COOKIE]) {
+      return redirectToApp(request, response, 'state');
+    }
+
+    const token = await auth.exchangeCode(code, request);
+    const profile = await auth.fetchDiscordUser(token.access_token);
+    const wallet = await auth.fetchHighriseWallet(profile.id);
+
+    let holdings = { creatureCount: 0, landCount: 0, holdersAvailable: false };
+    if (wallet.ethWallet) holdings = await getWalletHoldings(wallet.ethWallet);
+
+    const eligibility = {
+      linked: wallet.linked,
+      ethWallet: wallet.ethWallet,
+      holdersAvailable: holdings.holdersAvailable,
+      ...computeEligibility(holdings),
+    };
+
+    const sessionProfile = { id: profile.id, username: profile.username, avatar: profile.avatar };
+    const sid = await db.createSession(profile.id, sessionProfile, eligibility);
+    await db.upsertApplicant({
+      discordId: profile.id,
+      discordUsername: profile.username,
+      ethWallet: wallet.ethWallet,
+      creatureCount: eligibility.creatureCount,
+      landCount: eligibility.landCount,
+      totalCount: eligibility.totalCount,
+      bracket: eligibility.bracket,
+      canRun: eligibility.canRun,
+    });
+
+    const secure = auth.isSecure(request);
+    response.writeHead(302, {
+      Location: '/#apply',
+      'Set-Cookie': [
+        auth.serializeCookie(auth.SESSION_COOKIE, sid, { maxAge: SESSION_MAX_AGE, secure }),
+        auth.serializeCookie(auth.STATE_COOKIE, '', { maxAge: 0, secure }),
+      ],
+      'Cache-Control': 'no-store',
+    });
+    response.end();
+    return;
+  }
+
+  // Current session + eligibility for the logged-in user.
+  if (pathname === '/api/me') {
+    const cookies = auth.parseCookies(request);
+    const session = await db.getSession(cookies[auth.SESSION_COOKIE]);
+    if (!session) { sendJson(response, 200, { authenticated: false }); return; }
+    sendJson(response, 200, {
+      authenticated: true,
+      profile: session.profile,
+      eligibility: session.eligibility,
+    });
+    return;
+  }
+
+  // Dev-only login (optional local module; absent from the deployed build).
+  if (pathname === '/api/auth/dev-login') {
+    if (devLogin) return devLogin(request, response, url);
+    sendJson(response, 404, { error: 'Not found' });
+    return;
+  }
+
+  // Logout.
+  if (pathname === '/api/auth/logout') {
+    const cookies = auth.parseCookies(request);
+    await db.deleteSession(cookies[auth.SESSION_COOKIE]);
+    response.writeHead(302, {
+      Location: '/#council',
+      'Set-Cookie': auth.serializeCookie(auth.SESSION_COOKIE, '', { maxAge: 0, secure: auth.isSecure(request) }),
+      'Cache-Control': 'no-store',
+    });
+    response.end();
+    return;
+  }
+
+  sendJson(response, 404, { error: 'Not found' });
+}
+
 // --- Static file serving ---
 const contentTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -475,20 +626,66 @@ const contentTypes = {
   '.webp': 'image/webp'
 };
 
-function resolveFile(requestUrl) {
-  const url = new URL(requestUrl, `http://${host}:${port}`);
-  const requestedPath = url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname);
-  const normalizedPath = path.normalize(requestedPath).replace(/^([/\\])+/, '');
-  const filePath = path.join(root, normalizedPath);
+// Strict allowlist for static serving. ONLY these top-level directories and root
+// files are reachable — everything else (.env, .git, server-side code in lib/,
+// server.js, package.json, node_modules, etc.) returns 404. This is the primary
+// guard against leaking secrets or source on an open-source, self-hostable repo.
+const PUBLIC_DIRS  = new Set(['css', 'js', 'img', 'assets', 'fonts', 'locales']);
+const PUBLIC_FILES = new Set(['index.html', 'changelog.json', 'favicon.ico', 'robots.txt']);
+const SERVABLE_EXT = new Set([
+  '.html', '.css', '.js', '.json',
+  '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp',
+  '.otf', '.ttf', '.woff', '.woff2', '.txt',
+]);
 
-  if (!filePath.startsWith(root)) {
-    return null;
+function resolveFile(requestUrl) {
+  let pathname;
+  try {
+    const url = new URL(requestUrl, `http://${host}:${port}`);
+    pathname = url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname);
+  } catch {
+    return null; // malformed URL / bad percent-encoding
   }
+
+  // Normalize, strip leading slashes, split into segments.
+  const normalized = path.normalize(pathname).replace(/^([/\\])+/, '');
+  const segments = normalized.split(/[/\\]+/).filter(Boolean);
+  if (!segments.length) return null;
+
+  // Reject traversal and any dotfile/dot-directory segment (.env, .git, .github…).
+  if (segments.some(s => s === '..' || s.startsWith('.'))) return null;
+
+  // Allowlist: a single public root file, or a file inside a public directory.
+  const top = segments[0];
+  const isPublicFile = segments.length === 1 && PUBLIC_FILES.has(top);
+  const isPublicDir  = segments.length > 1 && PUBLIC_DIRS.has(top);
+  if (!isPublicFile && !isPublicDir) return null;
+
+  // Extension allowlist — never serve files without a known-safe content type.
+  if (!SERVABLE_EXT.has(path.extname(normalized).toLowerCase())) return null;
+
+  const filePath = path.join(root, normalized);
+  // Final containment backstop.
+  if (filePath !== root && !filePath.startsWith(root + path.sep)) return null;
 
   return filePath;
 }
 
 const server = http.createServer((request, response) => {
+  // Auth + eligibility API (async). Catches errors so a failed lookup sends the
+  // user back to the Apply panel with an error flag instead of hanging.
+  if (request.url.startsWith('/api/auth') || request.url === '/api/me') {
+    const url = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
+    handleAuthApi(request, response, url).catch(err => {
+      console.error('Auth API error:', err.message);
+      if (!response.headersSent) {
+        if (url.pathname === '/api/me') sendJson(response, 200, { authenticated: false });
+        else redirectToApp(request, response, 'failed');
+      }
+    });
+    return;
+  }
+
   if (request.url === '/api/holders/progress') {
     response.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8',
@@ -508,8 +705,9 @@ const server = http.createServer((request, response) => {
         response.end(JSON.stringify(data));
       })
       .catch(err => {
+        console.error('Holder stats request failed:', err.message);
         response.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
-        response.end(JSON.stringify({ error: err.message || 'Holder data temporarily unavailable.' }));
+        response.end(JSON.stringify({ error: 'Holder data temporarily unavailable.' }));
       });
     return;
   }
@@ -524,8 +722,9 @@ const server = http.createServer((request, response) => {
         response.end(JSON.stringify(data));
       })
       .catch(err => {
+        console.error('Market stats request failed:', err.message);
         response.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
-        response.end(JSON.stringify({ error: err.message || 'Market data temporarily unavailable.' }));
+        response.end(JSON.stringify({ error: 'Market data temporarily unavailable.' }));
       });
     return;
   }
@@ -533,8 +732,8 @@ const server = http.createServer((request, response) => {
   const filePath = resolveFile(request.url);
 
   if (!filePath) {
-    response.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
-    response.end('Forbidden');
+    response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    response.end('Not found');
     return;
   }
 

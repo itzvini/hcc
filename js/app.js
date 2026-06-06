@@ -2,12 +2,14 @@ import { initI18n, setLanguage } from './i18n.js';
 import { loadHoldersChart } from './holders.js';
 import { loadMarketChart, rerenderMarket } from './market.js';
 import { loadChangelog, rerenderChangelog } from './changelog.js';
+import { loadApply, rerenderApply } from './apply.js';
 
 // Language switcher — re-render dynamic views after language change
 document.querySelectorAll('.lang-btn').forEach(btn => {
   btn.addEventListener('click', () => setLanguage(btn.dataset.lang).then(() => {
     rerenderChangelog();
     rerenderMarket();
+    rerenderApply();
   }));
 });
 
@@ -20,6 +22,7 @@ const navCurrent = document.getElementById('nav-current');
 let holdersLoaded   = false;
 let marketLoaded    = false;
 let changelogLoaded = false;
+let applyLoaded     = false;
 
 // Mobile drawer open/close
 function setDrawer(open) {
@@ -53,6 +56,7 @@ function selectTab(name, updateHash = true) {
   if (name === 'holders'   && !holdersLoaded)   { holdersLoaded   = true; loadHoldersChart(); }
   if (name === 'market'    && !marketLoaded)    { marketLoaded    = true; loadMarketChart(); }
   if (name === 'changelog' && !changelogLoaded) { changelogLoaded = true; loadChangelog(); }
+  if (name === 'apply'     && !applyLoaded)     { applyLoaded     = true; loadApply(); }
   if (updateHash) history.replaceState(null, '', `#${name}`);
 }
 
@@ -82,7 +86,7 @@ subTabs.forEach(btn => btn.addEventListener('click', () => {
   document.getElementById('guides-top')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }));
 
-const HASH_TABS = ['club', 'council', 'roadmap', 'guides', 'perks', 'holders', 'market', 'changelog', 'terms', 'privacy'];
+const HASH_TABS = ['club', 'council', 'apply', 'roadmap', 'guides', 'perks', 'holders', 'market', 'changelog', 'terms', 'privacy'];
 
 // Footer / in-page links like #terms and #privacy switch tabs (and deep-links on load)
 window.addEventListener('hashchange', () => {

@@ -38,6 +38,7 @@
       <div class="tab-list" role="tablist" aria-label="Highrise Creature Club pages">
         <button class="page-tab is-active" type="button" role="tab" id="tab-club" aria-selected="true" aria-controls="panel-club" data-tab="club" data-i18n="nav.club">The Club</button>
         <button class="page-tab" type="button" role="tab" id="tab-council" aria-selected="false" aria-controls="panel-council" data-tab="council" data-i18n="nav.council">Council</button>
+        <button class="page-tab" type="button" role="tab" id="tab-apply" aria-selected="false" aria-controls="panel-apply" data-tab="apply" data-i18n="nav.apply">Apply &amp; Vote</button>
         <button class="page-tab" type="button" role="tab" id="tab-roadmap" aria-selected="false" aria-controls="panel-roadmap" data-tab="roadmap" data-i18n="nav.roadmap">Roadmap</button>
         <button class="page-tab" type="button" role="tab" id="tab-guides" aria-selected="false" aria-controls="panel-guides" data-tab="guides" data-i18n="nav.guides">Guides</button>
         <button class="page-tab" type="button" role="tab" id="tab-perks" aria-selected="false" aria-controls="panel-perks" data-tab="perks" data-i18n="nav.perks">Perks</button>
@@ -68,6 +69,12 @@
       <span class="hub-ico">🏛️</span>
       <span class="hub-t" data-i18n="nav.council">Council</span>
       <span class="hub-d" data-i18n="hub.council.d">The Player Council — its role, seats, and how voting works.</span>
+      <span class="hub-arrow">→</span>
+    </button>
+    <button class="hub-card" type="button" data-goto="apply">
+      <span class="hub-ico">🗳️</span>
+      <span class="hub-t" data-i18n="nav.apply">Apply &amp; Vote</span>
+      <span class="hub-d" data-i18n="hub.apply.d">Sign in with Discord to check your eligibility to run or vote.</span>
       <span class="hub-arrow">→</span>
     </button>
     <button class="hub-card" type="button" data-goto="roadmap">
@@ -301,6 +308,20 @@
   <details><summary data-i18n="faq.q6">What does the Council actually start with?</summary><p data-i18n="faq.a6">It starts advisory-leaning, and its "Decides" power grows release by release as it proves out. Think training wheels that come off over time, not everything on day one.</p></details>
 </section>
 
+</main>
+
+<main id="panel-apply" class="tab-panel" role="tabpanel" aria-labelledby="tab-apply" hidden>
+<section class="wrap">
+  <div class="eyebrow" data-i18n="apply.eyebrow">Run or vote</div>
+  <h2 data-i18n="apply.h2">Check your eligibility</h2>
+  <p class="lead" data-i18n="apply.lead">Sign in with the Discord account linked to your Highrise profile. We check your linked wallet against current HCC holders to confirm whether you can vote and which seat you can run for.</p>
+
+  <div id="apply-app" class="apply-box" aria-live="polite" aria-busy="true">
+    <div class="apply-loading"><div class="apply-spinner"></div></div>
+  </div>
+
+  <p class="apply-fineprint" data-i18n="apply.fineprint">We only read your Discord identity and your linked wallet's public holdings. The 3-month continuous-holding rule for voting is verified against the official snapshot when the candidacy window opens.</p>
+</section>
 </main>
 
 <main id="panel-roadmap" class="tab-panel roadmap-panel" role="tabpanel" aria-labelledby="tab-roadmap" hidden>
