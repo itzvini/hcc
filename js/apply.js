@@ -1,4 +1,5 @@
 import { t } from './i18n.js';
+import { openApplication } from './application.js';
 
 // Council "Apply & Vote" panel: Discord sign-in → eligibility check, styled as the
 // entrance to a premium members' club. All dynamic copy goes through t(); any
@@ -64,8 +65,10 @@ function memberHeader(profile, tierKey) {
   const tier = tierKey
     ? `<span class="apply-tier" data-tier="${esc(tierKey)}">${esc(t(TIER_KEY[tierKey]))}</span>`
     : '';
-  const avatar = profile.avatar
-    ? `<img class="apply-avatar" src="${esc(profile.avatar)}" alt="" />`
+  // Prefer the Highrise profile pic; fall back to the Discord avatar.
+  const avatarSrc = profile.highriseIcon || profile.avatar;
+  const avatar = avatarSrc
+    ? `<img class="apply-avatar" src="${esc(avatarSrc)}" alt="" loading="lazy" />`
     : '<div class="apply-avatar apply-avatar-fallback" aria-hidden="true">👤</div>';
   return `
     <div class="apply-id">
@@ -149,6 +152,7 @@ function eligibilityView(profile, e) {
       </div>
 
       <p class="apply-note">${esc(e.isMember ? t('apply.note.holdtime') : t('apply.note.nothold'))}</p>
+      ${e.canRun ? `<button class="appf-btn-primary apply-run-cta" type="button" id="apply-run">${esc(t('app.cta'))} <span aria-hidden="true">→</span></button>` : ''}
     </div>`;
 }
 
@@ -180,6 +184,7 @@ function render() {
   }
   el.innerHTML = eligibilityView(lastState.profile || {}, lastState.eligibility || {});
   el.querySelector('#apply-retry')?.addEventListener('click', () => loadApply(true));
+  el.querySelector('#apply-run')?.addEventListener('click', () => openApplication(el, () => loadApply()));
   animateCounts(el);
 }
 

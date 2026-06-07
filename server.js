@@ -11,6 +11,8 @@ try { process.loadEnvFile(); } catch { /* no .env — fine */ }
 const db = require('./lib/db');
 const auth = require('./lib/auth');
 const { computeEligibility } = require('./lib/eligibility');
+const { PROPOSITIONS, PROPOSITION_IDS } = require('./lib/propositions');
+const derive = require('./lib/derive-positions');
 
 db.init().catch(err => console.error('DB init failed:', err.message));
 
@@ -499,12 +501,24 @@ getMarketStats().catch(err => console.error('Market stats prefetch failed:', err
 // --- Council auth + eligibility API ---
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // seconds, mirrors db.js SESSION_TTL_MS
 
-function sendJson(response, status, obj) {
+function sendJson(response, status, obj, extraHeaders = {}) {
   response.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
+    ...extraHeaders,
   });
   response.end(JSON.stringify(obj));
+}
+
+// Crude in-memory fixed-window rate limiter (resets on restart). Returns the
+// Retry-After seconds if the key is over `max` within `windowMs`, else 0.
+const rateBuckets = new Map();
+function rateLimited(key, max, windowMs) {
+  const now = Date.now();
+  let b = rateBuckets.get(key);
+  if (!b || now > b.reset) { b = { count: 0, reset: now + windowMs }; rateBuckets.set(key, b); }
+  b.count++;
+  return b.count > max ? Math.max(1, Math.ceil((b.reset - now) / 1000)) : 0;
 }
 
 // Send the user back to the Apply panel; `error` (if set) is read by the front-end.
@@ -543,11 +557,17 @@ async function handleAuthApi(request, response, url) {
       const token = await auth.exchangeCode(code, request);
       stage = 'fetchDiscordUser';
       const profile = await auth.fetchDiscordUser(token.access_token);
+      stage = 'fetchGuildMember';
+      const guild = await auth.fetchGuildDisplayName(token.access_token);
       stage = 'fetchHighriseWallet';
       const wallet = await auth.fetchHighriseWallet(profile.id);
 
       let holdings = { creatureCount: 0, landCount: 0, holdersAvailable: false };
       if (wallet.ethWallet) { stage = 'getWalletHoldings'; holdings = await getWalletHoldings(wallet.ethWallet); }
+
+      // Highrise profile (avatar pic + in-game name) by user_id from the wallet lookup.
+      stage = 'fetchHighriseProfile';
+      const highrise = await auth.fetchHighriseProfile(wallet.userId);
 
       const eligibility = {
         linked: wallet.linked,
@@ -556,7 +576,17 @@ async function handleAuthApi(request, response, url) {
         ...computeEligibility(holdings),
       };
 
-      const sessionProfile = { id: profile.id, username: profile.username, avatar: profile.avatar };
+      // Ballot name = display name in the Highrise Discord (falls back to global name).
+      const sessionProfile = {
+        id: profile.id,
+        username: profile.username,
+        avatar: profile.avatar,
+        serverName: guild.serverName,
+        inGuild: guild.inGuild,
+        highriseName: highrise?.name || null,
+        highriseIcon: highrise?.iconUrl || null,
+        highriseUserId: wallet.userId || null,
+      };
       stage = 'createSession';
       const sid = await db.createSession(profile.id, sessionProfile, eligibility);
       stage = 'upsertApplicant';
@@ -624,6 +654,176 @@ async function handleAuthApi(request, response, url) {
   sendJson(response, 404, { error: 'Not found' });
 }
 
+// --- Candidate application API ---
+// Candidacy window. Closed by default — no draft, submit, or AI-draft is accepted
+// until APPLICATIONS_OPEN=1 is set (the eligibility check stays live regardless).
+const APPLICATIONS_OPEN = process.env.APPLICATIONS_OPEN === '1';
+
+// Draft open questions for the self-nomination form (owner will refine the copy;
+// these ids must match the front-end in js/application.js).
+const APPLICATION_QUESTIONS = ['drops', 'gen2', 'community', 'pushback', 'change'];
+const APP_LIMITS = { displayName: 40, pitch: 240, answer: 1200 };
+
+function readJsonBody(request, limitBytes = 64 * 1024) {
+  return new Promise((resolve, reject) => {
+    let size = 0, aborted = false; const chunks = [];
+    request.on('data', chunk => {
+      if (aborted) return; // over the cap — discard further chunks (bounded memory), don't reset the socket
+      size += chunk.length;
+      if (size > limitBytes) {
+        aborted = true; chunks.length = 0;
+        reject(Object.assign(new Error('Request body too large.'), { statusCode: 413 }));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on('end', () => {
+      if (aborted) return;
+      if (!chunks.length) return resolve({});
+      try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); }
+      catch { reject(Object.assign(new Error('Invalid JSON.'), { statusCode: 400 })); }
+    });
+    request.on('error', err => { if (!aborted) reject(err); });
+  });
+}
+
+// Shape an application row for the client (never leaks DB-internal fields).
+function publicApplication(a) {
+  if (!a) return null;
+  return {
+    displayName: a.display_name || '',
+    pitch: a.pitch || '',
+    answers: a.answers || {},
+    positions: a.positions || {},
+    bracket: a.bracket || null,
+    status: a.status || 'draft',
+    submittedAt: a.submitted_at || null,
+    updatedAt: a.updated_at || null,
+  };
+}
+
+// Validate a client-sent positions map into { id: { stance 1-5, rationale } }.
+function cleanPositions(raw) {
+  const out = {};
+  if (raw && typeof raw === 'object') {
+    for (const id of PROPOSITION_IDS) {
+      const p = raw[id];
+      if (p && typeof p === 'object') {
+        const stance = parseInt(p.stance, 10);
+        if (stance >= 1 && stance <= 5) {
+          out[id] = { stance, rationale: String(p.rationale || '').trim().slice(0, 200) };
+        }
+      }
+    }
+  }
+  return out;
+}
+
+async function handleApplicationApi(request, response) {
+  const cookies = auth.parseCookies(request);
+  const session = await db.getSession(cookies[auth.SESSION_COOKIE]);
+  if (!session) { sendJson(response, 401, { error: 'Sign in to apply.' }); return; }
+  const elig = session.eligibility || {};
+
+  // Ballot name is server-authoritative: the user's Highrise Discord display name
+  // (falls back to their global Discord name). Never taken from the client.
+  const ballotName = (session.profile?.serverName || session.profile?.username || '').slice(0, APP_LIMITS.displayName);
+
+  const pathname = request.url.split('?')[0];
+
+  // AI-draft positions from the candidate's current answers (review-before-save).
+  if (pathname === '/api/application/derive') {
+    if (request.method !== 'POST') { sendJson(response, 405, { error: 'Method not allowed.' }); return; }
+    if (!APPLICATIONS_OPEN) { sendJson(response, 403, { error: 'Applications are not open yet.' }); return; }
+    if (!elig.canRun) { sendJson(response, 403, { error: 'You are not eligible to run for a seat.' }); return; }
+    if (!derive.isConfigured()) { sendJson(response, 503, { error: 'AI drafting is not configured.' }); return; }
+    // Rate limit the paid AI endpoint per user (cost / abuse protection).
+    const wait = rateLimited(`derive:${session.discord_id}`, 20, 60 * 60 * 1000);
+    if (wait) { sendJson(response, 429, { error: 'Too many AI drafts. Try again later.' }, { 'Retry-After': String(wait) }); return; }
+
+    let body;
+    try { body = await readJsonBody(request); }
+    catch (err) { sendJson(response, err.statusCode || 400, { error: err.message }); return; }
+
+    const answers = {};
+    for (const id of APPLICATION_QUESTIONS) {
+      const v = body.answers && typeof body.answers[id] === 'string' ? body.answers[id] : '';
+      answers[id] = v.trim().slice(0, APP_LIMITS.answer);
+    }
+    const positions = await derive.derivePositions(answers);
+    sendJson(response, 200, { positions });
+    return;
+  }
+
+  if (request.method === 'GET') {
+    const application = await db.getApplication(session.discord_id);
+    sendJson(response, 200, {
+      eligibleToRun: !!elig.canRun,
+      applicationsOpen: APPLICATIONS_OPEN,
+      bracket: elig.bracket || null,
+      ballotName,
+      avatar: session.profile?.highriseIcon || null,
+      inGuild: !!session.profile?.inGuild,
+      propositions: PROPOSITIONS,
+      application: publicApplication(application),
+    });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    // Server-side gate — never trust the client about eligibility.
+    if (!elig.canRun) { sendJson(response, 403, { error: 'You are not eligible to run for a seat.' }); return; }
+    // Light rate limit on writes (per user) — prevents draft-spam / DB abuse.
+    const wait = rateLimited(`save:${session.discord_id}`, 120, 60 * 60 * 1000);
+    if (wait) { sendJson(response, 429, { error: 'Too many requests. Try again shortly.' }, { 'Retry-After': String(wait) }); return; }
+
+    let body;
+    try { body = await readJsonBody(request); }
+    catch (err) { sendJson(response, err.statusCode || 400, { error: err.message }); return; }
+
+    const status = body.status === 'submitted' ? 'submitted' : 'draft';
+    // Candidacy window closed — drafts are allowed (so candidates can prepare),
+    // but final submission is blocked until APPLICATIONS_OPEN=1.
+    if (status === 'submitted' && !APPLICATIONS_OPEN) {
+      sendJson(response, 403, { error: 'Applications are not open for submission yet.' });
+      return;
+    }
+    const displayName = ballotName; // not editable by the candidate
+    const pitch = String(body.pitch || '').trim().slice(0, APP_LIMITS.pitch);
+    const answers = {};
+    for (const id of APPLICATION_QUESTIONS) {
+      const v = body.answers && typeof body.answers[id] === 'string' ? body.answers[id] : '';
+      answers[id] = v.trim().slice(0, APP_LIMITS.answer);
+    }
+    const positions = cleanPositions(body.positions);
+
+    if (status === 'submitted') {
+      const missing = [];
+      if (!displayName) missing.push('displayName');
+      if (!pitch) missing.push('pitch');
+      for (const id of APPLICATION_QUESTIONS) if (!answers[id]) missing.push(id);
+      for (const id of PROPOSITION_IDS) if (!positions[id]) missing.push(`pos:${id}`);
+      if (body.consent !== true) missing.push('consent');
+      if (missing.length) {
+        sendJson(response, 422, { error: 'Complete every field and the acknowledgements before submitting.', missing });
+        return;
+      }
+    }
+
+    const saved = await db.saveApplication({
+      discordId: session.discord_id,
+      discordUsername: session.profile?.username,
+      ethWallet: elig.ethWallet || null,
+      bracket: elig.bracket || null,
+      displayName, pitch, answers, positions, status,
+    });
+    sendJson(response, 200, { ok: true, application: publicApplication(saved) });
+    return;
+  }
+
+  sendJson(response, 405, { error: 'Method not allowed.' });
+}
+
 // --- Static file serving ---
 const contentTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -650,6 +850,36 @@ const SERVABLE_EXT = new Set([
   '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp',
   '.otf', '.ttf', '.woff', '.woff2', '.txt',
 ]);
+
+// Content-Security-Policy for HTML pages: scripts only from self + the Chart.js CDN
+// (no inline/eval scripts); images from self + the Discord & Highrise avatar CDNs;
+// inline styles allowed (the markup uses style="" attributes); everything else self.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' https://cdn.jsdelivr.net",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: https://cdn.highrisegame.com https://cdn.discordapp.com",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "object-src 'none'",
+].join('; ');
+
+// Security headers. CSP + framing protection only matter for the HTML document;
+// nosniff/referrer apply to everything.
+function securityHeaders(extension) {
+  const h = {
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+  };
+  if (extension === '.html') {
+    h['Content-Security-Policy'] = CSP;
+    h['X-Frame-Options'] = 'DENY';
+  }
+  return h;
+}
 
 function resolveFile(requestUrl) {
   let pathname;
@@ -695,6 +925,14 @@ const server = http.createServer((request, response) => {
         if (url.pathname === '/api/me') sendJson(response, 200, { authenticated: false });
         else redirectToApp(request, response, 'failed');
       }
+    });
+    return;
+  }
+
+  if (request.url.startsWith('/api/application')) {
+    handleApplicationApi(request, response).catch(err => {
+      console.error('Application API error:', err.message);
+      if (!response.headersSent) sendJson(response, 500, { error: 'Something went wrong.' });
     });
     return;
   }
@@ -773,9 +1011,11 @@ const server = http.createServer((request, response) => {
       ? 'public, max-age=3600, must-revalidate'
       : 'no-cache';
 
+    const secHeaders = securityHeaders(extension);
+
     // Honour conditional requests — cheap 304 when the browser already has this content.
     if (request.headers['if-none-match'] === etag) {
-      response.writeHead(304, { ETag: etag, 'Cache-Control': cacheControl });
+      response.writeHead(304, { ETag: etag, 'Cache-Control': cacheControl, ...secHeaders });
       response.end();
       return;
     }
@@ -784,6 +1024,7 @@ const server = http.createServer((request, response) => {
       'Content-Type': contentTypes[extension] || 'application/octet-stream',
       'Cache-Control': cacheControl,
       ETag: etag,
+      ...secHeaders,
     });
     response.end(data);
   });
