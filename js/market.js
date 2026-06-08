@@ -30,7 +30,11 @@ function fmtPrice(v) { return v == null ? '—' : fmtMoney(v); }
 function fmtAxis(v)  { return currency === 'eth' ? `${v} Ξ` : fmtMoney(v); }
 
 function fmtDate(iso) {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  // Parse as a LOCAL calendar date, not UTC. `new Date('2026-06-06')` is UTC
+  // midnight, which renders a day earlier in timezones behind UTC (e.g. Brazil),
+  // shifting every label back one day. Buckets are UTC days, so show them verbatim.
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 // Convert an (ETH, USD) pair into the active currency. ETH is native; USD is
