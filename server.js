@@ -172,10 +172,10 @@ async function getWalletHoldings(address) {
 getHolderStats().catch(err => console.error('Holder stats prefetch failed:', err.message));
 
 // --- Market / floor price stats ---
-// Creatures: floor + real weekly sale-price history from Immutable zkEVM (free, no key).
-// LAND: floor + weekly sale-price history from OpenSea when OPENSEA_API_KEY is set;
+// Creatures: floor + real daily sale-price history from Immutable zkEVM (free, no key).
+// LAND: floor + daily sale-price history from OpenSea when OPENSEA_API_KEY is set;
 //       falls back to CoinGecko for the current floor only (keyless) if the key is absent.
-// Both collections trade in ETH, so their weekly floors plot on one shared timeline.
+// Both collections trade in ETH, so their daily floors plot on one shared timeline.
 const IMX_ZKEVM_CHAIN   = 'imtbl-zkevm-mainnet';
 const CREATURE_CONTRACT = '0xCf44b1cBC959295bbBb49935B1b339cC0AA77cdA';
 const IMX_ETH_TOKEN     = '0x52a6c53869ce09a731cd772f245b97a4401d3348'; // ETH on Immutable zkEVM (18 decimals)
@@ -184,9 +184,9 @@ const LAND_OS_SLUG      = 'highrise-land';
 const OPENSEA_API_KEY   = process.env.OPENSEA_API_KEY || '';
 const LAND_ETH_SYMBOLS  = new Set(['ETH', 'WETH']); // 1:1 ETH-equivalent payment tokens
 const MARKET_CACHE_TTL_MS = 30 * 60 * 1000;
-const WEEK_MS             = 7 * 24 * 60 * 60 * 1000;
 const DAY_MS              = 24 * 60 * 60 * 1000;
-const HISTORY_MS          = 730 * DAY_MS; // how far back the price chart reaches (~2y; LAND has the depth, Creatures ~9.5mo)
+const HISTORY_DAYS        = 730; // how far back the price chart reaches (~2y; LAND has the depth, Creatures ~9.5mo)
+const HISTORY_MS          = HISTORY_DAYS * DAY_MS;
 const MAX_MARKET_PAGES    = 30; // safety cap; current data is well within this
 
 const marketCache = { data: null, fetchedAt: 0, inFlight: null };
@@ -295,44 +295,77 @@ async function fetchEthUsd() {
   return { at, current };
 }
 
-// Bucket sales into ISO-week aggregates, tracking both ETH and USD low/avg.
-// Each sale: { ts, eth, usd } (usd may be null if no rate was available).
-function aggregateByWeek(sales) {
-  const byWeek = new Map();
+// Bucket sales into daily aggregates, tracking the day's lowest and highest sale
+// in both ETH and USD. Each sale: { ts, eth, usd } (usd may be null if no rate
+// was available). The client picks low/high, then averages over its interval.
+function aggregateByDay(sales) {
+  const byDay = new Map();
   for (const s of sales) {
-    const wk = Math.floor(s.ts / WEEK_MS);
-    let a = byWeek.get(wk);
-    if (!a) { a = { ethLow: s.eth, ethSum: 0, count: 0, usdLow: null, usdSum: 0, usdCount: 0 }; byWeek.set(wk, a); }
+    const day = Math.floor(s.ts / DAY_MS);
+    let a = byDay.get(day);
+    if (!a) { a = { ethLow: s.eth, ethHigh: s.eth, usdLow: s.usd ?? null, usdHigh: s.usd ?? null }; byDay.set(day, a); continue; }
     a.ethLow = Math.min(a.ethLow, s.eth);
-    a.ethSum += s.eth;
-    a.count++;
+    a.ethHigh = Math.max(a.ethHigh, s.eth);
     if (s.usd != null) {
       a.usdLow = a.usdLow == null ? s.usd : Math.min(a.usdLow, s.usd);
-      a.usdSum += s.usd;
-      a.usdCount++;
+      a.usdHigh = a.usdHigh == null ? s.usd : Math.max(a.usdHigh, s.usd);
     }
   }
-  return byWeek;
+  return byDay;
 }
 
-// Continuous weekly series over [first, last] (inclusive), gaps as nulls.
-function seriesFromWeeks(byWeek, first, last) {
-  const series = [];
-  for (let wk = first; wk <= last; wk++) {
-    const a = byWeek.get(wk);
-    const date = new Date(wk * WEEK_MS).toISOString().slice(0, 10);
-    series.push(a
-      ? {
-          date,
-          ethLow: round4(a.ethLow),
-          ethAvg: round4(a.ethSum / a.count),
-          usdLow: a.usdCount ? Math.round(a.usdLow) : null,
-          usdAvg: a.usdCount ? Math.round(a.usdSum / a.usdCount) : null,
-          count: a.count,
-        }
-      : { date, ethLow: null, ethAvg: null, usdLow: null, usdAvg: null, count: 0 });
+// Persist today's lowest-listing floor for a collection. Never throws — a DB
+// hiccup must not take down the market endpoint; the chart just won't gain a point.
+async function recordFloorSnapshot(collection, day, ethFloor, usdFloor) {
+  if (ethFloor == null && usdFloor == null) return; // nothing worth storing
+  try {
+    await db.recordFloorSnapshot({
+      day, collection,
+      ethFloor: ethFloor != null ? round4(ethFloor) : null,
+      usdFloor: usdFloor != null ? Math.round(usdFloor) : null,
+    });
+  } catch (err) {
+    console.error(`Floor snapshot (${collection}) failed:`, err.message);
   }
-  return series;
+}
+
+// Read stored listing-floor snapshots into per-collection day-index maps of { eth, usd }.
+async function getListingSnapshots() {
+  const out = { creature: new Map(), land: new Map() };
+  let rows;
+  try { rows = await db.getFloorHistory(HISTORY_DAYS); }
+  catch (err) { console.error('Floor history read failed:', err.message); return out; }
+  for (const r of rows) {
+    const m = out[r.collection];
+    if (!m) continue;
+    const eth = r.eth_floor != null ? Number(r.eth_floor) : null;
+    const usd = r.usd_floor != null ? Math.round(Number(r.usd_floor)) : null;
+    if (eth == null && usd == null) continue;
+    const day = Math.floor(new Date(`${r.date}T00:00:00Z`).getTime() / DAY_MS);
+    m.set(day, { eth, usd });
+  }
+  return out;
+}
+
+// One daily series per collection: every day with a sale and/or a floor snapshot
+// becomes a point carrying that day's high sale, low sale, and listing floor (any
+// may be null). Sale history runs ~2y back; the floor only exists from launch day
+// on. The client chooses a metric, buckets by interval, and averages.
+function buildCollectionSeries(saleDays, floorDays) {
+  const days = [...new Set([...saleDays.keys(), ...floorDays.keys()])].sort((a, b) => a - b);
+  return days.map(day => {
+    const s = saleDays.get(day);
+    const f = floorDays.get(day);
+    return {
+      date: new Date(day * DAY_MS).toISOString().slice(0, 10),
+      highEth: s ? round4(s.ethHigh) : null,
+      highUsd: s && s.usdHigh != null ? Math.round(s.usdHigh) : null,
+      lowEth:  s ? round4(s.ethLow) : null,
+      lowUsd:  s && s.usdLow != null ? Math.round(s.usdLow) : null,
+      floorEth: f ? f.eth : null,
+      floorUsd: f ? f.usd : null,
+    };
+  });
 }
 
 // LAND via OpenSea: current floor + 30d volume + ETH-denominated sale history.
@@ -432,18 +465,24 @@ async function computeMarketStats() {
   let creatureSales30 = 0, creatureVol30 = 0;
   for (const s of creatureSales) if (s.ts >= cutoff30d) { creatureSales30++; creatureVol30 += s.price; }
 
-  // Build both weekly series over a single shared week range so they align on one chart.
-  const creatureWeeks = aggregateByWeek(creatureSales.filter(s => s.ts >= cutoff).map(withUsd));
-  const landWeeks = aggregateByWeek((land?.sales ?? []).filter(s => s.ts >= cutoff).map(withUsd));
+  // Daily lowest-sale aggregates seed the pre-launch history (the only price
+  // signal that exists for past days).
+  const creatureDays = aggregateByDay(creatureSales.filter(s => s.ts >= cutoff).map(withUsd));
+  const landDays = aggregateByDay((land?.sales ?? []).filter(s => s.ts >= cutoff).map(withUsd));
 
-  const allWeekKeys = [...creatureWeeks.keys(), ...landWeeks.keys()];
-  let creatureHistory = [], landHistory = [];
-  if (allWeekKeys.length) {
-    const first = Math.min(...allWeekKeys);
-    const last = Math.max(...allWeekKeys);
-    creatureHistory = creatureWeeks.size ? seriesFromWeeks(creatureWeeks, first, last) : [];
-    landHistory = landWeeks.size ? seriesFromWeeks(landWeeks, first, last) : [];
+  // Sample today's *listing* floor and store it, so the chart becomes a true
+  // daily floor from here on (listings override the sale proxy day by day).
+  const today = new Date().toISOString().slice(0, 10);
+  await recordFloorSnapshot('creature', today, creatureFloor, toUsd(creatureFloor));
+  if (land) {
+    const landEth = land.currency === 'ETH' ? land.floor : null;
+    const landUsd = land.floorUsd ?? toUsd(land.floor);
+    await recordFloorSnapshot('land', today, landEth, landUsd);
   }
+
+  const listing = await getListingSnapshots();
+  const creatureHistory = buildCollectionSeries(creatureDays, listing.creature);
+  const landHistory = buildCollectionSeries(landDays, listing.land);
 
   return {
     ethUsd: rate,
@@ -497,6 +536,10 @@ function getMarketStats() {
 
 // Warm up market cache in the background on startup
 getMarketStats().catch(err => console.error('Market stats prefetch failed:', err.message));
+
+// Re-run periodically so today's floor snapshot is captured even on quiet days
+// with no visitors (computeMarketStats records the floor as a side effect).
+setInterval(() => { getMarketStats().catch(() => {}); }, 6 * 60 * 60 * 1000).unref();
 
 // --- Council auth + eligibility API ---
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // seconds, mirrors db.js SESSION_TTL_MS

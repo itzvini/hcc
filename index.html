@@ -784,13 +784,24 @@
       <div class="dist-card market-chart-card" id="market-chart-card" style="margin-top:28px">
         <div class="market-chart-head">
           <div>
-            <div class="eyebrow" data-i18n="market.chart.eyebrow">📈 Weekly floor price</div>
-            <p style="font-size:.92rem;color:var(--hr-fg-2);margin:0" data-i18n="market.chart.lead">The weekly floor — lowest real sale each week — for Creatures and LAND.</p>
+            <div class="eyebrow" data-i18n="market.chart.eyebrow">📈 Price history</div>
+            <p style="font-size:.92rem;color:var(--hr-fg-2);margin:0" data-i18n="market.chart.lead">Pick a metric and interval — floor, lowest or highest sale, averaged by day, week or month — for Creatures and LAND.</p>
           </div>
           <div class="market-controls">
+            <div class="seg" id="market-metric" role="group" aria-label="Metric">
+              <button type="button" class="seg-btn is-active" data-metric="low" data-i18n="market.metric.low">Low sale</button>
+              <button type="button" class="seg-btn" data-metric="high" data-i18n="market.metric.high">High sale</button>
+              <button type="button" class="seg-btn" data-metric="floor" data-i18n="market.metric.floor">Floor</button>
+            </div>
             <div class="seg" id="market-currency" role="group" aria-label="Currency">
               <button type="button" class="seg-btn is-active" data-cur="usd">USD</button>
               <button type="button" class="seg-btn" data-cur="eth">ETH</button>
+            </div>
+            <div class="seg" id="market-interval" role="group" aria-label="Interval">
+              <button type="button" class="seg-btn is-active" data-interval="daily" data-i18n="market.interval.daily">Daily</button>
+              <button type="button" class="seg-btn" data-interval="weekly" data-i18n="market.interval.weekly">Weekly</button>
+              <button type="button" class="seg-btn" data-interval="biweekly" data-i18n="market.interval.biweekly">Bi-weekly</button>
+              <button type="button" class="seg-btn" data-interval="monthly" data-i18n="market.interval.monthly">Monthly</button>
             </div>
             <div class="seg" id="market-range" role="group" aria-label="Time range">
               <button type="button" class="seg-btn" data-range="1m">1M</button>
@@ -799,11 +810,24 @@
               <button type="button" class="seg-btn" data-range="1y">1Y</button>
               <button type="button" class="seg-btn is-active" data-range="all" data-i18n="market.range.all">All</button>
             </div>
+            <div class="seg market-dates" id="market-dates" role="group" aria-label="Custom timeframe">
+              <label class="date-field">
+                <span data-i18n="market.range.from">From</span>
+                <input type="date" id="market-from">
+              </label>
+              <span class="date-sep" aria-hidden="true">–</span>
+              <label class="date-field">
+                <span data-i18n="market.range.to">To</span>
+                <input type="date" id="market-to">
+              </label>
+            </div>
+            <button type="button" class="seg-btn market-reset" id="market-reset-zoom" hidden data-i18n="market.zoom.reset">Reset zoom</button>
           </div>
         </div>
         <div class="market-chart-box">
           <canvas id="market-price-chart"></canvas>
         </div>
+        <p class="market-zoom-hint" data-i18n="market.zoom.hint">Scroll or pinch to zoom · drag to pan</p>
       </div>
 
       <div class="guide-note market-land-note" id="market-land-note" data-i18n="market.land.note">🗺️ LAND price history is on the way. For now, here's LAND's current floor from OpenSea — its full sale history will light up here soon.</div>
@@ -917,6 +941,8 @@
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
 <script type="module" src="/js/app.js"></script>
 
 </body>
