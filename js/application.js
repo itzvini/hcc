@@ -4,7 +4,7 @@ import { t } from './i18n.js';
 // eligible to run. Server re-checks eligibility on every save (never trust client).
 // Question ids must match APPLICATION_QUESTIONS in server.js.
 
-const QUESTIONS = ['theme', 'gen2', 'value', 'roadmap', 'communication', 'represent', 'seat'];
+const QUESTIONS = ['track', 'theme', 'gen2', 'value', 'roadmap', 'communication', 'represent', 'seat'];
 const CONSENTS  = ['seat', 'publish', 'hold'];
 const LIMITS    = { displayName: 40, pitch: 240, answer: 1200 };
 const BRACKET_KEY = { single: 'apply.bracket.single', mid: 'apply.bracket.mid', whale: 'apply.bracket.whale' };
