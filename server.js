@@ -34,6 +34,30 @@ const LAND_HOLDERS_URL        = 'https://eth.blockscout.com/api/v2/tokens/0x8bf3
 const HOLDER_CACHE_TTL_MS     = 30 * 60 * 1000;
 const DIST_THRESHOLDS         = [1, 2, 5, 10]; // bucket breakpoints
 
+// Highrise ESTATE: minting an estate locks N LAND parcels INTO this contract and issues
+// one ERC-721 back, so those parcels leave the owner's wallet — on-chain the estate
+// contract is the LAND holder, not the user. Without crediting estates, every estate
+// owner reads as holding 0 LAND. We credit each estate's parcel count back to its
+// current owner below (see fetchEstateLandCredits). Estates are immutable once minted
+// (the contract only mints a whole estate from parcels or burns it — no add/remove), so
+// an estate's LAND count is exactly its EstateMinted parcels[] length.
+//
+// Ownership is read straight from the contract (totalSupply/tokenByIndex/ownerOf) rather
+// than Blockscout's /holders or /instances: those are balance-derived and over-report
+// for this contract (they keep burned/transferred-out estates), which would credit LAND
+// to wallets that no longer hold an estate. Event logs (EstateMinted) ARE reliable.
+const ESTATE_CONTRACT         = '0x8dcbcafacfdc935d084dc19983194509813da6bd';
+const ESTATE_LOGS_URL         = `https://eth.blockscout.com/api/v2/addresses/${ESTATE_CONTRACT}/logs`;
+// topic0 of EstateMinted(uint256,address,uint32[]) — filters the contract's log feed to
+// just mints (≈2 pages) instead of its full Transfer/Approval/role history.
+const ESTATE_MINTED_TOPIC     = '0x61e22a5856592b5587565bc3f94edb44458e1a8cf97705c0450802385188a753';
+// ERC-721 read selectors used to enumerate live estates + their owners on-chain.
+const SEL_TOTAL_SUPPLY        = '0x18160ddd'; // totalSupply()
+const SEL_TOKEN_BY_INDEX      = '0x4f6ccce7'; // tokenByIndex(uint256)
+const SEL_OWNER_OF            = '0x6352211e'; // ownerOf(uint256)
+const ETH_RPC_URL             = process.env.ETH_RPC_URL || 'https://eth.blockscout.com/api/eth-rpc';
+const ZERO_ADDRESS            = '0x0000000000000000000000000000000000000000';
+
 const holderCache    = { data: null, fetchedAt: 0, inFlight: null };
 const fetchProgress  = { phase: 'idle', creaturePages: 0, landPages: 0 };
 // Raw per-address counts from the latest successful fetch, kept so the Council
@@ -66,6 +90,82 @@ async function fetchHolderCounts(baseUrl, onPage) {
   return counts;
 }
 
+// Page through a Blockscout v2 list endpoint, invoking onBody(body) per page and
+// following next_page_params until exhausted. `extraParams` are reapplied each page.
+async function fetchBlockscoutPages(baseUrl, onBody, extraParams = {}) {
+  let pageParams = null;
+  do {
+    const url = new URL(baseUrl);
+    for (const [k, v] of Object.entries(extraParams)) url.searchParams.set(k, v);
+    if (pageParams) for (const [k, v] of Object.entries(pageParams)) url.searchParams.set(k, v);
+    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(15000) });
+    if (!res.ok) throw new Error(`Blockscout API ${res.status} for ${baseUrl}`);
+    const body = await res.json();
+    onBody(body);
+    pageParams = body.next_page_params ?? null;
+  } while (pageParams);
+}
+
+// Minimal eth_call against ETH_RPC_URL. `data` is the ABI-encoded calldata; returns the
+// raw hex result (throws on transport/RPC error so the caller can degrade gracefully).
+async function ethCall(to, data) {
+  const res = await fetch(ETH_RPC_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to, data }, 'latest'] }),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`eth_call HTTP ${res.status}`);
+  const body = await res.json();
+  if (body.error) throw new Error(`eth_call: ${body.error.message || JSON.stringify(body.error)}`);
+  return body.result;
+}
+
+const padUint = n => BigInt(n).toString(16).padStart(64, '0'); // uint256 arg → 32-byte word
+
+// Authoritative [{ estateId, owner }] for every live (non-burned) estate, read from the
+// contract: totalSupply() → tokenByIndex(i) → ownerOf(id). See the ESTATE_CONTRACT note.
+async function fetchLiveEstateOwners() {
+  const total = parseInt(await ethCall(ESTATE_CONTRACT, SEL_TOTAL_SUPPLY), 16);
+  if (!Number.isFinite(total) || total <= 0) return [];
+  const idxs = Array.from({ length: total }, (_, i) => i);
+  const estateIds = await Promise.all(idxs.map(async i =>
+    BigInt(await ethCall(ESTATE_CONTRACT, SEL_TOKEN_BY_INDEX + padUint(i))).toString()));
+  const owners = await Promise.all(estateIds.map(async id =>
+    ('0x' + (await ethCall(ESTATE_CONTRACT, SEL_OWNER_OF + padUint(id))).slice(-40)).toLowerCase()));
+  return estateIds.map((estateId, i) => ({ estateId, owner: owners[i] }));
+}
+
+// Map<ownerAddress(lowercase), lockedParcelCount>: for every live estate, the number of
+// LAND parcels it locks, attributed to its current owner. See the ESTATE_CONTRACT note.
+// Parcel counts come from decoded EstateMinted logs; ownership comes from the contract.
+async function fetchEstateLandCredits() {
+  // Parcel count per estate id. The log feed is newest-first, so the first entry seen
+  // for an id is its current mint (an id is only ever re-minted after a burn).
+  const parcelsByEstate = new Map();
+  await fetchBlockscoutPages(ESTATE_LOGS_URL, body => {
+    for (const log of (body.items ?? [])) {
+      const dec = log.decoded;
+      if (!dec || !String(dec.method_call || '').startsWith('EstateMinted')) continue;
+      const params = dec.parameters ?? [];
+      const id = params.find(p => p.type === 'uint256')?.value;
+      const parcels = params.find(p => String(p.type || '').endsWith('[]'))?.value;
+      const estateId = id != null ? String(id) : null;
+      if (estateId == null || parcelsByEstate.has(estateId)) continue;
+      parcelsByEstate.set(estateId, Array.isArray(parcels) ? parcels.length : 0);
+    }
+  }, { topic: ESTATE_MINTED_TOPIC });
+
+  const credits = new Map();
+  for (const { estateId, owner } of await fetchLiveEstateOwners()) {
+    if (owner === ZERO_ADDRESS) continue;
+    const count = parcelsByEstate.get(estateId);
+    if (count == null) { console.warn(`Estate ${estateId} live but has no EstateMinted parcel count`); continue; }
+    if (count > 0) credits.set(owner, (credits.get(owner) || 0) + count);
+  }
+  return credits;
+}
+
 function computeDistribution(countMap) {
   const sorted = [...DIST_THRESHOLDS].sort((a, b) => a - b);
   const buckets = sorted.map((t, i) => ({
@@ -89,12 +189,23 @@ async function computeHolderStats() {
   fetchProgress.creaturePages = 0;
   fetchProgress.landPages = 0;
 
-  const [creatureCounts, landCounts] = await Promise.all([
+  const [creatureCounts, landCounts, estateCredits] = await Promise.all([
     fetchHolderCounts(CREATURE_HOLDERS_URL, () => fetchProgress.creaturePages++),
     fetchHolderCounts(LAND_HOLDERS_URL,     () => fetchProgress.landPages++),
+    // Non-fatal: a failed estate lookup just leaves estate-locked LAND uncredited
+    // (and the phantom contract holding removed below), rather than failing the snapshot.
+    fetchEstateLandCredits().catch(err => { console.error('Estate land credits failed:', err.message); return new Map(); }),
   ]);
 
   fetchProgress.phase = 'computing';
+
+  // LANDs locked inside an estate are held on-chain by the estate contract, not their
+  // owner. Drop that phantom contract holding, then credit each estate's parcels back to
+  // its real owner — so estate holders count as LAND holders for eligibility and stats.
+  landCounts.delete(ESTATE_CONTRACT);
+  for (const [owner, parcels] of estateCredits) {
+    landCounts.set(owner, (landCounts.get(owner) || 0) + parcels);
+  }
 
   // Combined: total HCC assets per wallet (creature + land)
   const combinedCounts = new Map(creatureCounts);
