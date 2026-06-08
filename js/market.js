@@ -5,32 +5,48 @@ const RANGE_DAYS = { '1m': 30, '3m': 90, '6m': 180, '1y': 365, 'all': Infinity }
 const DAY = 86400000;
 
 let lastData = null;
-let currency = 'usd';      // 'usd' | 'eth' — default USD per request
+let currency = 'usd';      // 'eth' or any fiat code in fxRates ('usd','eur',… )
 let metric   = 'low';      // 'low' | 'high' | 'floor' — which series to plot
 let interval = 'daily';    // 'daily' | 'weekly' | 'biweekly' | 'monthly' — bucket size, averaged
 let range    = 'all';      // key of RANGE_DAYS, or 'custom' when a From/To window is set
 let customFrom = null;     // 'YYYY-MM-DD' lower bound when range === 'custom'
 let customTo   = null;     // 'YYYY-MM-DD' upper bound when range === 'custom'
+let fxRates  = { usd: 1 }; // USD-relative display rates from the API
 let chart    = null;
 let wired    = false;
 
-function fmtPrice(v) {
-  if (v == null) return '—';
-  return currency === 'usd' ? `$${Math.round(v).toLocaleString()}` : `${Number(v).toFixed(3)} ETH`;
+// Format a number in the active currency. ETH is native; fiats use the locale's
+// own currency formatting (symbol, grouping) via Intl.
+function fmtMoney(v) {
+  if (currency === 'eth') return `${Number(v).toFixed(3)} ETH`;
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency.toUpperCase(), maximumFractionDigits: 0 }).format(v);
+  } catch {
+    return `${Math.round(v).toLocaleString()} ${currency.toUpperCase()}`;
+  }
 }
 
-function fmtAxis(v) {
-  return currency === 'usd' ? `$${Math.round(v).toLocaleString()}` : `${v} Ξ`;
-}
+function fmtPrice(v) { return v == null ? '—' : fmtMoney(v); }
+function fmtAxis(v)  { return currency === 'eth' ? `${v} Ξ` : fmtMoney(v); }
 
 function fmtDate(iso) {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+// Convert an (ETH, USD) pair into the active currency. ETH is native; USD is
+// stored; other fiats scale the USD value by the latest USD→currency rate.
+function inCurrency(eth, usd) {
+  if (currency === 'eth') return eth;
+  if (currency === 'usd') return usd;
+  const rate = fxRates[currency];
+  return usd != null && rate != null ? usd * rate : null;
+}
+
 // The value to plot for a daily point, given the active metric + currency.
 function pickValue(p) {
-  if (currency === 'usd') return metric === 'high' ? p.highUsd : metric === 'low' ? p.lowUsd : p.floorUsd;
-  return metric === 'high' ? p.highEth : metric === 'low' ? p.lowEth : p.floorEth;
+  const eth = metric === 'high' ? p.highEth : metric === 'low' ? p.lowEth : p.floorEth;
+  const usd = metric === 'high' ? p.highUsd : metric === 'low' ? p.lowUsd : p.floorUsd;
+  return inCurrency(eth, usd);
 }
 
 // Which bucket a date falls in. Weekly / bi-weekly are fixed windows anchored to
@@ -115,7 +131,6 @@ function renderChart() {
   if (lData.some(v => v != null)) datasets.push(lineDataset(t('market.chart.land'), lData, '#FFF95F', null, showPoints));
 
   if (chart) chart.destroy();
-  const usd = currency === 'usd';
   chart = new Chart(document.getElementById('market-price-chart'), {
     type: 'line',
     data: { labels, datasets },
@@ -139,8 +154,7 @@ function renderChart() {
           callbacks: {
             label(ctx) {
               if (ctx.parsed.y == null) return null;
-              const v = ctx.parsed.y;
-              return `  ${ctx.dataset.label}: ${usd ? '$' + Math.round(v).toLocaleString() : v.toFixed(3) + ' ETH'}`;
+              return `  ${ctx.dataset.label}: ${fmtMoney(ctx.parsed.y)}`;
             },
           },
         },
@@ -200,17 +214,32 @@ function setDateBounds() {
   fromEl.max = toEl.max = dates[dates.length - 1];
 }
 
+// Enable only the currency options we have a rate for (ETH + USD always work);
+// if the active currency lost its rate, fall back to USD.
+function updateCurrencyOptions() {
+  const sel = document.getElementById('market-currency');
+  if (!sel) return;
+  for (const opt of sel.options) {
+    const v = opt.value;
+    opt.disabled = !(v === 'eth' || v === 'usd' || fxRates[v] != null);
+  }
+  if (sel.options[sel.selectedIndex]?.disabled) { currency = 'usd'; }
+  sel.value = currency;
+}
+
 function renderStats() {
   const c = lastData.creatures || {};
   const l = lastData.land || null;
-  document.getElementById('stat-creature-floor').textContent = fmtPrice(currency === 'usd' ? c.floorUsd : c.floor);
-  document.getElementById('stat-land-floor').textContent     = fmtPrice(l ? (currency === 'usd' ? l.floorUsd : l.floor) : null);
+  document.getElementById('stat-creature-floor').textContent = fmtPrice(inCurrency(c.floor, c.floorUsd));
+  document.getElementById('stat-land-floor').textContent     = fmtPrice(l ? inCurrency(l.floor, l.floorUsd) : null);
   document.getElementById('stat-creature-sales').textContent = (c.sales30d ?? 0).toLocaleString();
   document.getElementById('stat-land-sales').textContent     = l && l.sales30d != null ? l.sales30d.toLocaleString() : '—';
 }
 
 function render() {
   if (!lastData) return;
+  fxRates = lastData.fxRates || { usd: 1 };
+  updateCurrencyOptions();
   renderStats();
   const cHist = ((lastData.creatures || {}).history || []).filter(Boolean);
   const lHist = (((lastData.land || {}).history) || []).filter(Boolean);
@@ -231,8 +260,8 @@ function wireControls() {
   const toEl   = document.getElementById('market-to');
   const datesGroup = document.getElementById('market-dates');
 
-  document.querySelectorAll('#market-currency [data-cur]').forEach(btn =>
-    btn.addEventListener('click', () => { currency = btn.dataset.cur; setActive('#market-currency', btn); render(); }));
+  const curEl = document.getElementById('market-currency');
+  curEl?.addEventListener('change', () => { currency = curEl.value; render(); });
 
   document.querySelectorAll('#market-metric [data-metric]').forEach(btn =>
     btn.addEventListener('click', () => { metric = btn.dataset.metric; setActive('#market-metric', btn); renderChart(); }));

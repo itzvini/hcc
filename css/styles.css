@@ -516,6 +516,19 @@ footer p  { color: var(--hr-fg-2); font-size: 14px; max-width: 420px; margin: 10
 .seg-btn:hover { color: var(--hr-fg-0); }
 .seg-btn.is-active { background: var(--hr-primary); color: var(--hr-on-primary); }
 
+/* Currency dropdown — pill-styled native select (too many options for a seg) */
+.seg-select {
+  font: 700 11px/1 var(--hr-sans); color: var(--hr-fg-0);
+  background-color: var(--hr-bg-3); border: 1px solid var(--hr-line);
+  border-radius: var(--hr-radius-pill); padding: 8px 30px 8px 13px; cursor: pointer;
+  appearance: none; -webkit-appearance: none; color-scheme: dark;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237D7C88' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center;
+  transition: border-color .15s, color .15s;
+}
+.seg-select:hover { border-color: var(--hr-line-strong); }
+.seg-select:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 1px; border-color: var(--hr-primary); }
+
 /* Custom timeframe picker — sits in the controls row alongside the presets */
 .market-dates { align-items: center; gap: 8px; padding: 4px 9px; }
 .market-dates.is-active {

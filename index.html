@@ -793,10 +793,18 @@
               <button type="button" class="seg-btn" data-metric="high" data-i18n="market.metric.high">High sale</button>
               <button type="button" class="seg-btn" data-metric="floor" data-i18n="market.metric.floor">Floor</button>
             </div>
-            <div class="seg" id="market-currency" role="group" aria-label="Currency">
-              <button type="button" class="seg-btn is-active" data-cur="usd">USD</button>
-              <button type="button" class="seg-btn" data-cur="eth">ETH</button>
-            </div>
+            <select class="seg-select" id="market-currency" aria-label="Currency">
+              <option value="usd" selected>USD</option>
+              <option value="eth">ETH</option>
+              <option value="eur">EUR</option>
+              <option value="gbp">GBP</option>
+              <option value="brl">BRL</option>
+              <option value="rub">RUB</option>
+              <option value="try">TRY</option>
+              <option value="jpy">JPY</option>
+              <option value="cad">CAD</option>
+              <option value="aud">AUD</option>
+            </select>
             <div class="seg" id="market-interval" role="group" aria-label="Interval">
               <button type="button" class="seg-btn is-active" data-interval="daily" data-i18n="market.interval.daily">Daily</button>
               <button type="button" class="seg-btn" data-interval="weekly" data-i18n="market.interval.weekly">Weekly</button>

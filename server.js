@@ -295,6 +295,26 @@ async function fetchEthUsd() {
   return { at, current };
 }
 
+// Extra display currencies (USD stays the canonical fiat; these are derived from
+// it). Stored ETH/USD values are exact + historical; fiats are scaled by the
+// latest USD→X rate, which preserves the chart shape and is exact for current values.
+const FX_CURRENCIES = ['usd', 'eur', 'gbp', 'brl', 'rub', 'try', 'jpy', 'cad', 'aud'];
+
+// Current USD-relative FX rates (rate.usd === 1), derived from one CoinGecko call
+// that prices ETH in every target currency. Degrades to USD-only on failure.
+async function fetchFxRates() {
+  const res = await fetch(
+    `https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=${FX_CURRENCIES.join(',')}`,
+    { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(20000) },
+  );
+  if (!res.ok) throw new Error(`CoinGecko FX ${res.status}`);
+  const eth = (await res.json()).ethereum || {};
+  const usd = eth.usd;
+  const rates = { usd: 1 };
+  if (usd) for (const c of FX_CURRENCIES) if (c !== 'usd' && eth[c] != null) rates[c] = eth[c] / usd;
+  return rates;
+}
+
 // Bucket sales into daily aggregates, tracking the day's lowest and highest sale
 // in both ETH and USD. Each sale: { ts, eth, usd } (usd may be null if no rate
 // was available). The client picks low/high, then averages over its interval.
@@ -449,11 +469,12 @@ async function computeMarketStats() {
 
   // Each source degrades independently — a transient failure in one (e.g. the
   // orderbook 500ing) blanks just that figure instead of taking down the whole tab.
-  const [creatureSales, creatureFloor, land, ethUsd] = await Promise.all([
+  const [creatureSales, creatureFloor, land, ethUsd, fxRates] = await Promise.all([
     fetchCreatureSales().catch(err => { console.error('Creature sales failed:', err.message); return []; }),
     fetchCreatureFloorEth().catch(err => { console.error('Creature floor failed:', err.message); return null; }),
     fetchLandData(cutoff).catch(err => { console.error('LAND market data failed:', err.message); return null; }),
     fetchEthUsd().catch(err => { console.error('ETH/USD rate failed:', err.message); return { at: () => null, current: null }; }),
+    fetchFxRates().catch(err => { console.error('FX rates failed:', err.message); return { usd: 1 }; }),
   ]);
 
   const rate = ethUsd.current;
@@ -486,6 +507,7 @@ async function computeMarketStats() {
 
   return {
     ethUsd: rate,
+    fxRates, // USD-relative display rates: { usd:1, eur, gbp, brl, rub, try, jpy, cad, aud }
     creatures: {
       currency: 'ETH',
       floor: creatureFloor != null ? round4(creatureFloor) : null,
