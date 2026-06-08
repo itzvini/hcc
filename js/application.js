@@ -159,7 +159,7 @@ function formView(data) {
       ${open ? '' : `<div class="appf-banner" role="note">${esc(t('app.closed.banner'))}</div>`}
 
       ${candidatePreview(data)}
-      <p class="appf-hint appf-hint-name">${esc(data.inGuild === false ? t('app.field.name.notinguild') : t('app.field.name.hint'))}</p>
+      <p class="appf-hint appf-hint-name">${esc(t('app.field.name.hint'))}</p>
       ${field('pitch', t('app.field.pitch.label'), app.pitch, { textarea: true, max: LIMITS.pitch, ph: t('app.field.pitch.ph') })}
 
       <div class="appf-divider"><span>${esc(t('app.questions.title'))}</span></div>

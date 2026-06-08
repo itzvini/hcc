@@ -24,7 +24,7 @@ function shortWallet(addr) {
 }
 
 const BRACKET_KEY = { single: 'apply.bracket.single', mid: 'apply.bracket.mid', whale: 'apply.bracket.whale' };
-const TIER_KEY    = { single: 'apply.tier.member',  mid: 'apply.tier.patron',  whale: 'apply.tier.founder' };
+const TIER_KEY    = { single: 'apply.tier.member',  mid: 'apply.tier.patron',  whale: 'apply.tier.icon' };
 
 // Map the ?auth=... flag set by the OAuth callback to a friendly message.
 function authError() {

@@ -752,7 +752,7 @@ async function handleAuthApi(request, response, url) {
         ...computeEligibility(holdings),
       };
 
-      // Ballot name = display name in the Highrise Discord (falls back to global name).
+      // Ballot name = Highrise username (falls back to Highrise Discord display/global name).
       const sessionProfile = {
         id: profile.id,
         username: profile.username,
@@ -901,9 +901,10 @@ async function handleApplicationApi(request, response) {
   if (!session) { sendJson(response, 401, { error: 'Sign in to apply.' }); return; }
   const elig = session.eligibility || {};
 
-  // Ballot name is server-authoritative: the user's Highrise Discord display name
-  // (falls back to their global Discord name). Never taken from the client.
-  const ballotName = (session.profile?.serverName || session.profile?.username || '').slice(0, APP_LIMITS.displayName);
+  // Ballot name is server-authoritative: the candidate's Highrise username (the identity
+  // voters recognise), falling back to their Highrise Discord display name then global
+  // Discord name only if the Highrise profile is unavailable. Never taken from the client.
+  const ballotName = (session.profile?.highriseName || session.profile?.serverName || session.profile?.username || '').slice(0, APP_LIMITS.displayName);
 
   const pathname = request.url.split('?')[0];
 
