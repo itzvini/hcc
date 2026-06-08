@@ -4,10 +4,15 @@ import { t } from './i18n.js';
 // eligible to run. Server re-checks eligibility on every save (never trust client).
 // Question ids must match APPLICATION_QUESTIONS in server.js.
 
-const QUESTIONS = ['drops', 'gen2', 'community', 'pushback', 'change'];
+const QUESTIONS = ['theme', 'gen2', 'value', 'roadmap', 'communication', 'represent', 'seat'];
 const CONSENTS  = ['seat', 'publish', 'hold'];
 const LIMITS    = { displayName: 40, pitch: 240, answer: 1200 };
 const BRACKET_KEY = { single: 'apply.bracket.single', mid: 'apply.bracket.mid', whale: 'apply.bracket.whale' };
+
+// Set while the application flow owns #apply-app, so a language switch re-renders
+// the form (in the new language, keeping entered values) instead of the apply.js
+// eligibility card clobbering it.
+let active = null;
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c =>
@@ -189,6 +194,14 @@ function collect() {
   return { pitch: val('pitch'), answers, positions, consent }; // ballot name is server-set
 }
 
+// Preserve in-progress edits into the in-memory data before a re-render (e.g. on a
+// language switch). No-op on the read-only submitted view (no inputs present).
+function captureInto(data) {
+  if (!data || !document.getElementById('appf-pitch')) return;
+  const c = collect();
+  data.application = { ...(data.application || {}), pitch: c.pitch, answers: c.answers, positions: c.positions };
+}
+
 function showMsg(kind, text) {
   const el = document.getElementById('app-msg');
   if (!el) return;
@@ -199,6 +212,7 @@ function showMsg(kind, text) {
 
 // Mount the application flow into `container`. onBack() returns to the eligibility view.
 export async function openApplication(container, onBack) {
+  active = null;
   container.innerHTML = '<div class="apply-loading"><div class="apply-spinner"></div></div>';
 
   let data;
@@ -212,16 +226,20 @@ export async function openApplication(container, onBack) {
 
   if (!data.eligibleToRun) { onBack(); return; }
 
+  const back = () => { active = null; onBack(); };
+  let currentMode = 'view';
+
   const render = (mode) => {
+    currentMode = mode;
     const submitted = data.application && data.application.status === 'submitted';
     container.innerHTML = (mode === 'view' && submitted)
-      ? submittedView(data, onBack)
+      ? submittedView(data, back)
       : formView(data);
     bind(mode);
   };
 
   const bind = (mode) => {
-    container.querySelector('#app-back')?.addEventListener('click', onBack);
+    container.querySelector('#app-back')?.addEventListener('click', back);
     container.querySelector('#app-edit')?.addEventListener('click', () => render('edit'));
 
     // Live character counters
@@ -284,5 +302,15 @@ export async function openApplication(container, onBack) {
     container.querySelector('#app-submit')?.addEventListener('click', () => save('submitted'));
   };
 
+  // Re-render the current view in the active language, keeping entered values.
+  active = { rerender: () => { captureInto(data); render(currentMode); } };
   render('view');
+}
+
+// Called on language switch: if the application flow is open, re-render it (in the
+// new language) and report that we handled the panel. Returns false if not active.
+export function rerenderApplication() {
+  if (!active) return false;
+  active.rerender();
+  return true;
 }

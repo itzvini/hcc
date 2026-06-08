@@ -1,5 +1,5 @@
 import { t } from './i18n.js';
-import { openApplication } from './application.js';
+import { openApplication, rerenderApplication } from './application.js';
 
 // Council "Apply & Vote" panel: Discord sign-in → eligibility check, styled as the
 // entrance to a premium members' club. All dynamic copy goes through t(); any
@@ -201,7 +201,10 @@ export async function loadApply(force = false) {
   render();
 }
 
-// Re-render with cached state after a language switch.
+// Re-render with cached state after a language switch. If the application form is
+// open, let it re-render itself (keeping entered values) instead of clobbering it
+// with the eligibility card.
 export function rerenderApply() {
+  if (rerenderApplication()) return;
   if (lastState !== null) render();
 }

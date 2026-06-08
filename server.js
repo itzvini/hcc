@@ -726,7 +726,7 @@ const APPLICATIONS_OPEN = process.env.APPLICATIONS_OPEN === '1';
 
 // Draft open questions for the self-nomination form (owner will refine the copy;
 // these ids must match the front-end in js/application.js).
-const APPLICATION_QUESTIONS = ['drops', 'gen2', 'community', 'pushback', 'change'];
+const APPLICATION_QUESTIONS = ['theme', 'gen2', 'value', 'roadmap', 'communication', 'represent', 'seat'];
 const APP_LIMITS = { displayName: 40, pitch: 240, answer: 1200 };
 
 function readJsonBody(request, limitBytes = 64 * 1024) {
