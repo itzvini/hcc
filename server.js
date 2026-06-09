@@ -10,7 +10,7 @@ try { process.loadEnvFile(); } catch { /* no .env — fine */ }
 
 const db = require('./lib/db');
 const auth = require('./lib/auth');
-const { computeEligibility } = require('./lib/eligibility');
+const { computeEligibility, BRACKETS } = require('./lib/eligibility');
 const { PROPOSITIONS, PROPOSITION_IDS } = require('./lib/propositions');
 const derive = require('./lib/derive-positions');
 
@@ -133,6 +133,9 @@ async function ethCall(rpcUrl, to, data) {
 }
 
 const padUint = n => BigInt(n).toString(16).padStart(64, '0'); // uint256 arg → 32-byte word
+
+// Mask a wallet for logs — never write a full holder address to the server log.
+const maskWallet = a => (a && a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : '(addr)');
 
 // Authoritative [{ estateId, owner }] for every live (non-burned) estate, read from the
 // contract: totalSupply() → tokenByIndex(i) → ownerOf(id). See the ESTATE_CONTRACT note.
@@ -340,7 +343,7 @@ async function getWalletHoldings(address) {
     walletHoldingsCache.set(addr, { holdings, at: Date.now() });
     return holdings;
   } catch (err) {
-    console.error(`Per-wallet holdings lookup failed for ${addr}, using holder snapshot:`, err.message);
+    console.error(`Per-wallet holdings lookup failed for ${maskWallet(addr)}, using holder snapshot:`, err.message);
     if (!holderCounts.fetchedAt) { try { await getHolderStats(); } catch { /* snapshot also unavailable */ } }
     return {
       creatureCount: holderCounts.creature.get(addr) || 0,
@@ -839,6 +842,19 @@ async function refreshEligibility(session, sid) {
   return fresh;
 }
 
+// Shape a session profile for the client. ONLY the fields the UI renders are sent —
+// the Discord id, Highrise user id, guild flag and raw server/Highrise names stay
+// server-side. They're identifiers the front-end never needs, and the Highrise user
+// id in particular must never reach a browser (it keys the Highrise wallet/profile API).
+function publicProfile(p) {
+  if (!p) return {};
+  return {
+    username: p.username || null,
+    avatar: p.avatar || null,
+    highriseIcon: p.highriseIcon || null,
+  };
+}
+
 async function handleAuthApi(request, response, url) {
   const { pathname } = url;
 
@@ -960,7 +976,7 @@ async function handleAuthApi(request, response, url) {
     if (!session) { sendJson(response, 200, { authenticated: false }); return; }
     sendJson(response, 200, {
       authenticated: true,
-      profile: session.profile,
+      profile: publicProfile(session.profile),
       // Recompute against current holdings so the panel reflects buys/sells without re-login.
       eligibility: await refreshEligibility(session, sid),
     });
@@ -997,6 +1013,37 @@ async function handleAuthApi(request, response, url) {
 // Candidacy window. Closed by default — no draft, submit, or AI-draft is accepted
 // until APPLICATIONS_OPEN=1 is set (the eligibility check stays live regardless).
 const APPLICATIONS_OPEN = envFlag(process.env.APPLICATIONS_OPEN);
+
+// --- Election status (public) ---
+// A cached snapshot of the race: submitted candidates per holding bracket, the seats
+// each bracket elects, and whether the candidacy window is open. Public — it's the
+// same picture voters see, so no auth or wallet is needed. The count is cheap (one
+// grouped query) but short-cached so repeated polling can't hammer the DB; a fresh
+// submission clears the cache (see handleApplicationApi) so the board updates at once.
+const APPOINTED_SEATS = 3;                       // appointed for continuity (see Roadmap → First Election)
+const RACE_ORDER = ['single', 'mid', 'whale'];   // smallest-holder bracket first, mirroring the eligibility card
+const electionCache = { data: null, at: 0 };
+const ELECTION_CACHE_TTL_MS = 30 * 1000;
+
+async function getElectionStatus() {
+  if (electionCache.data && Date.now() - electionCache.at < ELECTION_CACHE_TTL_MS) {
+    return electionCache.data;
+  }
+  const counts = await db.getCandidateCounts();
+  const seatsFor = id => BRACKETS.find(b => b.id === id)?.seats ?? 0;
+  const races = RACE_ORDER.map(id => ({ bracket: id, seats: seatsFor(id), candidates: counts[id] || 0 }));
+  const data = {
+    applicationsOpen: APPLICATIONS_OPEN,
+    races,
+    totalCandidates: races.reduce((n, r) => n + r.candidates, 0),
+    electedSeats: races.reduce((n, r) => n + r.seats, 0),
+    appointedSeats: APPOINTED_SEATS,
+    lastUpdated: new Date().toISOString(),
+  };
+  electionCache.data = data;
+  electionCache.at = Date.now();
+  return data;
+}
 
 // Draft open questions for the self-nomination form (owner will refine the copy;
 // these ids must match the front-end in js/application.js).
@@ -1167,6 +1214,10 @@ async function handleApplicationApi(request, response) {
       displayName, pitch, answers, positions, status,
     });
 
+    // A new (or re-)submission changes the public race counts — drop the cached
+    // election snapshot so the status board reflects it on the next load.
+    if (status === 'submitted') electionCache.at = 0;
+
     // Drafts autosave often, so log a light summary. Submissions log the full
     // point-in-time snapshot — preserving exactly what each candidate submitted even
     // if they edit later, and making every submission individually traceable.
@@ -1336,6 +1387,23 @@ const server = http.createServer((request, response) => {
         console.error('Holder stats request failed:', err.message);
         response.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
         response.end(JSON.stringify({ error: 'Holder data temporarily unavailable.' }));
+      });
+    return;
+  }
+
+  if (request.url.startsWith('/api/election')) {
+    getElectionStatus()
+      .then(data => {
+        response.writeHead(200, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'no-store',
+        });
+        response.end(JSON.stringify(data));
+      })
+      .catch(err => {
+        console.error('Election status request failed:', err.message);
+        response.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
+        response.end(JSON.stringify({ error: 'Election status temporarily unavailable.' }));
       });
     return;
   }

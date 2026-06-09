@@ -3,6 +3,7 @@ import { loadHoldersChart } from './holders.js';
 import { loadMarketChart, rerenderMarket } from './market.js';
 import { loadChangelog, rerenderChangelog } from './changelog.js';
 import { loadApply, rerenderApply } from './apply.js';
+import { loadElection, rerenderElection } from './election.js';
 
 // Language switcher — re-render dynamic views after language change
 document.querySelectorAll('.lang-btn').forEach(btn => {
@@ -10,6 +11,7 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
     rerenderChangelog();
     rerenderMarket();
     rerenderApply();
+    rerenderElection();
   }));
 });
 
@@ -56,7 +58,7 @@ function selectTab(name, updateHash = true) {
   if (name === 'holders'   && !holdersLoaded)   { holdersLoaded   = true; loadHoldersChart(); }
   if (name === 'market'    && !marketLoaded)    { marketLoaded    = true; loadMarketChart(); }
   if (name === 'changelog' && !changelogLoaded) { changelogLoaded = true; loadChangelog(); }
-  if (name === 'apply'     && !applyLoaded)     { applyLoaded     = true; loadApply(); }
+  if (name === 'apply'     && !applyLoaded)     { applyLoaded     = true; loadApply(); loadElection(); }
   if (updateHash) history.replaceState(null, '', `#${name}`);
 }
 
@@ -106,6 +108,7 @@ if (initialTab) selectTab(initialTab, false);
 initI18n().then(() => {
   rerenderChangelog();
   rerenderApply();
+  rerenderElection();
   rerenderMarket();
 });
 
