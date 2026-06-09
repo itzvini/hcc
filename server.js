@@ -14,8 +14,12 @@ const { computeEligibility } = require('./lib/eligibility');
 const { PROPOSITIONS, PROPOSITION_IDS } = require('./lib/propositions');
 const derive = require('./lib/derive-positions');
 
+// Treat common truthy spellings (1/true/yes/on, case- and whitespace-insensitive) as
+// "on", so a minor env value doesn't silently leave a flag off. Used for APPLICATIONS_OPEN.
+const envFlag = v => /^(1|true|yes|on)$/i.test(String(v ?? '').trim());
+
 db.init()
-  .then(() => db.recordEvent({ event: 'system.startup', detail: { applicationsOpen: process.env.APPLICATIONS_OPEN === '1', usingPostgres: db.usingPostgres } }))
+  .then(() => db.recordEvent({ event: 'system.startup', detail: { applicationsOpen: envFlag(process.env.APPLICATIONS_OPEN), usingPostgres: db.usingPostgres } }))
   .catch(err => console.error('DB init failed:', err.message));
 
 // Optional local dev-login helper for testing eligibility screens without a real
@@ -926,7 +930,7 @@ async function handleAuthApi(request, response, url) {
 // --- Candidate application API ---
 // Candidacy window. Closed by default — no draft, submit, or AI-draft is accepted
 // until APPLICATIONS_OPEN=1 is set (the eligibility check stays live regardless).
-const APPLICATIONS_OPEN = process.env.APPLICATIONS_OPEN === '1';
+const APPLICATIONS_OPEN = envFlag(process.env.APPLICATIONS_OPEN);
 
 // Draft open questions for the self-nomination form (owner will refine the copy;
 // these ids must match the front-end in js/application.js).
