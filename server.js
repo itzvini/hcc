@@ -284,6 +284,7 @@ function getHolderStats() {
 // so a fresh buy/sell shows up quickly.
 const walletHoldingsCache = new Map(); // lowercaseAddr -> { holdings, at }
 const WALLET_HOLDINGS_TTL_MS = 60 * 1000;
+const HEX_ADDRESS = /^0x[0-9a-f]{40}$/; // a real on-chain address (rejects dev-login placeholders)
 
 // ERC-721 balanceOf for one address on the given chain RPC.
 async function erc721BalanceOf(rpcUrl, contract, address) {
@@ -324,6 +325,10 @@ async function estateLandOwnedBy(address) {
 async function getWalletHoldings(address) {
   const addr = (address || '').toLowerCase();
   if (!addr) return { creatureCount: 0, landCount: 0, holdersAvailable: false, holdersFetchedAt: null };
+  // Not a real on-chain address (e.g. a dev-login placeholder like 0xDEV…). Reading the
+  // chain would throw on BigInt(addr); report "unavailable" so callers keep the last-known
+  // eligibility instead of erroring — and so a malformed upstream wallet degrades cleanly.
+  if (!HEX_ADDRESS.test(addr)) return { creatureCount: 0, landCount: 0, holdersAvailable: false, holdersFetchedAt: null };
 
   const cached = walletHoldingsCache.get(addr);
   if (cached && (Date.now() - cached.at) < WALLET_HOLDINGS_TTL_MS) return cached.holdings;
@@ -1014,6 +1019,12 @@ async function handleAuthApi(request, response, url) {
 // until APPLICATIONS_OPEN=1 is set (the eligibility check stays live regardless).
 const APPLICATIONS_OPEN = envFlag(process.env.APPLICATIONS_OPEN);
 
+// Voting-phase flag — distinct from APPLICATIONS_OPEN. While voting hasn't started, the
+// matcher is an ANONYMISED preview: candidate names are NEVER sent to the client (only
+// bracket, pitch and match %), so the application phase shows how voting will look and a
+// preview of the field without revealing who's who. Names are revealed once VOTING_OPEN=1.
+const VOTING_OPEN = envFlag(process.env.VOTING_OPEN);
+
 // --- Election status (public) ---
 // A cached snapshot of the race: submitted candidates per holding bracket, the seats
 // each bracket elects, and whether the candidacy window is open. Public — it's the
@@ -1086,6 +1097,124 @@ function publicApplication(a) {
     submittedAt: a.submitted_at || null,
     updatedAt: a.updated_at || null,
   };
+}
+
+// Affinity between a voter's stances and a candidate's positions: per shared
+// proposition, agreement = 1 − |Δstance| / 4 (scale 1–5), averaged. Pure function.
+function affinity(voterPos, candPositions) {
+  let sum = 0, n = 0;
+  for (const id of PROPOSITION_IDS) {
+    const v = voterPos[id];
+    const c = candPositions?.[id]?.stance;
+    if (v >= 1 && v <= 5 && c >= 1 && c <= 5) { sum += 1 - Math.abs(v - c) / 4; n++; }
+  }
+  return n ? { pct: Math.round((sum / n) * 100), n } : null;
+}
+
+// Validate a client-sent voter ballot into { propId: stance 1-5 }, known props only.
+function cleanVoterPositions(raw) {
+  const out = {};
+  if (raw && typeof raw === 'object') {
+    for (const id of PROPOSITION_IDS) {
+      const s = parseInt(raw[id], 10);
+      if (s >= 1 && s <= 5) out[id] = s;
+    }
+  }
+  return out;
+}
+
+// Opaque, stable per-candidate id for the client to reference a candidate (e.g. to open
+// their profile) WITHOUT ever exposing the Discord id. A truncated SHA-256 — not
+// reversible to the Discord id, stable across restarts.
+function candidateId(discordId) {
+  return crypto.createHash('sha256').update(String(discordId)).digest('hex').slice(0, 16);
+}
+
+// A single candidate's public profile for the click-through detail view. Consented
+// fields only — never wallet or Discord id. During the CANDIDACY phase it's an
+// anonymous preview: pitch + VAA positions (the matchable part) are shown, but the
+// candidate's NAME and free-text open-question ANSWERS are withheld until voting opens,
+// at which point the full profile becomes public.
+function publicCandidateProfile(c) {
+  const profile = {
+    id: candidateId(c.discord_id),
+    bracket: c.bracket || null,
+    pitch: c.pitch || '',
+    positions: c.positions || {},
+  };
+  if (VOTING_OPEN) {
+    profile.name = c.display_name || '';
+    profile.answers = c.answers || {};
+  }
+  return profile;
+}
+
+// /api/vote — the voting-advice matcher, computed ENTIRELY server-side so candidate
+// positions never reach the browser (the client only ever sees ranked names + match %).
+// Gated to signed-in, voting-eligible holders.
+//   GET  → { propositions, candidateCount } (to render the questionnaire).
+//   POST { positions } → { results: [{ name, bracket, pitch, pct, n }], candidateCount }.
+// PRIVACY: the gate reads the STORED eligibility snapshot (no recompute side-effects),
+// and the handler writes NOTHING and logs NOTHING about the voter's answers — they're
+// matched in memory and discarded. No DB row, no audit event, so there's no persistent
+// trace of who matched or how they voted. POST is lightly rate-limited per voter to
+// blunt attempts to infer candidate positions by probing many crafted ballots.
+async function handleVoteApi(request, response) {
+  const cookies = auth.parseCookies(request);
+  const session = await db.getSession(cookies[auth.SESSION_COOKIE]);
+  if (!session) { sendJson(response, 401, { error: 'Sign in to find your match.' }); return; }
+  const elig = session.eligibility || {};
+  if (!elig.canVotePendingHoldTime) { sendJson(response, 403, { error: 'Only eligible voters can use the matcher.' }); return; }
+
+  if (request.method === 'GET') {
+    const url = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
+    const cid = url.searchParams.get('candidate');
+
+    // Click-through: one candidate's full profile (positions + answers) on demand.
+    // Lazy + per-candidate (not bulk), and like the match it writes/logs nothing about
+    // which profile was viewed, so a voter's interest stays untraceable.
+    if (cid) {
+      const wait = rateLimited(`profile:${session.discord_id}`, 240, 60 * 60 * 1000);
+      if (wait) { sendJson(response, 429, { error: 'Too many requests. Try again shortly.' }, { 'Retry-After': String(wait) }); return; }
+      const cand = (await db.getCandidates()).find(c => candidateId(c.discord_id) === cid);
+      if (!cand) { sendJson(response, 404, { error: 'Candidate not found.' }); return; }
+      sendJson(response, 200, { candidate: publicCandidateProfile(cand) });
+      return;
+    }
+
+    const candidates = await db.getCandidates();
+    sendJson(response, 200, { propositions: PROPOSITIONS, candidateCount: candidates.length, votingOpen: VOTING_OPEN });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const wait = rateLimited(`match:${session.discord_id}`, 60, 60 * 60 * 1000);
+    if (wait) { sendJson(response, 429, { error: 'Too many match requests. Try again shortly.' }, { 'Retry-After': String(wait) }); return; }
+
+    let body;
+    try { body = await readJsonBody(request); }
+    catch (err) { sendJson(response, err.statusCode || 400, { error: err.message }); return; }
+
+    const voterPos = cleanVoterPositions(body.positions);
+    const candidates = await db.getCandidates();
+    const results = Object.keys(voterPos).length
+      ? candidates
+          .map(c => {
+            const m = affinity(voterPos, c.positions);
+            // `id` is the opaque handle the client uses to open this candidate's profile.
+            const row = { id: candidateId(c.discord_id), bracket: c.bracket || null, pitch: c.pitch || '', pct: m ? m.pct : null, n: m ? m.n : 0 };
+            // Candidate names are withheld until the voting phase opens — never sent
+            // to the client during the application/preview phase.
+            if (VOTING_OPEN) row.name = c.display_name || '';
+            return row;
+          })
+          .sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1))
+      : [];
+    sendJson(response, 200, { results, candidateCount: candidates.length, votingOpen: VOTING_OPEN });
+    return;
+  }
+
+  sendJson(response, 405, { error: 'Method not allowed.' });
 }
 
 // Validate a client-sent positions map into { id: { stance 1-5, rationale } }.
@@ -1360,6 +1489,14 @@ const server = http.createServer((request, response) => {
   if (request.url.startsWith('/api/application')) {
     handleApplicationApi(request, response).catch(err => {
       console.error('Application API error:', err.message);
+      if (!response.headersSent) sendJson(response, 500, { error: 'Something went wrong.' });
+    });
+    return;
+  }
+
+  if (request.url.startsWith('/api/vote')) {
+    handleVoteApi(request, response).catch(err => {
+      console.error('Vote match API error:', err.message);
       if (!response.headersSent) sendJson(response, 500, { error: 'Something went wrong.' });
     });
     return;

@@ -1240,6 +1240,179 @@ footer { margin-top: 28px; }
   .race-status.is-open .race-status-dot { animation: none !important; }
 }
 
+/* ---------- VOTING-ADVICE MATCHER (voter view) ---------- */
+.vote-box { margin: 22px 0 4px; }
+
+.vote-wrap {
+  --accent: var(--hr-primary); --accent-soft: var(--hr-primary-25);
+  position: relative; overflow: hidden; isolation: isolate;
+  padding: 28px; border-radius: var(--hr-radius-2xl);
+  border: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(40,39,45,.72), rgba(20,19,23,.86));
+  backdrop-filter: blur(10px);
+  box-shadow: var(--hr-shadow-3), inset 0 1px 0 rgba(255,255,255,.06);
+}
+.vote-wrap > * { position: relative; z-index: 1; }
+.vote-wrap .apply-aurora { z-index: 0; opacity: .4; }
+
+.vote-head { margin-bottom: 22px; }
+.vote-h {
+  font-family: var(--hr-sans); font-weight: 900; letter-spacing: var(--hr-tracking-tight);
+  font-size: clamp(22px, 3.4vw, 30px); line-height: 1.05; color: var(--hr-fg-0); margin: 14px 0 10px;
+}
+.vote-intro { color: var(--hr-fg-1); max-width: 560px; font-size: 15px; }
+.vote-private {
+  display: inline-flex; align-items: center; gap: 8px; margin-top: 16px;
+  padding: 6px 13px; border-radius: var(--hr-radius-pill);
+  font-size: 12px; font-weight: 700; color: var(--hr-primary);
+  background: var(--hr-primary-25); border: 1px solid color-mix(in srgb, var(--hr-primary) 35%, transparent);
+}
+.vote-private i { width: 8px; height: 8px; border-radius: 50%; background: var(--hr-primary); box-shadow: 0 0 8px var(--hr-primary); flex: 0 0 auto; }
+
+/* Questionnaire — reuses the .vaa-* statement/scale styles from the application form */
+.vote-props { display: flex; flex-direction: column; gap: 14px; }
+
+.vote-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-end; margin-top: 22px; }
+.vote-msg { margin-top: 14px; padding: 11px 14px; border-radius: var(--hr-radius-md); font-size: 13.5px; font-weight: 600; }
+.vote-msg.is-info { background: var(--hr-secondary-25); color: var(--hr-fg-0); }
+.vote-msg.is-ok   { background: var(--hr-primary-25);  color: var(--hr-fg-0); }
+.vote-msg.is-error{ background: var(--hr-alert-15);    color: var(--hr-fg-0); }
+
+/* Results */
+.vote-results { margin-top: 4px; }
+.vote-cards { display: flex; flex-direction: column; gap: 12px; }
+.vote-empty { color: var(--hr-fg-2); text-align: center; padding: 16px 0; }
+
+.vote-card {
+  --accent: var(--hr-primary); --accent-soft: var(--hr-primary-25);
+  position: relative; overflow: hidden; isolation: isolate;
+  padding: 16px 18px; border-radius: var(--hr-radius-lg);
+  background: rgba(0,0,0,.28); border: 1px solid var(--hr-line);
+  transition: transform .25s, border-color .25s, box-shadow .25s;
+}
+.vote-card > * { position: relative; z-index: 1; }
+.vote-card[data-tier="single"] { --accent: var(--hr-primary);   --accent-soft: var(--hr-primary-25); }
+.vote-card[data-tier="mid"]    { --accent: var(--hr-secondary); --accent-soft: var(--hr-secondary-25); }
+.vote-card[data-tier="whale"]  { --accent: var(--hr-banana);    --accent-soft: var(--hr-banana-25); }
+.vote-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.vote-card.is-top {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  box-shadow: 0 0 34px var(--accent-soft), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.vote-card-glow { position: absolute; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(70% 80% at 100% 0%, var(--accent-soft), transparent 70%); opacity: .5; }
+/* Inline (no longer absolute) so it never overlaps the match % */
+.vote-top-badge {
+  display: inline-block; vertical-align: middle;
+  font-family: var(--hr-sans); font-weight: 900; font-size: 9.5px;
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase; color: var(--hr-on-primary);
+  padding: 3px 9px; border-radius: var(--hr-radius-pill); background: var(--accent);
+}
+
+/* Back-to-questions / clear row above the matches (results view) */
+.vote-results-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.vote-results-actions .apply-btn-ghost { margin-top: 0; }
+
+/* Seat/race tabs — pick a seat class instead of scrolling the whole field */
+.vote-seat-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 16px; }
+.vote-seat-tab {
+  --accent: var(--hr-primary);
+  cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 16px; border-radius: var(--hr-radius-pill);
+  border: 1px solid var(--hr-line); background: rgba(0,0,0,.28);
+  font-family: var(--hr-sans); font-weight: 800; font-size: 13px; color: var(--hr-fg-2);
+  transition: color .2s, border-color .2s, background .2s, box-shadow .2s;
+}
+.vote-seat-tab[data-tier="single"] { --accent: var(--hr-primary);   }
+.vote-seat-tab[data-tier="mid"]    { --accent: var(--hr-secondary); }
+.vote-seat-tab[data-tier="whale"]  { --accent: var(--hr-banana);    }
+.vote-seat-tab:hover { color: var(--hr-fg-0); border-color: var(--hr-line-strong); }
+.vote-seat-tab.is-active {
+  color: var(--hr-on-primary); background: var(--accent); border-color: var(--accent);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.vote-seat-tab[data-tier="mid"].is-active { color: #fff; }
+.vote-seat-count {
+  font-size: 11px; font-weight: 900; padding: 1px 7px; border-radius: var(--hr-radius-pill);
+  background: rgba(255,255,255,.14); color: inherit;
+}
+.vote-seat-tab.is-active .vote-seat-count { background: rgba(0,0,0,.22); }
+
+/* Anonymised preview (before voting opens) */
+.vote-anon-note { margin-top: 14px; font-size: 12.5px; color: var(--hr-fg-2); font-style: italic; }
+.vote-card.is-anon .vote-cand-name { color: var(--hr-fg-1); }
+.vote-cand-avatar.is-anon { background: var(--hr-bg-4); color: var(--hr-fg-2); box-shadow: none; font-size: 22px; }
+
+.vote-card-main { display: flex; align-items: center; gap: 14px; }
+.vote-rank { font-family: var(--hr-sans); font-weight: 900; font-size: 15px; color: var(--hr-fg-3); flex: 0 0 auto; min-width: 26px; }
+.vote-cand-avatar {
+  flex: 0 0 auto; width: 46px; height: 46px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-family: var(--hr-sans); font-weight: 900; font-size: 20px; color: var(--hr-on-primary);
+  background: var(--accent); box-shadow: 0 0 18px var(--accent-soft);
+}
+.vote-cand-id { min-width: 0; flex: 1 1 auto; }
+.vote-cand-name { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-family: var(--hr-sans); font-weight: 800; font-size: 16px; color: var(--hr-fg-0); }
+.vote-cand-pitch { font-size: 13px; color: var(--hr-fg-2); margin-top: 3px; line-height: 1.4; }
+.vote-score { flex: 0 0 auto; text-align: center; min-width: 64px; }
+.vote-score-n { font-family: var(--hr-sans); font-weight: 900; font-size: 30px; line-height: 1; color: var(--accent); text-shadow: 0 0 20px var(--accent-soft); }
+.vote-score-n::after { content: "%"; font-size: 15px; margin-left: 1px; }
+.vote-score-l { font-size: 10.5px; color: var(--hr-fg-2); margin-top: 4px; text-transform: uppercase; letter-spacing: .04em; }
+
+.vote-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--hr-line); flex-wrap: wrap; }
+.vote-based { font-size: 12px; color: var(--hr-fg-3); }
+
+/* Clickable result card → opens the candidate profile */
+.vote-card.is-clickable { cursor: pointer; }
+.vote-card.is-clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.vote-view { font-size: 12px; font-weight: 800; color: var(--accent); white-space: nowrap; }
+
+/* Candidate profile (click-through detail) */
+.vote-profile-actions { margin-bottom: 16px; }
+.vote-profile-actions .apply-btn-ghost { margin-top: 0; }
+.vote-profile { --accent: var(--hr-primary); --accent-soft: var(--hr-primary-25); }
+.vote-profile[data-tier="single"] { --accent: var(--hr-primary);   --accent-soft: var(--hr-primary-25); }
+.vote-profile[data-tier="mid"]    { --accent: var(--hr-secondary); --accent-soft: var(--hr-secondary-25); }
+.vote-profile[data-tier="whale"]  { --accent: var(--hr-banana);    --accent-soft: var(--hr-banana-25); }
+.vote-profile-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.vote-profile-id { min-width: 0; }
+.vote-profile-match { font-size: 13px; color: var(--hr-fg-2); margin-top: 4px; display: inline-block; }
+.vote-profile-match strong { color: var(--accent); font-weight: 900; }
+.vote-profile-pitch { color: var(--hr-fg-1); font-size: 15px; line-height: 1.5; margin: 2px 0 4px; }
+.vote-answers { display: flex; flex-direction: column; }
+.vote-ans { padding: 14px 0; border-top: 1px solid var(--hr-line); }
+.vote-ans:first-child { border-top: none; }
+.vote-ans-q { font-family: var(--hr-sans); font-weight: 700; font-size: 13px; color: var(--hr-fg-2); margin-bottom: 6px; line-height: 1.4; }
+.vote-ans-a { color: var(--hr-fg-0); font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.vote-breakdown { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.vote-bd { padding: 10px 12px; border-radius: var(--hr-radius-md); background: rgba(255,255,255,.03); border-left: 3px solid var(--hr-line-strong); }
+.vote-bd.is-agree  { border-left-color: var(--hr-primary); }
+.vote-bd.is-near   { border-left-color: var(--hr-banana); }
+.vote-bd.is-differ { border-left-color: var(--hr-alert); }
+.vote-bd-stmt { font-size: 13px; font-weight: 600; color: var(--hr-fg-1); margin-bottom: 6px; line-height: 1.4; }
+.vote-bd-row { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; }
+.vote-bd-you  { color: var(--hr-fg-0); font-weight: 700; }
+.vote-bd-them { color: var(--hr-fg-2); }
+.vote-bd-why { margin-top: 6px; font-size: 12px; color: var(--hr-fg-2); font-style: italic; }
+
+/* Gate / error states */
+.vote-gate { text-align: center; }
+.vote-gate-ico { font-size: 38px; margin-bottom: 8px; }
+.vote-gate .vote-intro { margin: 0 auto; }
+.vote-error { text-align: center; }
+.vote-error p { color: var(--hr-fg-1); margin-bottom: 4px; }
+
+@media (max-width: 560px) {
+  .vote-wrap { padding: 22px 18px; }
+  .vote-card-main { flex-wrap: wrap; }
+  .vote-score { margin-left: auto; }
+  .vote-actions { justify-content: stretch; }
+  .vote-actions button { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vote-private i { box-shadow: none; }
+}
+
 /* ---------- CANDIDATE APPLICATION FORM ---------- */
 .application {
   --accent: var(--hr-primary); --accent-soft: var(--hr-primary-25);
