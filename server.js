@@ -14,7 +14,9 @@ const { computeEligibility } = require('./lib/eligibility');
 const { PROPOSITIONS, PROPOSITION_IDS } = require('./lib/propositions');
 const derive = require('./lib/derive-positions');
 
-db.init().catch(err => console.error('DB init failed:', err.message));
+db.init()
+  .then(() => db.recordEvent({ event: 'system.startup', detail: { applicationsOpen: process.env.APPLICATIONS_OPEN === '1', usingPostgres: db.usingPostgres } }))
+  .catch(err => console.error('DB init failed:', err.message));
 
 // Optional local dev-login helper for testing eligibility screens without a real
 // wallet. The active file (lib/dev-login.js) is gitignored, so it is ABSENT from
@@ -704,6 +706,69 @@ function redirectToApp(request, response, error) {
   response.end();
 }
 
+// True when the holdings-derived parts of two eligibility snapshots differ.
+function eligibilityChanged(a, b) {
+  return a.creatureCount !== b.creatureCount
+    || a.landCount !== b.landCount
+    || a.totalCount !== b.totalCount
+    || a.bracket !== b.bracket
+    || a.canRun !== b.canRun
+    || a.isMember !== b.isMember
+    || a.holdsNow !== b.holdsNow;
+}
+
+// Recompute a session's eligibility against the CURRENT holder snapshot, so holdings
+// changes (buys/sells, estate moves, or a cold-cache login) reflect without re-login.
+// Cheap: getWalletHoldings reads the in-memory holder cache (warming it once if needed)
+// — no chain or Highrise calls. Returns the stored snapshot UNCHANGED when there's no
+// linked wallet, the holder data isn't available, or the lookup fails, so a transient
+// outage can never wrongly downgrade a real holder to "0 assets". When holdings did
+// change, it converges the session, the public applicant row, and the audit trail
+// (out of band, so the response is never blocked on those writes).
+async function refreshEligibility(session, sid) {
+  const stored = session.eligibility || {};
+  if (!stored.ethWallet) return stored; // no linked wallet — nothing to recompute
+
+  let holdings;
+  try { holdings = await getWalletHoldings(stored.ethWallet); }
+  catch (err) { console.error('Eligibility refresh failed:', err.message); return stored; }
+  if (!holdings.holdersAvailable) return stored; // can't determine right now — keep last known
+
+  const fresh = {
+    linked: stored.linked,
+    ethWallet: stored.ethWallet,
+    holdersAvailable: true,
+    ...computeEligibility(holdings),
+  };
+  if (!eligibilityChanged(stored, fresh)) return fresh;
+
+  session.eligibility = fresh; // keep the in-request copy consistent
+  (async () => {
+    try {
+      if (sid) await db.updateSessionEligibility(sid, fresh);
+      await db.upsertApplicant({
+        discordId: session.discord_id,
+        discordUsername: session.profile?.username,
+        ethWallet: fresh.ethWallet,
+        creatureCount: fresh.creatureCount,
+        landCount: fresh.landCount,
+        totalCount: fresh.totalCount,
+        bracket: fresh.bracket,
+        canRun: fresh.canRun,
+      });
+      db.recordEvent({
+        event: 'eligibility.changed',
+        discordId: session.discord_id,
+        detail: {
+          from: { totalCount: stored.totalCount ?? null, bracket: stored.bracket ?? null, canRun: !!stored.canRun },
+          to:   { totalCount: fresh.totalCount, bracket: fresh.bracket, canRun: fresh.canRun },
+        },
+      });
+    } catch (err) { console.error('Eligibility persist failed:', err.message); }
+  })();
+  return fresh;
+}
+
 async function handleAuthApi(request, response, url) {
   const { pathname } = url;
 
@@ -719,10 +784,14 @@ async function handleAuthApi(request, response, url) {
   // Step 2 — OAuth callback: verify state, exchange code, look up wallet + eligibility.
   if (pathname === '/api/auth/discord/callback') {
     const cookies = auth.parseCookies(request);
-    if (url.searchParams.get('error')) return redirectToApp(request, response, 'denied');
+    if (url.searchParams.get('error')) {
+      db.recordEvent({ event: 'auth.denied', ok: false, detail: { error: url.searchParams.get('error') } });
+      return redirectToApp(request, response, 'denied');
+    }
     const code = url.searchParams.get('code');
     const state = url.searchParams.get('state');
     if (!code || !state || state !== cookies[auth.STATE_COOKIE]) {
+      db.recordEvent({ event: 'auth.state_mismatch', ok: false });
       return redirectToApp(request, response, 'state');
     }
 
@@ -777,6 +846,24 @@ async function handleAuthApi(request, response, url) {
         canRun: eligibility.canRun,
       });
 
+      db.recordEvent({
+        event: 'auth.login',
+        discordId: profile.id,
+        detail: {
+          username: profile.username,
+          highriseName: highrise?.name || null,
+          inGuild: guild.inGuild,
+          linked: wallet.linked,
+          ethWallet: wallet.ethWallet,
+          creatureCount: eligibility.creatureCount,
+          landCount: eligibility.landCount,
+          totalCount: eligibility.totalCount,
+          bracket: eligibility.bracket,
+          canRun: eligibility.canRun,
+          holdersAvailable: eligibility.holdersAvailable,
+        },
+      });
+
       const secure = auth.isSecure(request);
       response.writeHead(302, {
         Location: '/#apply',
@@ -789,6 +876,7 @@ async function handleAuthApi(request, response, url) {
       response.end();
     } catch (err) {
       console.error(`OAuth callback failed at stage "${stage}":`, err.message);
+      db.recordEvent({ event: 'auth.callback_error', ok: false, detail: { stage, message: err.message } });
       redirectToApp(request, response, 'failed');
     }
     return;
@@ -797,12 +885,14 @@ async function handleAuthApi(request, response, url) {
   // Current session + eligibility for the logged-in user.
   if (pathname === '/api/me') {
     const cookies = auth.parseCookies(request);
-    const session = await db.getSession(cookies[auth.SESSION_COOKIE]);
+    const sid = cookies[auth.SESSION_COOKIE];
+    const session = await db.getSession(sid);
     if (!session) { sendJson(response, 200, { authenticated: false }); return; }
     sendJson(response, 200, {
       authenticated: true,
       profile: session.profile,
-      eligibility: session.eligibility,
+      // Recompute against current holdings so the panel reflects buys/sells without re-login.
+      eligibility: await refreshEligibility(session, sid),
     });
     return;
   }
@@ -817,7 +907,10 @@ async function handleAuthApi(request, response, url) {
   // Logout.
   if (pathname === '/api/auth/logout') {
     const cookies = auth.parseCookies(request);
-    await db.deleteSession(cookies[auth.SESSION_COOKIE]);
+    const sid = cookies[auth.SESSION_COOKIE];
+    const endingSession = await db.getSession(sid);
+    await db.deleteSession(sid);
+    db.recordEvent({ event: 'auth.logout', discordId: endingSession?.discord_id || null });
     response.writeHead(302, {
       Location: '/#council',
       'Set-Cookie': auth.serializeCookie(auth.SESSION_COOKIE, '', { maxAge: 0, secure: auth.isSecure(request) }),
@@ -899,7 +992,9 @@ async function handleApplicationApi(request, response) {
   const cookies = auth.parseCookies(request);
   const session = await db.getSession(cookies[auth.SESSION_COOKIE]);
   if (!session) { sendJson(response, 401, { error: 'Sign in to apply.' }); return; }
-  const elig = session.eligibility || {};
+  // Live eligibility — recompute against current holdings so the form's gate matches the
+  // panel and reflects any change since login (estates, buys/sells) without re-login.
+  const elig = await refreshEligibility(session, cookies[auth.SESSION_COOKIE]);
 
   // Ballot name is server-authoritative: the candidate's Highrise username (the identity
   // voters recognise), falling back to their Highrise Discord display name then global
@@ -928,6 +1023,7 @@ async function handleApplicationApi(request, response) {
       answers[id] = v.trim().slice(0, APP_LIMITS.answer);
     }
     const positions = await derive.derivePositions(answers);
+    db.recordEvent({ event: 'application.derive', discordId: session.discord_id, detail: { answered: Object.values(answers).filter(Boolean).length } });
     sendJson(response, 200, { positions });
     return;
   }
@@ -949,7 +1045,11 @@ async function handleApplicationApi(request, response) {
 
   if (request.method === 'POST') {
     // Server-side gate — never trust the client about eligibility.
-    if (!elig.canRun) { sendJson(response, 403, { error: 'You are not eligible to run for a seat.' }); return; }
+    if (!elig.canRun) {
+      db.recordEvent({ event: 'application.forbidden', discordId: session.discord_id, ok: false, detail: { bracket: elig.bracket || null, totalCount: elig.totalCount ?? null } });
+      sendJson(response, 403, { error: 'You are not eligible to run for a seat.' });
+      return;
+    }
     // Light rate limit on writes (per user) — prevents draft-spam / DB abuse.
     const wait = rateLimited(`save:${session.discord_id}`, 120, 60 * 60 * 1000);
     if (wait) { sendJson(response, 429, { error: 'Too many requests. Try again shortly.' }, { 'Retry-After': String(wait) }); return; }
@@ -962,6 +1062,7 @@ async function handleApplicationApi(request, response) {
     // Candidacy window closed — drafts are allowed (so candidates can prepare),
     // but final submission is blocked until APPLICATIONS_OPEN=1.
     if (status === 'submitted' && !APPLICATIONS_OPEN) {
+      db.recordEvent({ event: 'application.submit_blocked', discordId: session.discord_id, ok: false, detail: { reason: 'applications_closed' } });
       sendJson(response, 403, { error: 'Applications are not open for submission yet.' });
       return;
     }
@@ -982,6 +1083,7 @@ async function handleApplicationApi(request, response) {
       for (const id of PROPOSITION_IDS) if (!positions[id]) missing.push(`pos:${id}`);
       if (body.consent !== true) missing.push('consent');
       if (missing.length) {
+        db.recordEvent({ event: 'application.submit_rejected', discordId: session.discord_id, ok: false, detail: { missing } });
         sendJson(response, 422, { error: 'Complete every field and the acknowledgements before submitting.', missing });
         return;
       }
@@ -994,6 +1096,34 @@ async function handleApplicationApi(request, response) {
       bracket: elig.bracket || null,
       displayName, pitch, answers, positions, status,
     });
+
+    // Drafts autosave often, so log a light summary. Submissions log the full
+    // point-in-time snapshot — preserving exactly what each candidate submitted even
+    // if they edit later, and making every submission individually traceable.
+    if (status === 'submitted') {
+      db.recordEvent({
+        event: 'application.submit',
+        discordId: session.discord_id,
+        detail: {
+          bracket: elig.bracket || null,
+          ethWallet: elig.ethWallet || null,
+          submittedAt: saved.submitted_at || null,
+          snapshot: { displayName, pitch, answers, positions },
+        },
+      });
+    } else {
+      db.recordEvent({
+        event: 'application.save_draft',
+        discordId: session.discord_id,
+        detail: {
+          bracket: elig.bracket || null,
+          hasPitch: !!pitch,
+          answered: Object.values(answers).filter(Boolean).length,
+          positions: Object.keys(positions).length,
+        },
+      });
+    }
+
     sendJson(response, 200, { ok: true, application: publicApplication(saved) });
     return;
   }
