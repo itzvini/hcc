@@ -62,6 +62,11 @@ const SEL_TOTAL_SUPPLY        = '0x18160ddd'; // totalSupply()
 const SEL_TOKEN_BY_INDEX      = '0x4f6ccce7'; // tokenByIndex(uint256)
 const SEL_OWNER_OF            = '0x6352211e'; // ownerOf(uint256)
 const ETH_RPC_URL             = process.env.ETH_RPC_URL || 'https://eth.blockscout.com/api/eth-rpc';
+const ZK_RPC_URL              = process.env.ZK_RPC_URL || 'https://rpc.immutable.com'; // Immutable zkEVM (Creatures)
+// Read selectors for the authoritative per-wallet eligibility lookup (see getWalletHoldings).
+const SEL_BALANCE_OF          = '0x70a08231'; // balanceOf(address)
+const SEL_OWNER_TOKENS        = '0xbba7723e'; // ownerTokens(address) -> uint256[]
+const SEL_ESTATES_TO_PARCELS  = '0x3890889f'; // estatesToParcels(uint256,uint256) -> uint256
 const ZERO_ADDRESS            = '0x0000000000000000000000000000000000000000';
 
 const holderCache    = { data: null, fetchedAt: 0, inFlight: null };
@@ -112,10 +117,10 @@ async function fetchBlockscoutPages(baseUrl, onBody, extraParams = {}) {
   } while (pageParams);
 }
 
-// Minimal eth_call against ETH_RPC_URL. `data` is the ABI-encoded calldata; returns the
-// raw hex result (throws on transport/RPC error so the caller can degrade gracefully).
-async function ethCall(to, data) {
-  const res = await fetch(ETH_RPC_URL, {
+// Minimal eth_call against the given chain RPC. `data` is the ABI-encoded calldata;
+// returns the raw hex result (throws on transport/RPC/revert so callers can degrade).
+async function ethCall(rpcUrl, to, data) {
+  const res = await fetch(rpcUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to, data }, 'latest'] }),
@@ -132,13 +137,13 @@ const padUint = n => BigInt(n).toString(16).padStart(64, '0'); // uint256 arg �
 // Authoritative [{ estateId, owner }] for every live (non-burned) estate, read from the
 // contract: totalSupply() → tokenByIndex(i) → ownerOf(id). See the ESTATE_CONTRACT note.
 async function fetchLiveEstateOwners() {
-  const total = parseInt(await ethCall(ESTATE_CONTRACT, SEL_TOTAL_SUPPLY), 16);
+  const total = parseInt(await ethCall(ETH_RPC_URL, ESTATE_CONTRACT, SEL_TOTAL_SUPPLY), 16);
   if (!Number.isFinite(total) || total <= 0) return [];
   const idxs = Array.from({ length: total }, (_, i) => i);
   const estateIds = await Promise.all(idxs.map(async i =>
-    BigInt(await ethCall(ESTATE_CONTRACT, SEL_TOKEN_BY_INDEX + padUint(i))).toString()));
+    BigInt(await ethCall(ETH_RPC_URL, ESTATE_CONTRACT, SEL_TOKEN_BY_INDEX + padUint(i))).toString()));
   const owners = await Promise.all(estateIds.map(async id =>
-    ('0x' + (await ethCall(ESTATE_CONTRACT, SEL_OWNER_OF + padUint(id))).slice(-40)).toLowerCase()));
+    ('0x' + (await ethCall(ETH_RPC_URL, ESTATE_CONTRACT, SEL_OWNER_OF + padUint(id))).slice(-40)).toLowerCase()));
   return estateIds.map((estateId, i) => ({ estateId, owner: owners[i] }));
 }
 
@@ -272,17 +277,78 @@ function getHolderStats() {
   return holderCache.inFlight;
 }
 
-// Look up a single wallet's HCC holdings (Creature + LAND counts) from the cached
-// holder maps. Ensures the holder data has been fetched at least once first.
+// Per-wallet holdings cache — bounds RPC load when /api/me is hit repeatedly. Short TTL
+// so a fresh buy/sell shows up quickly.
+const walletHoldingsCache = new Map(); // lowercaseAddr -> { holdings, at }
+const WALLET_HOLDINGS_TTL_MS = 60 * 1000;
+
+// ERC-721 balanceOf for one address on the given chain RPC.
+async function erc721BalanceOf(rpcUrl, contract, address) {
+  const n = parseInt(await ethCall(rpcUrl, contract, SEL_BALANCE_OF + padUint(BigInt(address))), 16);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// LAND parcels locked in estates owned by `address`. Estate parcels live in the estate
+// contract, not the wallet, so they'd otherwise be invisible. ownerTokens(address) gives
+// the owned estate ids; each estate's parcel count is read by probing estatesToParcels
+// (id, i) until the array index reverts (out of bounds). Usually 0 — most wallets own no
+// estate, so this is a single empty call.
+async function estateLandOwnedBy(address) {
+  const raw = await ethCall(ETH_RPC_URL, ESTATE_CONTRACT, SEL_OWNER_TOKENS + padUint(BigInt(address)));
+  if (!raw || raw.length <= 2) return 0;
+  const hex = raw.slice(2);
+  const word = i => hex.slice(i * 64, i * 64 + 64);   // [0]=offset, [1]=length, [2..]=ids
+  const len = parseInt(word(1), 16) || 0;
+  let parcels = 0;
+  for (let k = 0; k < len; k++) {
+    const estateId = BigInt('0x' + word(2 + k)).toString();
+    for (let i = 0; i < 1000; i++) {
+      let pr;
+      try { pr = await ethCall(ETH_RPC_URL, ESTATE_CONTRACT, SEL_ESTATES_TO_PARCELS + padUint(BigInt(estateId)) + padUint(i)); }
+      catch { break; } // out-of-bounds index reverts → end of this estate's parcels
+      if (!pr || pr === '0x') break;
+      parcels++;
+    }
+  }
+  return parcels;
+}
+
+// A single wallet's HCC holdings (Creature + LAND, including estate-locked LAND), read
+// AUTHORITATIVELY from the contracts via balanceOf / ownerTokens — NOT the bulk /holders
+// snapshot, which can omit a legitimate holder (Blockscout indexing gaps) and wrongly
+// report 0. Short-cached per wallet to bound RPC; on a chain-read failure it falls back to
+// the snapshot, so a transient RPC outage degrades gracefully instead of erroring out.
 async function getWalletHoldings(address) {
-  if (!holderCounts.fetchedAt) await getHolderStats();
   const addr = (address || '').toLowerCase();
-  return {
-    creatureCount: holderCounts.creature.get(addr) || 0,
-    landCount: holderCounts.land.get(addr) || 0,
-    holdersAvailable: holderCounts.fetchedAt > 0,
-    holdersFetchedAt: holderCounts.fetchedAt ? new Date(holderCounts.fetchedAt).toISOString() : null,
-  };
+  if (!addr) return { creatureCount: 0, landCount: 0, holdersAvailable: false, holdersFetchedAt: null };
+
+  const cached = walletHoldingsCache.get(addr);
+  if (cached && (Date.now() - cached.at) < WALLET_HOLDINGS_TTL_MS) return cached.holdings;
+
+  try {
+    const [creatureCount, standaloneLand, estateParcels] = await Promise.all([
+      erc721BalanceOf(ZK_RPC_URL, CREATURE_CONTRACT, addr),
+      erc721BalanceOf(ETH_RPC_URL, LAND_CONTRACT, addr),
+      estateLandOwnedBy(addr),
+    ]);
+    const holdings = {
+      creatureCount,
+      landCount: standaloneLand + estateParcels,
+      holdersAvailable: true,
+      holdersFetchedAt: new Date().toISOString(),
+    };
+    walletHoldingsCache.set(addr, { holdings, at: Date.now() });
+    return holdings;
+  } catch (err) {
+    console.error(`Per-wallet holdings lookup failed for ${addr}, using holder snapshot:`, err.message);
+    if (!holderCounts.fetchedAt) { try { await getHolderStats(); } catch { /* snapshot also unavailable */ } }
+    return {
+      creatureCount: holderCounts.creature.get(addr) || 0,
+      landCount: holderCounts.land.get(addr) || 0,
+      holdersAvailable: holderCounts.fetchedAt > 0,
+      holdersFetchedAt: holderCounts.fetchedAt ? new Date(holderCounts.fetchedAt).toISOString() : null,
+    };
+  }
 }
 
 // Warm up cache in the background on startup
