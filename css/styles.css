@@ -1325,6 +1325,9 @@ footer { margin-top: 28px; }
   background: color-mix(in srgb, var(--hr-banana) 8%, rgba(20,19,23,.6));
   border: 1px solid rgba(255,249,95,.35);
   backdrop-filter: blur(8px);
+  /* backdrop-filter makes this a stacking context; without an explicit z-index the
+     later wallet bar (its own context) paints OVER this note's open ⓘ tooltip. */
+  position: relative; z-index: 5;
 }
 .trade-beta-note .trade-beta-chip { margin-top: 2px; }
 .trade-beta-note p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--hr-fg-1); }
@@ -1734,6 +1737,73 @@ a.trade-buy-btn { display: inline-flex; }
 }
 .trade-tip:hover .trade-tip-pop, .trade-tip.is-open .trade-tip-pop,
 .trade-tip-btn:focus-visible + .trade-tip-pop { opacity: 1; visibility: visible; }
+
+/* ---- Wallet safety primer (one-time, before first connect) + 🛡 pill ---- */
+.trade-safety { z-index: 1100; } /* above the token modal */
+.trade-safety-card {
+  position: relative; z-index: 1; width: min(520px, 100%);
+  max-height: 90vh; overflow-y: auto; overscroll-behavior: contain;
+  padding: 30px 28px 22px; text-align: center;
+  border-radius: var(--hr-radius-2xl); border: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(40,39,45,.97), rgba(16,15,19,.99));
+  box-shadow: var(--hr-shadow-3), 0 0 60px var(--hr-primary-25);
+  animation: apply-rise .45s cubic-bezier(.16,.84,.3,1) both;
+  scrollbar-width: thin; scrollbar-color: var(--hr-tuna) transparent;
+}
+.trade-safety-h {
+  font-family: var(--hr-sans); font-weight: 900; font-size: clamp(20px, 3vw, 25px);
+  color: var(--hr-fg-0); margin: 14px 0 6px; line-height: 1.15;
+}
+.trade-safety-p { font-size: 14px; color: var(--hr-fg-1); margin: 0 0 18px; }
+.trade-safety-rules { list-style: none; margin: 0 0 20px; padding: 0; display: flex; flex-direction: column; gap: 10px; text-align: left; }
+.trade-safety-rules li {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 12px 14px; border-radius: var(--hr-radius-md);
+  background: rgba(255,255,255,.035); border: 1px solid var(--hr-line);
+  opacity: 0; transform: translateY(10px);
+  animation: apply-rise .45s cubic-bezier(.2,.7,.2,1) forwards;
+  animation-delay: calc(.1s * var(--i) + .15s);
+}
+.trade-safety-ico {
+  flex: 0 0 auto; width: 34px; height: 34px; display: grid; place-items: center;
+  font-size: 17px; border-radius: 50%;
+  background: var(--hr-primary-25);
+}
+.trade-safety-rules b { display: block; font-family: var(--hr-sans); font-weight: 800; font-size: 14px; color: var(--hr-fg-0); margin-bottom: 2px; }
+.trade-safety-rules p { font-size: 12.5px; color: var(--hr-fg-2); margin: 0; line-height: 1.5; }
+.trade-safety-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.trade-safety-actions .apply-btn-ghost { margin-top: 0; flex: 1; min-width: 150px; }
+.trade-safety-ok { flex: 2; min-width: 200px; width: auto; margin-top: 0; }
+.trade-safety-foot { font-size: 11.5px; color: var(--hr-fg-3); margin: 14px 0 0; }
+
+/* Small persistent entry point beside the Buy/Sell/Transfer tabs */
+.trade-safety-pill {
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  margin-left: 6px; padding: 0 18px; border-radius: var(--hr-radius-pill);
+  background: linear-gradient(135deg, rgba(81,255,165,.16), rgba(133,97,255,.12));
+  border: 1px solid var(--hr-primary-25);
+  font-family: var(--hr-sans); font-weight: 800; font-size: 12.5px; color: var(--hr-primary);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+  transition: transform .18s cubic-bezier(.2,.7,.2,1), box-shadow .2s, border-color .2s, color .2s;
+}
+.trade-safety-pill svg { width: 14px; height: 15px; flex: 0 0 auto; }
+.trade-safety-pill:hover {
+  color: var(--hr-primary); border-color: var(--hr-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 0 18px var(--hr-primary-25), inset 0 1px 0 rgba(255,255,255,.12);
+}
+@media (prefers-reduced-motion: reduce) {
+  .trade-safety-pill, .trade-safety-pill:hover { transform: none; transition: none; }
+}
+
+@media (max-width: 620px) {
+  .trade-safety-card { padding: 24px 18px 18px; }
+  .trade-safety-pill span:last-child { display: none; } /* icon-only on small screens */
+}
+@media (prefers-reduced-motion: reduce) {
+  .trade-safety-card, .trade-safety-rules li { animation: none !important; }
+  .trade-safety-rules li { opacity: 1; transform: none; }
+}
 
 /* Wallet-bug notice (e.g. MetaMask 13.33+ phantom "insufficient IMX") */
 #trade-mmwarn-slot { display: contents; } /* no phantom flex-gap when empty */

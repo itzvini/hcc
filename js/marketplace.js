@@ -23,6 +23,8 @@ const SEL_BALANCE_OF    = '0x70a08231'; // balanceOf(address)
 const SEL_OWNER_OF      = '0x6352211e'; // ownerOf(uint256)
 const ZERO = '0x0000000000000000000000000000000000000000';
 const METAMASK_IMG = '/img/brands/metamask.svg';
+// Crisp shield-check (currentColor) — emoji shields render as flat glyphs on Windows.
+const SHIELD_SVG = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2.5l7.5 2.8v5.4c0 4.8-3.2 8.9-7.5 10.3-4.3-1.4-7.5-5.5-7.5-10.3V5.3L12 2.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8.6 12l2.4 2.4 4.4-4.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const IS_ADDR = /^0x[0-9a-f]{40}$/;
 // ETH on Immutable zkEVM is an ERC-20 (the price token); IMX is the NATIVE gas token.
 // A buyer needs BOTH, on Immutable zkEVM. The bridge deep-link opens Squid (which also
@@ -234,8 +236,50 @@ async function ensureNetwork() {
   chainId = await eth().request({ method: 'eth_chainId' });
 }
 
+// --- Wallet safety primer ---
+// Shown ONCE, at the exact moment it matters: the first Connect click. The community
+// is heavily targeted (Discord impersonation, phishing links, seed-phrase theft), so
+// the primer is unskippable-but-once: four rules, then connect. The full content
+// lives in Guides → Stay safe; the 🛡 pill by the tabs links there forever after.
+const SAFETY_ACK = 'hcc-safety-ack';
+let safetyOpen = false;
+function safetyAcked() {
+  try { return localStorage.getItem(SAFETY_ACK) === '1'; } catch { return true; }
+}
+function safetyHtml() {
+  if (!safetyOpen) return '';
+  const RULES = [['🤫', 1], ['💬', 2], ['🧐', 3], ['🔗', 4]].map(([ico, i], idx) => `
+    <li style="--i:${idx}">
+      <span class="trade-safety-ico" aria-hidden="true">${ico}</span>
+      <div><b>${esc(t(`trade.safety.r${i}h`))}</b><p>${esc(t(`trade.safety.r${i}p`))}</p></div>
+    </li>`).join('');
+  return `
+    <div class="trade-modal trade-safety" role="dialog" aria-modal="true" aria-label="${esc(t('trade.safety.aria'))}">
+      <div class="trade-modal-backdrop" data-act="safety-close"></div>
+      <div class="trade-safety-card">
+        <span class="apply-pill">${esc(t('trade.safety.badge'))}</span>
+        <h3 class="trade-safety-h">${esc(t('trade.safety.h'))}</h3>
+        <p class="trade-safety-p">${esc(t('trade.safety.p'))}</p>
+        <ul class="trade-safety-rules">${RULES}</ul>
+        <div class="trade-safety-actions">
+          <button class="apply-btn-ghost" data-act="safety-guide" type="button">${esc(t('trade.safety.guide'))}</button>
+          <button class="trade-send trade-safety-ok" data-act="safety-ack" type="button">${esc(t('trade.safety.ok'))}</button>
+        </div>
+        <p class="trade-safety-foot">${esc(t('trade.safety.foot'))}</p>
+      </div>
+    </div>`;
+}
+function openSafetyGuide() {
+  safetyOpen = false;
+  render();
+  // Static elements wired by app.js — programmatic clicks reuse its tab plumbing.
+  document.getElementById('tab-guides')?.click();
+  document.querySelector('[data-subtab="safety"]')?.click();
+}
+
 async function connect() {
   if (!eth() || busy) return;
+  if (!safetyAcked()) { safetyOpen = true; render(); return; }
   busy = true; render();
   try {
     const accounts = await eth().request({ method: 'eth_requestAccounts' });
@@ -1303,6 +1347,8 @@ function tradeTabsHtml() {
     ${TABS.map(([id, key]) => `
       <button type="button" role="tab" class="seg-btn ${tradeTab === id ? 'is-active' : ''}"
         aria-selected="${tradeTab === id}" data-act="trade-tab" data-tab="${id}">${esc(t(key))}</button>`).join('')}
+    <button type="button" class="trade-safety-pill" data-act="safety-guide" title="${esc(t('trade.safety.pill.title'))}">
+      ${SHIELD_SVG}<span>${esc(t('trade.safety.pill'))}</span></button>
   </div>`;
 }
 
@@ -1536,7 +1582,7 @@ function render() {
   const el = root();
   if (!el) return;
   el.setAttribute('aria-busy', 'false');
-  el.innerHTML = `${flashBanner()}${walletBarHtml()}<div id="trade-mmwarn-slot">${walletNoticeHtml()}</div><div id="trade-bridgebar-slot">${bridgeBannerHtml()}</div>${tradeTabsHtml()}${viewHtml()}${modalHtml()}`;
+  el.innerHTML = `${flashBanner()}${walletBarHtml()}<div id="trade-mmwarn-slot">${walletNoticeHtml()}</div><div id="trade-bridgebar-slot">${bridgeBannerHtml()}</div>${tradeTabsHtml()}${viewHtml()}${modalHtml()}${safetyHtml()}`;
   ensureDelegation();
   if (account && onZk()) {
     refreshBalance();
@@ -1573,6 +1619,15 @@ function onClick(e) {
     case 'mmwarn-dismiss':
       try { localStorage.setItem('hcc-mmwarn-' + mmBuggyVersion, '1'); } catch { /* fine */ }
       return patchWalletNotice();
+    case 'safety-ack':
+      try { localStorage.setItem(SAFETY_ACK, '1'); } catch { /* fine */ }
+      safetyOpen = false;
+      render();
+      return connect();
+    case 'safety-close':
+      safetyOpen = false;
+      return render();
+    case 'safety-guide': return openSafetyGuide();
     case 'connect':    return connect();
     case 'disconnect': account = null; resetSellerState(); return render();
     case 'switch':     return switchNetwork(target);
@@ -1617,7 +1672,11 @@ function ensureDelegation() {
 let escWired = false;
 function wireEsc() {
   if (escWired) return; escWired = true;
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && modalToken) closeModal(); });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (safetyOpen) { safetyOpen = false; render(); return; }
+    if (modalToken) closeModal();
+  });
 }
 
 function wireProviderEvents() {
