@@ -1649,6 +1649,8 @@ a.trade-buy-btn { display: inline-flex; }
 }
 .trade-myoffer-chip button:hover { background: rgba(255,91,149,.35); }
 .trade-myoffer-chip button[disabled] { opacity: .5; cursor: not-allowed; }
+.trade-myoffer-chip.is-unfunded { border-color: rgba(255,249,95,.45); }
+.trade-myoffer-warn { color: var(--hr-banana); cursor: help; }
 
 /* Instant-sell card (Sell tab) */
 .trade-instant {

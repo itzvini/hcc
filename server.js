@@ -877,6 +877,39 @@ async function fetchCreatureListingsPage(cursor) {
   return { items, nextCursor: body.page?.next_cursor ?? null };
 }
 
+// Offers are gasless signatures — the bidder's ETH stays in THEIR wallet until fill,
+// so an "ACTIVE" bid can be unfillable: balance spent or Seaport allowance revoked
+// after signing. The orderbook doesn't re-validate funding, which leaves phantom
+// offers (often above floor — impossible to fill, guaranteed revert + confusion).
+// We verify funding on-chain before showing any offer as acceptable.
+const SEAPORT_ZK    = '0x6c12ad6f0bd274191075eb2e78d7da5ba6453424'; // Immutable Seaport (the bid's ERC-20 spender)
+const SEL_ALLOWANCE = '0xdd62ed3e'; // allowance(address,address)
+
+async function offerIsFunded(o) {
+  try {
+    const owner = padUint(BigInt(o.from));
+    const [balRaw, alwRaw] = await Promise.all([
+      ethCall(ZK_RPC_URL, IMX_ETH_TOKEN, SEL_BALANCE_OF + owner),
+      ethCall(ZK_RPC_URL, IMX_ETH_TOKEN, SEL_ALLOWANCE + owner + padUint(BigInt(SEAPORT_ZK))),
+    ]);
+    const need = BigInt(o.grossWei || '0');
+    return BigInt(balRaw || '0x0') >= need && BigInt(alwRaw || '0x0') >= need;
+  } catch (err) {
+    console.error('Offer funding check failed:', err.message);
+    return true; // fail-open: an RPC hiccup must not blank the offers UI
+  }
+}
+async function annotateOffersFunded(offers) {
+  const flags = await Promise.all((offers || []).map(offerIsFunded));
+  return (offers || []).map((o, i) => ({ ...o, funded: flags[i] }));
+}
+// Browse/accept surfaces: hide unfunded entirely (they cannot be filled right now).
+async function fundedOffersOnly(offers) {
+  return (await annotateOffersFunded(offers))
+    .filter(o => o.funded)
+    .map(({ grossWei, funded, ...rest }) => rest);
+}
+
 // Parse a user-supplied decimal ETH string into wei, exactly (no floats).
 // Returns a BigInt or null when the input isn't a sane positive amount.
 function parseEthToWei(s) {
@@ -1167,19 +1200,22 @@ async function handleMarketplaceApi(request, response, url) {
   // Read endpoints (public orderbook data).
   if (pathname === '/api/market/creatures/offers/collection') {
     const data = await mktOrderbook.listCollectionOffers({ nftContract: CREATURE_CONTRACT, ethContract: IMX_ETH_TOKEN });
-    sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=15' });
+    sendJson(response, 200, { offers: await fundedOffersOnly(data.offers) }, { 'Cache-Control': 'public, max-age=15' });
     return;
   }
   const offersTokenMatch = pathname.match(/^\/api\/market\/creatures\/offers\/token\/(\d{1,80})$/);
   if (offersTokenMatch) {
     const data = await mktOrderbook.listTokenOffers({ nftContract: CREATURE_CONTRACT, ethContract: IMX_ETH_TOKEN, tokenId: offersTokenMatch[1] });
-    sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=15' });
+    sendJson(response, 200, { offers: await fundedOffersOnly(data.offers) }, { 'Cache-Control': 'public, max-age=15' });
     return;
   }
   const offersMineMatch = pathname.match(/^\/api\/market\/creatures\/offers\/mine\/(0x[0-9a-f]{40})$/);
   if (offersMineMatch) {
     const data = await mktOrderbook.listMyOffers({ nftContract: CREATURE_CONTRACT, ethContract: IMX_ETH_TOKEN, accountAddress: offersMineMatch[1] });
-    sendJson(response, 200, data, { 'Cache-Control': 'no-store' });
+    // The user's OWN offers are annotated, not hidden — an unfunded one needs their
+    // attention (top up or cancel), not silence.
+    const annotated = await annotateOffersFunded(data.offers);
+    sendJson(response, 200, { offers: annotated.map(({ grossWei, ...rest }) => rest) }, { 'Cache-Control': 'no-store' });
     return;
   }
 
@@ -1320,12 +1356,15 @@ async function handleMarketplaceApi(request, response, url) {
     const offerId = String(body.offerId || '').toLowerCase();
     const taker = String(body.takerAddress || '').toLowerCase();
     const tokenId = body.tokenId != null ? String(body.tokenId) : null;
+    // Multi-unit collection bids (buy.amount > 1) are filled one Creature at a time.
+    const amountToFill = body.amountToFill != null ? String(body.amountToFill) : null;
     if (!ORDER_ID.test(offerId)) { sendJson(response, 400, { error: 'bad_listing' }); return; }
     if (!HEX_ADDRESS.test(taker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
     if (tokenId != null && !/^\d{1,80}$/.test(tokenId)) { sendJson(response, 400, { error: 'bad_token' }); return; }
+    if (amountToFill != null && !/^[1-9]\d{0,2}$/.test(amountToFill)) { sendJson(response, 400, { error: 'bad_request' }); return; }
 
     try {
-      const prepared = await mktOrderbook.prepareFulfill(offerId, taker, tokenId);
+      const prepared = await mktOrderbook.prepareFulfill(offerId, taker, tokenId, amountToFill);
       sendJson(response, 200, prepared);
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });

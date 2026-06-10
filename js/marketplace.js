@@ -80,6 +80,7 @@ let owned = null;          // null = not loaded; [] = loaded, none
 let mine = null;           // null = not loaded; [] = loaded, none
 let sellerLoading = false;
 let sellSel = null;        // tokenId picked for sale
+let sellPickOffers = null; // specific offers on the picked token (instant-sell target)
 let sellState = null;      // {phase, msg?, hash?}: prepare|approve|approveWait|sign|create|done|error
 let cancelBusy = null;     // listingId currently being cancelled
 const SELL_BUSY_PHASES = new Set(['prepare', 'approve', 'approveWait', 'sign', 'create']);
@@ -911,7 +912,8 @@ function collStripHtml() {
     ? `<div class="trade-myoffers">
         <span class="trade-myoffers-h">${esc(t('trade.coll.mine.h'))}</span>
         ${myOffers.map(o => `
-          <span class="trade-myoffer-chip">
+          <span class="trade-myoffer-chip ${o.funded === false ? 'is-unfunded' : ''}">
+            ${o.funded === false ? `<span class="trade-myoffer-warn" title="${esc(t('trade.coll.unfunded'))}" aria-label="${esc(t('trade.coll.unfunded'))}">⚠</span>` : ''}
             ${esc(o.collection ? t('trade.coll.chipAny') : `#…${String(o.tokenId).slice(-4)}`)} · ${esc(fmtEthFiat(o.priceEth))}
             <button data-act="cancel-offer" data-offer="${esc(o.offerId)}" type="button" aria-label="${esc(t('trade.coll.cancel'))}" ${acceptBusyId ? 'disabled' : ''}>×</button>
           </span>`).join('')}
@@ -939,22 +941,46 @@ function patchCollStrip() {
   if (el) el.outerHTML = collStripHtml();
 }
 
-// Instant-sell card on the Sell tab: sell the picked Creature into the top standing offer.
+// Instant-sell card on the Sell tab. Targets the best SPECIFIC offer on the picked
+// Creature — collection-bid accepts are broken in the current Immutable SDK (criteria
+// resolution bug; reported), so the collection top is shown for context only.
+async function fetchSellPickOffers(tokenId) {
+  try {
+    const res = await fetch(`/api/market/creatures/offers/token/${encodeURIComponent(tokenId)}`, { headers: { Accept: 'application/json' } });
+    const offers = res.ok ? ((await res.json()).offers || []) : [];
+    if (String(sellSel) === String(tokenId)) { sellPickOffers = offers; patchSellView(); }
+  } catch { if (String(sellSel) === String(tokenId)) { sellPickOffers = []; patchSellView(); } }
+}
+
 function instantSellHtml() {
-  const top = collOffers?.[0];
-  if (!top) return '';
+  // Best payout wins: top direct offer on the picked Creature vs top collection-wide
+  // offer (per-Creature; multi-unit bids fill one at a time).
+  const spec = sellSel != null && Array.isArray(sellPickOffers) && sellPickOffers.length ? sellPickOffers[0] : null;
+  const coll = collOffers?.[0] || null;
+  const best = spec && coll ? (spec.netEth >= coll.netEth ? spec : coll) : (spec || coll);
+  if (!best) return '';
   const busy = acceptState && ACCEPT_BUSY.has(acceptState.phase);
+  let action;
+  if (sellSel != null && sellPickOffers === null) {
+    action = `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.offers.loading'))}</div>`;
+  } else if (sellSel != null) {
+    action = `<button class="trade-send trade-instant-btn" data-act="instant-sell" data-offer="${esc(best.offerId)}" type="button" ${busy ? 'disabled' : ''}>
+      ${esc(t('trade.instant.btn').replace('{x}', fmtEthFiat(best.netEth)))}</button>`;
+  } else {
+    action = `<button class="trade-send trade-instant-btn" type="button" disabled>
+        ${esc(t('trade.instant.btn').replace('{x}', fmtEthFiat(best.netEth)))}</button>
+      <p class="trade-beta-micro">${esc(t('trade.instant.pick'))}</p>`;
+  }
   return `
     <div class="trade-instant">
       <div class="trade-instant-head">
         <span class="trade-instant-ico" aria-hidden="true">⚡</span>
         <div>
           <b>${esc(t('trade.instant.h'))} </b>${tipHtml('trade.instant.tip')}
-          <p>${esc(t('trade.instant.line').replace('{x}', fmtEthFiat(top.priceEth)).replace('{y}', fmtEthFiat(top.netEth)))}</p>
+          <p>${esc(t(best === spec ? 'trade.instant.lineSpecific' : 'trade.instant.line').replace('{x}', fmtEthFiat(best.priceEth)).replace('{y}', fmtEthFiat(best.netEth)))}</p>
         </div>
       </div>
-      <button class="trade-send trade-instant-btn" data-act="instant-sell" data-offer="${esc(top.offerId)}" type="button" ${!sellSel || busy ? 'disabled' : ''}>
-        ${esc(t('trade.instant.btn').replace('{x}', fmtEthFiat(top.netEth)))}</button>
+      ${action}
       ${offerCtx !== 'modal' ? acceptStatusHtml() : ''}
     </div>`;
 }
@@ -964,6 +990,19 @@ function offerServerError(code) {
     insufficient: 'trade.err.offerFunds', bad_price: 'trade.err.badPrice',
     rate_limited: 'trade.err.rate', own_listing: 'trade.err.ownOffer',
     not_found: 'trade.err.offerGone', not_active: 'trade.err.offerGone',
+  };
+  return t(KEY[code] || 'trade.err.unavailable');
+}
+// Accept-side mapping: here 'insufficient' means the BIDDER's offer is no longer
+// funded — very different from the make-offer context.
+function acceptServerError(code) {
+  const KEY = {
+    // 'taker_float' fires (mislabeled by seaport-js) when accepting COLLECTION bids —
+    // an SDK criteria-resolution bug, independent of balances. Specific offers work.
+    taker_float: 'trade.err.collAccept',
+    insufficient: 'trade.err.offerUnfunded', rate_limited: 'trade.err.rate',
+    own_listing: 'trade.err.ownOffer', not_found: 'trade.err.offerGone',
+    not_active: 'trade.err.offerGone', bad_token: 'trade.err.notOwner',
   };
   return t(KEY[code] || 'trade.err.unavailable');
 }
@@ -1023,14 +1062,31 @@ async function handleMakeOffer(tokenId, priceRaw, ctx) {
 async function handleAcceptOffer(offerId, tokenId) {
   if (acceptBusyId) return;
   acceptBusyId = offerId;
+  const offer = [...(collOffers || []), ...(tokenOffers || []), ...(myOffers || []), ...(sellPickOffers || [])].find(o => o.offerId === offerId);
+  // Collection bids need to know WHICH Creature is being sold into them, and
+  // multi-unit bids (buy N creatures) are filled one at a time.
+  const fillToken = tokenId ?? (offer?.collection ? sellSel : null);
+  const amountToFill = offer && offer.units > 1 ? '1' : null;
   try {
     setAccept('prepare');
     const res = await fetch('/api/market/creatures/offer/accept/prepare', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ offerId, takerAddress: account, ...(tokenId != null ? { tokenId } : {}) }),
+      body: JSON.stringify({
+        offerId, takerAddress: account,
+        ...(fillToken != null ? { tokenId: fillToken } : {}),
+        ...(amountToFill != null ? { amountToFill } : {}),
+      }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) { setAccept('error', { msg: offerServerError(data.error) }); return; }
+    if (!res.ok) {
+      setAccept('error', { msg: acceptServerError(data.error) });
+      // A stale (unfunded/filled/cancelled/changed) offer should vanish from the UI promptly.
+      if (['insufficient', 'not_found', 'not_active', 'taker_float'].includes(data.error)) {
+        loadCollOffers();
+        if (modalToken) loadTokenOffers(modalToken);
+      }
+      return;
+    }
 
     for (const tx of (data.transactions || [])) {
       const isApproval = tx.purpose === 'APPROVAL';
@@ -1505,10 +1561,12 @@ function onClick(e) {
     case 'sell-pick':
       sellSel = String(sellSel) === String(target.dataset.token) ? null : target.dataset.token;
       sellState = null;
+      sellPickOffers = null;
+      if (sellSel != null) fetchSellPickOffers(sellSel);
       return patchSellView();
     case 'cancel-listing': return handleCancelListing(target.dataset.listing);
     case 'accept-offer':   return handleAcceptOffer(target.dataset.offer);
-    case 'instant-sell':   return sellSel != null && handleAcceptOffer(target.dataset.offer, sellSel);
+    case 'instant-sell':   return handleAcceptOffer(target.dataset.offer, sellSel);
     case 'cancel-offer':   return handleCancelOffer(target.dataset.offer);
     case 'bridge-now':     return handleBridgeNow();
     case 'bridge-dismiss': return dismissBridge();
@@ -1545,6 +1603,7 @@ function onChange(e) {
 function resetSellerState() {
   owned = null; mine = null; sellSel = null; sellState = null; cancelBusy = null;
   myOffers = null; offerState = null; offerCtx = null; acceptState = null; acceptBusyId = null;
+  sellPickOffers = null;
 }
 function ensureDelegation() {
   const el = root();
