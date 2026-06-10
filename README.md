@@ -27,16 +27,44 @@ The **Market** tab shows floor prices and weekly sale-price history for Creature
 All data is fetched server-side and cached for 30 minutes (`/api/market`), so no
 database is needed — history is recomputed from on-chain/marketplace sales each refresh.
 
-## Apply & Vote (Discord login + eligibility)
+## Apply & Vote (the First Election)
 
-The **Apply & Vote** tab lets a holder sign in with Discord and see whether they
-can vote and which seat bracket they can run for.
+The **Apply & Vote** tab runs the Council's first election end-to-end: a holder signs
+in with Discord, sees whether they can vote and which seat bracket they can run for,
+self-nominates if eligible, and uses the Voting Advice Application to find their
+best-matching candidates.
 
-Flow: `/api/auth/discord/login` → Discord OAuth2 (scope `identify`) →
+**Sign-in & eligibility.** `/api/auth/discord/login` → Discord OAuth2 (scope `identify`) →
 `/api/auth/discord/callback` → look up the Discord account's linked ETH wallet via
 the Highrise web API (`/discord/users/<id>/wallet`) → match that wallet against the
-current Creature + LAND holder snapshot → compute the bracket (1-4 / 4–14 / 15+) → create
+current Creature + LAND holder snapshot → compute the running bracket → create
 a session. `GET /api/me` returns the logged-in user's eligibility for the front-end.
+
+Brackets gate *running*, not voting — every eligible holder votes on all four races.
+They're defined in [lib/eligibility.js](lib/eligibility.js):
+
+- **1–4 assets** → 2 seats
+- **5–14 assets** → 1 seat
+- **15+ assets** → 1 seat
+
+That's 4 elected seats; 3 more are appointed for continuity.
+
+**Self-nomination.** `POST /api/application` saves a candidate's draft and submission
+(short pitch, questionnaire answers, and a stance per VAA position). `POST
+/api/application/derive` optionally drafts those stances from the candidate's own
+answers with an AI assistant (OpenAI, strict JSON schema — see
+[lib/derive-positions.js](lib/derive-positions.js)); the candidate reviews and edits
+every line before submitting. Final submission is gated by `APPLICATIONS_OPEN`.
+
+**Election board.** `GET /api/election` returns the public race snapshot — seats and
+candidate counts per bracket — that powers the status board. No auth or wallet needed;
+it's the same picture every voter sees.
+
+**Voting Advice Application.** `GET /api/vote` returns the propositions; `POST /api/vote`
+takes the voter's stances and ranks candidates by affinity. Matching runs **entirely
+server-side** so candidate positions never ship to the browser, and the voter's answers
+are never stored or logged. Candidate names and free-text answers stay hidden during the
+candidacy phase and are revealed once `VOTING_OPEN` is set.
 
 Required env vars (see `.env`):
 
@@ -46,6 +74,16 @@ Required env vars (see `.env`):
 - `DATABASE_URL` — Postgres connection string. Railway injects this when a Postgres
   plugin is attached. Without it, the app uses an in-memory store (fine for local dev,
   data lost on restart).
+- `APPLICATIONS_OPEN` — gates candidacy submission. Until it's truthy (`1`/`true`/`yes`/`on`),
+  the eligibility check and draft-saving stay live but final submission is blocked.
+- `VOTING_OPEN` — distinct from `APPLICATIONS_OPEN`. Until it's set, candidates are an
+  anonymous preview (pitch + matchable positions only); once set, names and full answers
+  go public and the matcher returns live results.
+- `OPENAI_API_KEY` — enables AI-assisted position drafting on the self-nomination form.
+  Optional; without it the form still works, candidates just fill in stances themselves.
+  `OPENAI_MODEL` overrides the default (`gpt-5.4-mini`).
+- `ETH_RPC_URL` — optional override for the Ethereum RPC used in per-wallet holdings
+  lookups (defaults to a public Blockscout endpoint).
 
 In the Discord developer portal, register these **OAuth2 → Redirects**:
 

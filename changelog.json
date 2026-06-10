@@ -1,6 +1,44 @@
 {
   "club": [
     {
+      "date": "June 9, 2026",
+      "title": "The First Election begins",
+      "body": "We've hit the First Election milestone on the roadmap. Sign in to check your eligibility, then — if you've held an HCC NFT continuously for the last 3 months — self-nominate for a seat in your holdings bracket: 1–4, 5–14, or 15+ assets. Through the candidacy phase candidate names stay anonymous and you can already explore your matches; when voting opens, every full profile goes public and votes are cast.",
+      "tag": "council",
+      "i18n": {
+        "pt": {
+          "date": "9 de jun. de 2026",
+          "title": "A Primeira Eleição começa",
+          "body": "Chegamos ao marco da Primeira Eleição no roadmap. Entre para verificar sua elegibilidade e então — se você manteve um NFT do HCC continuamente pelos últimos 3 meses — candidate-se a uma cadeira na sua faixa de holdings: 1–4, 5–14 ou 15+ ativos. Durante a fase de candidatura os nomes dos candidatos ficam anônimos e você já pode explorar suas combinações; quando a votação abrir, cada perfil completo se torna público e os votos são registrados."
+        },
+        "es": {
+          "date": "9 jun. 2026",
+          "title": "Comienza la Primera Elección",
+          "body": "Hemos llegado al hito de la Primera Elección en el roadmap. Inicia sesión para comprobar tu elegibilidad y luego — si has mantenido un NFT de HCC de forma continua durante los últimos 3 meses — postúlate a un asiento en tu tramo de holdings: 1–4, 5–14 o 15+ activos. Durante la fase de candidatura los nombres de los candidatos permanecen anónimos y ya puedes explorar tus coincidencias; cuando se abra la votación, cada perfil completo se hace público y se emiten los votos."
+        },
+        "fr": {
+          "date": "9 juin 2026",
+          "title": "La Première Élection commence",
+          "body": "Nous avons atteint le jalon de la Première Élection sur le roadmap. Connecte-toi pour vérifier ton éligibilité, puis — si tu détiens un NFT HCC en continu depuis les 3 derniers mois — présente ta candidature à un siège dans ta tranche d'avoirs : 1–4, 5–14 ou 15+ actifs. Pendant la phase de candidature, les noms des candidats restent anonymes et tu peux déjà explorer tes correspondances ; quand le vote s'ouvre, chaque profil complet devient public et les votes sont exprimés."
+        },
+        "de": {
+          "date": "9. Juni 2026",
+          "title": "Die erste Wahl beginnt",
+          "body": "Wir haben den Meilenstein der ersten Wahl auf der Roadmap erreicht. Melde dich an, um deine Berechtigung zu prüfen, und kandidiere dann — wenn du in den letzten 3 Monaten durchgehend ein HCC-NFT gehalten hast — für einen Sitz in deiner Bestandsstufe: 1–4, 5–14 oder 15+ Assets. Während der Kandidaturphase bleiben die Namen der Kandidaten anonym und du kannst deine Übereinstimmungen schon erkunden; sobald die Abstimmung öffnet, wird jedes vollständige Profil öffentlich und die Stimmen werden abgegeben."
+        },
+        "ru": {
+          "date": "9 июня 2026",
+          "title": "Начинаются первые выборы",
+          "body": "Мы достигли этапа первых выборов на роадмапе. Войдите, чтобы проверить право участия, и затем — если вы непрерывно держали NFT HCC последние 3 месяца — выдвиньте свою кандидатуру на место в своей категории по количеству активов: 1–4, 5–14 или 15+ активов. На этапе кандидатур имена кандидатов остаются анонимными, и вы уже можете изучить свои совпадения; когда откроется голосование, каждый полный профиль станет публичным, и голоса будут поданы."
+        },
+        "tr": {
+          "date": "9 Haziran 2026",
+          "title": "İlk Seçim başlıyor",
+          "body": "Yol haritasında İlk Seçim kilometre taşına ulaştık. Uygunluğunu kontrol etmek için giriş yap ve ardından — son 3 ay boyunca kesintisiz bir HCC NFT'si tuttuysan — varlık kademende bir koltuk için kendi adaylığını koy: 1–4, 5–14 veya 15+ varlık. Adaylık aşamasında aday isimleri anonim kalır ve eşleşmelerini şimdiden inceleyebilirsin; oylama açıldığında her tam profil herkese açık olur ve oylar kullanılır."
+        }
+      }
+    },
+    {
       "date": "June 4, 2026",
       "title": "Player Council — model update",
       "body": "An update to the Council model, open for feedback: voting now requires holding an HCC NFT continuously for the last 3 months; the 4 elected seats are split into 3 brackets by holdings (2 seats for 1 NFT, 1 for 2–4, 1 for 5+) so every holder size has a path to run; it stays one vote per seat; and a Voting Advice Application will help match voters to candidates.",
@@ -192,6 +230,120 @@
     }
   ],
   "site": [
+    {
+      "date": "June 9, 2026",
+      "title": "Run for a seat — self-nomination is live",
+      "body": "The Apply & Vote tab now lets eligible holders run for the Council. Sign in with Discord, answer a short questionnaire, and an AI assistant drafts your stance on each position from your own words — you review and edit every line, and nothing's saved until you submit.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "9 de jun. de 2026",
+          "title": "Candidate-se a uma cadeira — autonomeação no ar",
+          "body": "A aba Apply & Vote agora permite que holders elegíveis concorram ao Conselho. Entre com o Discord, responda a um breve questionário e um assistente de IA esboça sua posição em cada tema a partir das suas próprias palavras — você revisa e edita cada linha, e nada é salvo até você enviar."
+        },
+        "es": {
+          "date": "9 jun. 2026",
+          "title": "Postúlate a un asiento — la autocandidatura ya está activa",
+          "body": "La pestaña Apply & Vote ahora permite que los holders elegibles se postulen al Consejo. Inicia sesión con Discord, responde un breve cuestionario y un asistente de IA redacta tu postura en cada tema a partir de tus propias palabras — tú revisas y editas cada línea, y no se guarda nada hasta que envías."
+        },
+        "fr": {
+          "date": "9 juin 2026",
+          "title": "Présente-toi à un siège — la candidature spontanée est en ligne",
+          "body": "L'onglet Apply & Vote permet désormais aux holders éligibles de se présenter au Conseil. Connecte-toi avec Discord, réponds à un court questionnaire et un assistant IA rédige ta position sur chaque sujet à partir de tes propres mots — tu relis et modifies chaque ligne, et rien n'est enregistré tant que tu n'as pas envoyé."
+        },
+        "de": {
+          "date": "9. Juni 2026",
+          "title": "Für einen Sitz kandidieren — Selbstnominierung ist live",
+          "body": "Im Apply-&-Vote-Tab können berechtigte Holder jetzt für den Rat kandidieren. Melde dich mit Discord an, beantworte einen kurzen Fragebogen, und ein KI-Assistent entwirft deine Haltung zu jedem Thema aus deinen eigenen Worten — du prüfst und bearbeitest jede Zeile, und nichts wird gespeichert, bevor du absendest."
+        },
+        "ru": {
+          "date": "9 июня 2026",
+          "title": "Баллотируйтесь на место — самовыдвижение доступно",
+          "body": "Вкладка Apply & Vote теперь позволяет соответствующим холдерам баллотироваться в Совет. Войдите через Discord, ответьте на короткую анкету, и ИИ-помощник набросает вашу позицию по каждому вопросу на основе ваших собственных слов — вы проверяете и редактируете каждую строку, и ничего не сохраняется, пока вы не отправите."
+        },
+        "tr": {
+          "date": "9 Haziran 2026",
+          "title": "Bir koltuğa aday ol — kendi adaylığını koyma yayında",
+          "body": "Apply & Vote sekmesi artık uygun holderların Konsey'e aday olmasına izin veriyor. Discord ile giriş yap, kısa bir anketi yanıtla ve bir yapay zekâ asistanı her konudaki duruşunu kendi sözlerinden taslak haline getirsin — her satırı sen gözden geçirip düzenlersin ve sen gönderene kadar hiçbir şey kaydedilmez."
+        }
+      }
+    },
+    {
+      "date": "June 9, 2026",
+      "title": "Election status board",
+      "body": "A live board on the Apply & Vote tab shows where the election stands: the seats up for grabs in each holdings bracket (1–4, 5–14, 15+), how many candidates have stepped up, and which races are contested. It refreshes as new candidacies come in.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "9 de jun. de 2026",
+          "title": "Painel de status da eleição",
+          "body": "Um painel ao vivo na aba Apply & Vote mostra como está a eleição: as cadeiras em disputa em cada faixa de holdings (1–4, 5–14, 15+), quantos candidatos já se inscreveram e quais disputas estão concorridas. Ele se atualiza conforme novas candidaturas chegam."
+        },
+        "es": {
+          "date": "9 jun. 2026",
+          "title": "Panel de estado de la elección",
+          "body": "Un panel en vivo en la pestaña Apply & Vote muestra cómo va la elección: los asientos en juego en cada tramo de holdings (1–4, 5–14, 15+), cuántos candidatos se han presentado y qué contiendas están disputadas. Se actualiza a medida que llegan nuevas candidaturas."
+        },
+        "fr": {
+          "date": "9 juin 2026",
+          "title": "Tableau de bord de l'élection",
+          "body": "Un tableau en direct sur l'onglet Apply & Vote montre où en est l'élection : les sièges en jeu dans chaque tranche d'avoirs (1–4, 5–14, 15+), combien de candidats se sont présentés et quelles courses sont disputées. Il se met à jour au fur et à mesure des nouvelles candidatures."
+        },
+        "de": {
+          "date": "9. Juni 2026",
+          "title": "Wahl-Statusboard",
+          "body": "Ein Live-Board im Apply-&-Vote-Tab zeigt den Stand der Wahl: die zu vergebenden Sitze in jeder Bestandsstufe (1–4, 5–14, 15+), wie viele Kandidaten angetreten sind und welche Rennen umkämpft sind. Es aktualisiert sich, sobald neue Kandidaturen eingehen."
+        },
+        "ru": {
+          "date": "9 июня 2026",
+          "title": "Табло статуса выборов",
+          "body": "Живое табло на вкладке Apply & Vote показывает, как идут выборы: места, разыгрываемые в каждой категории по активам (1–4, 5–14, 15+), сколько кандидатов выдвинулось и в каких гонках есть конкуренция. Оно обновляется по мере поступления новых кандидатур."
+        },
+        "tr": {
+          "date": "9 Haziran 2026",
+          "title": "Seçim durum panosu",
+          "body": "Apply & Vote sekmesindeki canlı bir pano seçimin nerede olduğunu gösterir: her varlık kademesinde (1–4, 5–14, 15+) yarışılan koltuklar, kaç adayın öne çıktığı ve hangi yarışların çekişmeli olduğu. Yeni adaylıklar geldikçe güncellenir."
+        }
+      }
+    },
+    {
+      "date": "June 9, 2026",
+      "title": "Voting Advice Application — find your match",
+      "body": "Set where you stand on each statement and we'll rank the candidates by how closely they line up with you. Your answers never leave the matcher — they're used only to work out your match, never stored, logged, or linked to you. During the candidacy phase candidates stay anonymous, so you compare on positions alone until names are revealed.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "9 de jun. de 2026",
+          "title": "Voting Advice Application — encontre seu match",
+          "body": "Defina onde você se posiciona em cada afirmação e nós classificamos os candidatos pelo quanto eles combinam com você. Suas respostas nunca saem do matcher — são usadas só para calcular seu match, nunca armazenadas, registradas ou vinculadas a você. Durante a fase de candidatura os candidatos ficam anônimos, então você compara apenas pelas posições até os nomes serem revelados."
+        },
+        "es": {
+          "date": "9 jun. 2026",
+          "title": "Voting Advice Application — encuentra tu match",
+          "body": "Indica tu postura en cada afirmación y clasificaremos a los candidatos según cuánto coinciden contigo. Tus respuestas nunca salen del matcher — se usan solo para calcular tu coincidencia, nunca se almacenan, registran ni se vinculan a ti. Durante la fase de candidatura los candidatos permanecen anónimos, así que comparas solo por posiciones hasta que se revelan los nombres."
+        },
+        "fr": {
+          "date": "9 juin 2026",
+          "title": "Voting Advice Application — trouve ton match",
+          "body": "Indique ta position sur chaque affirmation et nous classerons les candidats selon leur proximité avec toi. Tes réponses ne quittent jamais le matcher — elles servent uniquement à calculer ta correspondance, jamais stockées, journalisées ni liées à toi. Pendant la phase de candidature, les candidats restent anonymes : tu compares donc uniquement sur les positions jusqu'à ce que les noms soient révélés."
+        },
+        "de": {
+          "date": "9. Juni 2026",
+          "title": "Voting Advice Application — finde dein Match",
+          "body": "Lege fest, wo du bei jeder Aussage stehst, und wir sortieren die Kandidaten danach, wie gut sie zu dir passen. Deine Antworten verlassen den Matcher nie — sie dienen nur zur Berechnung deines Matches, werden nie gespeichert, protokolliert oder mit dir verknüpft. Während der Kandidaturphase bleiben die Kandidaten anonym, du vergleichst also nur über die Positionen, bis die Namen enthüllt werden."
+        },
+        "ru": {
+          "date": "9 июня 2026",
+          "title": "Voting Advice Application — найдите своё совпадение",
+          "body": "Укажите свою позицию по каждому утверждению, и мы отсортируем кандидатов по тому, насколько они совпадают с вами. Ваши ответы никогда не покидают матчер — они используются только для расчёта совпадения, никогда не сохраняются, не логируются и не привязываются к вам. На этапе кандидатур кандидаты остаются анонимными, поэтому вы сравниваете только по позициям, пока не раскроют имена."
+        },
+        "tr": {
+          "date": "9 Haziran 2026",
+          "title": "Voting Advice Application — eşleşmeni bul",
+          "body": "Her ifadede nerede durduğunu belirle, biz de adayları sana ne kadar yakın olduklarına göre sıralayalım. Yanıtların eşleştiriciden hiç çıkmaz — yalnızca eşleşmeni hesaplamak için kullanılır, asla saklanmaz, kaydedilmez ya da seninle ilişkilendirilmez. Adaylık aşamasında adaylar anonim kalır, bu yüzden isimler açıklanana kadar yalnızca duruşlara göre karşılaştırırsın."
+        }
+      }
+    },
     {
       "date": "June 7, 2026",
       "title": "Market chart upgrade — metrics, intervals & zoom",
