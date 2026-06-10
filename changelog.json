@@ -195,38 +195,38 @@
     {
       "date": "June 7, 2026",
       "title": "Market chart upgrade — metrics, intervals & zoom",
-      "body": "The market chart got a big upgrade. Pick what to plot — lowest sale, highest sale, or the floor (the lowest active listing, tracked daily from launch) — and choose the interval: daily, weekly, bi-weekly or monthly, each shown as the average over that span. It runs right up to today, and you can scroll or pinch to zoom into any stretch, drag to pan, set an exact From/To window, or view it all in your currency — USD, ETH, EUR, GBP and more.",
+      "body": "The market chart got a big upgrade. Pick what to plot — lowest sale, highest sale, total volume, sales count, or the floor (the lowest active listing, tracked daily from launch) — and choose the interval: daily, weekly, bi-weekly or monthly, each shown as the average over that span. It runs right up to today, and you can scroll or pinch to zoom into any stretch, drag to pan, set an exact From/To window, or view it all in your currency — USD, ETH, EUR, GBP and more.",
       "tag": "update",
       "i18n": {
         "pt": {
           "date": "7 de jun. de 2026",
           "title": "Melhoria no gráfico de mercado — métricas, intervalos e zoom",
-          "body": "O gráfico de mercado recebeu uma grande melhoria. Escolha o que plotar — menor venda, maior venda ou o piso (a listagem ativa mais baixa, registrada diariamente desde o lançamento) — e escolha o intervalo: diário, semanal, quinzenal ou mensal, cada um mostrado como a média daquele período. Vai até hoje, e você pode rolar ou pinçar para ampliar qualquer trecho, arrastar para mover, definir uma janela exata De/Até ou ver tudo na sua moeda — USD, ETH, EUR, GBP e mais."
+          "body": "O gráfico de mercado recebeu uma grande melhoria. Escolha o que plotar — menor venda, maior venda, volume total, nº de vendas ou o piso (a listagem ativa mais baixa, registrada diariamente desde o lançamento) — e escolha o intervalo: diário, semanal, quinzenal ou mensal, cada um mostrado como a média daquele período. Vai até hoje, e você pode rolar ou pinçar para ampliar qualquer trecho, arrastar para mover, definir uma janela exata De/Até ou ver tudo na sua moeda — USD, ETH, EUR, GBP e mais."
         },
         "es": {
           "date": "7 jun. 2026",
           "title": "Mejora del gráfico de mercado — métricas, intervalos y zoom",
-          "body": "El gráfico de mercado recibió una gran mejora. Elige qué mostrar — venta más baja, venta más alta o el mínimo (el listado activo más bajo, registrado a diario desde el lanzamiento) — y elige el intervalo: diario, semanal, quincenal o mensual, cada uno como el promedio de ese período. Llega hasta hoy, y puedes desplazar o pellizcar para ampliar cualquier tramo, arrastrar para moverte, fijar una ventana exacta Desde/Hasta o verlo todo en tu moneda — USD, ETH, EUR, GBP y más."
+          "body": "El gráfico de mercado recibió una gran mejora. Elige qué mostrar — venta más baja, venta más alta, volumen total, nº de ventas o el mínimo (el listado activo más bajo, registrado a diario desde el lanzamiento) — y elige el intervalo: diario, semanal, quincenal o mensual, cada uno como el promedio de ese período. Llega hasta hoy, y puedes desplazar o pellizcar para ampliar cualquier tramo, arrastrar para moverte, fijar una ventana exacta Desde/Hasta o verlo todo en tu moneda — USD, ETH, EUR, GBP y más."
         },
         "fr": {
           "date": "7 juin 2026",
           "title": "Améliorations du graphique du marché — métriques, intervalles et zoom",
-          "body": "Le graphique du marché a été nettement amélioré. Choisissez quoi afficher — vente la plus basse, vente la plus haute ou le plancher (la mise en vente active la plus basse, suivie chaque jour depuis le lancement) — et l'intervalle : jour, semaine, quinzaine ou mois, chacun affiché comme la moyenne sur cette période. Il va jusqu'à aujourd'hui, et vous pouvez faire défiler ou pincer pour zoomer, glisser pour déplacer, définir une fenêtre Du/Au précise ou tout afficher dans votre devise — USD, ETH, EUR, GBP et plus."
+          "body": "Le graphique du marché a été nettement amélioré. Choisissez quoi afficher — vente la plus basse, vente la plus haute, volume total, nombre de ventes ou le plancher (la mise en vente active la plus basse, suivie chaque jour depuis le lancement) — et l'intervalle : jour, semaine, quinzaine ou mois, chacun affiché comme la moyenne sur cette période. Il va jusqu'à aujourd'hui, et vous pouvez faire défiler ou pincer pour zoomer, glisser pour déplacer, définir une fenêtre Du/Au précise ou tout afficher dans votre devise — USD, ETH, EUR, GBP et plus."
         },
         "de": {
           "date": "7. Juni 2026",
           "title": "Markt-Diagramm-Upgrade — Kennzahlen, Intervalle & Zoom",
-          "body": "Das Markt-Diagramm wurde stark erweitert. Wähle, was angezeigt wird — niedrigster Verkauf, höchster Verkauf oder der Mindestpreis (das niedrigste aktive Angebot, seit dem Start täglich erfasst) — und das Intervall: täglich, wöchentlich, zweiwöchentlich oder monatlich, jeweils als Durchschnitt dieses Zeitraums. Es reicht bis heute, und du kannst scrollen oder mit zwei Fingern zoomen, ziehen zum Verschieben, ein genaues Von/Bis-Fenster festlegen oder alles in deiner Währung anzeigen — USD, ETH, EUR, GBP und mehr."
+          "body": "Das Markt-Diagramm wurde stark erweitert. Wähle, was angezeigt wird — niedrigster Verkauf, höchster Verkauf, Gesamtvolumen, Anzahl Verkäufe oder der Mindestpreis (das niedrigste aktive Angebot, seit dem Start täglich erfasst) — und das Intervall: täglich, wöchentlich, zweiwöchentlich oder monatlich, jeweils als Durchschnitt dieses Zeitraums. Es reicht bis heute, und du kannst scrollen oder mit zwei Fingern zoomen, ziehen zum Verschieben, ein genaues Von/Bis-Fenster festlegen oder alles in deiner Währung anzeigen — USD, ETH, EUR, GBP und mehr."
         },
         "ru": {
           "date": "7 июня 2026",
           "title": "Обновление графика рынка — метрики, интервалы и зум",
-          "body": "График рынка значительно улучшен. Выберите, что показывать — самая низкая продажа, самая высокая продажа или минимум (самое низкое активное предложение, отслеживаемое ежедневно с запуска) — и интервал: день, неделя, две недели или месяц, каждый как среднее за этот период. Он доходит до сегодняшнего дня, и можно прокручивать или сводить пальцами для масштаба, перетаскивать, задать точное окно С/По или смотреть всё в своей валюте — USD, ETH, EUR, GBP и другие."
+          "body": "График рынка значительно улучшен. Выберите, что показывать — самая низкая продажа, самая высокая продажа, общий объём, число продаж или минимум (самое низкое активное предложение, отслеживаемое ежедневно с запуска) — и интервал: день, неделя, две недели или месяц, каждый как среднее за этот период. Он доходит до сегодняшнего дня, и можно прокручивать или сводить пальцами для масштаба, перетаскивать, задать точное окно С/По или смотреть всё в своей валюте — USD, ETH, EUR, GBP и другие."
         },
         "tr": {
           "date": "7 Haziran 2026",
           "title": "Piyasa grafiği güncellemesi — metrikler, aralıklar ve yakınlaştırma",
-          "body": "Piyasa grafiği büyük bir güncelleme aldı. Ne çizileceğini seç — en düşük satış, en yüksek satış ya da taban (lansmandan beri her gün takip edilen en düşük aktif listeleme) — ve aralığı seç: günlük, haftalık, iki haftalık veya aylık; her biri o dönemin ortalaması olarak gösterilir. Bugüne kadar uzanıyor ve herhangi bir aralığı yakınlaştırmak için kaydırabilir veya sıkıştırabilir, taşımak için sürükleyebilir, tam bir Başlangıç/Bitiş aralığı belirleyebilir ya da her şeyi kendi para biriminde görebilirsin — USD, ETH, EUR, GBP ve daha fazlası."
+          "body": "Piyasa grafiği büyük bir güncelleme aldı. Ne çizileceğini seç — en düşük satış, en yüksek satış, toplam hacim, satış adedi ya da taban (lansmandan beri her gün takip edilen en düşük aktif listeleme) — ve aralığı seç: günlük, haftalık, iki haftalık veya aylık; her biri o dönemin ortalaması olarak gösterilir. Bugüne kadar uzanıyor ve herhangi bir aralığı yakınlaştırmak için kaydırabilir veya sıkıştırabilir, taşımak için sürükleyebilir, tam bir Başlangıç/Bitiş aralığı belirleyebilir ya da her şeyi kendi para biriminde görebilirsin — USD, ETH, EUR, GBP ve daha fazlası."
         }
       }
     },

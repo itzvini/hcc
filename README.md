@@ -35,7 +35,7 @@ can vote and which seat bracket they can run for.
 Flow: `/api/auth/discord/login` → Discord OAuth2 (scope `identify`) →
 `/api/auth/discord/callback` → look up the Discord account's linked ETH wallet via
 the Highrise web API (`/discord/users/<id>/wallet`) → match that wallet against the
-current Creature + LAND holder snapshot → compute the bracket (1 / 2–4 / 5+) → create
+current Creature + LAND holder snapshot → compute the bracket (1-4 / 4–14 / 15+) → create
 a session. `GET /api/me` returns the logged-in user's eligibility for the front-end.
 
 Required env vars (see `.env`):

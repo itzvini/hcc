@@ -3,6 +3,7 @@ import { t } from './i18n.js';
 const FONT = "'Museo Sans Rounded', sans-serif";
 const RANGE_DAYS = { '1m': 30, '3m': 90, '6m': 180, '1y': 365, 'all': Infinity };
 const DAY = 86400000;
+const SUM_METRICS = new Set(['count', 'volume']); // totalled per interval, not averaged
 
 let lastData = null;
 let currency = 'usd';      // 'eth' or any fiat code in fxRates ('usd','eur',… )
@@ -27,7 +28,14 @@ function fmtMoney(v) {
 }
 
 function fmtPrice(v) { return v == null ? '—' : fmtMoney(v); }
-function fmtAxis(v)  { return currency === 'eth' ? `${v} Ξ` : fmtMoney(v); }
+
+// Format a chart value for the active metric: the sales count is a plain integer;
+// every other metric (price/volume) is money in the active currency.
+function fmtMetric(v) { return metric === 'count' ? Math.round(v).toLocaleString() : fmtMoney(v); }
+function fmtAxis(v)  {
+  if (metric === 'count') return Math.round(v).toLocaleString();
+  return currency === 'eth' ? `${v} Ξ` : fmtMoney(v);
+}
 
 function fmtDate(iso) {
   // Parse as a LOCAL calendar date, not UTC. `new Date('2026-06-06')` is UTC
@@ -47,7 +55,10 @@ function inCurrency(eth, usd) {
 }
 
 // The value to plot for a daily point, given the active metric + currency.
+// 'count' is unitless; 'volume' and the price metrics resolve to the active currency.
 function pickValue(p) {
+  if (metric === 'count') return p.count;
+  if (metric === 'volume') return inCurrency(p.volEth, p.volUsd);
   const eth = metric === 'high' ? p.highEth : metric === 'low' ? p.lowEth : p.floorEth;
   const usd = metric === 'high' ? p.highUsd : metric === 'low' ? p.lowUsd : p.floorUsd;
   return inCurrency(eth, usd);
@@ -68,9 +79,11 @@ function bucketStart(key) {
   return new Date(dayIdx * DAY).toISOString().slice(0, 10);
 }
 
-// Average the active metric over each interval → Map(bucketStartDate -> value).
-// Days with no value for the metric are skipped, so the average reflects real data.
+// Aggregate the active metric over each interval → Map(bucketStartDate -> value).
+// Count and volume are summed (totals); prices and floor are averaged. Days with
+// no value for the metric are skipped, so the result reflects real data only.
 function bucketSeries(daily) {
+  const total = SUM_METRICS.has(metric);
   const acc = new Map();
   for (const p of daily) {
     const v = pickValue(p);
@@ -81,7 +94,7 @@ function bucketSeries(daily) {
     acc.set(k, a);
   }
   const out = new Map();
-  for (const [k, a] of acc) out.set(bucketStart(k), a.sum / a.n);
+  for (const [k, a] of acc) out.set(bucketStart(k), total ? a.sum : a.sum / a.n);
   return out;
 }
 
@@ -158,7 +171,7 @@ function renderChart() {
           callbacks: {
             label(ctx) {
               if (ctx.parsed.y == null) return null;
-              return `  ${ctx.dataset.label}: ${fmtMoney(ctx.parsed.y)}`;
+              return `  ${ctx.dataset.label}: ${fmtMetric(ctx.parsed.y)}`;
             },
           },
         },
@@ -185,7 +198,7 @@ function renderChart() {
         y: {
           grid: { color: 'rgba(255,255,255,0.08)' },
           border: { display: false },
-          ticks: { font: { family: FONT, size: 10, weight: '700' }, color: '#7D7C88', maxTicksLimit: 6, callback: fmtAxis },
+          ticks: { font: { family: FONT, size: 10, weight: '700' }, color: '#7D7C88', maxTicksLimit: 6, precision: metric === 'count' ? 0 : undefined, callback: fmtAxis },
         },
       },
     },

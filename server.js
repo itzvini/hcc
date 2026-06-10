@@ -506,20 +506,24 @@ async function fetchFxRates() {
   return rates;
 }
 
-// Bucket sales into daily aggregates, tracking the day's lowest and highest sale
-// in both ETH and USD. Each sale: { ts, eth, usd } (usd may be null if no rate
-// was available). The client picks low/high, then averages over its interval.
+// Bucket sales into daily aggregates: low/high sale, total volume, and trade
+// count, in both ETH and USD. Each sale: { ts, eth, usd } (usd may be null if no
+// rate was available). The client picks a metric, then sums or averages per interval.
 function aggregateByDay(sales) {
   const byDay = new Map();
   for (const s of sales) {
     const day = Math.floor(s.ts / DAY_MS);
     let a = byDay.get(day);
-    if (!a) { a = { ethLow: s.eth, ethHigh: s.eth, usdLow: s.usd ?? null, usdHigh: s.usd ?? null }; byDay.set(day, a); continue; }
+    if (!a) { a = { ethLow: s.eth, ethHigh: s.eth, ethSum: 0, count: 0, usdLow: null, usdHigh: null, usdSum: 0, usdCount: 0 }; byDay.set(day, a); }
     a.ethLow = Math.min(a.ethLow, s.eth);
     a.ethHigh = Math.max(a.ethHigh, s.eth);
+    a.ethSum += s.eth;
+    a.count++;
     if (s.usd != null) {
       a.usdLow = a.usdLow == null ? s.usd : Math.min(a.usdLow, s.usd);
       a.usdHigh = a.usdHigh == null ? s.usd : Math.max(a.usdHigh, s.usd);
+      a.usdSum += s.usd;
+      a.usdCount++;
     }
   }
   return byDay;
@@ -575,6 +579,9 @@ function buildCollectionSeries(saleDays, floorDays) {
       lowUsd:  s && s.usdLow != null ? Math.round(s.usdLow) : null,
       floorEth: f ? f.eth : null,
       floorUsd: f ? f.usd : null,
+      count:   s ? s.count : null,
+      volEth:  s ? round4(s.ethSum) : null,
+      volUsd:  s && s.usdCount ? Math.round(s.usdSum) : null,
     };
   });
 }
