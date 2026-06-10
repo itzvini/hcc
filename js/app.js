@@ -90,7 +90,7 @@ subTabs.forEach(btn => btn.addEventListener('click', () => {
   document.getElementById('guides-top')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }));
 
-const HASH_TABS = ['club', 'council', 'apply', 'roadmap', 'guides', 'perks', 'holders', 'market', 'changelog', 'terms', 'privacy'];
+const HASH_TABS = ['club', 'council', 'apply', 'roadmap', 'guides', 'perks', 'holders', 'market', 'changelog', 'contribute', 'terms', 'privacy'];
 
 // Footer / in-page links like #terms and #privacy switch tabs (and deep-links on load)
 window.addEventListener('hashchange', () => {

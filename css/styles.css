@@ -1570,3 +1570,109 @@ textarea.appf-input { resize: vertical; min-height: 92px; line-height: 1.5; }
   .appf-actions #app-back { margin-right: 0; order: 3; width: 100%; }
   .appf-btn-primary, .appf-actions .apply-btn-ghost { flex: 1; }
 }
+
+/* ==========================================================================
+   CONTRIBUTE PANEL
+   Reuses the Apply showcase shell (.apply-gate / .apply-aurora / .apply-pill /
+   .apply-sparkles / .apply-discord-shine — all motion-safe via the block at
+   line ~1140) and adds GitHub-branded actions + a few small surfaces.
+   ========================================================================== */
+
+/* GitHub mark inside the OPEN SOURCE pill */
+.contrib-pill { display: inline-flex; align-items: center; gap: 7px; }
+.contrib-pill-ico { width: 13px; height: 13px; display: block; }
+
+/* Action row (GitHub + ghost buttons) */
+.contrib-actions {
+  display: flex; flex-wrap: wrap; gap: 14px;
+  justify-content: center; align-items: center;
+  margin-top: 8px;
+}
+
+/* GitHub button — official mark, brand "GitHub black" */
+.contrib-gh-btn {
+  position: relative; overflow: hidden;
+  display: inline-flex; align-items: center; gap: 12px;
+  padding: 16px 30px; border-radius: var(--hr-radius-pill);
+  background: #24292F; color: #fff;
+  border: 1px solid rgba(255,255,255,.16);
+  font-family: var(--hr-sans); font-weight: 800; font-size: 16px; letter-spacing: .01em;
+  box-shadow: 0 10px 30px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.1);
+  transition: transform .2s cubic-bezier(.2,.7,.2,1), box-shadow .2s, background .2s, border-color .2s;
+}
+.contrib-gh-btn:hover {
+  color: #fff; background: #2f363d; border-color: var(--hr-primary);
+  transform: translateY(-3px) scale(1.025);
+  box-shadow: 0 18px 44px rgba(0,0,0,.6), 0 0 26px var(--hr-primary-25), inset 0 1px 0 rgba(255,255,255,.14);
+}
+.contrib-gh-btn:active { transform: translateY(-1px) scale(.99); }
+.contrib-gh-logo { display: inline-flex; }
+.contrib-gh-logo svg { width: 22px; height: 22px; display: block; }
+.contrib-gh-label { position: relative; z-index: 1; }
+
+/* Secondary / ghost pill */
+.contrib-ghost-btn {
+  display: inline-flex; align-items: center;
+  padding: 15px 26px; border-radius: var(--hr-radius-pill);
+  background: var(--hr-bg-3); color: var(--hr-fg-1);
+  border: 1px solid var(--hr-line-strong);
+  font-family: var(--hr-sans); font-weight: 800; font-size: 15px;
+  transition: transform .15s cubic-bezier(.2,0,0,1), background .15s, color .15s, border-color .15s;
+}
+.contrib-ghost-btn:hover {
+  color: var(--hr-fg-0); background: var(--hr-bg-4);
+  border-color: var(--hr-primary); transform: translateY(-2px);
+}
+
+/* Inline-code chips inside copy (translate file names, branch names) */
+.contrib-gate code, .perk code, .guide-intro code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .9em; color: var(--hr-primary);
+  background: rgba(81,255,165,.1); border: 1px solid var(--hr-line);
+  padding: .08em .42em; border-radius: var(--hr-radius-xs);
+}
+
+/* "Run it locally" code block */
+.contrib-code {
+  margin-top: 16px; padding: 14px 16px;
+  background: var(--hr-bg-0); border: 1px solid var(--hr-line);
+  border-radius: var(--hr-radius-md);
+  overflow-x: auto;
+}
+.contrib-code code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px; color: var(--hr-fg-0); white-space: pre;
+}
+.contrib-code-c { color: var(--hr-fg-3); }
+
+/* "What gets merged" checklist */
+.contrib-checks { display: grid; gap: 10px; margin-top: 24px; }
+.contrib-check {
+  display: flex; align-items: center; gap: 13px;
+  padding: 14px 16px;
+  background: var(--hr-bg-3); border: 1px solid var(--hr-line);
+  border-radius: var(--hr-radius-md);
+  font-size: 14px; color: var(--hr-fg-1);
+}
+.contrib-check-ico {
+  flex: none; width: 24px; height: 24px;
+  display: grid; place-items: center; border-radius: 50%;
+  background: var(--hr-primary-25); color: var(--hr-primary);
+  font: 900 13px/1 var(--hr-sans);
+}
+
+/* Closing CTA card — contain the aurora glow behind the content */
+.contrib-cta {
+  position: relative; overflow: hidden; isolation: isolate;
+  text-align: center;
+  border-color: var(--hr-line-strong);
+}
+.contrib-cta > * { position: relative; z-index: 1; }
+.contrib-cta .apply-aurora { z-index: 0; opacity: .4; }
+.contrib-cta p { max-width: 480px; margin: 10px auto 0; color: var(--hr-fg-2); }
+.contrib-cta .contrib-actions { margin-top: 24px; }
+
+@media (max-width: 560px) {
+  .contrib-actions { flex-direction: column; }
+  .contrib-gh-btn, .contrib-ghost-btn { width: 100%; justify-content: center; }
+}
