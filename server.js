@@ -11,6 +11,7 @@ try { process.loadEnvFile(); } catch { /* no .env — fine */ }
 const db = require('./lib/db');
 const auth = require('./lib/auth');
 const mktOrderbook = require('./lib/marketplace-orderbook');
+const squidBridge = require('./lib/squid-bridge');
 const { computeEligibility, BRACKETS } = require('./lib/eligibility');
 const { PROPOSITIONS, PROPOSITION_IDS } = require('./lib/propositions');
 const derive = require('./lib/derive-positions');
@@ -134,6 +135,34 @@ async function ethCall(rpcUrl, to, data) {
 }
 
 const padUint = n => BigInt(n).toString(16).padStart(64, '0'); // uint256 arg → 32-byte word
+
+// Transaction receipt on the given chain RPC (null while pending). Powers the bridge
+// tracker's "confirmed on Ethereum" stage before Squid has indexed the transfer.
+async function ethGetTxReceipt(rpcUrl, hash) {
+  const res = await fetch(rpcUrl, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getTransactionReceipt', params: [hash] }),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`eth_getTransactionReceipt HTTP ${res.status}`);
+  const body = await res.json();
+  if (body.error) throw new Error(body.error.message || 'eth_getTransactionReceipt error');
+  return body.result; // null until mined
+}
+
+// Native-coin balance (wei hex) for an address on the given chain RPC. Powers the
+// marketplace's "your ETH is just on the wrong network" helper (mainnet ETH lookup).
+async function ethGetBalance(rpcUrl, address) {
+  const res = await fetch(rpcUrl, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getBalance', params: [address, 'latest'] }),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`eth_getBalance HTTP ${res.status}`);
+  const body = await res.json();
+  if (body.error) throw new Error(body.error.message || 'eth_getBalance error');
+  return body.result;
+}
 
 // Mask a wallet for logs — never write a full holder address to the server log.
 const maskWallet = a => (a && a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : '(addr)');
@@ -904,15 +933,43 @@ async function getMyListings(address) {
   };
 }
 
+// ETH→USD plus USD-relative rates for every display currency, in ONE CoinGecko call.
+// Independent of the heavy market-stats cache (which can be cold on a fresh boot, so
+// listings used to render with no fiat). Own short cache — FX barely moves minute to
+// minute. Degrades to the last good value, or USD-only, on failure.
+const mktFxCache = { data: null, at: 0 };
+const MKT_FX_TTL_MS = 10 * 60 * 1000;
+async function getMarketplaceFx() {
+  if (mktFxCache.data && Date.now() - mktFxCache.at < MKT_FX_TTL_MS) return mktFxCache.data;
+  try {
+    const res = await fetch(
+      `https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=${FX_CURRENCIES.join(',')}`,
+      { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(20000) },
+    );
+    if (!res.ok) throw new Error(`CoinGecko FX ${res.status}`);
+    const eth = (await res.json()).ethereum || {};
+    const ethUsd = eth.usd ?? null;
+    const fxRates = { usd: 1 }; // USD-relative display rates (rate.usd === 1)
+    if (ethUsd) for (const c of FX_CURRENCIES) if (c !== 'usd' && eth[c] != null) fxRates[c] = eth[c] / ethUsd;
+    const data = { ethUsd, fxRates };
+    mktFxCache.data = data; mktFxCache.at = Date.now();
+    return data;
+  } catch (err) {
+    console.error('Marketplace FX failed:', err.message);
+    return mktFxCache.data || { ethUsd: null, fxRates: { usd: 1 } };
+  }
+}
+
 async function getCreatureListings(cursor = '') {
   const key = cursor || '';
   const hit = listingsCache.get(key);
   if (hit && Date.now() - hit.at < MKT_LISTINGS_TTL_MS) return hit.data;
-  const page = await fetchCreatureListingsPage(cursor);
+  const [page, fx] = await Promise.all([fetchCreatureListingsPage(cursor), getMarketplaceFx()]);
   const data = {
     items: page.items,
     nextCursor: page.nextCursor,
-    ethUsd: marketCache.data?.ethUsd ?? null, // reuse the market cache's rate; null until warm
+    ethUsd: fx.ethUsd,
+    fxRates: fx.fxRates, // { usd:1, eur, gbp, brl, rub, try, jpy, cad, aud } for the currency picker
     fetchedAt: new Date().toISOString(),
   };
   if (listingsCache.size > 64) listingsCache.clear(); // bound memory from many distinct cursors
@@ -958,6 +1015,18 @@ async function handleMarketplaceApi(request, response, url) {
   if (tokenMatch) {
     const data = await getCreatureToken(tokenMatch[1]);
     sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=120' });
+    return;
+  }
+
+  // The buyer's ETH on Ethereum MAINNET — powers the friendly "your ETH just needs to
+  // switch networks" guidance (the #1 source of confusion). Public on-chain data for the
+  // caller's own address; the client can't read mainnet itself (CSP blocks external RPCs).
+  const elsewhereMatch = pathname.match(/^\/api\/market\/creatures\/eth-elsewhere\/(0x[0-9a-fA-F]{40})$/);
+  if (elsewhereMatch) {
+    let mainnetEthWei = null;
+    try { mainnetEthWei = await ethGetBalance(ETH_RPC_URL, elsewhereMatch[1]); }
+    catch (err) { console.error('Mainnet ETH balance failed:', err.message); }
+    sendJson(response, 200, { mainnetEthWei }, { 'Cache-Control': 'no-store' });
     return;
   }
 
@@ -1085,6 +1154,179 @@ async function handleMarketplaceApi(request, response, url) {
         listingsCache.clear(); // cancelled listings should drop out of browse promptly
         sendJson(response, 200, result);
       }
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // --- Offers (bids): standing offers on a specific Creature, or collection-wide
+  // ("floor") offers any holder can sell into. Same trust model as listings: the
+  // bidder's signature is the authorization; the orderbook + Seaport verify it.
+
+  // Read endpoints (public orderbook data).
+  if (pathname === '/api/market/creatures/offers/collection') {
+    const data = await mktOrderbook.listCollectionOffers({ nftContract: CREATURE_CONTRACT, ethContract: IMX_ETH_TOKEN });
+    sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=15' });
+    return;
+  }
+  const offersTokenMatch = pathname.match(/^\/api\/market\/creatures\/offers\/token\/(\d{1,80})$/);
+  if (offersTokenMatch) {
+    const data = await mktOrderbook.listTokenOffers({ nftContract: CREATURE_CONTRACT, ethContract: IMX_ETH_TOKEN, tokenId: offersTokenMatch[1] });
+    sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=15' });
+    return;
+  }
+  const offersMineMatch = pathname.match(/^\/api\/market\/creatures\/offers\/mine\/(0x[0-9a-f]{40})$/);
+  if (offersMineMatch) {
+    const data = await mktOrderbook.listMyOffers({ nftContract: CREATURE_CONTRACT, ethContract: IMX_ETH_TOKEN, accountAddress: offersMineMatch[1] });
+    sendJson(response, 200, data, { 'Cache-Control': 'no-store' });
+    return;
+  }
+
+  // Prepare an offer: ERC20 approval tx (first time only) + typed data to sign (gasless).
+  if (pathname === '/api/market/creatures/offer/prepare' && request.method === 'POST') {
+    if (!mktOrderbook.available()) { sendJson(response, 503, { error: 'unavailable' }); return; }
+    const oWait = rateLimited(`mktsell:${ip}`, 15, 60 * 1000);
+    if (oWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(oWait) }); return; }
+
+    const body = await readJsonBody(request, 4 * 1024);
+    const maker = String(body.makerAddress || '').toLowerCase();
+    const wei = parseEthToWei(body.priceEth);
+    const tokenId = body.tokenId != null ? String(body.tokenId) : null;
+    if (!HEX_ADDRESS.test(maker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
+    if (wei == null) { sendJson(response, 400, { error: 'bad_price' }); return; }
+    if (tokenId != null && !/^\d{1,80}$/.test(tokenId)) { sendJson(response, 400, { error: 'bad_token' }); return; }
+
+    try {
+      const prepared = await mktOrderbook.prepareOffer({
+        makerAddress: maker, ethContract: IMX_ETH_TOKEN, amountWei: wei.toString(),
+        nftContract: CREATURE_CONTRACT, tokenId,
+      });
+      sendJson(response, 200, prepared);
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // Create the offer from the signed order. Scope allowlist mirrors sell/create, with
+  // sides flipped: a bid OFFERS the ETH token and takes the Creature in consideration
+  // (fee items ride along in ETH).
+  if (pathname === '/api/market/creatures/offer/create' && request.method === 'POST') {
+    if (!mktOrderbook.available()) { sendJson(response, 503, { error: 'unavailable' }); return; }
+    const cWait = rateLimited(`mktsell:${ip}`, 15, 60 * 1000);
+    if (cWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(cWait) }); return; }
+
+    const body = await readJsonBody(request, 64 * 1024);
+    const { orderComponents, orderHash, signature } = body || {};
+    if (!orderComponents || typeof orderComponents !== 'object'
+      || !/^0x[0-9a-f]{64}$/i.test(String(orderHash || ''))
+      || !/^0x[0-9a-f]{60,2600}$/i.test(String(signature || ''))) {
+      sendJson(response, 400, { error: 'bad_order' }); return;
+    }
+    const offer = Array.isArray(orderComponents.offer) ? orderComponents.offer : [];
+    const consideration = Array.isArray(orderComponents.consideration) ? orderComponents.consideration : [];
+    const creature = CREATURE_CONTRACT.toLowerCase();
+    const scopeOk = offer.length === 1
+      && String(offer[0]?.token || '').toLowerCase() === IMX_ETH_TOKEN
+      && consideration.length >= 1
+      && consideration.every(c => {
+        const tk = String(c?.token || '').toLowerCase();
+        return tk === creature || tk === IMX_ETH_TOKEN;
+      })
+      && consideration.some(c => String(c?.token || '').toLowerCase() === creature);
+    if (!scopeOk) { sendJson(response, 400, { error: 'bad_order' }); return; }
+
+    try {
+      const created = await mktOrderbook.createOffer({ orderComponents, orderHash, signature, collection: !!body.collection });
+      sendJson(response, 200, created);
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // Exact-output bridge quote via Squid: "send X ETH on Ethereum, receive ≥ what you're
+  // short on Immutable zkEVM", plus the ready-to-sign mainnet transaction. Quotes hit
+  // Squid's API (integrator id from env), so the cap is tight; 'not_configured' tells
+  // the client to fall back to the deep-link.
+  if (pathname === '/api/market/creatures/bridge/quote' && request.method === 'POST') {
+    if (!squidBridge.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    const qWait = rateLimited(`mktbridge:${ip}`, 6, 60 * 1000);
+    if (qWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(qWait) }); return; }
+
+    const body = await readJsonBody(request, 4 * 1024);
+    const addr = String(body.address || '').toLowerCase();
+    const wei = parseEthToWei(body.needEth);
+    if (!HEX_ADDRESS.test(addr)) { sendJson(response, 400, { error: 'bad_address' }); return; }
+    if (wei == null) { sendJson(response, 400, { error: 'bad_price' }); return; }
+
+    try {
+      sendJson(response, 200, await squidBridge.quoteBridge(wei, addr));
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // Live bridge progress for the in-panel tracker. Squid's status API is the primary
+  // signal; before Squid indexes the tx (~1 min) we fall back to the source-chain
+  // receipt so the tracker can still show "confirmed on Ethereum".
+  if (pathname === '/api/market/creatures/bridge/status') {
+    const sWait = rateLimited(`mktbst:${ip}`, 30, 60 * 1000);
+    if (sWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(sWait) }); return; }
+
+    const tx = String(url.searchParams.get('tx') || '').toLowerCase();
+    const quoteId = String(url.searchParams.get('quoteId') || '').slice(0, 100);
+    const requestId = String(url.searchParams.get('requestId') || '').slice(0, 100);
+    if (!/^0x[0-9a-f]{64}$/.test(tx)) { sendJson(response, 400, { error: 'bad_tx' }); return; }
+    if ((quoteId && !/^[\w-]+$/.test(quoteId)) || (requestId && !/^[\w-]+$/.test(requestId))) {
+      sendJson(response, 400, { error: 'bad_request' }); return;
+    }
+
+    let squid = null;
+    if (squidBridge.configured()) {
+      try { squid = await squidBridge.getStatus({ txHash: tx, quoteId, requestId }); }
+      catch (err) { console.error('Squid status failed:', err.message); }
+    }
+    const MAP = { success: 'arrived', ongoing: 'bridging', needs_gas: 'needs_gas', partial_success: 'failed', refund: 'failed' };
+    let stage = MAP[squid?.squidStatus] || null;
+    if (!stage) { // not indexed yet (or Squid unavailable) — check the mainnet receipt
+      try {
+        const rec = await ethGetTxReceipt(ETH_RPC_URL, tx);
+        stage = rec ? (rec.status === '0x1' ? 'src_confirmed' : 'failed_src') : 'submitted';
+      } catch (err) {
+        console.error('Bridge receipt check failed:', err.message);
+        stage = 'submitted'; // tracker stays at step 1 rather than erroring
+      }
+    }
+    sendJson(response, 200, {
+      stage,
+      axelarUrl: squid?.axelarUrl || null,
+      srcUrl: squid?.srcUrl || null,
+      destUrl: squid?.destUrl || null,
+    });
+    return;
+  }
+
+  // Accept an offer (the holder sells into it): unsigned NFT-approval + fill txs.
+  // For collection offers, tokenId picks which Creature is sold into the bid.
+  if (pathname === '/api/market/creatures/offer/accept/prepare' && request.method === 'POST') {
+    if (!mktOrderbook.available()) { sendJson(response, 503, { error: 'unavailable' }); return; }
+    const aWait = rateLimited(`mktbuy:${ip}`, 15, 60 * 1000);
+    if (aWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(aWait) }); return; }
+
+    const body = await readJsonBody(request, 4 * 1024);
+    const offerId = String(body.offerId || '').toLowerCase();
+    const taker = String(body.takerAddress || '').toLowerCase();
+    const tokenId = body.tokenId != null ? String(body.tokenId) : null;
+    if (!ORDER_ID.test(offerId)) { sendJson(response, 400, { error: 'bad_listing' }); return; }
+    if (!HEX_ADDRESS.test(taker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
+    if (tokenId != null && !/^\d{1,80}$/.test(tokenId)) { sendJson(response, 400, { error: 'bad_token' }); return; }
+
+    try {
+      const prepared = await mktOrderbook.prepareFulfill(offerId, taker, tokenId);
+      sendJson(response, 200, prepared);
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }
@@ -1899,8 +2141,9 @@ const server = http.createServer((request, response) => {
     if (!url) { sendJson(response, 400, { error: 'bad_request' }); return; }
     handleMarketplaceApi(request, response, url).catch(err => {
       console.error('Marketplace API error:', err.message);
-      // readJsonBody rejections carry a 4xx statusCode (bad JSON / oversized body).
-      if (!response.headersSent) sendJson(response, err.statusCode || 503, { error: err.statusCode ? 'bad_request' : 'unavailable' });
+      // readJsonBody rejections carry a 4xx statusCode (bad JSON / oversized body);
+      // wrapper errors carry a stable .code (e.g. 'unavailable').
+      if (!response.headersSent) sendJson(response, err.statusCode || 503, { error: err.code || (err.statusCode ? 'bad_request' : 'unavailable') });
     });
     return;
   }

@@ -1151,7 +1151,14 @@ footer { margin-top: 28px; }
    Reuses the Apply showcase shell (.apply-aurora / .apply-pill / .apply-shine /
    [data-reveal]) for a consistent premium feel.
    ========================================================================== */
-.trade-box { margin-top: 30px; perspective: 1200px; }
+/* No `perspective` here (unlike .apply-box): it would create a containing block and
+   re-anchor the fixed-position token modal to this element instead of the viewport.
+   Flex column with a fixed gap = deterministic, equal spacing between the wallet bar,
+   the Buy/Sell/Transfer tabs, and the content (no margin-collapse / line-box surprises).
+   The fixed modal is position:fixed so it's out of flow and unaffected by the gap. */
+/* One uniform 18px gap between wallet bar, tabs, and content (the browse section adds
+   none of its own — it's margin-top:0 below). Equal by construction = proportional. */
+.trade-box { margin-top: 24px; display: flex; flex-direction: column; align-items: stretch; gap: 18px; }
 
 /* Connect / install gate */
 .trade-gate {
@@ -1358,7 +1365,7 @@ footer { margin-top: 28px; }
 /* Wallet status strip */
 .trade-bar {
   display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
-  margin-top: 26px; padding: 14px 18px;
+  padding: 14px 18px;
   border-radius: var(--hr-radius-xl); border: 1px solid var(--hr-line);
   background: linear-gradient(180deg, rgba(40,39,45,.55), rgba(20,19,23,.6));
   backdrop-filter: blur(8px);
@@ -1368,14 +1375,23 @@ footer { margin-top: 28px; }
 .trade-bar-bal { font-size: 13px; color: var(--hr-fg-2); }
 .trade-bar-bal b { color: var(--hr-fg-0); font-weight: 800; }
 .trade-bar.is-connected .apply-logout { margin-left: auto; }
+/* .apply-logout was written for an <a>; as a <button> here it'd inherit the UA's
+   light button background ("whitened"). Reset to the intended ghost-pill look. */
+.trade-bar .apply-logout {
+  appearance: none; -webkit-appearance: none; background: transparent; cursor: pointer;
+  font-family: var(--hr-sans);
+}
+.trade-bar .apply-logout:hover { background: rgba(255,255,255,.05); }
 .trade-mm-btn.is-sm { padding: 11px 18px; font-size: 14px; gap: 9px; }
 .trade-mm-btn.is-sm .trade-mm-logo { width: 20px; height: 20px; }
 
 /* Browse header */
-.trade-browse { margin-top: 30px; }
+.trade-browse { margin-top: 0; gap: 0; padding: 0;}
 .trade-browse-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .trade-browse-h { font-family: var(--hr-sans); font-weight: 900; font-size: clamp(20px,3vw,26px); color: var(--hr-fg-0); margin: 0 0 4px; }
 .trade-browse-sub { font-size: 14px; color: var(--hr-fg-2); margin: 0; max-width: 520px; }
+.trade-browse-actions { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+.trade-currency { font-size: 13px; padding-top: 9px; padding-bottom: 9px; }
 .trade-refresh { margin-top: 0; flex: 0 0 auto; }
 
 /* Grid */
@@ -1431,11 +1447,31 @@ footer { margin-top: 28px; }
 @keyframes trade-shimmer { to { background-position: -200% 0; } }
 
 .trade-loadmore { text-align: center; margin-top: 22px; }
-.trade-actions { margin-top: 30px; max-width: 520px; }
-.trade-actions.trade-hub { max-width: none; }
+/* The Buy/Sell/Transfer tabs own the gap to the content (margin-bottom below), so the
+   views sit flush under them rather than stacking two margins. */
+.trade-actions { margin-top: 0; max-width: 560px; }
 
-/* Seller hub: sell + transfer side by side on wide screens */
-.trade-hub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+/* Buy / Sell / Transfer segmented tabs — primary actions, so scaled up from the
+   compact .seg base (which is sized for the Market panel's chart controls) to sit
+   proportionally with the nav pills and the grid. */
+/* Equal gap above and below the tabs (wallet bar ↔ tabs ↔ content all share it). */
+/* Spacing comes from the parent flex gap; width:fit-content keeps the bar hugging
+   the three pills instead of stretching full-width. */
+/* Spacing comes entirely from the parent's uniform flex gap (no own margin). */
+.trade-tabs { margin: 0; display: flex; width: fit-content; gap: 4px; padding: 5px; }
+.trade-tabs .seg-btn {
+  min-width: 132px; min-height: 44px;
+  font-size: 14px; font-weight: 800; letter-spacing: .01em;
+  padding: 12px 26px;
+}
+.trade-tabs .seg-btn.is-active {
+  font-weight: 900;
+  box-shadow: 0 0 18px var(--hr-primary-25), inset 0 1px 0 rgba(255,255,255,.25);
+}
+@media (max-width: 620px) {
+  .trade-tabs { display: flex; width: 100%; }
+  .trade-tabs .seg-btn { flex: 1; min-width: 0; padding: 12px 10px; }
+}
 
 /* Sell picker: small selectable tiles of your own Creatures */
 .trade-pick {
@@ -1487,8 +1523,13 @@ body.trade-modal-open { overflow: hidden; }
 .trade-modal[hidden] { display: none; }
 .trade-modal-backdrop { position: absolute; inset: 0; background: rgba(1,1,4,.72); backdrop-filter: blur(6px); }
 .trade-modal-card {
-  position: relative; z-index: 1; width: min(720px, 100%); max-height: 88vh; overflow: auto;
-  display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+  position: relative; z-index: 1; width: min(880px, 100%);
+  /* FIXED height (not max-height): the card no longer grows with the info column, so the
+     image column can't restretch and rescale the artwork ("zoom") on each status update.
+     The info column scrolls within this height when content is long. */
+  height: min(820px, 90vh); overflow: hidden;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr); gap: 0;
   border-radius: var(--hr-radius-2xl); border: 1px solid var(--hr-line-strong);
   background: linear-gradient(180deg, rgba(40,39,45,.96), rgba(16,15,19,.98));
   box-shadow: var(--hr-shadow-3);
@@ -1501,10 +1542,22 @@ body.trade-modal-open { overflow: hidden; }
   font-size: 22px; font-weight: 700;
 }
 .trade-modal-close:hover { background: rgba(0,0,0,.7); }
-.trade-modal-media { position: relative; }
+/* The artwork fills its column edge-to-edge; ONLY the info column scrolls, so a long
+   trait list can never push the card off-screen or scroll the image away. */
+.trade-modal-media { position: relative; min-height: 0; }
 .trade-modal-img { width: 100%; height: 100%; min-height: 240px; object-fit: cover; display: block; }
 .trade-modal-media .trade-tile-noimg { width: 100%; height: 100%; min-height: 240px; }
-.trade-modal-info { padding: 24px 22px; min-width: 0; }
+.trade-modal-info { padding: 26px 24px; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+
+/* Thin, brand-dark scrollbars on the modal info column + sell picker (the Windows
+   default scrollbar reads as a white slab on these dark surfaces). */
+.trade-modal-info, .trade-pick { scrollbar-width: thin; scrollbar-color: var(--hr-tuna) transparent; }
+.trade-modal-info::-webkit-scrollbar, .trade-pick::-webkit-scrollbar { width: 8px; }
+.trade-modal-info::-webkit-scrollbar-track, .trade-pick::-webkit-scrollbar-track { background: transparent; }
+.trade-modal-info::-webkit-scrollbar-thumb, .trade-pick::-webkit-scrollbar-thumb {
+  background: var(--hr-tuna); border-radius: 4px;
+}
+.trade-modal-info::-webkit-scrollbar-thumb:hover, .trade-pick::-webkit-scrollbar-thumb:hover { background: var(--hr-salmon); }
 .trade-modal-name { font-family: var(--hr-sans); font-weight: 900; font-size: 21px; color: var(--hr-fg-0); margin: 0 0 12px; }
 .trade-modal-price { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
 .trade-modal-price-eth { font-family: var(--hr-sans); font-weight: 900; font-size: 24px; color: var(--hr-primary); text-shadow: 0 0 22px var(--hr-primary-25); }
@@ -1518,7 +1571,7 @@ body.trade-modal-open { overflow: hidden; }
 .trade-modal-traits { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 16px 0; }
 .trade-trait { background: rgba(0,0,0,.28); border: 1px solid var(--hr-line); border-radius: var(--hr-radius-sm); padding: 8px 10px; min-width: 0; }
 .trade-trait-k { display: block; font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--hr-fg-3); }
-.trade-trait-v { display: block; font-size: 13px; font-weight: 700; color: var(--hr-fg-0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trade-trait-v { display: block; font-size: 13px; font-weight: 700; color: var(--hr-fg-0); line-height: 1.3; }
 .trade-modal-explorer { display: inline-block; margin-top: 8px; font-size: 13px; font-weight: 700; color: var(--hr-primary); }
 .trade-modal-explorer:hover { text-decoration: underline; }
 
@@ -1534,14 +1587,212 @@ a.trade-buy-btn { display: inline-flex; }
   border-radius: var(--hr-radius-md);
 }
 
+/* ---- Offers (bids + standing collection offers) ---- */
+.trade-offers { margin: 2px 0 14px; padding: 12px 14px; border-radius: var(--hr-radius-lg); background: rgba(0,0,0,.24); border: 1px solid var(--hr-line); }
+.trade-offers-h { font-family: var(--hr-sans); font-weight: 800; font-size: 13px; color: var(--hr-fg-0); margin: 0 0 2px; text-transform: uppercase; letter-spacing: .04em; }
+.trade-offer-list { list-style: none; margin: 0; padding: 3px; display: flex; flex-direction: column; gap: 0px; }
+.trade-offer-list li { display: flex; align-items: center; gap: 0px; flex-wrap: wrap; font-size: 12.5px; }
+.trade-offer-price { font-family: var(--hr-sans); font-weight: 900; font-size: 14px; color: var(--hr-secondary); flex: 0 0 auto; }
+.trade-offer-meta { color: var(--hr-fg-2); min-width: 0; }
+.trade-offer-meta code { font-family: ui-monospace, Menlo, monospace; color: var(--hr-fg-1); }
+.trade-offer-accept {
+  margin-left: auto; cursor: pointer; flex: 0 0 auto;
+  padding: 6px 14px; border-radius: var(--hr-radius-pill); border: none;
+  background: var(--hr-primary); color: var(--hr-on-primary);
+  font-family: var(--hr-sans); font-weight: 800; font-size: 12px;
+}
+.trade-offer-accept:hover { background: var(--hr-primary-press); }
+.trade-offer-accept[disabled] { opacity: .55; cursor: not-allowed; }
+.trade-offers-none { font-size: 12.5px; color: var(--hr-fg-3); margin: 0; }
+.trade-offer-form { display: flex; gap: 8px; margin-top: 10px; }
+.trade-offer-form input {
+  flex: 1; min-width: 0; box-sizing: border-box;
+  background: var(--hr-bg-2); border: 1px solid var(--hr-line-strong);
+  border-radius: var(--hr-radius-pill); padding: 9px 14px;
+  font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: var(--hr-fg-0);
+}
+.trade-offer-form input:focus { outline: none; border-color: var(--hr-secondary); box-shadow: 0 0 0 3px var(--hr-secondary-25); }
+.trade-offer-btn {
+  flex: 0 0 auto; cursor: pointer; padding: 9px 16px; border: none; border-radius: var(--hr-radius-pill);
+  background: var(--hr-secondary); color: #fff;
+  font-family: var(--hr-sans); font-weight: 800; font-size: 12.5px;
+  transition: transform .15s, background .15s;
+}
+.trade-offer-btn:hover { transform: translateY(-1px); background: #9374ff; }
+.trade-offer-btn[disabled] { opacity: .55; cursor: not-allowed; transform: none; }
+
+/* Collection-offer strip (Buy tab) */
+.trade-colloffer {
+  margin-bottom: 16px; padding: 14px 16px; border-radius: var(--hr-radius-xl);
+  background: linear-gradient(180deg, rgba(133,97,255,.10), rgba(0,0,0,.26));
+  border: 1px solid color-mix(in srgb, var(--hr-secondary) 35%, transparent);
+}
+.trade-colloffer-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.trade-colloffer-info { display: flex; flex-direction: column; min-width: 0; }
+.trade-colloffer-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--hr-fg-2); }
+.trade-colloffer-price { font-family: var(--hr-sans); font-weight: 900; font-size: 19px; color: var(--hr-secondary); }
+.trade-colloffer .trade-offer-form.is-inline { margin: 0 0 0 auto; max-width: 340px; }
+.trade-colloffer-hint { margin-left: auto; font-size: 12.5px; color: var(--hr-fg-3); }
+.trade-colloffer-p { font-size: 12px; color: var(--hr-fg-3); margin: 8px 0 0; }
+.trade-colloffer .trade-status { margin-top: 10px; }
+.trade-myoffers { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.trade-myoffers-h { font-size: 11.5px; font-weight: 800; color: var(--hr-fg-2); }
+.trade-myoffer-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 6px 5px 12px; border-radius: var(--hr-radius-pill);
+  background: rgba(0,0,0,.3); border: 1px solid var(--hr-line);
+  font-size: 12px; font-weight: 700; color: var(--hr-fg-1);
+}
+.trade-myoffer-chip button {
+  cursor: pointer; width: 20px; height: 20px; border-radius: 50%; border: none; line-height: 1;
+  background: rgba(255,91,149,.18); color: var(--hr-alert); font-weight: 900; font-size: 13px;
+}
+.trade-myoffer-chip button:hover { background: rgba(255,91,149,.35); }
+.trade-myoffer-chip button[disabled] { opacity: .5; cursor: not-allowed; }
+
+/* Instant-sell card (Sell tab) */
+.trade-instant {
+  margin-bottom: 16px; padding: 14px 16px; border-radius: var(--hr-radius-xl);
+  background: linear-gradient(180deg, rgba(81,255,165,.08), rgba(0,0,0,.26));
+  border: 1px solid color-mix(in srgb, var(--hr-primary) 35%, transparent);
+}
+.trade-instant-head { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
+.trade-instant-ico { font-size: 22px; line-height: 1; }
+.trade-instant-head b { font-family: var(--hr-sans); font-weight: 800; font-size: 15px; color: var(--hr-fg-0); }
+.trade-instant-head p { font-size: 12.5px; color: var(--hr-fg-2); margin: 4px 0 0; line-height: 1.5; }
+.trade-instant-btn { width: 100%; }
+.trade-instant .trade-status { margin-top: 10px; }
+
+@media (max-width: 620px) {
+  .trade-colloffer .trade-offer-form.is-inline { margin-left: 0; max-width: none; width: 100%; }
+  .trade-colloffer-hint { margin-left: 0; }
+}
+
+/* Friendly "let's get you set up" panel — calm info tone, NOT an alarm. */
+.trade-funds {
+  margin-top: 12px; padding: 16px; border-radius: var(--hr-radius-lg);
+  background: linear-gradient(180deg, rgba(13,166,252,.08), rgba(0,0,0,.28));
+  border: 1px solid rgba(13,166,252,.3);
+}
+.trade-funds-h { display: flex; align-items: center; gap: 8px; font-family: var(--hr-sans); font-weight: 800; font-size: 15px; color: var(--hr-fg-0); margin-bottom: 8px; }
+.trade-funds-h span { font-size: 18px; }
+.trade-funds-p { font-size: 13px; color: var(--hr-fg-1); margin: 0 0 12px; line-height: 1.55; }
+.trade-funds-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.trade-funds-list li {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px 12px; border-radius: var(--hr-radius-md);
+  background: rgba(0,0,0,.28); border: 1px solid var(--hr-line);
+  font-size: 12.5px; color: var(--hr-fg-1); line-height: 1.5;
+}
+.trade-funds-list li b { color: var(--hr-fg-0); }
+.trade-funds-list li.is-ok { border-color: rgba(100,242,169,.4); }
+.trade-funds-ic {
+  flex: 0 0 auto; width: 20px; height: 20px; margin-top: 1px; display: grid; place-items: center;
+  border-radius: 50%; font-size: 11px; font-weight: 900;
+  background: rgba(255,255,255,.08); color: var(--hr-fg-2);
+}
+.trade-funds-list li.is-ok .trade-funds-ic { background: var(--hr-primary); color: var(--hr-on-primary); }
+.trade-funds-net { font-size: 12px; color: var(--hr-fg-2); margin: 0 0 12px; line-height: 1.55; }
+.trade-funds-foot { font-size: 11.5px; color: var(--hr-fg-3); margin: 10px 0 0; line-height: 1.55; }
+.trade-funds-btn {
+  display: inline-flex; align-items: center; justify-content: center; width: 100%;
+  padding: 12px 18px; border-radius: var(--hr-radius-pill);
+  background: linear-gradient(135deg, #FF8D5D, #FF5C16); color: #fff;
+  font-family: var(--hr-sans); font-weight: 800; font-size: 14px;
+  box-shadow: 0 8px 22px rgba(255,92,22,.4);
+  transition: transform .18s, box-shadow .2s;
+}
+.trade-funds-btn:hover { color: #fff; transform: translateY(-2px); box-shadow: 0 12px 30px rgba(255,92,22,.55); }
+.trade-funds-btn[disabled] { opacity: .55; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* Exact-amount bridge quote (Squid) inside the funds panel */
+.trade-bridge-quote { margin-top: 4px; padding-top: 10px; border-top: 1px dashed var(--hr-line-strong); }
+.trade-bridge-line { font-family: var(--hr-sans); font-weight: 800; font-size: 13.5px; color: var(--hr-fg-0); margin-bottom: 4px; }
+.trade-bridge-meta { font-size: 11.5px; color: var(--hr-fg-3); margin-bottom: 10px; }
+.trade-bridge-quote .trade-status { margin-top: 10px; }
+
+/* Info tip (ⓘ): hover on desktop, tap (JS .is-open) on touch. Non-crucial detail
+   lives here so the always-visible copy stays minimal. */
+.trade-tip { position: relative; display: inline-flex; vertical-align: middle; }
+.trade-tip-btn {
+  width: 16px; height: 16px; padding: 0; cursor: pointer;
+  display: grid; place-items: center; border-radius: 50%;
+  border: 1px solid var(--hr-line-strong); background: rgba(255,255,255,.06);
+  color: var(--hr-fg-2); font: italic 700 10px/1 Georgia, serif;
+}
+.trade-tip-btn:hover { color: var(--hr-fg-0); border-color: var(--hr-fg-3); }
+.trade-tip-pop {
+  position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  width: max-content; max-width: 260px; padding: 10px 12px; z-index: 60;
+  border-radius: var(--hr-radius-md); background: var(--hr-bg-3);
+  border: 1px solid var(--hr-line-strong); box-shadow: var(--hr-shadow-2);
+  font-family: var(--hr-body); font-size: 12px; font-weight: 500; line-height: 1.5;
+  color: var(--hr-fg-1); text-align: left; text-transform: none; letter-spacing: normal;
+  opacity: 0; visibility: hidden; transition: opacity .15s; pointer-events: none;
+}
+.trade-tip:hover .trade-tip-pop, .trade-tip.is-open .trade-tip-pop,
+.trade-tip-btn:focus-visible + .trade-tip-pop { opacity: 1; visibility: visible; }
+
+/* Persistent bridge banner — survives modal close, tab switches and page reloads. */
+#trade-bridgebar-slot { display: contents; } /* no phantom flex-gap when empty */
+.trade-bridgebar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 11px 14px; border-radius: var(--hr-radius-lg);
+  background: rgba(13,166,252,.10); border: 1px solid rgba(13,166,252,.35);
+  font-size: 13px; font-weight: 600; color: var(--hr-fg-1);
+}
+.trade-bridgebar b { color: var(--hr-fg-0); font-variant-numeric: tabular-nums; }
+.trade-bridgebar.is-ok { background: rgba(100,242,169,.12); border-color: rgba(100,242,169,.45); }
+.trade-bridgebar.is-ok > span:first-child { color: var(--hr-online); font-weight: 900; }
+.trade-bridgebar.is-bad { background: var(--hr-alert-15); border-color: rgba(255,91,149,.45); }
+.trade-bridgebar.is-bad > span:first-child { color: var(--hr-alert); }
+.trade-bridgebar-links { margin-left: auto; font-size: 12px; }
+.trade-bridgebar-links a { color: var(--hr-primary); font-weight: 700; }
+.trade-bridgebar-x {
+  flex: 0 0 auto; cursor: pointer; width: 24px; height: 24px; border-radius: 50%;
+  border: 1px solid var(--hr-line-strong); background: rgba(0,0,0,.3);
+  color: var(--hr-fg-1); font-size: 14px; font-weight: 700; line-height: 1;
+}
+.trade-bridgebar-x:hover { color: var(--hr-fg-0); background: rgba(0,0,0,.5); }
+
+/* Live bridge tracker: stepper + ETA bar + elapsed clock */
+.trade-track {
+  margin-top: 12px; padding: 12px 14px; border-radius: var(--hr-radius-md);
+  background: rgba(13,166,252,.10); border: 1px solid rgba(13,166,252,.35);
+}
+.trade-track-steps { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.trade-track-steps li { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; color: var(--hr-fg-3); }
+.trade-track-steps li.is-active { color: var(--hr-fg-0); }
+.trade-track-steps li.is-done { color: var(--hr-fg-2); }
+.trade-track-ic {
+  flex: 0 0 auto; width: 22px; height: 22px; display: grid; place-items: center;
+  border-radius: 50%; font-size: 12px; font-weight: 900;
+  background: rgba(255,255,255,.07); color: var(--hr-fg-3);
+}
+.trade-track-steps li.is-done .trade-track-ic { background: var(--hr-primary); color: var(--hr-on-primary); }
+.trade-track-steps li.is-active .trade-track-ic { background: rgba(13,166,252,.25); }
+.trade-track-ic .trade-mini-spin { border-top-color: var(--hr-blueberry); }
+.trade-track-bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.08); overflow: hidden; margin-bottom: 8px; }
+.trade-track-barfill {
+  height: 100%; width: 2%; border-radius: 3px;
+  background: linear-gradient(90deg, var(--hr-blueberry), var(--hr-primary));
+  transition: width 1s linear;
+}
+.trade-track-meta { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 11.5px; color: var(--hr-fg-2); }
+.trade-track-meta b { color: var(--hr-fg-0); font-variant-numeric: tabular-nums; }
+.trade-track-meta a { color: var(--hr-primary); font-weight: 700; }
+.trade-track-note { font-size: 11.5px; color: var(--hr-fg-3); margin: 8px 0 0; line-height: 1.5; }
+
+@media (prefers-reduced-motion: reduce) {
+  .trade-track-barfill { transition: none; }
+}
+
 @media (max-width: 620px) {
   .trade-browse-head { flex-direction: column; align-items: flex-start; }
   .trade-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 11px; }
-  .trade-modal-card { grid-template-columns: 1fr; max-height: 92vh; }
-  .trade-modal-img, .trade-modal-media .trade-tile-noimg { min-height: 200px; max-height: 46vh; }
-}
-@media (max-width: 860px) {
-  .trade-hub-grid { grid-template-columns: 1fr; }
+  /* Stacked: image on top (capped), info scrolls below it. */
+  .trade-modal-card { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); height: auto; max-height: 92vh; }
+  .trade-modal-img, .trade-modal-media .trade-tile-noimg { min-height: 0; height: auto; max-height: 38vh; }
 }
 
 @media (prefers-reduced-motion: reduce) {
