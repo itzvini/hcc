@@ -1084,7 +1084,11 @@ async function handleMarketplaceApi(request, response, url) {
       const prepared = await mktOrderbook.prepareBuy(listingId, taker);
       sendJson(response, 200, prepared);
     } catch (err) {
-      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+      // On a LISTING buy the "fulfiller" is the buyer — seaport's fulfiller-balance
+      // error here just means the buyer lacks ETH, which the client turns into the
+      // funds-help panel (balances + bridge quote), not a generic failure.
+      const code = err.code === 'taker_float' ? 'insufficient' : err.code;
+      sendJson(response, err.statusCode || 503, { error: code || 'unavailable' });
     }
     return;
   }

@@ -818,6 +818,16 @@ async function handleBuy(listingId) {
 
   try {
     setBuy('prepare');
+
+    // Pre-flight FIRST: verify the on-chain balances ourselves before any server or
+    // wallet round-trip — a real shortfall goes straight to the friendly funds panel
+    // (balances + bridge quote). Also means any wallet-side "insufficient" alert that
+    // appears later is a false positive (MetaMask's custom-network reads can lag).
+    const [zkEthBal, imxBal] = await Promise.all([readErc20(IMX_ETH_TOKEN, account), readNative(account)]);
+    const needWei = BigInt(Math.round((it.totalEth ?? it.priceEth) * 1e6)) * 10n ** 12n;
+    if (zkEthBal != null && zkEthBal < needWei) { await showFundsHelp(it); return; }
+    if (imxBal != null && imxBal === 0n) { setBuy('error', { msg: t('trade.err.gas') }); return; }
+
     const res = await fetch('/api/market/creatures/buy/prepare', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -829,15 +839,6 @@ async function handleBuy(listingId) {
       setBuy('error', { msg: buyServerError(data.error) });
       return;
     }
-
-    // Pre-flight: verify the on-chain balances OURSELVES before opening MetaMask, so a
-    // real shortfall surfaces as the friendly funds panel — and any wallet-side
-    // "insufficient funds" alert that still appears is a false positive (MetaMask's
-    // balance reads on custom networks can lag and report 0).
-    const [zkEthBal, imxBal] = await Promise.all([readErc20(IMX_ETH_TOKEN, account), readNative(account)]);
-    const needWei = BigInt(Math.round((it.totalEth ?? it.priceEth) * 1e6)) * 10n ** 12n;
-    if (zkEthBal != null && zkEthBal < needWei) { await showFundsHelp(it); return; }
-    if (imxBal != null && imxBal === 0n) { setBuy('error', { msg: t('trade.err.gas') }); return; }
 
     for (const tx of (data.transactions || [])) {
       const isApproval = tx.purpose === 'APPROVAL';
