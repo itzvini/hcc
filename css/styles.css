@@ -1733,6 +1733,18 @@ a.trade-buy-btn { display: inline-flex; }
 .trade-tip:hover .trade-tip-pop, .trade-tip.is-open .trade-tip-pop,
 .trade-tip-btn:focus-visible + .trade-tip-pop { opacity: 1; visibility: visible; }
 
+/* Wallet-bug notice (e.g. MetaMask 13.33+ phantom "insufficient IMX") */
+#trade-mmwarn-slot { display: contents; } /* no phantom flex-gap when empty */
+.trade-mmwarn {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 11px 14px; border-radius: var(--hr-radius-lg);
+  background: color-mix(in srgb, var(--hr-banana) 8%, rgba(0,0,0,.3));
+  border: 1px solid rgba(255,249,95,.4);
+  font-size: 13px; font-weight: 600; color: var(--hr-fg-1);
+}
+.trade-mmwarn > span:first-child { color: var(--hr-banana); }
+.trade-mmwarn .trade-bridgebar-x { margin-left: auto; }
+
 /* Persistent bridge banner — survives modal close, tab switches and page reloads. */
 #trade-bridgebar-slot { display: contents; } /* no phantom flex-gap when empty */
 .trade-bridgebar {

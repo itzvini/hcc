@@ -136,11 +136,49 @@ function fmtFiat(eth) {
   }
 }
 
+// --- Known wallet bugs ---
+// MetaMask extension 13.33.0+ ships a regression that wrongly reports "not enough IMX
+// to pay for network fees" on custom networks even when the balance is ample (confirmed
+// in the wild 2026-06-10; 13.32 and below behave). We read the wallet's version and
+// warn affected users BEFORE they hit the wall. Bounded to major 13 on the assumption
+// 14.x ships fixed — revisit/remove once MetaMask patches the regression.
+let mmBuggyVersion = null;
+async function detectWalletBug() {
+  if (!eth()) return;
+  try {
+    const v = String(await eth().request({ method: 'web3_clientVersion' }) || '');
+    const m = v.match(/MetaMask\/v?(\d+)\.(\d+)\.(\d+)/i);
+    if (m && Number(m[1]) === 13 && Number(m[2]) >= 33) mmBuggyVersion = `${m[1]}.${m[2]}.${m[3]}`;
+  } catch { /* harmless — no warning then */ }
+  patchWalletNotice();
+}
+function mmWarnDismissed() {
+  try { return localStorage.getItem('hcc-mmwarn-' + mmBuggyVersion) === '1'; } catch { return false; }
+}
+function walletNoticeHtml() {
+  if (!mmBuggyVersion || mmWarnDismissed()) return '';
+  return `
+    <div class="trade-mmwarn" role="note">
+      <span aria-hidden="true">⚠</span>
+      <span>${esc(t('trade.mmbug.notice').replace('{v}', mmBuggyVersion))}</span>
+      ${tipHtml('trade.mmbug.detail')}
+      <button class="trade-bridgebar-x" data-act="mmwarn-dismiss" type="button" aria-label="${esc(t('trade.bridgebar.dismiss'))}">×</button>
+    </div>`;
+}
+function patchWalletNotice() {
+  const el = root()?.querySelector('#trade-mmwarn-slot');
+  if (el) el.innerHTML = walletNoticeHtml();
+}
+
 // Map a wallet/provider error to a friendly, actionable message — never a raw revert.
 function friendlyError(err) {
   const code = err?.code;
   const msg  = (err?.message || '').toLowerCase();
-  if (code === 4001 || /user rejected|user denied|rejected the request/.test(msg)) return t('trade.err.rejected');
+  if (code === 4001 || /user rejected|user denied|rejected the request/.test(msg)) {
+    // On buggy MetaMask builds a "cancel" is often forced by the phantom insufficient-
+    // IMX block — say so, or the user blames themselves (or us).
+    return t('trade.err.rejected') + (mmBuggyVersion ? ` ${t('trade.err.mmBugHint')}` : '');
+  }
   if (code === -32002 || /already pending|already processing|request already/.test(msg)) return t('trade.err.pending');
   if (/insufficient funds|insufficient balance|gas required|exceeds balance/.test(msg)) return t('trade.err.gas');
   if (code === 4902 || /unrecognized chain|wrong network/.test(msg)) return t('trade.err.network');
@@ -1442,7 +1480,7 @@ function render() {
   const el = root();
   if (!el) return;
   el.setAttribute('aria-busy', 'false');
-  el.innerHTML = `${flashBanner()}${walletBarHtml()}<div id="trade-bridgebar-slot">${bridgeBannerHtml()}</div>${tradeTabsHtml()}${viewHtml()}${modalHtml()}`;
+  el.innerHTML = `${flashBanner()}${walletBarHtml()}<div id="trade-mmwarn-slot">${walletNoticeHtml()}</div><div id="trade-bridgebar-slot">${bridgeBannerHtml()}</div>${tradeTabsHtml()}${viewHtml()}${modalHtml()}`;
   ensureDelegation();
   if (account && onZk()) {
     refreshBalance();
@@ -1474,6 +1512,9 @@ function onClick(e) {
     case 'cancel-offer':   return handleCancelOffer(target.dataset.offer);
     case 'bridge-now':     return handleBridgeNow();
     case 'bridge-dismiss': return dismissBridge();
+    case 'mmwarn-dismiss':
+      try { localStorage.setItem('hcc-mmwarn-' + mmBuggyVersion, '1'); } catch { /* fine */ }
+      return patchWalletNotice();
     case 'connect':    return connect();
     case 'disconnect': account = null; resetSellerState(); return render();
     case 'switch':     return switchNetwork(target);
@@ -1534,6 +1575,7 @@ export async function loadMarketplace() {
   wireEsc();
   wireTips();
   wireProviderEvents();
+  detectWalletBug();
   if (eth()) {
     try {
       const accs = await eth().request({ method: 'eth_accounts' });
