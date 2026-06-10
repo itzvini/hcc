@@ -10,6 +10,7 @@ try { process.loadEnvFile(); } catch { /* no .env — fine */ }
 
 const db = require('./lib/db');
 const auth = require('./lib/auth');
+const mktOrderbook = require('./lib/marketplace-orderbook');
 const { computeEligibility, BRACKETS } = require('./lib/eligibility');
 const { PROPOSITIONS, PROPOSITION_IDS } = require('./lib/propositions');
 const derive = require('./lib/derive-positions');
@@ -761,6 +762,338 @@ getMarketStats().catch(err => console.error('Market stats prefetch failed:', err
 // with no visitors (computeMarketStats records the floor as a side effect).
 setInterval(() => { getMarketStats().catch(() => {}); }, 6 * 60 * 60 * 1000).unref();
 
+// --- Marketplace: browse active Creature listings (non-custodial) ---
+// Public browse surface for the Trade tab. Joins the Immutable orderbook's active ETH
+// listings (cheapest first) with each token's metadata + image, so the client renders
+// a grid without ever touching keys or funds. Buy/sell/cancel (which need signed
+// orders) arrive in later phases. Short-cached per cursor — listings move, so freshness
+// matters more here than for the slow holder/market snapshots.
+const MKT_PAGE_SIZE       = 24;
+const MKT_LISTINGS_TTL_MS = 60 * 1000;
+const CREATURE_IMG_HOST   = 'https://cdn-production.joinhighrise.com'; // Creature art host (see CSP img-src)
+const listingsCache = new Map(); // cursor ('' = first page) -> { data, at }
+
+// Shape a raw metadata record into just the public fields the client needs.
+function shapeCreatureMeta(r, tokenId) {
+  return {
+    name: r.name || `Highrise Creature #${tokenId}`,
+    image: r.image || null,
+    description: r.description || null,
+    attributes: Array.isArray(r.attributes)
+      ? r.attributes.map(a => ({ trait: a.trait_type, value: a.value })).filter(a => a.trait && a.value != null)
+      : [],
+  };
+}
+
+// Metadata for many tokens in ONE request → Map<tokenId, meta>. The per-token metadata
+// endpoint rate-limits distinct parallel calls (429s), so we never fan out: the list
+// endpoint accepts repeated token_id params and returns them all at once.
+async function fetchCreatureMetaBatch(tokenIds) {
+  const out = new Map();
+  if (!tokenIds.length) return out;
+  const url = new URL(`https://api.immutable.com/v1/chains/${IMX_ZKEVM_CHAIN}/collections/${CREATURE_CONTRACT}/nfts`);
+  for (const id of tokenIds) url.searchParams.append('token_id', id);
+  url.searchParams.set('page_size', String(Math.min(200, tokenIds.length)));
+  try {
+    const body = await imxFetch(url.toString());
+    for (const r of (body.result ?? [])) out.set(String(r.token_id), shapeCreatureMeta(r, r.token_id));
+  } catch (err) {
+    console.error('Creature metadata batch failed:', err.message); // grid still renders, sans art
+  }
+  return out;
+}
+
+// One Creature's metadata (single-token path for the detail endpoint).
+async function fetchCreatureMeta(tokenId) {
+  const url = `https://api.immutable.com/v1/chains/${IMX_ZKEVM_CHAIN}/collections/${CREATURE_CONTRACT}/nfts/${tokenId}`;
+  try { return shapeCreatureMeta((await imxFetch(url)).result || {}, tokenId); }
+  catch { return null; }
+}
+
+// A page of cheapest active ETH listings, each joined with its token metadata.
+async function fetchCreatureListingsPage(cursor) {
+  const url = new URL(`https://api.immutable.com/v1/chains/${IMX_ZKEVM_CHAIN}/orders/listings`);
+  url.searchParams.set('sell_item_contract_address', CREATURE_CONTRACT);
+  url.searchParams.set('buy_item_contract_address', IMX_ETH_TOKEN);
+  url.searchParams.set('status', 'ACTIVE');
+  url.searchParams.set('sort_by', 'buy_item_amount');
+  url.searchParams.set('sort_direction', 'asc');
+  url.searchParams.set('page_size', String(MKT_PAGE_SIZE));
+  if (cursor) url.searchParams.set('page_cursor', cursor);
+
+  const body = await imxFetch(url.toString());
+  const orders = body.result ?? [];
+  const metaById = await fetchCreatureMetaBatch(orders.map(o => o.sell?.[0]?.token_id).filter(Boolean));
+
+  // The price the seller set is buy.amount; the buyer also pays the fee items on top.
+  const items = orders.map(o => {
+    const sell = (o.sell ?? [])[0] || {};
+    const buy  = (o.buy ?? [])[0] || {};
+    const tokenId = sell.token_id;
+    if (!tokenId || !buy.amount) return null;
+    const priceWei = BigInt(buy.amount);
+    const feesWei  = (o.fees ?? []).reduce((s, f) => s + (f.amount ? BigInt(f.amount) : 0n), 0n);
+    const meta = metaById.get(String(tokenId)) || {};
+    return {
+      listingId: o.id,
+      tokenId,
+      seller: o.account_address || null,
+      priceEth: round4(Number(priceWei) / 1e18),
+      totalEth: round4(Number(priceWei + feesWei) / 1e18),
+      name: meta.name || `Highrise Creature #${tokenId}`,
+      image: meta.image || null,
+      rarity: meta.attributes?.find(a => /rarity/i.test(a.trait))?.value || null,
+    };
+  }).filter(Boolean);
+  return { items, nextCursor: body.page?.next_cursor ?? null };
+}
+
+// Parse a user-supplied decimal ETH string into wei, exactly (no floats).
+// Returns a BigInt or null when the input isn't a sane positive amount.
+function parseEthToWei(s) {
+  const m = /^(\d{1,6})(?:\.(\d{1,18}))?$/.exec(String(s ?? '').trim());
+  if (!m) return null;
+  const wei = BigInt(m[1]) * 10n ** 18n + BigInt((m[2] || '').padEnd(18, '0'));
+  return wei > 0n ? wei : null;
+}
+
+// All Creatures owned by one wallet (for the sell picker): [{tokenId, name, image}].
+// Public on-chain data; the client only ever asks for its own connected address.
+async function getOwnedCreatures(address) {
+  const items = [];
+  let cursor = null, pages = 0;
+  do {
+    const url = new URL(`https://api.immutable.com/v1/chains/${IMX_ZKEVM_CHAIN}/accounts/${address}/nfts`);
+    url.searchParams.set('contract_address', CREATURE_CONTRACT);
+    url.searchParams.set('page_size', '100');
+    if (cursor) url.searchParams.set('page_cursor', cursor);
+    const body = await imxFetch(url.toString());
+    for (const n of (body.result ?? [])) {
+      items.push({ tokenId: String(n.token_id), name: n.name || `Highrise Creature #${n.token_id}`, image: n.image || null });
+    }
+    cursor = body.page?.next_cursor ?? null;
+    pages++;
+  } while (cursor && pages < 5); // 500 Creatures is plenty for a picker
+  return { items, truncated: !!cursor };
+}
+
+// One wallet's ACTIVE listings for the Creature collection (for "My listings").
+async function getMyListings(address) {
+  const url = new URL(`https://api.immutable.com/v1/chains/${IMX_ZKEVM_CHAIN}/orders/listings`);
+  url.searchParams.set('sell_item_contract_address', CREATURE_CONTRACT);
+  url.searchParams.set('account_address', address);
+  url.searchParams.set('status', 'ACTIVE');
+  url.searchParams.set('page_size', '50');
+  const body = await imxFetch(url.toString());
+  const orders = body.result ?? [];
+  const metaById = await fetchCreatureMetaBatch(orders.map(o => o.sell?.[0]?.token_id).filter(Boolean));
+  return {
+    items: orders.map(o => {
+      const tokenId = o.sell?.[0]?.token_id;
+      const amount = o.buy?.[0]?.amount;
+      if (!tokenId || !amount) return null;
+      const meta = metaById.get(String(tokenId)) || {};
+      return {
+        listingId: o.id,
+        tokenId,
+        priceEth: round4(Number(BigInt(amount)) / 1e18),
+        name: meta.name || `Highrise Creature #${tokenId}`,
+        image: meta.image || null,
+      };
+    }).filter(Boolean),
+  };
+}
+
+async function getCreatureListings(cursor = '') {
+  const key = cursor || '';
+  const hit = listingsCache.get(key);
+  if (hit && Date.now() - hit.at < MKT_LISTINGS_TTL_MS) return hit.data;
+  const page = await fetchCreatureListingsPage(cursor);
+  const data = {
+    items: page.items,
+    nextCursor: page.nextCursor,
+    ethUsd: marketCache.data?.ethUsd ?? null, // reuse the market cache's rate; null until warm
+    fetchedAt: new Date().toISOString(),
+  };
+  if (listingsCache.size > 64) listingsCache.clear(); // bound memory from many distinct cursors
+  listingsCache.set(key, { data, at: Date.now() });
+  return data;
+}
+
+// Full detail for one token: metadata + current on-chain owner (read straight from the
+// contract). The active listing, if any, is supplied client-side from the grid card.
+async function getCreatureToken(tokenId) {
+  const [meta, ownerRaw] = await Promise.all([
+    fetchCreatureMeta(tokenId),
+    ethCall(ZK_RPC_URL, CREATURE_CONTRACT, SEL_OWNER_OF + padUint(BigInt(tokenId))).catch(() => null),
+  ]);
+  const owner = ownerRaw && ownerRaw.length >= 42 ? ('0x' + ownerRaw.slice(-40)).toLowerCase() : null;
+  return {
+    tokenId,
+    name: meta?.name || `Highrise Creature #${tokenId}`,
+    image: meta?.image || null,
+    description: meta?.description || null,
+    attributes: meta?.attributes || [],
+    owner,
+  };
+}
+
+// Public marketplace API — browse only (no auth, no wallet, nothing sensitive).
+async function handleMarketplaceApi(request, response, url) {
+  const { pathname } = url;
+
+  // Bound upstream load from public browsing (per client IP).
+  const ip = (request.headers['x-forwarded-for'] || '').split(',')[0].trim()
+    || request.socket.remoteAddress || 'unknown';
+  const wait = rateLimited(`mkt:${ip}`, 90, 60 * 1000);
+  if (wait) { sendJson(response, 429, { error: 'Too many requests.' }, { 'Retry-After': String(wait) }); return; }
+
+  if (pathname === '/api/market/creatures/listings') {
+    const data = await getCreatureListings(url.searchParams.get('cursor') || '');
+    sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=30' });
+    return;
+  }
+
+  const tokenMatch = pathname.match(/^\/api\/market\/creatures\/token\/(\d{1,80})$/);
+  if (tokenMatch) {
+    const data = await getCreatureToken(tokenMatch[1]);
+    sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=120' });
+    return;
+  }
+
+  // Prepare a buy: returns the unsigned transactions (approval + fulfilment) for the
+  // buyer's wallet to sign. No auth — the wallet signature is the real authorization;
+  // the taker address only scopes the prepared transactions to that buyer.
+  if (pathname === '/api/market/creatures/buy/prepare' && request.method === 'POST') {
+    if (!mktOrderbook.available()) { sendJson(response, 503, { error: 'unavailable' }); return; }
+    // Order preparation hits the orderbook + RPC upstream — tighter cap than browsing.
+    const bWait = rateLimited(`mktbuy:${ip}`, 15, 60 * 1000);
+    if (bWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(bWait) }); return; }
+
+    const body = await readJsonBody(request, 4 * 1024);
+    const listingId = String(body.listingId || '').toLowerCase();
+    const taker = String(body.takerAddress || '').toLowerCase();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(listingId)) {
+      sendJson(response, 400, { error: 'bad_listing' }); return;
+    }
+    if (!HEX_ADDRESS.test(taker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
+
+    try {
+      const prepared = await mktOrderbook.prepareBuy(listingId, taker);
+      sendJson(response, 200, prepared);
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // The seller's own Creatures (sell picker) and active listings (My listings).
+  // Public on-chain data; the address is the caller's own connected wallet.
+  const ownedMatch = pathname.match(/^\/api\/market\/creatures\/(owned|mine)\/(0x[0-9a-f]{40})$/);
+  if (ownedMatch) {
+    const data = ownedMatch[1] === 'owned'
+      ? await getOwnedCreatures(ownedMatch[2])
+      : await getMyListings(ownedMatch[2]);
+    sendJson(response, 200, data, { 'Cache-Control': 'no-store' }); // wallet-keyed — never shared-cache it
+    return;
+  }
+
+  const ORDER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+  // Prepare a listing: NFT approval tx (first time only) + typed data to sign (gasless).
+  if (pathname === '/api/market/creatures/sell/prepare' && request.method === 'POST') {
+    if (!mktOrderbook.available()) { sendJson(response, 503, { error: 'unavailable' }); return; }
+    const sWait = rateLimited(`mktsell:${ip}`, 15, 60 * 1000);
+    if (sWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(sWait) }); return; }
+
+    const body = await readJsonBody(request, 4 * 1024);
+    const maker = String(body.makerAddress || '').toLowerCase();
+    const tokenId = String(body.tokenId || '');
+    const wei = parseEthToWei(body.priceEth);
+    if (!HEX_ADDRESS.test(maker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
+    if (!/^\d{1,80}$/.test(tokenId)) { sendJson(response, 400, { error: 'bad_token' }); return; }
+    if (wei == null) { sendJson(response, 400, { error: 'bad_price' }); return; }
+
+    try {
+      const prepared = await mktOrderbook.prepareSell({
+        makerAddress: maker, sellContract: CREATURE_CONTRACT, tokenId,
+        buyContract: IMX_ETH_TOKEN, amountWei: wei.toString(),
+      });
+      sendJson(response, 200, prepared);
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // Create the listing from the signed order (gasless; the orderbook verifies the
+  // signature against the order's offerer, so a forged body can't list anyone's NFT).
+  if (pathname === '/api/market/creatures/sell/create' && request.method === 'POST') {
+    if (!mktOrderbook.available()) { sendJson(response, 503, { error: 'unavailable' }); return; }
+    const cWait = rateLimited(`mktsell:${ip}`, 15, 60 * 1000);
+    if (cWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(cWait) }); return; }
+
+    const body = await readJsonBody(request, 64 * 1024);
+    const { orderComponents, orderHash, signature } = body || {};
+    if (!orderComponents || typeof orderComponents !== 'object'
+      || !/^0x[0-9a-f]{64}$/i.test(String(orderHash || ''))
+      || !/^0x[0-9a-f]{60,2600}$/i.test(String(signature || ''))) {
+      sendJson(response, 400, { error: 'bad_order' }); return;
+    }
+    // Scope allowlist: this endpoint only relays orders selling THIS collection for
+    // THIS payment token (mirrors what sell/prepare pins). The orderbook would verify
+    // the signature anyway, but without this the endpoint is a generic Seaport relay.
+    const offer = Array.isArray(orderComponents.offer) ? orderComponents.offer : [];
+    const consideration = Array.isArray(orderComponents.consideration) ? orderComponents.consideration : [];
+    const scopeOk = offer.length === 1
+      && String(offer[0]?.token || '').toLowerCase() === CREATURE_CONTRACT.toLowerCase()
+      && consideration.length >= 1
+      && consideration.every(c => String(c?.token || '').toLowerCase() === IMX_ETH_TOKEN);
+    if (!scopeOk) { sendJson(response, 400, { error: 'bad_order' }); return; }
+    try {
+      const created = await mktOrderbook.createSell({ orderComponents, orderHash, signature });
+      listingsCache.clear(); // the new listing should appear in browse promptly
+      sendJson(response, 200, created);
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // Gasless cancel: typed data to sign, then submit with the signature. Only the
+  // order's creator can produce a valid signature — the orderbook enforces that.
+  if ((pathname === '/api/market/creatures/cancel/prepare' || pathname === '/api/market/creatures/cancel')
+      && request.method === 'POST') {
+    if (!mktOrderbook.available()) { sendJson(response, 503, { error: 'unavailable' }); return; }
+    const kWait = rateLimited(`mktsell:${ip}`, 15, 60 * 1000);
+    if (kWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(kWait) }); return; }
+
+    const body = await readJsonBody(request, 16 * 1024);
+    const addr = String(body.accountAddress || '').toLowerCase();
+    const orderIds = Array.isArray(body.orderIds) ? body.orderIds.map(s => String(s).toLowerCase()) : [];
+    if (!HEX_ADDRESS.test(addr)) { sendJson(response, 400, { error: 'bad_address' }); return; }
+    if (!orderIds.length || orderIds.length > 20 || !orderIds.every(id => ORDER_ID.test(id))) {
+      sendJson(response, 400, { error: 'bad_order' }); return;
+    }
+    try {
+      if (pathname.endsWith('/prepare')) {
+        sendJson(response, 200, await mktOrderbook.prepareCancel(orderIds, addr));
+      } else {
+        const signature = String(body.signature || '');
+        if (!/^0x[0-9a-f]{60,2600}$/i.test(signature)) { sendJson(response, 400, { error: 'bad_signature' }); return; }
+        const result = await mktOrderbook.submitCancel(orderIds, addr, signature);
+        listingsCache.clear(); // cancelled listings should drop out of browse promptly
+        sendJson(response, 200, result);
+      }
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  sendJson(response, 404, { error: 'Not found' });
+}
+
 // --- Council auth + eligibility API ---
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // seconds, mirrors db.js SESSION_TTL_MS
 
@@ -1422,7 +1755,7 @@ const CSP = [
   "default-src 'self'",
   "script-src 'self' https://cdn.jsdelivr.net",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: https://cdn.highrisegame.com https://cdn.discordapp.com",
+  "img-src 'self' data: https://cdn.highrisegame.com https://cdn.discordapp.com https://cdn-production.joinhighrise.com",
   "font-src 'self'",
   "connect-src 'self'",
   "frame-ancestors 'none'",
@@ -1478,11 +1811,20 @@ function resolveFile(requestUrl) {
   return filePath;
 }
 
+// Parse a request URL against the (untrusted) Host header. A malformed Host makes
+// `new URL` throw synchronously — before any async .catch() attaches — which would
+// crash the process; return null instead so routes can answer 400.
+function parseRequestUrl(request) {
+  try { return new URL(request.url, `http://${request.headers.host || 'localhost'}`); }
+  catch { return null; }
+}
+
 const server = http.createServer((request, response) => {
   // Auth + eligibility API (async). Catches errors so a failed lookup sends the
   // user back to the Apply panel with an error flag instead of hanging.
   if (request.url.startsWith('/api/auth') || request.url === '/api/me') {
-    const url = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
+    const url = parseRequestUrl(request);
+    if (!url) { sendJson(response, 400, { error: 'Bad request.' }); return; }
     handleAuthApi(request, response, url).catch(err => {
       console.error('Auth API error:', err.message);
       if (!response.headersSent) {
@@ -1549,6 +1891,17 @@ const server = http.createServer((request, response) => {
         response.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
         response.end(JSON.stringify({ error: 'Election status temporarily unavailable.' }));
       });
+    return;
+  }
+
+  if (request.url.startsWith('/api/market/creatures')) {
+    const url = parseRequestUrl(request);
+    if (!url) { sendJson(response, 400, { error: 'bad_request' }); return; }
+    handleMarketplaceApi(request, response, url).catch(err => {
+      console.error('Marketplace API error:', err.message);
+      // readJsonBody rejections carry a 4xx statusCode (bad JSON / oversized body).
+      if (!response.headersSent) sendJson(response, err.statusCode || 503, { error: err.statusCode ? 'bad_request' : 'unavailable' });
+    });
     return;
   }
 

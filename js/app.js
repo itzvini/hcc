@@ -5,6 +5,7 @@ import { loadChangelog, rerenderChangelog } from './changelog.js';
 import { loadApply, rerenderApply } from './apply.js';
 import { loadElection, rerenderElection } from './election.js';
 import { loadVote, rerenderVote } from './vote.js';
+import { loadMarketplace, rerenderMarketplace } from './marketplace.js';
 
 // Language switcher — re-render dynamic views after language change
 document.querySelectorAll('.lang-btn').forEach(btn => {
@@ -14,6 +15,7 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
     rerenderApply();
     rerenderElection();
     rerenderVote();
+    rerenderMarketplace();
   }));
 });
 
@@ -27,6 +29,7 @@ let holdersLoaded   = false;
 let marketLoaded    = false;
 let changelogLoaded = false;
 let applyLoaded     = false;
+let tradeLoaded     = false;
 
 // Mobile drawer open/close
 function setDrawer(open) {
@@ -61,6 +64,7 @@ function selectTab(name, updateHash = true) {
   if (name === 'market'    && !marketLoaded)    { marketLoaded    = true; loadMarketChart(); }
   if (name === 'changelog' && !changelogLoaded) { changelogLoaded = true; loadChangelog(); }
   if (name === 'apply'     && !applyLoaded)     { applyLoaded     = true; loadApply(); loadElection(); loadVote(); }
+  if (name === 'trade'     && !tradeLoaded)     { tradeLoaded     = true; loadMarketplace(); }
   if (updateHash) history.replaceState(null, '', `#${name}`);
 }
 
@@ -90,7 +94,7 @@ subTabs.forEach(btn => btn.addEventListener('click', () => {
   document.getElementById('guides-top')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }));
 
-const HASH_TABS = ['club', 'council', 'apply', 'roadmap', 'guides', 'perks', 'holders', 'market', 'changelog', 'contribute', 'terms', 'privacy'];
+const HASH_TABS = ['club', 'council', 'apply', 'roadmap', 'guides', 'perks', 'holders', 'market', 'trade', 'changelog', 'contribute', 'terms', 'privacy'];
 
 // Footer / in-page links like #terms and #privacy switch tabs (and deep-links on load)
 window.addEventListener('hashchange', () => {
@@ -113,6 +117,7 @@ initI18n().then(() => {
   rerenderElection();
   rerenderVote();
   rerenderMarket();
+  rerenderMarketplace();
 });
 
 // Jump animation on hover / click / tap

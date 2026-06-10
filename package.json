@@ -9,6 +9,7 @@
     "dev": "node --env-file-if-exists=.env server.js"
   },
   "dependencies": {
+    "@imtbl/orderbook": "^2.20.0",
     "pg": "^8.13.1"
   },
   "engines": {

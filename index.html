@@ -44,6 +44,7 @@
         <button class="page-tab" type="button" role="tab" id="tab-perks" aria-selected="false" aria-controls="panel-perks" data-tab="perks" data-i18n="nav.perks">Perks</button>
         <button class="page-tab" type="button" role="tab" id="tab-holders" aria-selected="false" aria-controls="panel-holders" data-tab="holders" data-i18n="nav.holders">Holders</button>
         <button class="page-tab" type="button" role="tab" id="tab-market" aria-selected="false" aria-controls="panel-market" data-tab="market" data-i18n="nav.market">Market</button>
+        <button class="page-tab" type="button" role="tab" id="tab-trade" aria-selected="false" aria-controls="panel-trade" data-tab="trade" data-i18n="nav.trade">Trade</button>
         <button class="page-tab" type="button" role="tab" id="tab-changelog" aria-selected="false" aria-controls="panel-changelog" data-tab="changelog" data-i18n="nav.changelog">Changelog</button>
         <button class="page-tab" type="button" role="tab" id="tab-contribute" aria-selected="false" aria-controls="panel-contribute" data-tab="contribute" data-i18n="nav.contribute">Contribute</button>
       </div>
@@ -106,6 +107,12 @@
       <span class="hub-ico">📈</span>
       <span class="hub-t" data-i18n="nav.market">Market</span>
       <span class="hub-d" data-i18n="hub.market.d">Floor prices &amp; real sale history.</span>
+      <span class="hub-arrow">→</span>
+    </button>
+    <button class="hub-card" type="button" data-goto="trade">
+      <span class="hub-ico">🛒</span>
+      <span class="hub-t" data-i18n="nav.trade">Trade</span>
+      <span class="hub-d" data-i18n="hub.trade.d">Buy, sell &amp; move Creatures from your wallet.</span>
       <span class="hub-arrow">→</span>
     </button>
     <button class="hub-card" type="button" data-goto="changelog">
@@ -858,6 +865,25 @@
       <p class="holders-updated" id="market-updated"></p>
       <p class="holders-updated" style="margin-top:6px;opacity:.7" data-i18n="market.source">Creatures via Immutable · LAND via OpenSea</p>
     </div>
+  </section>
+</main>
+
+<main id="panel-trade" class="tab-panel" role="tabpanel" aria-labelledby="tab-trade" hidden>
+  <section class="wrap">
+    <div class="eyebrow" data-i18n="trade.eyebrow">Marketplace</div>
+    <h2 class="trade-h2"><span data-i18n="trade.h2">Trade your Creatures</span> <span class="trade-beta-chip">Beta</span></h2>
+    <p class="lead" data-i18n="trade.lead">Browse Creatures for sale, then buy, sell or move them straight from your own wallet — no middleman, no custody.</p>
+
+    <div class="trade-beta-note" role="note">
+      <span class="trade-beta-chip" aria-hidden="true">Beta</span>
+      <p data-i18n="trade.beta.note">This marketplace is brand new and still being tested. Transactions are real and move real money — use it at your own risk, start small, and double-check every confirmation in your wallet. Spotted something odd? Tell us on Discord.</p>
+    </div>
+
+    <div id="trade-app" class="trade-box" aria-live="polite" aria-busy="true">
+      <div class="apply-loading"><div class="apply-spinner"></div></div>
+    </div>
+
+    <p class="apply-fineprint" data-i18n="trade.fineprint">This marketplace is non-custodial and open source: every transaction is signed by your own wallet on Immutable zkEVM, and this site never holds your Creatures or funds. Only Creatures in a self-custody wallet like MetaMask can be traded — if yours are in Immutable Passport, withdraw them first. You'll need a little IMX for network gas.</p>
   </section>
 </main>
 
