@@ -83,6 +83,12 @@ let mine = null;           // null = not loaded; [] = loaded, none
 let sellerLoading = false;
 let sellSel = null;        // tokenId picked for sale
 let sellPickOffers = null; // specific offers on the picked token (instant-sell target)
+
+// Transfer state: picked Creature + live recipient assessment.
+let transferSel = null;
+let transferCheck = null;      // null | 'loading' | {addr, valid, reason?, checksum, contract, active, activityKnown, creatures}
+let transferAck = false;       // explicit confirmation for never-used addresses
+let transferCheckTimer = null;
 let sellState = null;      // {phase, msg?, hash?}: prepare|approve|approveWait|sign|create|done|error
 let cancelBusy = null;     // listingId currently being cancelled
 const SELL_BUSY_PHASES = new Set(['prepare', 'approve', 'approveWait', 'sign', 'create']);
@@ -246,6 +252,46 @@ let safetyOpen = false;
 function safetyAcked() {
   try { return localStorage.getItem(SAFETY_ACK) === '1'; } catch { return true; }
 }
+
+// "60 seconds that protect your Creatures" — literally. The connect button unlocks
+// after a real 60s, anchored to the FIRST time the primer was seen (persisted, so a
+// refresh doesn't restart it, and time spent reading the full guide counts).
+const SAFETY_T0 = 'hcc-safety-t0';
+const SAFETY_WAIT_MS = 60 * 1000; // tune here if 60s proves too much friction
+let safetyT0Mem = null;
+let safetyTimer = null;
+function safetyT0() {
+  try {
+    let v = Number(localStorage.getItem(SAFETY_T0)) || 0;
+    if (!v) { v = Date.now(); localStorage.setItem(SAFETY_T0, String(v)); }
+    return v;
+  } catch {
+    if (!safetyT0Mem) safetyT0Mem = Date.now();
+    return safetyT0Mem;
+  }
+}
+function safetyRemainingMs() {
+  return Math.max(0, safetyT0() + SAFETY_WAIT_MS - Date.now());
+}
+function startSafetyTicker() {
+  if (safetyTimer) return;
+  safetyTimer = setInterval(() => {
+    if (!safetyOpen || !root()) { clearInterval(safetyTimer); safetyTimer = null; return; }
+    const rem = safetyRemainingMs();
+    const bar = root().querySelector('#trade-safety-bar');
+    if (bar) bar.style.width = `${Math.min(100, ((SAFETY_WAIT_MS - rem) / SAFETY_WAIT_MS) * 100)}%`;
+    const btn = root().querySelector('#trade-safety-ok');
+    if (!btn) return;
+    if (rem > 0) {
+      btn.disabled = true;
+      btn.textContent = `${t('trade.safety.ok')} · ${Math.ceil(rem / 1000)}s`;
+    } else {
+      btn.disabled = false;
+      btn.textContent = t('trade.safety.ok');
+      clearInterval(safetyTimer); safetyTimer = null;
+    }
+  }, 250);
+}
 function safetyHtml() {
   if (!safetyOpen) return '';
   const RULES = [['🤫', 1], ['💬', 2], ['🧐', 3], ['🔗', 4]].map(([ico, i], idx) => `
@@ -261,9 +307,11 @@ function safetyHtml() {
         <h3 class="trade-safety-h">${esc(t('trade.safety.h'))}</h3>
         <p class="trade-safety-p">${esc(t('trade.safety.p'))}</p>
         <ul class="trade-safety-rules">${RULES}</ul>
+        <div class="trade-safety-track" aria-hidden="true"><div class="trade-safety-barfill" id="trade-safety-bar" style="width:${Math.min(100, ((SAFETY_WAIT_MS - safetyRemainingMs()) / SAFETY_WAIT_MS) * 100)}%"></div></div>
         <div class="trade-safety-actions">
           <button class="apply-btn-ghost" data-act="safety-guide" type="button">${esc(t('trade.safety.guide'))}</button>
-          <button class="trade-send trade-safety-ok" data-act="safety-ack" type="button">${esc(t('trade.safety.ok'))}</button>
+          <button class="trade-send trade-safety-ok" id="trade-safety-ok" data-act="safety-ack" type="button" ${safetyRemainingMs() > 0 ? 'disabled' : ''}>
+            ${esc(t('trade.safety.ok'))}${safetyRemainingMs() > 0 ? ` · ${Math.ceil(safetyRemainingMs() / 1000)}s` : ''}</button>
         </div>
         <p class="trade-safety-foot">${esc(t('trade.safety.foot'))}</p>
       </div>
@@ -279,7 +327,7 @@ function openSafetyGuide() {
 
 async function connect() {
   if (!eth() || busy) return;
-  if (!safetyAcked()) { safetyOpen = true; render(); return; }
+  if (!safetyAcked()) { safetyOpen = true; render(); startSafetyTicker(); return; }
   busy = true; render();
   try {
     const accounts = await eth().request({ method: 'eth_requestAccounts' });
@@ -1396,18 +1444,140 @@ function sellViewHtml() {
     </form>`;
 }
 
+// Picker of transferable Creatures (owned minus actively listed — transferring a
+// listed Creature would leave a phantom listing behind).
+function transferPickerHtml() {
+  if (owned === null) return `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.sell.loadingOwned'))}</div>`;
+  const listedIds = new Set((mine || []).map(l => String(l.tokenId)));
+  const transferable = owned.filter(o => !listedIds.has(String(o.tokenId)));
+  const hiddenNote = owned.length > transferable.length
+    ? `<p class="trade-form-p">${esc(t('trade.transfer.listedNote'))}</p>` : '';
+  if (!transferable.length) return `<p class="trade-form-p">${esc(t('trade.transfer.none'))}</p>${hiddenNote}`;
+  return `
+    <div class="trade-pick" role="listbox" aria-label="${esc(t('trade.transfer.pick'))}">
+      ${transferable.map(o => `
+        <button class="trade-pick-tile ${String(transferSel) === String(o.tokenId) ? 'is-sel' : ''}" type="button"
+          role="option" aria-selected="${String(transferSel) === String(o.tokenId)}"
+          data-act="transfer-pick" data-token="${esc(o.tokenId)}" title="${esc(o.name)}">
+          ${o.image ? `<img src="${esc(o.image)}" alt="" loading="lazy" />` : '<div class="trade-tile-noimg">🐾</div>'}
+          <span>${esc(o.name.replace('Highrise Creature ', ''))}</span>
+        </button>`).join('')}
+    </div>${hiddenNote}`;
+}
+
+// Live recipient assessment rendering. Hard blocks (bad checksum / protocol contract)
+// kill the Send button; a never-used address demands an explicit confirmation.
+function transferCheckHtml() {
+  const c = transferCheck;
+  if (!c) return '';
+  if (c === 'loading') return `<div class="trade-check-row is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t('trade.check.checking'))}</span></div>`;
+  if (!c.valid) {
+    const KEY = { checksum: 'trade.check.checksumBad', protocol: 'trade.check.protocol', format: 'trade.err.badAddr' };
+    return `<div class="trade-check-row is-err"><span aria-hidden="true">⛔</span><span>${esc(t(KEY[c.reason] || 'trade.err.badAddr'))}</span></div>`;
+  }
+  // Best case: it's another of the user's own connected accounts — proven by the
+  // wallet itself, no warning needed at all.
+  if (c.connectedOwn) {
+    return `<div class="trade-check-row is-ok"><span aria-hidden="true">✓</span><span>${esc(t('trade.check.ownAccount'))}</span></div>`;
+  }
+  const rows = [];
+  if (c.checksum === 'ok') rows.push(`<div class="trade-check-row is-ok"><span aria-hidden="true">✓</span><span>${esc(t('trade.check.checksumOk'))}</span></div>`);
+  if (c.active) {
+    rows.push(`<div class="trade-check-row is-ok"><span aria-hidden="true">✓</span><span>${esc(t('trade.check.active'))}</span></div>`);
+    if (c.creatures > 0) rows.push(`<div class="trade-check-row is-ok"><span aria-hidden="true">✓</span><span>${esc(t('trade.check.holds').replace('{n}', String(c.creatures)))}</span></div>`);
+    if (c.contract) rows.push(`<div class="trade-check-row is-warn"><span aria-hidden="true">⚠</span><span>${esc(t('trade.check.contract'))}</span></div>`);
+  } else {
+    // Calm info tone, not an alarm — a fresh wallet is normal; the diligence is the
+    // ten-second visual match. The hard "why" lives behind the ⓘ for the curious.
+    rows.push(`<div class="trade-check-row is-info"><span aria-hidden="true">🔍</span><span>${esc(t(c.activityKnown ? 'trade.check.fresh' : 'trade.check.unknown'))} ${tipHtml('trade.check.fresh.tip')}</span></div>`);
+    // Spaced-out copy of the typed address so the visual match is actually
+    // humanly doable against what the recipient's wallet shows.
+    const chunked = c.addr ? `${c.addr.slice(0, 2)} ${c.addr.slice(2).match(/.{1,4}/g).join(' ')}` : '';
+    if (chunked) {
+      rows.push(`<div class="trade-check-compare"><span>${esc(t('trade.check.compare'))}</span><code>${esc(chunked)}</code></div>`);
+    }
+    rows.push(`
+      <label class="trade-ack">
+        <input type="checkbox" id="trade-transfer-ack" ${transferAck ? 'checked' : ''} />
+        <span>${esc(t('trade.check.freshAck'))}</span>
+      </label>`);
+  }
+  return rows.join('');
+}
+
+// Send only when: a Creature is picked, the address passed every hard check, and any
+// soft warning has been explicitly acknowledged.
+function transferSendAllowed() {
+  const c = transferCheck;
+  return transferSel != null && c && c !== 'loading' && c.valid && (c.active || transferAck);
+}
+
 function transferViewHtml() {
   if (!account || !onZk()) return walletGateHtml();
   return `
     <form class="trade-form" id="trade-transfer-form" novalidate>
       <h4 class="trade-form-h">${esc(t('trade.transfer.h'))} ${tipHtml('trade.transfer.p')}</h4>
-      <label class="trade-field"><span>${esc(t('trade.field.tokenId'))}</span>
-        <input id="trade-token-id" type="text" inputmode="numeric" placeholder="${esc(t('trade.field.tokenId.ph'))}" autocomplete="off" /></label>
+      <span class="trade-field-label">${esc(t('trade.transfer.pick'))}</span>
+      ${transferPickerHtml()}
       <label class="trade-field"><span>${esc(t('trade.field.recipient'))}</span>
         <input id="trade-to" type="text" placeholder="0x…" autocomplete="off" spellcheck="false" /></label>
-      <button class="trade-send" id="trade-send" type="submit">${esc(t('trade.transfer.btn'))} <span aria-hidden="true">→</span></button>
+      <div id="trade-to-check" aria-live="polite">${transferCheckHtml()}</div>
+      <button class="trade-send" id="trade-send" type="submit" ${transferSendAllowed() ? '' : 'disabled'}>${esc(t('trade.transfer.btn'))} <span aria-hidden="true">→</span></button>
       <div class="trade-status" id="trade-status" role="status" aria-live="polite"></div>
     </form>`;
+}
+
+function patchTransferView() {
+  const view = root()?.querySelector('#trade-view');
+  if (!view || tradeTab !== 'transfer') return;
+  const to = view.querySelector('#trade-to')?.value;
+  view.innerHTML = transferViewHtml();
+  const input = view.querySelector('#trade-to');
+  if (input && to) input.value = to;
+}
+function patchTransferCheck() {
+  const el = root()?.querySelector('#trade-to-check');
+  if (el) el.innerHTML = transferCheckHtml();
+  const btn = root()?.querySelector('#trade-transfer-form #trade-send');
+  if (btn) btn.disabled = !transferSendAllowed();
+}
+
+// Debounced server-side recipient assessment as the user types/pastes.
+function queueTransferCheck(raw) {
+  clearTimeout(transferCheckTimer);
+  transferAck = false;
+  const addr = (raw || '').trim();
+  if (!addr) { transferCheck = null; patchTransferCheck(); return; }
+  transferCheck = 'loading'; patchTransferCheck();
+  transferCheckTimer = setTimeout(async () => {
+    // Instant local rejections — no round-trip needed.
+    const lower = addr.toLowerCase();
+    if (!IS_ADDR.test(lower)) { transferCheck = { addr, valid: false, reason: 'format' }; patchTransferCheck(); return; }
+    if (lower === account)    { transferCheck = { addr, valid: false, reason: 'format' }; patchTransferCheck(); return; }
+    if (lower === ZERO)       { transferCheck = { addr, valid: false, reason: 'protocol' }; patchTransferCheck(); return; }
+    // The strongest possible proof: the recipient is another account the user has
+    // connected in their own wallet — key-holdership confirmed by MetaMask itself.
+    try {
+      const accs = (await eth().request({ method: 'eth_accounts' })) || [];
+      if (accs.map(a => String(a).toLowerCase()).includes(lower)) {
+        transferCheck = { addr, valid: true, connectedOwn: true, active: true, checksum: 'none', contract: false, creatures: null };
+        patchTransferCheck();
+        return;
+      }
+    } catch { /* fall through to the on-chain assessment */ }
+    try {
+      const res = await fetch('/api/market/creatures/transfer/check', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ to: addr }),
+      });
+      const c = res.ok ? await res.json() : { valid: true, active: false, activityKnown: false, checksum: 'none', contract: false, creatures: null };
+      const cur = root()?.querySelector('#trade-to')?.value?.trim();
+      if (cur === addr) { transferCheck = { addr, ...c }; patchTransferCheck(); }
+    } catch {
+      const cur = root()?.querySelector('#trade-to')?.value?.trim();
+      if (cur === addr) { transferCheck = { addr, valid: true, active: false, activityKnown: false, checksum: 'none', contract: false, creatures: null }; patchTransferCheck(); }
+    }
+  }, 500);
 }
 
 function viewHtml() {
@@ -1543,12 +1713,16 @@ async function handleTransferSubmit(form) {
   };
 
   if (btn.disabled) return;
-  const tokenId = (form.querySelector('#trade-token-id').value || '').trim();
-  const to      = (form.querySelector('#trade-to').value || '').trim().toLowerCase();
-  if (!/^\d+$/.test(tokenId)) return fail(t('trade.err.badId'));
-  if (!IS_ADDR.test(to))      return fail(t('trade.err.badAddr'));
-  if (to === account)         return fail(t('trade.err.self'));
-  if (to === ZERO)            return fail(t('trade.err.zero'));
+  const tokenId = transferSel;
+  const to = (form.querySelector('#trade-to').value || '').trim().toLowerCase();
+  // Belt and braces — the button is disabled unless these hold, but state can race.
+  if (tokenId == null)         return fail(t('trade.err.noTransferSel'));
+  if (!IS_ADDR.test(to))       return fail(t('trade.err.badAddr'));
+  if (to === account)          return fail(t('trade.err.self'));
+  if (to === ZERO)             return fail(t('trade.err.zero'));
+  if (!transferSendAllowed() || transferCheck?.addr?.toLowerCase() !== to) {
+    return fail(t('trade.err.badAddr'));
+  }
 
   btn.disabled = true;
   try {
@@ -1559,12 +1733,15 @@ async function handleTransferSubmit(form) {
     info(t('trade.status.confirm'));
     const hash = await sendTransfer(tokenId, to);
     done(t('trade.status.sent'), hash);
-    form.reset();
+    transferSel = null; transferCheck = null; transferAck = false;
+    form.querySelector('#trade-to').value = '';
     refreshBalance();
+    loadSellerData(); // the Creature left this wallet — refresh pickers
   } catch (err) {
     console.error('Transfer failed:', err);
     fail(friendlyError(err));
-  } finally { btn.disabled = false; }
+    btn.disabled = !transferSendAllowed();
+  }
 }
 
 async function refreshBalance() {
@@ -1611,6 +1788,9 @@ function onClick(e) {
       sellPickOffers = null;
       if (sellSel != null) fetchSellPickOffers(sellSel);
       return patchSellView();
+    case 'transfer-pick':
+      transferSel = String(transferSel) === String(target.dataset.token) ? null : target.dataset.token;
+      return patchTransferView();
     case 'cancel-listing': return handleCancelListing(target.dataset.listing);
     case 'accept-offer':   return handleAcceptOffer(target.dataset.offer);
     case 'instant-sell':   return handleAcceptOffer(target.dataset.offer, sellSel);
@@ -1621,6 +1801,7 @@ function onClick(e) {
       try { localStorage.setItem('hcc-mmwarn-' + mmBuggyVersion, '1'); } catch { /* fine */ }
       return patchWalletNotice();
     case 'safety-ack':
+      if (safetyRemainingMs() > 0) return; // button is disabled; belt and braces
       try { localStorage.setItem(SAFETY_ACK, '1'); } catch { /* fine */ }
       safetyOpen = false;
       render();
@@ -1650,16 +1831,27 @@ function onSubmit(e) {
   }
 }
 function onChange(e) {
+  if (e.target?.id === 'trade-transfer-ack') {
+    transferAck = e.target.checked;
+    const btn = root()?.querySelector('#trade-transfer-form #trade-send');
+    if (btn) btn.disabled = !transferSendAllowed();
+    return;
+  }
   if (e.target?.id !== 'trade-currency') return;
   currency = e.target.value;
   try { localStorage.setItem('hcc-trade-cur', currency); } catch { /* private mode — fine */ }
   patchGrid();
   if (modalToken) patchModal();
 }
+function onInput(e) {
+  if (e.target?.id === 'trade-to') queueTransferCheck(e.target.value);
+}
 function resetSellerState() {
   owned = null; mine = null; sellSel = null; sellState = null; cancelBusy = null;
   myOffers = null; offerState = null; offerCtx = null; acceptState = null; acceptBusyId = null;
   sellPickOffers = null;
+  transferSel = null; transferCheck = null; transferAck = false;
+  clearTimeout(transferCheckTimer);
 }
 function ensureDelegation() {
   const el = root();
@@ -1668,6 +1860,7 @@ function ensureDelegation() {
   el.addEventListener('click', onClick);
   el.addEventListener('submit', onSubmit);
   el.addEventListener('change', onChange);
+  el.addEventListener('input', onInput);
 }
 
 let escWired = false;

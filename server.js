@@ -910,6 +910,88 @@ async function fundedOffersOnly(offers) {
     .map(({ grossWei, funded, ...rest }) => rest);
 }
 
+// --- Transfer recipient safety checks ---
+// Transfers are irreversible; these checks catch the classic loss patterns BEFORE the
+// user can sign: bad EIP-55 checksum (= typo), sending to a protocol contract (asset
+// gone forever), and never-used addresses (typo'd or wrong-chain destinations).
+let ethersLib = null;
+try { ethersLib = require('ethers'); } catch { /* transitive dep of @imtbl/orderbook — present in practice */ }
+
+async function ethGetTxCount(rpcUrl, address) {
+  const res = await fetch(rpcUrl, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getTransactionCount', params: [address, 'latest'] }),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`eth_getTransactionCount HTTP ${res.status}`);
+  const body = await res.json();
+  if (body.error) throw new Error(body.error.message || 'eth_getTransactionCount error');
+  return parseInt(body.result, 16) || 0;
+}
+async function ethGetCode(rpcUrl, address) {
+  const res = await fetch(rpcUrl, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getCode', params: [address, 'latest'] }),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`eth_getCode HTTP ${res.status}`);
+  const body = await res.json();
+  if (body.error) throw new Error(body.error.message || 'eth_getCode error');
+  return body.result || '0x';
+}
+
+// Addresses where an NFT is irretrievably lost or obviously wrong — hard-blocked.
+const KNOWN_PROTOCOL_ADDRESSES = new Set([
+  CREATURE_CONTRACT.toLowerCase(),
+  IMX_ETH_TOKEN, // already lowercase
+  '0x6c12ad6f0bd274191075eb2e78d7da5ba6453424', // Immutable Seaport
+]);
+
+// Full recipient assessment on Immutable zkEVM. Never throws — individual probes
+// degrade to 'unknown' so a transient RPC blip can't block a legitimate transfer.
+async function checkTransferRecipient(rawAddress) {
+  const raw = String(rawAddress || '').trim();
+  const lower = raw.toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(lower)) return { valid: false, reason: 'format' };
+
+  // EIP-55: a mixed-case address carries a checksum — if it doesn't verify, the
+  // address was mistyped or corrupted. All-lowercase carries no checksum (common
+  // from explorers and wallets), so there's nothing to verify.
+  const hex = raw.slice(2);
+  const isMixedCase = /[a-f]/.test(hex) && /[A-F]/.test(hex);
+  let checksum = 'none';
+  if (isMixedCase) {
+    checksum = 'bad';
+    if (ethersLib) { try { ethersLib.getAddress(raw); checksum = 'ok'; } catch { /* stays bad */ } }
+    else checksum = 'none'; // can't verify without ethers — treat as unverifiable, not bad
+  }
+  if (checksum === 'bad') return { valid: false, reason: 'checksum' };
+
+  if (KNOWN_PROTOCOL_ADDRESSES.has(lower)) return { valid: false, reason: 'protocol' };
+
+  const [code, txCount, native, creatures] = await Promise.all([
+    ethGetCode(ZK_RPC_URL, lower).catch(() => null),
+    ethGetTxCount(ZK_RPC_URL, lower).catch(() => null),
+    ethGetBalance(ZK_RPC_URL, lower).catch(() => null),
+    erc721BalanceOf(ZK_RPC_URL, CREATURE_CONTRACT, lower).catch(() => null),
+  ]);
+  const isContract = code != null && code !== '0x';
+  // "Active" = any sign of life on Immutable zkEVM: sent txs, holds IMX, or holds
+  // Creatures. A deployed contract also counts (it exists on this chain).
+  const active = (txCount ?? 0) > 0
+    || (native != null && BigInt(native) > 0n)
+    || (creatures ?? 0) > 0
+    || isContract;
+  return {
+    valid: true,
+    checksum,                      // 'ok' (verified) | 'none' (lowercase, unverifiable)
+    contract: isContract,          // safeTransferFrom still guards receivers on-chain
+    active,
+    activityKnown: txCount != null || native != null || creatures != null || code != null,
+    creatures: creatures ?? null,  // nice signal: recipient already holds Creatures
+  };
+}
+
 // Parse a user-supplied decimal ETH string into wei, exactly (no floats).
 // Returns a BigInt or null when the input isn't a sane positive amount.
 function parseEthToWei(s) {
@@ -1283,6 +1365,16 @@ async function handleMarketplaceApi(request, response, url) {
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }
+    return;
+  }
+
+  // Recipient safety assessment for transfers (checksum, protocol-contract block,
+  // on-chain activity) — read-only, never blocks on RPC blips.
+  if (pathname === '/api/market/creatures/transfer/check' && request.method === 'POST') {
+    const tWait = rateLimited(`mkt:${ip}`, 90, 60 * 1000);
+    if (tWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(tWait) }); return; }
+    const body = await readJsonBody(request, 4 * 1024);
+    sendJson(response, 200, await checkTransferRecipient(body.to), { 'Cache-Control': 'no-store' });
     return;
   }
 
