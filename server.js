@@ -12,6 +12,8 @@ const db = require('./lib/db');
 const auth = require('./lib/auth');
 const mktOrderbook = require('./lib/marketplace-orderbook');
 const squidBridge = require('./lib/squid-bridge');
+const landMarket = require('./lib/land-market');
+const landPets = require('./lib/land-pets');
 const { computeEligibility, BRACKETS } = require('./lib/eligibility');
 const { PROPOSITIONS, PROPOSITION_IDS } = require('./lib/propositions');
 const derive = require('./lib/derive-positions');
@@ -414,23 +416,25 @@ const marketCache = { data: null, fetchedAt: 0, inFlight: null };
 
 const round4 = n => Math.round(n * 1e4) / 1e4;
 
-// Fetch an Immutable endpoint with retries on transient 5xx / network errors —
-// the orderbook occasionally returns 500s that succeed on a quick retry. 4xx
-// (a malformed request on our side) fails fast.
+// Fetch an Immutable endpoint with retries on transient 5xx / 429 / network errors —
+// the orderbook occasionally returns 500s that succeed on a quick retry, and bursts
+// (boot builds several indexes at once) can trip the rate limit. Other 4xx (a
+// malformed request on our side) fails fast.
 async function imxFetch(url) {
   let lastErr;
   for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await new Promise(r => setTimeout(r, (lastErr?.rateLimited ? 1200 : 500) * attempt));
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
       if (res.ok) return res.json();
       const err = new Error(`Immutable API ${res.status} for ${url}`);
-      if (res.status < 500) throw err; // our fault — retrying won't help
+      err.rateLimited = res.status === 429;
+      if (res.status < 500 && !err.rateLimited) throw err; // our fault — retrying won't help
       lastErr = err;
     } catch (err) {
-      if (err.message?.startsWith('Immutable API 4')) throw err;
+      if (err.message?.startsWith('Immutable API 4') && !err.rateLimited) throw err;
       lastErr = err;
     }
-    if (attempt < 2) await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
   }
   throw lastErr;
 }
@@ -802,6 +806,17 @@ const MKT_LISTINGS_TTL_MS = 60 * 1000;
 const CREATURE_IMG_HOST   = 'https://cdn-production.joinhighrise.com'; // Creature art host (see CSP img-src)
 const listingsCache = new Map(); // cursor ('' = first page) -> { data, at }
 
+// A chunk of the collection still carries an older metadata format: camelCase trait
+// keys ('backgroundColor') and a junk 'attributes' entry (verified live 2026-06-10 —
+// 24 of 103 listed tokens). Normalize to the display form the rest of the collection
+// uses, so trait filters and facets see ONE vocabulary, not two. Snake_case keys
+// ('animation_url_mime_type') are technical metadata, never real traits — dropped.
+function normalizeTraitType(tt) {
+  const s = String(tt ?? '').trim();
+  if (!s || s === 'attributes' || s.includes('_')) return null;
+  return s.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/\b[a-z]/g, c => c.toUpperCase());
+}
+
 // Shape a raw metadata record into just the public fields the client needs.
 function shapeCreatureMeta(r, tokenId) {
   return {
@@ -809,25 +824,31 @@ function shapeCreatureMeta(r, tokenId) {
     image: r.image || null,
     description: r.description || null,
     attributes: Array.isArray(r.attributes)
-      ? r.attributes.map(a => ({ trait: a.trait_type, value: a.value })).filter(a => a.trait && a.value != null)
+      ? r.attributes
+          .map(a => ({ trait: normalizeTraitType(a.trait_type), value: a.value }))
+          .filter(a => a.trait && (typeof a.value === 'string' || typeof a.value === 'number'))
       : [],
   };
 }
 
-// Metadata for many tokens in ONE request → Map<tokenId, meta>. The per-token metadata
-// endpoint rate-limits distinct parallel calls (429s), so we never fan out: the list
-// endpoint accepts repeated token_id params and returns them all at once.
+// Metadata for many tokens → Map<tokenId, meta>. The per-token metadata endpoint
+// rate-limits distinct parallel calls (429s), so we never fan out: the list endpoint
+// accepts repeated token_id params. But only up to ~32 of them — more is a hard 400
+// (verified live 2026-06-10) — so larger requests run as sequential ≤25-id chunks.
+const META_BATCH_MAX = 25;
 async function fetchCreatureMetaBatch(tokenIds) {
   const out = new Map();
-  if (!tokenIds.length) return out;
-  const url = new URL(`https://api.immutable.com/v1/chains/${IMX_ZKEVM_CHAIN}/collections/${CREATURE_CONTRACT}/nfts`);
-  for (const id of tokenIds) url.searchParams.append('token_id', id);
-  url.searchParams.set('page_size', String(Math.min(200, tokenIds.length)));
-  try {
-    const body = await imxFetch(url.toString());
-    for (const r of (body.result ?? [])) out.set(String(r.token_id), shapeCreatureMeta(r, r.token_id));
-  } catch (err) {
-    console.error('Creature metadata batch failed:', err.message); // grid still renders, sans art
+  for (let i = 0; i < tokenIds.length; i += META_BATCH_MAX) {
+    const chunk = tokenIds.slice(i, i + META_BATCH_MAX);
+    const url = new URL(`https://api.immutable.com/v1/chains/${IMX_ZKEVM_CHAIN}/collections/${CREATURE_CONTRACT}/nfts`);
+    for (const id of chunk) url.searchParams.append('token_id', id);
+    url.searchParams.set('page_size', String(chunk.length));
+    try {
+      const body = await imxFetch(url.toString());
+      for (const r of (body.result ?? [])) out.set(String(r.token_id), shapeCreatureMeta(r, r.token_id));
+    } catch (err) {
+      console.error('Creature metadata batch failed:', err.message); // grid still renders, sans art
+    }
   }
   return out;
 }
@@ -947,9 +968,25 @@ const KNOWN_PROTOCOL_ADDRESSES = new Set([
   '0x6c12ad6f0bd274191075eb2e78d7da5ba6453424', // Immutable Seaport
 ]);
 
-// Full recipient assessment on Immutable zkEVM. Never throws — individual probes
+// Per-chain transfer-check context: which RPC to probe, which NFT signals "familiar
+// destination", and which protocol addresses are guaranteed asset graves.
+const TRANSFER_CHAINS = {
+  zkevm: { rpc: () => ZK_RPC_URL, nft: CREATURE_CONTRACT, blocked: KNOWN_PROTOCOL_ADDRESSES },
+  ethereum: {
+    rpc: () => ETH_RPC_URL,
+    nft: LAND_CONTRACT,
+    blocked: new Set([
+      LAND_CONTRACT,                                  // the LAND contract itself
+      ESTATE_CONTRACT,                                // estates lock parcels — not a wallet
+      '0x0000000000000068f116a894984e2db1123eb395',   // OpenSea Seaport 1.6
+      '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',   // WETH
+    ]),
+  },
+};
+
+// Full recipient assessment on the given chain. Never throws — individual probes
 // degrade to 'unknown' so a transient RPC blip can't block a legitimate transfer.
-async function checkTransferRecipient(rawAddress) {
+async function checkTransferRecipient(rawAddress, chain = 'zkevm') {
   const raw = String(rawAddress || '').trim();
   const lower = raw.toLowerCase();
   if (!/^0x[0-9a-f]{40}$/.test(lower)) return { valid: false, reason: 'format' };
@@ -967,13 +1004,15 @@ async function checkTransferRecipient(rawAddress) {
   }
   if (checksum === 'bad') return { valid: false, reason: 'checksum' };
 
-  if (KNOWN_PROTOCOL_ADDRESSES.has(lower)) return { valid: false, reason: 'protocol' };
+  const ctx = TRANSFER_CHAINS[chain] || TRANSFER_CHAINS.zkevm;
+  if (ctx.blocked.has(lower)) return { valid: false, reason: 'protocol' };
 
+  const rpc = ctx.rpc();
   const [code, txCount, native, creatures] = await Promise.all([
-    ethGetCode(ZK_RPC_URL, lower).catch(() => null),
-    ethGetTxCount(ZK_RPC_URL, lower).catch(() => null),
-    ethGetBalance(ZK_RPC_URL, lower).catch(() => null),
-    erc721BalanceOf(ZK_RPC_URL, CREATURE_CONTRACT, lower).catch(() => null),
+    ethGetCode(rpc, lower).catch(() => null),
+    ethGetTxCount(rpc, lower).catch(() => null),
+    ethGetBalance(rpc, lower).catch(() => null),
+    erc721BalanceOf(rpc, ctx.nft, lower).catch(() => null),
   ]);
   const isContract = code != null && code !== '0x';
   // "Active" = any sign of life on Immutable zkEVM: sent txs, holds IMX, or holds
@@ -1100,6 +1139,7 @@ async function getCreatureToken(tokenId) {
     ethCall(ZK_RPC_URL, CREATURE_CONTRACT, SEL_OWNER_OF + padUint(BigInt(tokenId))).catch(() => null),
   ]);
   const owner = ownerRaw && ownerRaw.length >= 42 ? ('0x' + ownerRaw.slice(-40)).toLowerCase() : null;
+  const coll = getCollectionIndex(); // statistical rank, when the index is built
   return {
     tokenId,
     name: meta?.name || `Highrise Creature #${tokenId}`,
@@ -1107,6 +1147,302 @@ async function getCreatureToken(tokenId) {
     description: meta?.description || null,
     attributes: meta?.attributes || [],
     owner,
+    rank: coll?.byId.get(String(tokenId))?.rank ?? null,
+    rankOf: coll?.total ?? null,
+  };
+}
+
+// --- Marketplace: filterable browse (IMX-Rarity-style explorer) ---
+// One in-memory snapshot of EVERY active ETH listing joined with its full metadata,
+// rebuilt at most once a minute. Stale-while-revalidate: once the first snapshot
+// exists, no request ever waits on a rebuild. Filtering, faceting, and sorting then
+// happen in-process per request — zero upstream calls per filter change, so clicking
+// through traits stays instant and can't exhaust the Immutable rate limits.
+const BROWSE_TTL_MS    = 60 * 1000;
+const BROWSE_MAX_PAGES = 5;   // 5 × 200 = 1000 listings indexed — far above today's ~100
+const BROWSE_PAGE_SIZE = 24;
+const RARITY_ORDER = ['Legendary', 'Epic', 'Rare', 'Uncommon', 'Common']; // best first
+const rarityRank = r => { const i = RARITY_ORDER.indexOf(r); return i === -1 ? RARITY_ORDER.length : i; };
+const browseIndex = { data: null, at: 0, inFlight: null };
+
+async function buildBrowseIndex() {
+  // 1) Every active ETH listing, cheapest first, across however many pages exist.
+  const orders = [];
+  let cursor = null, pages = 0;
+  do {
+    const url = new URL(`https://api.immutable.com/v1/chains/${IMX_ZKEVM_CHAIN}/orders/listings`);
+    url.searchParams.set('sell_item_contract_address', CREATURE_CONTRACT);
+    url.searchParams.set('buy_item_contract_address', IMX_ETH_TOKEN);
+    url.searchParams.set('status', 'ACTIVE');
+    url.searchParams.set('sort_by', 'buy_item_amount');
+    url.searchParams.set('sort_direction', 'asc');
+    url.searchParams.set('page_size', '200');
+    if (cursor) url.searchParams.set('page_cursor', cursor);
+    const body = await imxFetch(url.toString());
+    orders.push(...(body.result ?? []));
+    cursor = body.page?.next_cursor ?? null;
+  } while (cursor && ++pages < BROWSE_MAX_PAGES);
+
+  // 2) Metadata. Traits are immutable, so the full-collection index (once built) is
+  //    the authoritative source — zero metadata API calls per rebuild, and a transient
+  //    upstream 429 can't blank a snapshot's traits. Only tokens the index doesn't
+  //    know (not built yet, or a gap) hit the batch endpoint.
+  const collIdx = collectionIndex.data;
+  const ids = [...new Set(orders.map(o => o.sell?.[0]?.token_id).filter(Boolean).map(String))];
+  const metaById = await fetchCreatureMetaBatch(collIdx ? ids.filter(id => !collIdx.byId.has(id)) : ids);
+
+  // 3) Join into flat filterable rows. `traits`/`listedAt` stay server-side; the wire
+  //    item matches the /listings shape the grid and buy flow already render.
+  const items = orders.map(o => {
+    const sell = (o.sell ?? [])[0] || {};
+    const buy  = (o.buy ?? [])[0] || {};
+    const tokenId = sell.token_id;
+    if (!tokenId || !buy.amount) return null;
+    const priceWei = BigInt(buy.amount);
+    const feesWei  = (o.fees ?? []).reduce((s, f) => s + (f.amount ? BigInt(f.amount) : 0n), 0n);
+    const known = collIdx?.byId.get(String(tokenId));
+    const meta = metaById.get(String(tokenId));
+    const traits = {};
+    if (known) Object.assign(traits, known.traits);
+    else if (meta) for (const a of (meta.attributes || [])) traits[a.trait] = String(a.value);
+    return {
+      listingId: o.id,
+      tokenId,
+      seller: o.account_address || null,
+      priceEth: round4(Number(priceWei) / 1e18),
+      totalEth: round4(Number(priceWei + feesWei) / 1e18),
+      name: known?.name || meta?.name || `Highrise Creature #${tokenId}`,
+      image: known?.image || meta?.image || null,
+      rarity: Object.entries(traits).find(([k]) => /rarity/i.test(k))?.[1] || null,
+      listedAt: Date.parse(o.created_at) || 0,
+      traits,
+    };
+  }).filter(Boolean);
+  return { items, truncated: !!cursor };
+}
+
+async function getBrowseIndex() {
+  const fresh = browseIndex.data && Date.now() - browseIndex.at < BROWSE_TTL_MS;
+  if (!fresh && !browseIndex.inFlight) {
+    browseIndex.inFlight = buildBrowseIndex()
+      .then(d => { browseIndex.data = d; browseIndex.at = Date.now(); return d; })
+      .catch(err => {
+        console.error('Browse index build failed:', err.message);
+        if (!browseIndex.data) throw err; // cold boot with nothing to serve → surface it
+        return browseIndex.data;          // refresh hiccup → keep serving the stale copy
+      })
+      .finally(() => { browseIndex.inFlight = null; });
+  }
+  return browseIndex.data || browseIndex.inFlight;
+}
+
+// Wire format: q (name substring), min/max (ETH, vs the all-in price), sort,
+// page (offset into the filtered set), and repeated t=Type:Value params —
+// multi-select is OR within a type, AND across types (standard faceted search).
+function parseBrowseQuery(searchParams) {
+  const q = (searchParams.get('q') || '').trim().toLowerCase().slice(0, 80);
+  const num = v => { const n = Number(v); return v != null && v !== '' && Number.isFinite(n) && n >= 0 ? n : null; };
+  const traits = new Map(); // type -> Set(values)
+  for (const pair of searchParams.getAll('t').slice(0, 40)) {
+    const i = pair.indexOf(':');
+    if (i < 1) continue;
+    const type = pair.slice(0, i).slice(0, 60);
+    const value = pair.slice(i + 1).slice(0, 120);
+    if (!value) continue;
+    if (!traits.has(type)) traits.set(type, new Set());
+    traits.get(type).add(value);
+  }
+  const sort = ['price-asc', 'price-desc', 'newest', 'rarity'].includes(searchParams.get('sort'))
+    ? searchParams.get('sort') : 'price-asc';
+  const page = Math.min(500, Math.max(0, parseInt(searchParams.get('page'), 10) || 0));
+  const scope = searchParams.get('scope') === 'all' ? 'all' : 'listed';
+  return { q, min: num(searchParams.get('min')), max: num(searchParams.get('max')), traits, sort, page, scope };
+}
+
+// skipType: evaluate every filter EXCEPT that trait type — how facet counts answer
+// "what would I get if I picked this value", given everything else stays selected.
+function browseMatch(it, f, skipType) {
+  if (f.q && !it.name.toLowerCase().includes(f.q)) return false;
+  // Unlisted rows have no price — a price filter implies "for sale", so they drop out.
+  const price = it.totalEth ?? it.priceEth ?? null;
+  if (f.min != null && (price == null || price < f.min)) return false;
+  if (f.max != null && (price == null || price > f.max)) return false;
+  for (const [type, values] of f.traits) {
+    if (type !== skipType && !values.has(it.traits[type])) return false;
+  }
+  return true;
+}
+
+// Unlisted rows (no price) sink to the end of price sorts; statistical rank breaks
+// every tie so ordering is stable across snapshot rebuilds.
+const browsePriceOf = it => it.totalEth ?? it.priceEth ?? null;
+const browseRankOf  = it => it.rank ?? Number.MAX_SAFE_INTEGER;
+function cmpBrowsePrice(a, b, dir) {
+  const pa = browsePriceOf(a), pb = browsePriceOf(b);
+  if (pa != null && pb != null) return dir * (pa - pb) || browseRankOf(a) - browseRankOf(b);
+  if (pa != null) return -1;
+  if (pb != null) return 1;
+  return browseRankOf(a) - browseRankOf(b);
+}
+const BROWSE_SORTS = {
+  'price-asc':  (a, b) => cmpBrowsePrice(a, b, 1),
+  'price-desc': (a, b) => cmpBrowsePrice(a, b, -1),
+  'newest':     (a, b) => (b.listedAt ?? 0) - (a.listedAt ?? 0) || browseRankOf(a) - browseRankOf(b),
+  // True statistical rank when the collection index is built; tier order until then.
+  'rarity':     (a, b) => (a.rank != null && b.rank != null)
+    ? a.rank - b.rank
+    : (rarityRank(a.rarity) - rarityRank(b.rarity) || cmpBrowsePrice(a, b, 1)),
+};
+
+// Facets over the whole snapshot: every trait value that exists in ANY active listing
+// renders in the filter UI, with its count under the current other filters (0 = picking
+// it would empty the grid — shown disabled, never hidden, so the vocabulary is stable).
+function computeBrowseFacets(items, f) {
+  const types = new Map(); // type -> Map(value -> count)
+  for (const it of items) {
+    for (const [type, v] of Object.entries(it.traits)) {
+      if (!types.has(type)) types.set(type, new Map());
+      const vals = types.get(type);
+      if (!vals.has(v)) vals.set(v, 0);
+    }
+  }
+  for (const [type, vals] of types) {
+    for (const it of items) {
+      const v = it.traits[type];
+      if (v !== undefined && browseMatch(it, f, type)) vals.set(v, vals.get(v) + 1);
+    }
+  }
+  const out = [];
+  for (const [type, vals] of types) {
+    const values = [...vals.entries()].map(([v, n]) => ({ v, n }));
+    if (/rarity/i.test(type)) values.sort((a, b) => rarityRank(a.v) - rarityRank(b.v));
+    else values.sort((a, b) => a.v.localeCompare(b.v));
+    out.push({ type, values });
+  }
+  out.sort((a, b) => a.type.localeCompare(b.type));
+  return out;
+}
+
+// --- Full-collection index: every Creature's traits + a statistical rarity rank ---
+// Traits are immutable, so this builds once (~56 paged calls, well under a minute) in
+// the background at boot and refreshes daily. It powers scope=all browsing and the
+// rank chips. Until the first build lands, browse quietly serves listed-only and
+// flags `indexing` so the client can say "hold on, cataloguing".
+const COLLECTION_TTL_MS    = 24 * 60 * 60 * 1000;
+const COLLECTION_MAX_PAGES = 120;      // 120 × 200 = 24k — far above the 11,111 supply
+const COLLECTION_RETRY_MS  = 60 * 1000; // failed build → cool off before trying again
+const collectionIndex = { data: null, at: 0, inFlight: null, failedAt: 0 };
+
+async function buildCollectionIndex() {
+  const byId = new Map();
+  let cursor = null, pages = 0;
+  do {
+    const url = new URL(`https://api.immutable.com/v1/chains/${IMX_ZKEVM_CHAIN}/collections/${CREATURE_CONTRACT}/nfts`);
+    url.searchParams.set('page_size', '200');
+    if (cursor) url.searchParams.set('page_cursor', cursor);
+    const body = await imxFetch(url.toString());
+    for (const r of (body.result ?? [])) {
+      const meta = shapeCreatureMeta(r, r.token_id);
+      const traits = {};
+      for (const a of meta.attributes) traits[a.trait] = String(a.value);
+      byId.set(String(r.token_id), {
+        tokenId: String(r.token_id),
+        name: meta.name,
+        image: meta.image,
+        rarity: meta.attributes.find(a => /rarity/i.test(a.trait))?.value || null,
+        traits,
+      });
+    }
+    cursor = body.page?.next_cursor ?? null;
+    if (cursor) await new Promise(r => setTimeout(r, 120)); // pace the sweep
+  } while (cursor && ++pages < COLLECTION_MAX_PAGES);
+
+  // Statistical rarity, the formula IMX Rarity used: a token's score is the sum of
+  // 1/frequency across its trait values, so rare values dominate. Rank 1 = rarest.
+  const freq = new Map();
+  for (const it of byId.values()) {
+    for (const [type, v] of Object.entries(it.traits)) {
+      const k = `${type}:${v}`;
+      freq.set(k, (freq.get(k) || 0) + 1);
+    }
+  }
+  const total = byId.size;
+  for (const it of byId.values()) {
+    let score = 0;
+    for (const [type, v] of Object.entries(it.traits)) score += total / freq.get(`${type}:${v}`);
+    it.score = score;
+  }
+  const items = [...byId.values()].sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+  items.forEach((it, i) => { it.rank = i + 1; });
+  console.log(`Creature collection index built: ${total} tokens across ${pages + 1} pages.`);
+  return { byId, items, total, builtAt: Date.now() };
+}
+
+// Non-blocking accessor: returns the index when built (kicking a refresh once stale),
+// null while the first build is running — callers degrade to listed-only meanwhile.
+function getCollectionIndex() {
+  const fresh = collectionIndex.data && Date.now() - collectionIndex.at < COLLECTION_TTL_MS;
+  const cooling = Date.now() - collectionIndex.failedAt < COLLECTION_RETRY_MS;
+  if (!fresh && !collectionIndex.inFlight && !cooling) {
+    collectionIndex.inFlight = buildCollectionIndex()
+      .then(d => { collectionIndex.data = d; collectionIndex.at = Date.now(); return d; })
+      .catch(err => { collectionIndex.failedAt = Date.now(); console.error('Collection index build failed:', err.message); })
+      .finally(() => { collectionIndex.inFlight = null; });
+  }
+  return collectionIndex.data;
+}
+getCollectionIndex(); // warm it at boot, in the background
+setInterval(() => { getCollectionIndex(); }, 60 * 60 * 1000).unref(); // hourly check; TTL gates the rebuild
+
+// Browse pools, memoized per (listings snapshot, collection build) pair so the merge
+// cost is paid once per 60s snapshot rebuild, not once per request.
+function listedPoolOf(listIdx, coll) {
+  if (listIdx._listedPool && listIdx._poolColl === coll) return listIdx._listedPool;
+  listIdx._listedPool = listIdx.items.map(it =>
+    ({ ...it, listed: true, rank: coll?.byId.get(String(it.tokenId))?.rank ?? null }));
+  listIdx._poolColl = coll;
+  listIdx._allPool = null;
+  return listIdx._listedPool;
+}
+function allPoolOf(listIdx, coll) {
+  const listed = listedPoolOf(listIdx, coll); // also keys the memo to this coll build
+  if (listIdx._allPool) return listIdx._allPool;
+  const listedById = new Map(listed.map(it => [String(it.tokenId), it]));
+  listIdx._allPool = coll.items.map(c => listedById.get(c.tokenId)
+    || { tokenId: c.tokenId, name: c.name, image: c.image, rarity: c.rarity, rank: c.rank, traits: c.traits, listed: false });
+  return listIdx._allPool;
+}
+
+async function getCreatureBrowse(searchParams) {
+  const f = parseBrowseQuery(searchParams);
+  const [listIdx, fx] = await Promise.all([getBrowseIndex(), getMarketplaceFx()]);
+  const coll = getCollectionIndex(); // null until the first build lands
+  const wantAll = f.scope === 'all';
+  const pool = wantAll && coll ? allPoolOf(listIdx, coll) : listedPoolOf(listIdx, coll);
+
+  const matched = pool.filter(it => browseMatch(it, f)).sort(BROWSE_SORTS[f.sort]);
+  const start = f.page * BROWSE_PAGE_SIZE;
+  let lo = null, hi = null;
+  for (const it of listIdx.items) {
+    const p = it.totalEth ?? it.priceEth;
+    if (lo === null || p < lo) lo = p;
+    if (hi === null || p > hi) hi = p;
+  }
+  return {
+    items: matched.slice(start, start + BROWSE_PAGE_SIZE).map(({ traits, listedAt, ...pub }) => pub),
+    total: matched.length,
+    page: f.page,
+    hasMore: start + BROWSE_PAGE_SIZE < matched.length,
+    scope: wantAll && coll ? 'all' : 'listed',
+    indexing: wantAll && !coll,                  // asked for everything; still cataloguing
+    facets: computeBrowseFacets(pool, f),
+    priceRange: lo === null ? null : { min: lo, max: hi },
+    listedTotal: listIdx.items.length,
+    collectionTotal: coll?.total ?? null,
+    truncated: listIdx.truncated,
+    ethUsd: fx.ethUsd,
+    fxRates: fx.fxRates,
+    fetchedAt: new Date().toISOString(),
   };
 }
 
@@ -1123,6 +1459,13 @@ async function handleMarketplaceApi(request, response, url) {
   if (pathname === '/api/market/creatures/listings') {
     const data = await getCreatureListings(url.searchParams.get('cursor') || '');
     sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=30' });
+    return;
+  }
+
+  // Filterable explorer: name search, trait/rarity facets, price range, sort.
+  if (pathname === '/api/market/creatures/browse') {
+    const data = await getCreatureBrowse(url.searchParams);
+    sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=15' });
     return;
   }
 
@@ -1374,7 +1717,8 @@ async function handleMarketplaceApi(request, response, url) {
     const tWait = rateLimited(`mkt:${ip}`, 90, 60 * 1000);
     if (tWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(tWait) }); return; }
     const body = await readJsonBody(request, 4 * 1024);
-    sendJson(response, 200, await checkTransferRecipient(body.to), { 'Cache-Control': 'no-store' });
+    const chain = body.chain === 'ethereum' ? 'ethereum' : 'zkevm';
+    sendJson(response, 200, await checkTransferRecipient(body.to, chain), { 'Cache-Control': 'no-store' });
     return;
   }
 
@@ -1462,6 +1806,85 @@ async function handleMarketplaceApi(request, response, url) {
     try {
       const prepared = await mktOrderbook.prepareFulfill(offerId, taker, tokenId, amountToFill);
       sendJson(response, 200, prepared);
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // --- LAND (Ethereum mainnet, via OpenSea) ---
+  // Same shape as the Creature endpoints; different chain + protocol underneath.
+  if (pathname === '/api/market/land/listings') {
+    if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    const [data, fx] = await Promise.all([
+      landMarket.listListings(url.searchParams.get('cursor') || ''),
+      getMarketplaceFx(),
+    ]);
+    sendJson(response, 200, { ...data, ethUsd: fx.ethUsd, fxRates: fx.fxRates }, { 'Cache-Control': 'public, max-age=30' });
+    return;
+  }
+  const landTokenMatch = pathname.match(/^\/api\/market\/land\/token\/(\d{1,80})$/);
+  if (landTokenMatch) {
+    if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    const data = await landMarket.getToken(landTokenMatch[1]);
+    sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=300' });
+    return;
+  }
+  const landOwnedMatch = pathname.match(/^\/api\/market\/land\/owned\/(0x[0-9a-f]{40})$/);
+  if (landOwnedMatch) {
+    if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    const data = await landMarket.ownedLand(landOwnedMatch[1]);
+    sendJson(response, 200, data, { 'Cache-Control': 'no-store' });
+    return;
+  }
+  // The parcel's attached Slime pet, rendered server-side from Highrise's public
+  // pet-part assets into one self-contained SVG (see lib/land-pets.js). 404 when the
+  // parcel has no pet — the client falls back to the plot image. Coords are the only
+  // input and are pinned to integers, so this can't be used as an open proxy.
+  const landPetMatch = pathname.match(/^\/api\/market\/land\/pet\/(-?\d{1,4})\/(-?\d{1,4})$/);
+  if (landPetMatch) {
+    const petWait = rateLimited(`landpet:${ip}`, 300, 60 * 1000);
+    if (petWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(petWait) }); return; }
+    try {
+      const pet = await landPets.renderPet(Number(landPetMatch[1]), Number(landPetMatch[2]));
+      if (pet.status !== 'ok') { sendJson(response, 404, { error: 'no_pet' }); return; }
+      // CSP + sandbox neutralize any active content if the SVG is opened as a page
+      // (as an <img> it's inert anyway); pets change rarely, so short-cache + ETag.
+      const headers = {
+        'Content-Type': 'image/svg+xml; charset=utf-8',
+        'Cache-Control': 'public, max-age=600, must-revalidate',
+        'ETag': pet.etag,
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+      };
+      if (request.headers['if-none-match'] === pet.etag) {
+        response.writeHead(304, headers);
+        response.end();
+      } else {
+        response.writeHead(200, headers);
+        response.end(pet.svg);
+      }
+    } catch (err) {
+      console.error(`LAND pet ${landPetMatch[1]}:${landPetMatch[2]} render failed:`, err.message);
+      sendJson(response, 503, { error: 'unavailable' });
+    }
+    return;
+  }
+  if (pathname === '/api/market/land/buy/prepare' && request.method === 'POST') {
+    if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    const bWait = rateLimited(`mktbuy:${ip}`, 15, 60 * 1000);
+    if (bWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(bWait) }); return; }
+
+    const body = await readJsonBody(request, 4 * 1024);
+    const orderHash = String(body.orderHash || '').toLowerCase();
+    const protocolAddress = String(body.protocolAddress || '').toLowerCase();
+    const taker = String(body.takerAddress || '').toLowerCase();
+    if (!/^0x[0-9a-f]{64}$/.test(orderHash)) { sendJson(response, 400, { error: 'bad_listing' }); return; }
+    if (!HEX_ADDRESS.test(protocolAddress)) { sendJson(response, 400, { error: 'bad_listing' }); return; }
+    if (!HEX_ADDRESS.test(taker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
+
+    try {
+      sendJson(response, 200, await landMarket.prepareBuy({ orderHash, protocolAddress, taker }));
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }
@@ -2132,7 +2555,7 @@ const CSP = [
   "default-src 'self'",
   "script-src 'self' https://cdn.jsdelivr.net",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: https://cdn.highrisegame.com https://cdn.discordapp.com https://cdn-production.joinhighrise.com",
+  "img-src 'self' data: https://cdn.highrisegame.com https://cdn.discordapp.com https://cdn-production.joinhighrise.com https://i2c.seadn.io",
   "font-src 'self'",
   "connect-src 'self'",
   "frame-ancestors 'none'",
@@ -2271,7 +2694,7 @@ const server = http.createServer((request, response) => {
     return;
   }
 
-  if (request.url.startsWith('/api/market/creatures')) {
+  if (request.url.startsWith('/api/market/creatures') || request.url.startsWith('/api/market/land')) {
     const url = parseRequestUrl(request);
     if (!url) { sendJson(response, 400, { error: 'bad_request' }); return; }
     handleMarketplaceApi(request, response, url).catch(err => {

@@ -43,6 +43,20 @@ document.addEventListener('click', e => {
       !navDrawer.contains(e.target) && !navToggle.contains(e.target)) setDrawer(false);
 });
 
+// Frost the tab bar only while it's actually pinned: a 1px sentinel sits right above
+// it; when the sentinel scrolls out of view the bar is stuck and gains its backdrop
+// (.is-stuck in CSS). At rest the bar is transparent — no floating strip mid-page.
+const pageTabs = document.querySelector('.page-tabs');
+if (pageTabs && 'IntersectionObserver' in window) {
+  const sentinel = document.createElement('div');
+  sentinel.setAttribute('aria-hidden', 'true');
+  sentinel.style.cssText = 'position:relative;height:1px;margin-top:-1px;visibility:hidden';
+  pageTabs.parentNode.insertBefore(sentinel, pageTabs);
+  new IntersectionObserver(entries => {
+    pageTabs.classList.toggle('is-stuck', !entries[0].isIntersecting);
+  }).observe(sentinel);
+}
+
 function selectTab(name, updateHash = true) {
   tabButtons.forEach(btn => {
     const active = btn.dataset.tab === name;

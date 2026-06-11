@@ -874,17 +874,21 @@
 </main>
 
 <main id="panel-trade" class="tab-panel" role="tabpanel" aria-labelledby="tab-trade" hidden>
-  <section class="wrap">
-    <div class="eyebrow" data-i18n="trade.eyebrow">Marketplace</div>
-    <h2 class="trade-h2"><span data-i18n="trade.h2">Trade your Creatures</span> <span class="trade-beta-chip">Beta</span></h2>
-    <p class="lead" data-i18n="trade.lead">Browse Creatures for sale, then buy, sell or move them straight from your own wallet — no middleman, no custody.</p>
-
-    <div class="trade-beta-note" role="note">
-      <span class="trade-beta-chip" aria-hidden="true">Beta</span>
-      <p><span data-i18n="trade.beta.short">Trades are real and at your own risk — start small.</span>
-        <span class="trade-tip"><button type="button" class="trade-tip-btn" aria-label="More info">i</button><span class="trade-tip-pop" role="tooltip" data-i18n="trade.beta.note">This marketplace is brand new and still being tested. Transactions are real and move real money — use it at your own risk, start small, and double-check every confirmation in your wallet. Spotted something odd? Tell us on Discord.</span></span>
-      </p>
-    </div>
+  <section class="wrap trade-wrap">
+    <header class="trade-hero">
+      <div class="trade-hero-glow" aria-hidden="true"></div>
+      <div class="trade-hero-text">
+        <div class="eyebrow" data-i18n="trade.eyebrow">Marketplace</div>
+        <h2 class="trade-h2"><span data-i18n="trade.h2">Trade your Creatures</span> <span class="trade-beta-chip">Beta</span></h2>
+        <p class="lead trade-lead" data-i18n="trade.lead">Browse Creatures for sale, then buy, sell or move them straight from your own wallet — no middleman, no custody.</p>
+      </div>
+      <div class="trade-hero-risk" role="note">
+        <span class="trade-beta-chip" aria-hidden="true">Beta</span>
+        <p><span data-i18n="trade.beta.short">Trades are real and at your own risk — start small.</span>
+          <span class="trade-tip"><button type="button" class="trade-tip-btn" aria-label="More info">i</button><span class="trade-tip-pop" role="tooltip" data-i18n="trade.beta.note">This marketplace is brand new and still being tested. Transactions are real and move real money — use it at your own risk, start small, and double-check every confirmation in your wallet. Spotted something odd? Tell us on Discord.</span></span>
+        </p>
+      </div>
+    </header>
 
     <div id="trade-app" class="trade-box" aria-live="polite" aria-busy="true">
       <div class="apply-loading"><div class="apply-spinner"></div></div>

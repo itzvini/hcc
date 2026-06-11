@@ -185,13 +185,25 @@ h1 .pop { color: var(--hr-primary); }
 @keyframes pet-jump{0%{transform:translateY(0)}20%{transform:translateY(-20px)}45%{transform:translateY(-24px)}68%{transform:translateY(3px)}82%{transform:translateY(-8px)}100%{transform:translateY(0)}}
 
 /* ---------- NAV TABS ---------- */
+/* At rest the tab bar is just pills sitting in the page — no strip, no edge. The
+   frosted band fades in only while the bar is actually pinned to the viewport top
+   (app.js toggles .is-stuck via a sentinel), where it needs a backdrop to stay
+   legible over scrolling content. */
 .page-tabs {
   position: sticky; top: 0; z-index: 20;
   padding: 12px 0 14px;
-  background: rgba(20,19,23,0.85);
+  background-color: transparent;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--hr-line);
+  border-bottom: 1px solid transparent;
+  transition: background-color .3s ease, border-color .3s ease;
+}
+.page-tabs.is-stuck {
+  background-color: rgba(20,19,23,0.85);
+  border-bottom-color: var(--hr-line);
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-tabs { transition: none; }
 }
 .page-nav-bar { position: relative; }
 .nav-drawer { display: flex; flex-direction: column; align-items: center; gap: 8px; }
@@ -1158,7 +1170,7 @@ footer { margin-top: 28px; }
    The fixed modal is position:fixed so it's out of flow and unaffected by the gap. */
 /* One uniform 18px gap between wallet bar, tabs, and content (the browse section adds
    none of its own — it's margin-top:0 below). Equal by construction = proportional. */
-.trade-box { margin-top: 24px; display: flex; flex-direction: column; align-items: stretch; gap: 18px; }
+.trade-box { margin-top: 22px; display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
 
 /* Connect / install gate */
 .trade-gate {
@@ -1353,20 +1365,66 @@ footer { margin-top: 28px; }
   0%,100% { box-shadow: 0 0 12px rgba(255,249,95,.3); }
   50%     { box-shadow: 0 0 26px rgba(255,153,0,.5); }
 }
-.trade-beta-note {
-  display: flex; align-items: flex-start; gap: 12px;
-  margin-top: 18px; padding: 14px 18px;
-  border-radius: var(--hr-radius-lg);
+/* ---- Trade shell: the marketplace earns the full screen, not the 920px column ---- */
+#panel-trade {
+  /* sticky offset that clears the two-row sticky nav (tabs ×2 + language pills) */
+  --trade-nav-clear: 178px;
+}
+/* overflow-x clip: the hero glow bleeds past the wrap edges for the aurora look —
+   without the clip that bleed widens the page and shifts mobile layouts. (clip, not
+   hidden: no scroll container, and the fixed-position filter sheet stays unclipped) */
+#panel-trade .trade-wrap { max-width: 1500px; overflow-x: clip; }
+
+/* Compact hero: title block left, slim beta-risk note right — one viewport line
+   instead of the old title + lead + full-width banner stack. */
+/* (it's a <header>, so undo the global landing-header centering/padding) */
+.trade-hero {
+  position: relative; display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 18px 28px; flex-wrap: wrap;
+  padding: 0; text-align: left;
+}
+.trade-hero-text { min-width: 0; flex: 1 1 460px; }
+.trade-hero .trade-lead { margin-top: 8px; max-width: 720px; }
+/* Aurora wash behind the title. The mask fades the whole layer to nothing well
+   before its own box edges — without it the radials get chopped into a visible
+   rectangle wherever the box (or the wrap's overflow clip) cuts them. */
+.trade-hero-glow {
+  position: absolute; inset: -60px 0 -80px; pointer-events: none; z-index: -1;
+  background:
+    radial-gradient(46% 70% at 24% 45%, rgba(81,255,165,.10), transparent 70%),
+    radial-gradient(42% 64% at 58% 30%, rgba(133,97,255,.11), transparent 72%);
+  -webkit-mask-image: radial-gradient(72% 78% at 42% 45%, #000 45%, transparent 96%);
+  mask-image: radial-gradient(72% 78% at 42% 45%, #000 45%, transparent 96%);
+}
+.trade-hero-risk {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 9px 14px; flex: 0 1 auto;
+  border-radius: var(--hr-radius-pill);
   background: color-mix(in srgb, var(--hr-banana) 8%, rgba(20,19,23,.6));
   border: 1px solid rgba(255,249,95,.35);
   backdrop-filter: blur(8px);
   /* backdrop-filter makes this a stacking context; without an explicit z-index the
-     later wallet bar (its own context) paints OVER this note's open ⓘ tooltip. */
-  position: relative; z-index: 5;
+     later command bar (its own context) paints OVER this note's open ⓘ tooltip. */
+  position: relative; z-index: 6;
 }
-.trade-beta-note .trade-beta-chip { margin-top: 2px; }
-.trade-beta-note p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--hr-fg-1); }
+.trade-hero-risk .trade-beta-chip { font-size: 9.5px; padding: 5px 9px; }
+.trade-hero-risk p { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--hr-fg-1); }
 .trade-beta-micro { margin: 8px 0 0; font-size: 11.5px; color: var(--hr-fg-3); text-align: center; }
+
+/* One-row command bar: collection ⟷ actions ⟷ wallet. */
+.trade-command {
+  position: relative; z-index: 6; /* its ⓘ tips and net pill ride above the browse area */
+  display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 1px solid var(--hr-line-strong); border-radius: var(--hr-radius-xl);
+  background:
+    radial-gradient(420px 120px at 6% 0%, rgba(81,255,165,.06), transparent 70%),
+    radial-gradient(420px 120px at 94% 100%, rgba(133,97,255,.07), transparent 70%),
+    linear-gradient(180deg, rgba(40,39,45,.66), rgba(20,19,23,.82));
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--hr-shadow-2), inset 0 1px 0 rgba(255,255,255,.06);
+}
+.trade-command .trade-bar { margin-left: auto; }
 
 /* Small BETA badge on the nav tab + landing hub card. Pseudo-elements stay out of
    textContent, so the i18n textContent swaps and the mobile nav-current mirror
@@ -1400,37 +1458,323 @@ footer { margin-top: 28px; }
 
 /* ---- Phase 1: browse grid + wallet bar + token modal ---- */
 
-/* Wallet status strip */
-.trade-bar {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
-  padding: 14px 18px;
-  border-radius: var(--hr-radius-xl); border: 1px solid var(--hr-line);
-  background: linear-gradient(180deg, rgba(40,39,45,.55), rgba(20,19,23,.6));
-  backdrop-filter: blur(8px);
+/* Wallet chip — compact, lives at the right edge of the command bar */
+.trade-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; min-width: 0; }
+.trade-bar-msg { font-size: 12.5px; color: var(--hr-fg-2); font-weight: 600; }
+.trade-bar.is-connected {
+  padding: 6px 8px 6px 10px;
+  border: 1px solid var(--hr-line); border-radius: var(--hr-radius-pill);
+  background: rgba(255,255,255,.03);
 }
-.trade-bar-msg { font-size: 14px; color: var(--hr-fg-1); font-weight: 600; margin-right: auto; }
-.trade-bar.is-connected .trade-addr { margin-right: 2px; }
-.trade-bar-bal { font-size: 13px; color: var(--hr-fg-2); }
-.trade-bar-bal b { color: var(--hr-fg-0); font-weight: 800; }
-.trade-bar.is-connected .apply-logout { margin-left: auto; }
+.trade-bar.is-connected .trade-addr { margin-right: 2px; font-size: 12.5px; padding: 5px 10px; }
+.trade-bar .trade-mm-dot { width: 20px; height: 20px; }
+.trade-bar .trade-net { padding: 5px 10px; font-size: 10.5px; }
+.trade-bar-bals {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 0 10px; border-left: 1px solid var(--hr-line); border-right: 1px solid var(--hr-line);
+}
+.trade-bar-bal { font-size: 12px; color: var(--hr-fg-2); white-space: nowrap; }
+.trade-bar-bal b { color: var(--hr-fg-0); font-weight: 800; font-variant-numeric: tabular-nums; }
 /* .apply-logout was written for an <a>; as a <button> here it'd inherit the UA's
    light button background ("whitened"). Reset to the intended ghost-pill look. */
 .trade-bar .apply-logout {
   appearance: none; -webkit-appearance: none; background: transparent; cursor: pointer;
-  font-family: var(--hr-sans);
+  font-family: var(--hr-sans); font-size: 11.5px; padding: 6px 11px;
 }
 .trade-bar .apply-logout:hover { background: rgba(255,255,255,.05); }
-.trade-mm-btn.is-sm { padding: 11px 18px; font-size: 14px; gap: 9px; }
-.trade-mm-btn.is-sm .trade-mm-logo { width: 20px; height: 20px; }
+/* The wrong-network pill doubles as the switch button */
+button.trade-net { cursor: pointer; font-family: var(--hr-sans); }
+button.trade-net:hover { box-shadow: 0 0 12px var(--hr-banana-25); }
+.trade-mm-btn.is-sm { padding: 9px 16px; font-size: 13px; gap: 8px; }
+.trade-mm-btn.is-sm .trade-mm-logo { width: 18px; height: 18px; }
 
-/* Browse header */
-.trade-browse { margin-top: 0; gap: 0; padding: 0;}
-.trade-browse-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
-.trade-browse-h { font-family: var(--hr-sans); font-weight: 900; font-size: clamp(20px,3vw,26px); color: var(--hr-fg-0); margin: 0 0 4px; }
-.trade-browse-sub { font-size: 14px; color: var(--hr-fg-2); margin: 0; max-width: 520px; }
+/* ---------- Browse: sidebar + results, side by side ---------- */
+/* The grid finally earns the widescreen: filters live in a sticky frosted rail on
+   the left, results take everything else. On mobile the rail becomes a bottom sheet. */
+.trade-browse { margin-top: 0; gap: 0; padding: 0; }
+.trade-browse.has-side {
+  display: grid; grid-template-columns: 268px minmax(0, 1fr);
+  gap: 0 24px; align-items: start;
+}
+.trade-main { min-width: 0; }
+
+.trade-results-head { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; margin-bottom: 12px; }
+.trade-browse-h { font-family: var(--hr-sans); font-weight: 900; font-size: clamp(19px,2.4vw,24px); color: var(--hr-fg-0); margin: 0; }
 .trade-browse-actions { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
 .trade-currency { font-size: 13px; padding-top: 9px; padding-bottom: 9px; }
-.trade-refresh { margin-top: 0; flex: 0 0 auto; }
+.trade-refresh { margin-top: 0; flex: 0 0 auto; padding: 9px 18px; font-size: 13px; }
+
+/* Toolbar row above the grid: scope ⟷ search ⟷ sort (+ Filters toggle on mobile) */
+.trade-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.trade-flt-scope { flex: 0 0 auto; }
+.trade-flt-scope .seg-btn { padding: 8px 14px; font-size: 12px; }
+
+/* Filter rail (desktop) — frosted card, sticky under the two-row nav */
+.trade-side { position: sticky; top: var(--trade-nav-clear); z-index: 5; }
+.trade-side-card {
+  padding: 16px 16px 18px;
+  border: 1px solid var(--hr-line-strong); border-radius: var(--hr-radius-xl);
+  background:
+    radial-gradient(300px 140px at 10% 0%, rgba(81,255,165,.07), transparent 70%),
+    radial-gradient(300px 160px at 90% 100%, rgba(133,97,255,.08), transparent 70%),
+    linear-gradient(180deg, rgba(40,39,45,.66), rgba(20,19,23,.82));
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--hr-shadow-2), inset 0 1px 0 rgba(255,255,255,.06);
+  max-height: calc(100vh - var(--trade-nav-clear) - 24px);
+  overflow-y: auto; overscroll-behavior: contain;
+  scrollbar-width: thin; scrollbar-color: var(--hr-tuna) transparent;
+  animation: trade-flt-in .45s cubic-bezier(.2,.7,.2,1) both;
+}
+@keyframes trade-flt-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.trade-side-backdrop { display: none; }
+.trade-side-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.trade-side-title { font-family: var(--hr-sans); font-weight: 900; font-size: 15px; color: var(--hr-fg-0); margin: 0; flex: 1; }
+.trade-side-x { display: none; }
+.trade-side-done { display: none; }
+.trade-side-sec { padding: 12px 0 2px; border-top: 1px solid var(--hr-line); }
+.trade-side-h {
+  font-family: var(--hr-sans); font-weight: 800; font-size: 10.5px;
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase;
+  color: var(--hr-fg-3); margin: 0 0 10px;
+}
+.trade-flt-search { position: relative; flex: 1 1 220px; min-width: 180px; display: block; }
+.trade-flt-sico {
+  position: absolute; left: 14px; top: 50%; width: 16px; height: 16px;
+  transform: translateY(-50%); color: var(--hr-fg-3); pointer-events: none;
+}
+.trade-flt-search input {
+  width: 100%; padding: 10px 16px 10px 38px;
+  font-family: var(--hr-sans); font-weight: 700; font-size: 13.5px; color: var(--hr-fg-0);
+  background: rgba(255,255,255,.04); border: 1px solid var(--hr-line);
+  border-radius: var(--hr-radius-pill); outline: none;
+  transition: border-color .2s, box-shadow .2s, background .2s;
+}
+.trade-flt-search input::placeholder { color: var(--hr-fg-3); font-weight: 500; }
+.trade-flt-search input:hover { border-color: var(--hr-line-strong); }
+.trade-flt-search input:focus-visible {
+  border-color: var(--hr-primary); background: rgba(81,255,165,.05);
+  box-shadow: 0 0 0 3px var(--hr-primary-25);
+}
+.trade-flt-search input::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+.trade-flt-price {
+  display: inline-flex; align-items: center; gap: 4px; padding: 0 14px 0 6px;
+  background: rgba(255,255,255,.04); border: 1px solid var(--hr-line);
+  border-radius: var(--hr-radius-pill); transition: border-color .2s;
+}
+.trade-flt-price:hover { border-color: var(--hr-line-strong); }
+.trade-flt-price:focus-within { border-color: var(--hr-primary); box-shadow: 0 0 0 3px var(--hr-primary-25); }
+.trade-flt-price input {
+  width: 64px; padding: 10px 4px; text-align: center; background: none; border: none; outline: none;
+  font-family: var(--hr-sans); font-weight: 700; font-size: 13px; color: var(--hr-fg-0);
+}
+.trade-flt-price input::placeholder { color: var(--hr-fg-3); font-weight: 500; }
+.trade-flt-dash { color: var(--hr-fg-3); }
+.trade-flt-eth { font-family: var(--hr-sans); font-weight: 900; font-size: 11px; letter-spacing: .05em; color: var(--hr-fg-3); }
+.trade-flt-sort { font-size: 13px; padding-top: 9px; padding-bottom: 9px; flex: 0 0 auto; }
+.trade-flt-toggle { display: none; margin-top: 0; align-items: center; gap: 7px; }
+
+/* Sidebar variants: price row stretches, trait dropdowns become inline accordions */
+.trade-side .trade-flt-price { display: flex; width: 100%; box-sizing: border-box; }
+.trade-side .trade-flt-price input { flex: 1 1 0; min-width: 0; }
+.trade-side .trade-flt-traits { flex-direction: column; gap: 6px; }
+.trade-side .trade-flt-dd { width: 100%; }
+.trade-side .trade-flt-ddbtn {
+  width: 100%; justify-content: space-between;
+  padding: 9px 12px; border-radius: var(--hr-radius-md); font-size: 12.5px;
+}
+.trade-side .trade-flt-ddbtn .trade-flt-caret { margin-left: auto; }
+.trade-side .trade-flt-ddbtn .trade-flt-badge { margin-left: 4px; }
+.trade-side .trade-flt-pop {
+  position: static; width: 100%; min-width: 0; max-width: none; max-height: 240px;
+  box-sizing: border-box; margin-top: 6px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+  background: rgba(0,0,0,.25);
+  scrollbar-width: thin; scrollbar-color: var(--hr-tuna) transparent;
+}
+
+/* Rarity tier chips — each lights up in its tier color when selected. */
+.trade-flt-rar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 11px; }
+.trade-flt-rchip {
+  --tc: var(--hr-mackerel);
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px;
+  font-family: var(--hr-sans); font-weight: 800; font-size: 12px; color: var(--hr-fg-1);
+  background: rgba(255,255,255,.03); border: 1px solid var(--hr-line);
+  border-radius: var(--hr-radius-pill); cursor: pointer;
+  transition: border-color .2s, background .2s, color .2s, transform .2s, box-shadow .2s;
+}
+.trade-flt-rchip[data-r="legendary"] { --tc: var(--hr-banana); }
+.trade-flt-rchip[data-r="epic"]      { --tc: var(--hr-secondary); }
+.trade-flt-rchip[data-r="rare"]      { --tc: var(--hr-blueberry); }
+.trade-flt-rchip[data-r="uncommon"]  { --tc: var(--hr-primary); }
+.trade-flt-rchip[data-r="common"]    { --tc: var(--hr-salmon); }
+.trade-flt-rdot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--tc);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--tc) 70%, transparent);
+}
+.trade-flt-rchip:hover:not(:disabled) { border-color: color-mix(in srgb, var(--tc) 55%, transparent); color: var(--hr-fg-0); transform: translateY(-1px); }
+.trade-flt-rchip.is-on {
+  border-color: var(--tc); color: var(--hr-fg-0);
+  background: color-mix(in srgb, var(--tc) 16%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--tc) 22%, transparent);
+}
+.trade-flt-rchip:disabled { opacity: .35; cursor: default; }
+.trade-flt-rchip:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; }
+
+/* Trait facet dropdowns */
+.trade-flt-traits { display: flex; gap: 8px; flex-wrap: wrap; }
+.trade-flt-loading { font-size: 12.5px; color: var(--hr-fg-3); padding: 6px 2px; }
+.trade-flt-dd { position: relative; }
+.trade-flt-ddbtn {
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px;
+  font-family: var(--hr-sans); font-weight: 700; font-size: 12px; color: var(--hr-fg-2);
+  background: rgba(255,255,255,.03); border: 1px solid var(--hr-line);
+  border-radius: var(--hr-radius-pill); cursor: pointer;
+  transition: border-color .2s, color .2s, background .2s;
+}
+.trade-flt-ddbtn:hover { border-color: var(--hr-line-strong); color: var(--hr-fg-0); }
+.trade-flt-ddbtn:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; }
+.trade-flt-ddbtn.has-sel { border-color: var(--hr-primary); color: var(--hr-fg-0); background: rgba(81,255,165,.07); }
+.trade-flt-caret { font-size: 9px; color: var(--hr-fg-3); transition: transform .2s; }
+.trade-flt-dd.is-open .trade-flt-caret { transform: rotate(180deg); }
+.trade-flt-badge {
+  min-width: 17px; height: 17px; padding: 0 5px; display: inline-grid; place-items: center;
+  font-size: 10.5px; font-weight: 900; color: var(--hr-on-primary);
+  background: var(--hr-primary); border-radius: var(--hr-radius-pill);
+}
+
+.trade-flt-pop {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 40;
+  min-width: 240px; max-width: min(300px, calc(100vw - 48px)); max-height: 280px; overflow: auto;
+  padding: 6px; border: 1px solid var(--hr-line-strong); border-radius: var(--hr-radius-lg);
+  background: linear-gradient(180deg, rgba(33,32,38,.97), rgba(20,19,23,.98));
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  box-shadow: var(--hr-shadow-3), inset 0 1px 0 rgba(255,255,255,.06);
+  animation: trade-flt-pop-in .18s cubic-bezier(.2,.7,.2,1) both;
+}
+@keyframes trade-flt-pop-in { from { opacity: 0; transform: translateY(-5px) scale(.98); } to { opacity: 1; transform: none; } }
+.trade-flt-opt {
+  display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px 10px;
+  font-family: var(--hr-sans); font-weight: 700; font-size: 12.5px; color: var(--hr-fg-1);
+  background: none; border: none; border-radius: 10px; cursor: pointer; text-align: left;
+  transition: background .15s, color .15s;
+}
+.trade-flt-opt:hover:not(:disabled) { background: rgba(255,255,255,.06); color: var(--hr-fg-0); }
+.trade-flt-opt:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: -2px; }
+.trade-flt-opt.is-on { color: var(--hr-fg-0); }
+.trade-flt-opt:disabled { opacity: .35; cursor: default; }
+.trade-flt-check {
+  flex: 0 0 auto; width: 16px; height: 16px; display: grid; place-items: center;
+  font-size: 11px; font-weight: 900; color: var(--hr-on-primary);
+  border: 1px solid var(--hr-line-strong); border-radius: 5px; background: rgba(255,255,255,.04);
+  transition: background .15s, border-color .15s;
+}
+.trade-flt-opt.is-on .trade-flt-check { background: var(--hr-primary); border-color: var(--hr-primary); }
+.trade-flt-optv { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trade-flt-n { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--hr-fg-3); font-variant-numeric: tabular-nums; }
+.trade-flt-rchip .trade-flt-n { margin-left: 1px; }
+
+/* Active filters + result count */
+.trade-flt-active { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 0 10px; }
+.trade-flt-active:empty { padding: 0 0 6px; }
+.trade-flt-count { font-size: 12.5px; color: var(--hr-fg-2); margin-right: 4px; transition: opacity .2s; }
+.trade-flt-count.is-stale { opacity: .5; }
+.trade-flt-note { font-size: 12px; color: var(--hr-fg-3); }
+
+/* Statistical rarity rank — glass pill, top-left of the art (rarity tier sits top-right) */
+.trade-rank {
+  position: absolute; top: 8px; left: 8px;
+  font-family: var(--hr-sans); font-weight: 900; font-size: 10.5px;
+  font-variant-numeric: tabular-nums; letter-spacing: .02em;
+  padding: 4px 8px; border-radius: var(--hr-radius-pill);
+  color: var(--hr-fg-0); background: rgba(15,16,20,.72);
+  border: 1px solid var(--hr-line-strong);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+.trade-tile-price.is-unlisted { color: var(--hr-fg-3); font-weight: 700; }
+.trade-modal-rank { font-size: 13px; font-weight: 700; color: var(--hr-fg-2); margin: -4px 0 2px; }
+.trade-flt-chip {
+  display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px;
+  font-family: var(--hr-sans); font-weight: 700; font-size: 12px; color: var(--hr-fg-0);
+  background: var(--hr-secondary-25); border: 1px solid rgba(133,97,255,.45);
+  border-radius: var(--hr-radius-pill); cursor: pointer;
+  transition: border-color .2s, background .2s;
+}
+.trade-flt-chip:hover { border-color: var(--hr-alert); background: var(--hr-alert-15); }
+.trade-flt-chip:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; }
+.trade-flt-x { font-size: 13px; color: var(--hr-fg-2); }
+.trade-flt-chip:hover .trade-flt-x { color: var(--hr-alert); }
+.trade-flt-clearall {
+  padding: 6px 11px; font-family: var(--hr-sans); font-weight: 800; font-size: 12px;
+  color: var(--hr-fg-2); background: none; border: none; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 3px; border-radius: 8px;
+}
+.trade-flt-clearall:hover { color: var(--hr-fg-0); }
+.trade-flt-clearall:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; }
+
+/* Mobile: the filter rail becomes a slide-up sheet over a dimmed backdrop. The
+   toolbar keeps scope/search/sort always visible; only refinements live in the sheet. */
+body.trade-sheet-open { overflow: hidden; }
+@media (max-width: 920px) {
+  .trade-browse.has-side { display: block; }
+  .trade-flt-toggle { display: inline-flex; }
+  .trade-side {
+    position: fixed; inset: 0; z-index: 1000;
+    visibility: hidden; pointer-events: none;
+    transition: visibility .28s;
+  }
+  .trade-side.is-open { visibility: visible; pointer-events: auto; }
+  .trade-side-backdrop {
+    display: block; position: absolute; inset: 0;
+    background: rgba(1,1,4,.66); backdrop-filter: blur(4px);
+    opacity: 0; transition: opacity .28s ease;
+  }
+  .trade-side.is-open .trade-side-backdrop { opacity: 1; }
+  .trade-side-card {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    max-height: 84dvh; border-radius: var(--hr-radius-2xl) var(--hr-radius-2xl) 0 0;
+    border-bottom: none; padding-bottom: max(18px, env(safe-area-inset-bottom));
+    transform: translateY(105%);
+    transition: transform .28s cubic-bezier(.2,.7,.2,1);
+    animation: none;
+  }
+  .trade-side.is-open .trade-side-card { transform: none; }
+  .trade-side-x {
+    display: grid; place-items: center; width: 32px; height: 32px;
+    font-size: 20px; line-height: 1; color: var(--hr-fg-2); cursor: pointer;
+    background: rgba(255,255,255,.05); border: 1px solid var(--hr-line);
+    border-radius: 50%;
+  }
+  .trade-side-x:hover { color: var(--hr-fg-0); }
+  .trade-side-done { display: inline-flex; margin-top: 18px; }
+}
+
+@media (max-width: 620px) {
+  .trade-flt-scope { display: flex; width: 100%; }
+  .trade-flt-scope .seg-btn { flex: 1; }
+  .trade-flt-search { flex: 1 1 auto; min-width: 0; }
+  .trade-flt-sort { flex: 1 1 110px; min-width: 0; }
+  .trade-flt-toggle { flex: 0 0 auto; padding: 9px 16px; font-size: 13px; }
+  .trade-results-head { align-items: center; }
+  .trade-browse-actions { width: 100%; justify-content: flex-end; }
+  /* wallet states stack inside the command bar instead of pushing past its edge */
+  .trade-command { padding: 10px 12px; }
+  .trade-command .trade-bar { margin-left: 0; width: 100%; }
+  .trade-bar-msg { flex: 1 1 100%; }
+  .trade-bar.is-connected { flex-wrap: wrap; border-radius: var(--hr-radius-lg); }
+  .trade-bar-bals { border: none; padding: 0; flex: 1 1 auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trade-side-card, .trade-side, .trade-side-backdrop,
+  .trade-flt-pop, .trade-flt-rchip, .trade-flt-ddbtn, .trade-flt-chip,
+  .trade-flt-caret, .trade-flt-opt, .trade-flt-check,
+  .trade-flt-search input, .trade-flt-price {
+    animation: none !important; transition: none !important;
+  }
+  .trade-flt-rchip:hover:not(:disabled) { transform: none; }
+}
 
 /* Grid */
 .trade-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 14px; }
@@ -1487,7 +1831,50 @@ footer { margin-top: 28px; }
 .trade-loadmore { text-align: center; margin-top: 22px; }
 /* The Buy/Sell/Transfer tabs own the gap to the content (margin-bottom below), so the
    views sit flush under them rather than stacking two margins. */
-.trade-actions { margin-top: 0; max-width: 560px; }
+.trade-actions { margin-top: 0; }
+/* Gate states (install / connect / wrong network) stay a centred column */
+.trade-actions > .apply-state-box { max-width: 560px; margin: 10px auto 0; }
+
+/* Sell/Transfer workbench: picker browses wide on the left, the action card sits
+   sticky on the right so the primary button never scrolls away. */
+.trade-workbench {
+  display: grid; grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 22px; align-items: start;
+}
+.trade-wb-main { min-width: 0; }
+.trade-wb-side {
+  position: sticky; top: var(--trade-nav-clear);
+  display: flex; flex-direction: column; gap: 16px;
+}
+.trade-wb-side .trade-form {
+  padding: 18px 18px 16px;
+  border: 1px solid var(--hr-line-strong); border-radius: var(--hr-radius-xl);
+  background:
+    radial-gradient(280px 120px at 90% 0%, rgba(81,255,165,.06), transparent 70%),
+    linear-gradient(180deg, rgba(40,39,45,.6), rgba(20,19,23,.78));
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--hr-shadow-2), inset 0 1px 0 rgba(255,255,255,.05);
+}
+.trade-workbench .trade-pick {
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 10px; max-height: min(56vh, 560px);
+}
+@media (max-width: 920px) {
+  .trade-workbench { grid-template-columns: 1fr; }
+  .trade-wb-side { position: static; }
+  .trade-workbench .trade-pick { max-height: 264px; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+}
+
+/* Collection switcher (Creatures ⟷ LAND) — sits above the action tabs */
+.trade-coll-switch { display: flex; width: fit-content; gap: 4px; padding: 4px; margin: 0; }
+.trade-coll-switch .seg-btn { min-width: 110px; min-height: 36px; font-size: 13px; font-weight: 800; }
+
+/* LAND tiles show slime pets — contain-fit with breathing room, soft brand tint */
+.trade-tile-img.is-pet {
+  object-fit: contain; padding: 14%; box-sizing: border-box;
+  background: radial-gradient(60% 60% at 50% 42%, rgba(133,97,255,.18), rgba(20,19,23,.0)), var(--hr-bg-2);
+}
+.trade-pick-tile img.is-pet, .trade-pick-tile img[data-fallback] { object-fit: contain; padding: 10%; box-sizing: border-box; background: var(--hr-bg-2); }
 
 /* Buy / Sell / Transfer segmented tabs — primary actions, so scaled up from the
    compact .seg base (which is sized for the Market panel's chart controls) to sit
@@ -1496,11 +1883,11 @@ footer { margin-top: 28px; }
 /* Spacing comes from the parent flex gap; width:fit-content keeps the bar hugging
    the three pills instead of stretching full-width. */
 /* Spacing comes entirely from the parent's uniform flex gap (no own margin). */
-.trade-tabs { margin: 0; display: flex; width: fit-content; gap: 4px; padding: 5px; }
+.trade-tabs { margin: 0; display: flex; width: fit-content; gap: 4px; padding: 4px; }
 .trade-tabs .seg-btn {
-  min-width: 132px; min-height: 44px;
-  font-size: 14px; font-weight: 800; letter-spacing: .01em;
-  padding: 12px 26px;
+  min-width: 108px; min-height: 38px;
+  font-size: 13.5px; font-weight: 800; letter-spacing: .01em;
+  padding: 10px 22px;
 }
 .trade-tabs .seg-btn.is-active {
   font-weight: 900;
@@ -1661,14 +2048,14 @@ a.trade-buy-btn { display: inline-flex; }
 
 /* Collection-offer strip (Buy tab) */
 .trade-colloffer {
-  margin-bottom: 16px; padding: 14px 16px; border-radius: var(--hr-radius-xl);
+  margin-bottom: 14px; padding: 9px 14px; border-radius: var(--hr-radius-lg);
   background: linear-gradient(180deg, rgba(133,97,255,.10), rgba(0,0,0,.26));
   border: 1px solid color-mix(in srgb, var(--hr-secondary) 35%, transparent);
 }
-.trade-colloffer-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.trade-colloffer-info { display: flex; flex-direction: column; min-width: 0; }
-.trade-colloffer-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--hr-fg-2); }
-.trade-colloffer-price { font-family: var(--hr-sans); font-weight: 900; font-size: 19px; color: var(--hr-secondary); }
+.trade-colloffer-row { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; }
+.trade-colloffer-info { display: flex; flex-direction: row; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
+.trade-colloffer-label { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--hr-fg-2); }
+.trade-colloffer-price { font-family: var(--hr-sans); font-weight: 900; font-size: 15px; color: var(--hr-secondary); }
 .trade-colloffer .trade-offer-form.is-inline { margin: 0 0 0 auto; max-width: 340px; }
 .trade-colloffer-hint { margin-left: auto; font-size: 12.5px; color: var(--hr-fg-3); }
 .trade-colloffer-p { font-size: 12px; color: var(--hr-fg-3); margin: 8px 0 0; }
@@ -1858,10 +2245,10 @@ a.trade-buy-btn { display: inline-flex; }
 #trade-mmwarn-slot { display: contents; } /* no phantom flex-gap when empty */
 .trade-mmwarn {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  padding: 11px 14px; border-radius: var(--hr-radius-lg);
+  padding: 8px 14px; border-radius: var(--hr-radius-lg);
   background: color-mix(in srgb, var(--hr-banana) 8%, rgba(0,0,0,.3));
   border: 1px solid rgba(255,249,95,.4);
-  font-size: 13px; font-weight: 600; color: var(--hr-fg-1);
+  font-size: 12.5px; font-weight: 600; color: var(--hr-fg-1);
 }
 .trade-mmwarn > span:first-child { color: var(--hr-banana); }
 .trade-mmwarn .trade-bridgebar-x { margin-left: auto; }
@@ -1870,9 +2257,9 @@ a.trade-buy-btn { display: inline-flex; }
 #trade-bridgebar-slot { display: contents; } /* no phantom flex-gap when empty */
 .trade-bridgebar {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  padding: 11px 14px; border-radius: var(--hr-radius-lg);
+  padding: 8px 14px; border-radius: var(--hr-radius-lg);
   background: rgba(13,166,252,.10); border: 1px solid rgba(13,166,252,.35);
-  font-size: 13px; font-weight: 600; color: var(--hr-fg-1);
+  font-size: 12.5px; font-weight: 600; color: var(--hr-fg-1);
 }
 .trade-bridgebar b { color: var(--hr-fg-0); font-variant-numeric: tabular-nums; }
 .trade-bridgebar.is-ok { background: rgba(100,242,169,.12); border-color: rgba(100,242,169,.45); }
@@ -1921,7 +2308,6 @@ a.trade-buy-btn { display: inline-flex; }
 }
 
 @media (max-width: 620px) {
-  .trade-browse-head { flex-direction: column; align-items: flex-start; }
   .trade-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 11px; }
   /* Stacked: image on top (capped), info scrolls below it. */
   .trade-modal-card { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); height: auto; max-height: 92vh; }

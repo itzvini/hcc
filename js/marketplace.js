@@ -15,8 +15,34 @@ const ZK_NETWORK = {
   blockExplorerUrls: ['https://explorer.immutable.com'],
 };
 const EXPLORER = 'https://explorer.immutable.com';
-const LISTINGS_API = '/api/market/creatures/listings';
-const TOKEN_API    = '/api/market/creatures/token/';
+
+// Two collections, two worlds: Creatures (Immutable zkEVM + Immutable orderbook) and
+// LAND (Ethereum mainnet + OpenSea Seaport). The active collection scopes the API base,
+// the chain every action needs, and which features exist (offers/sell are
+// Creatures-only until LAND listing-creation ships).
+const LAND_CONTRACT_L1 = '0x8bf3a40ea2337e6e4f6e540680ea6390cb3b4e11';
+const COLLECTIONS = {
+  creatures: { api: '/api/market/creatures', chainHex: ZK_CHAIN_ID_HEX, contract: CREATURE_CONTRACT, labelKey: 'trade.coll.creatures', ico: '🐾' },
+  land:      { api: '/api/market/land',      chainHex: '0x1',           contract: LAND_CONTRACT_L1, labelKey: 'trade.coll.land',      ico: '🗺️' },
+};
+let coll = 'creatures';
+const C = () => COLLECTIONS[coll];
+const onRightChain = () => (chainId || '').toLowerCase() === C().chainHex;
+// Every LAND parcel comes with a slime pet in-game — the plot tiles all look alike, so
+// the grid shows each parcel's REAL pet, rendered server-side from the Highrise API
+// (real plot art lives in the modal). Null when coords are unknown — use the plot image.
+function petUrl(it) {
+  const c = it?.coords;
+  return Number.isInteger(c?.x) && Number.isInteger(c?.y) ? `/api/market/land/pet/${c.x}/${c.y}` : null;
+}
+function tokenExplorerUrl(tokenId) {
+  return coll === 'land'
+    ? `https://opensea.io/assets/ethereum/${LAND_CONTRACT_L1}/${encodeURIComponent(tokenId)}`
+    : `${EXPLORER}/token/${CREATURE_CONTRACT}/instance/${encodeURIComponent(tokenId)}`;
+}
+function txExplorerUrl(hash) {
+  return coll === 'land' ? `https://etherscan.io/tx/${hash}` : `${EXPLORER}/tx/${hash}`;
+}
 
 const SEL_SAFE_TRANSFER = '0x42842e0e'; // safeTransferFrom(address,address,uint256)
 const SEL_BALANCE_OF    = '0x70a08231'; // balanceOf(address)
@@ -50,6 +76,53 @@ let ethUsd = null;
 let fxRates = { usd: 1 };   // USD-relative display rates from the listings API
 let currency = 'usd';       // active display currency for the fiat estimate ('eth' = none)
 const CURRENCIES = ['usd', 'eth', 'eur', 'gbp', 'brl', 'rub', 'try', 'jpy', 'cad', 'aud'];
+
+// Explorer state (Creatures only — LAND keeps the plain cursor feed). Filters are
+// applied server-side against a full snapshot of active listings, so the client just
+// describes what it wants: traits is Map(type -> Set(values)), OR within a type,
+// AND across types. Facets come back with every response (value -> live match count).
+let flt = { q: '', traits: new Map(), min: '', max: '', sort: 'price-asc', scope: 'listed' };
+let browsePage = 0;
+let browseHasMore = false;
+let browseTotal = null;        // filtered match count (null until the first response)
+let browseListedTotal = null;  // everything currently listed, pre-filter
+let browseCollectionTotal = null; // whole collection size, once the server has indexed it
+let browseScope = 'listed';    // EFFECTIVE scope from the server (≠ flt.scope while indexing)
+let browseIndexing = false;    // asked for the whole collection; server still cataloguing
+let browseHadFilters = false;  // whether the LAST APPLIED response was filtered — the count
+                               // line renders response-time state, never a mid-flight mix
+let browseFacets = null;       // [{type, values:[{v, n}]}] from the server
+let browsePriceRange = null;   // {min, max} over all listings — price placeholder hints
+let openFacet = null;          // trait type whose value popover is open
+let fltOpenMobile = false;     // filter drawer expanded (mobile)
+let fltDebounce = null;
+let browseReqId = 0;           // drops stale responses when filters change mid-flight
+const RARITY_TIERS = ['Legendary', 'Epic', 'Rare', 'Uncommon', 'Common'];
+
+function fltActive() {
+  return !!(flt.q || flt.min || flt.max || flt.traits.size);
+}
+function fltCount() {
+  let n = (flt.q ? 1 : 0) + (flt.min ? 1 : 0) + (flt.max ? 1 : 0);
+  for (const vals of flt.traits.values()) n += vals.size;
+  return n;
+}
+function resetFilters() {
+  // Scope is a view mode, not a filter — clearing filters keeps you where you are.
+  flt = { q: '', traits: new Map(), min: '', max: '', sort: flt.sort, scope: flt.scope };
+  openFacet = null;
+}
+function browseQuery(page) {
+  const p = new URLSearchParams();
+  if (flt.scope === 'all') p.set('scope', 'all');
+  if (flt.q) p.set('q', flt.q);
+  if (flt.min) p.set('min', flt.min);
+  if (flt.max) p.set('max', flt.max);
+  if (flt.sort !== 'price-asc') p.set('sort', flt.sort);
+  for (const [type, vals] of flt.traits) for (const v of vals) p.append('t', `${type}:${v}`);
+  if (page) p.set('page', String(page));
+  return p.toString();
+}
 
 // Modal state
 let modalToken = null;
@@ -202,9 +275,9 @@ async function readBalance() {
     return parseInt(res, 16) || 0;
   } catch { return null; }
 }
-async function ownerOf(tokenId) {
+async function ownerOf(contract, tokenId) {
   try {
-    const res = await eth().request({ method: 'eth_call', params: [{ to: CREATURE_CONTRACT, data: SEL_OWNER_OF + word(tokenId) }, 'latest'] });
+    const res = await eth().request({ method: 'eth_call', params: [{ to: contract, data: SEL_OWNER_OF + word(tokenId) }, 'latest'] });
     if (!res || res.length < 42) return null;
     return ('0x' + res.slice(-40)).toLowerCase();
   } catch { return null; }
@@ -340,38 +413,99 @@ async function connect() {
   } finally { busy = false; render(); }
 }
 
+// Switch to whatever chain the ACTIVE collection needs (zkEVM gets added if absent;
+// Ethereum mainnet always exists in the wallet).
+async function switchToChain(hex) {
+  if (hex === ZK_CHAIN_ID_HEX) { await ensureNetwork(); return; }
+  await eth().request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] });
+  chainId = await eth().request({ method: 'eth_chainId' });
+}
+
 async function switchNetwork(btn) {
   if (busy) return;
   busy = true;
   if (btn) { btn.disabled = true; btn.textContent = t('trade.net.switching'); }
-  try { await ensureNetwork(); pendingFlash = null; }
+  try { await switchToChain(C().chainHex); pendingFlash = null; }
   catch (err) { console.error('Network switch failed:', err); pendingFlash = friendlyError(err); }
   finally { busy = false; render(); }
 }
 
-async function sendTransfer(tokenId, to) {
+async function sendTransfer(contract, tokenId, to) {
   const data = SEL_SAFE_TRANSFER + word(account) + word(to) + word(tokenId);
-  return eth().request({ method: 'eth_sendTransaction', params: [{ from: account, to: CREATURE_CONTRACT, data }] });
+  return eth().request({ method: 'eth_sendTransaction', params: [{ from: account, to: contract, data }] });
 }
 
 // --- Browse ---
 async function loadListings(reset = true) {
+  if (coll === 'creatures') return loadBrowse(reset);
   if (reset) { listings = []; listingsCursor = null; listingsError = false; }
   if (!reset && (!listingsCursor || listingsLoading)) return;
   listingsLoading = true; patchGrid();
   try {
-    const url = reset ? LISTINGS_API : `${LISTINGS_API}?cursor=${encodeURIComponent(listingsCursor)}`;
+    const base = `${C().api}/listings`;
+    const url = reset ? base : `${base}?cursor=${encodeURIComponent(listingsCursor)}`;
     const res = await fetch(url, { headers: { Accept: 'application/json' } });
     if (!res.ok) throw new Error('http ' + res.status);
     const data = await res.json();
     if (data.ethUsd != null) ethUsd = data.ethUsd;
     if (data.fxRates) fxRates = data.fxRates;
-    listings = reset ? (data.items || []) : listings.concat(data.items || []);
+    // Normalize LAND (OpenSea) rows onto the creature listing shape the UI renders:
+    // orderHash plays the listingId role, and OpenSea prices are already all-in.
+    const items = (data.items || []).map(it =>
+      ({ listingId: it.orderHash, protocolAddress: it.protocolAddress, tokenId: it.tokenId, seller: it.seller, priceEth: it.priceEth, totalEth: it.priceEth, name: it.name, image: it.image, coords: it.coords, rarity: null }));
+    listings = reset ? items : listings.concat(items);
     listingsCursor = data.nextCursor || null;
   } catch (err) {
     console.error('Listings load failed:', err);
     if (reset) listingsError = true;
   } finally { listingsLoading = false; patchGrid(); }
+}
+
+// Creatures explorer feed: the server filters/sorts its full listing snapshot, so a
+// "page" is an offset into the current filtered set. A request id guards against a
+// slow stale response landing after the user already changed filters.
+async function loadBrowse(reset = true) {
+  if (!reset && (!browseHasMore || listingsLoading)) return;
+  const page = reset ? 0 : browsePage + 1;
+  if (reset) { listings = []; browsePage = 0; browseHasMore = false; listingsError = false; }
+  const rid = ++browseReqId;
+  const hadFilters = fltActive(); // captured at request time, applied at response time
+  listingsLoading = true; patchGrid(); patchFilters();
+  try {
+    const qs = browseQuery(page);
+    const res = await fetch(`/api/market/creatures/browse${qs ? '?' + qs : ''}`, { headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error('http ' + res.status);
+    const data = await res.json();
+    if (rid !== browseReqId || coll !== 'creatures') return; // superseded — newer request owns the grid
+    if (data.ethUsd != null) ethUsd = data.ethUsd;
+    if (data.fxRates) fxRates = data.fxRates;
+    listings = reset ? (data.items || []) : listings.concat(data.items || []);
+    browsePage = data.page ?? page;
+    browseHasMore = !!data.hasMore;
+    browseTotal = data.total ?? null;
+    browseListedTotal = data.listedTotal ?? null;
+    browseCollectionTotal = data.collectionTotal ?? browseCollectionTotal;
+    browseScope = data.scope || 'listed';
+    browseIndexing = !!data.indexing;
+    browseHadFilters = hadFilters;
+    if (data.facets) browseFacets = data.facets;
+    if (data.priceRange) browsePriceRange = data.priceRange;
+  } catch (err) {
+    if (rid !== browseReqId) return;
+    console.error('Browse load failed:', err);
+    if (reset) listingsError = true;
+  } finally {
+    if (rid === browseReqId) { listingsLoading = false; patchGrid(); patchFilters(); }
+  }
+}
+
+// Re-fetch from page 0 after any filter change, debounced for typed input — every
+// keystroke must not become a request (and the rate limiter agrees).
+function applyFilters(debounceMs = 0) {
+  clearTimeout(fltDebounce);
+  if (!debounceMs) { patchFilters(); loadBrowse(true); return; }
+  patchFilters();
+  fltDebounce = setTimeout(() => loadBrowse(true), debounceMs);
 }
 
 function skeletons(n) {
@@ -382,18 +516,30 @@ function skeletons(n) {
 function rarityChip(rarity) {
   return rarity ? `<span class="trade-rar" data-r="${esc(String(rarity).toLowerCase())}">${esc(rarity)}</span>` : '';
 }
+function rankChip(rank) {
+  return rank != null ? `<span class="trade-rank" title="${esc(t('trade.filter.rankAria'))}">#${esc(String(rank))}</span>` : '';
+}
 
 function tileHtml(it) {
-  const fiat = fmtFiat(it.totalEth ?? it.priceEth);
-  const img = it.image
-    ? `<img class="trade-tile-img" src="${esc(it.image)}" alt="" loading="lazy" />`
-    : `<div class="trade-tile-img trade-tile-noimg" aria-hidden="true">🐾</div>`;
+  const unlisted = it.listed === false; // scope=all rows; LAND/listed rows lack the flag
+  const fiat = unlisted ? '' : fmtFiat(it.totalEth ?? it.priceEth);
+  // LAND tiles show the parcel's slime pet (plot art is in the modal); if the parcel
+  // has no pet (404) the delegated error handler swaps in the plot image.
+  const pet = coll === 'land' ? petUrl(it) : null;
+  const src = pet || it.image;
+  const fallback = pet && it.image ? ` data-fallback="${esc(it.image)}"` : '';
+  const img = src
+    ? `<img class="trade-tile-img ${pet ? 'is-pet' : ''}" src="${esc(src)}"${fallback} alt="" loading="lazy" />`
+    : `<div class="trade-tile-img trade-tile-noimg" aria-hidden="true">${coll === 'land' ? '🗺️' : '🐾'}</div>`;
+  const price = unlisted
+    ? `<span class="trade-tile-price is-unlisted">${esc(t('trade.filter.unlisted'))}</span>`
+    : `<span class="trade-tile-price">${esc(fmtEth(it.totalEth ?? it.priceEth))}</span>`;
   return `
     <button class="trade-tile" type="button" data-act="open" data-token="${esc(it.tokenId)}">
-      <div class="trade-tile-media">${img}${rarityChip(it.rarity)}</div>
+      <div class="trade-tile-media">${img}${rankChip(it.rank)}${rarityChip(it.rarity)}</div>
       <div class="trade-tile-body">
         <span class="trade-tile-name">${esc(it.name)}</span>
-        <span class="trade-tile-price">${esc(fmtEth(it.totalEth ?? it.priceEth))}</span>
+        ${price}
         ${fiat ? `<span class="trade-tile-usd">${esc(fiat)}</span>` : ''}
       </div>
     </button>`;
@@ -406,13 +552,18 @@ function gridInnerHtml() {
       <button class="apply-btn-ghost" data-act="retry" type="button">${esc(t('trade.browse.retry'))}</button></div>`;
   }
   if (!listings.length) {
+    if (coll === 'creatures' && fltActive()) {
+      return `<div class="trade-grid-state"><div class="trade-grid-state-ico" aria-hidden="true">🔍</div><p>${esc(t('trade.filter.noMatch'))}</p>
+        <button class="apply-btn-ghost" data-act="flt-clear" type="button">${esc(t('trade.filter.clear'))}</button></div>`;
+    }
     return `<div class="trade-grid-state"><div class="trade-grid-state-ico" aria-hidden="true">🛒</div><p>${esc(t('trade.browse.empty'))}</p></div>`;
   }
   return listings.map(tileHtml).join('');
 }
 
 function loadMoreHtml() {
-  if (!listings.length || !listingsCursor) return '';
+  const more = coll === 'creatures' ? browseHasMore : !!listingsCursor;
+  if (!listings.length || !more) return '';
   return `<button class="apply-btn-ghost" data-act="loadmore" type="button" ${listingsLoading ? 'disabled' : ''}>${esc(listingsLoading ? t('trade.browse.loadingMore') : t('trade.browse.loadMore'))}</button>`;
 }
 
@@ -429,10 +580,10 @@ async function openModal(tokenId) {
   tokenOffers = null;
   if (offerCtx === 'modal') { offerState = null; offerCtx = null; }
   acceptState = null;
-  loadTokenOffers(tokenId);
+  if (coll === 'creatures') loadTokenOffers(tokenId); // offers are Creatures-only for now
   patchModal();
   try {
-    const res = await fetch(TOKEN_API + encodeURIComponent(tokenId), { headers: { Accept: 'application/json' } });
+    const res = await fetch(`${C().api}/token/${encodeURIComponent(tokenId)}`, { headers: { Accept: 'application/json' } });
     if (res.ok) modalMeta = await res.json();
   } catch (err) { console.error('Token detail failed:', err); }
   modalLoading = false;
@@ -463,24 +614,31 @@ function modalCardHtml() {
        ${buyAreaHtml(it)}`
     : `<div class="trade-modal-price"><span class="trade-modal-notlisted">${esc(t('trade.modal.notListed'))}</span></div>`;
 
+  const attrs = meta.attributes || meta.traits; // creatures vs LAND field name
   const traits = modalLoading
     ? `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.modal.loading'))}</div>`
-    : (meta.attributes && meta.attributes.length
-        ? `<div class="trade-modal-traits">${meta.attributes.map(a =>
+    : (attrs && attrs.length
+        ? `<div class="trade-modal-traits">${attrs.map(a =>
             `<div class="trade-trait"><span class="trade-trait-k">${esc(a.trait)}</span><span class="trade-trait-v">${esc(a.value)}</span></div>`).join('')}</div>`
         : '');
 
   const owner = meta.owner ? `<div class="trade-modal-meta-row">${esc(t('trade.modal.owner'))}: <code>${esc(shortWallet(meta.owner))}</code></div>` : '';
   const idRow = `<div class="trade-modal-meta-row">${esc(t('trade.modal.tokenId'))}: <code class="trade-modal-tokenid">${esc(modalToken)}</code></div>`;
-  const explorer = `${EXPLORER}/token/${CREATURE_CONTRACT}/instance/${encodeURIComponent(modalToken)}`;
+  const explorer = tokenExplorerUrl(modalToken);
 
+  const rank = meta.rank != null
+    ? `<div class="trade-modal-rank">${esc(t('trade.modal.rank')
+        .replace('{r}', Number(meta.rank).toLocaleString())
+        .replace('{t}', Number(meta.rankOf || 0).toLocaleString()))}</div>`
+    : '';
   return `
     <button class="trade-modal-close" data-act="close" type="button" aria-label="${esc(t('trade.modal.close'))}">×</button>
-    <div class="trade-modal-media">${img}${rarityChip(it.rarity)}</div>
+    <div class="trade-modal-media">${img}${rankChip(meta.rank ?? it.rank)}${rarityChip(it.rarity || (meta.attributes || []).find(a => /rarity/i.test(a.trait))?.value)}</div>
     <div class="trade-modal-info">
       <h3 class="trade-modal-name">${esc(name)}</h3>
+      ${rank}
       ${price}
-      ${modalOffersHtml(meta)}
+      ${coll === 'creatures' ? modalOffersHtml(meta) : ''}
       ${owner}
       ${idRow}
       ${traits}
@@ -501,7 +659,7 @@ function buyStatusHtml() {
   };
   if (buyState.phase === 'done') {
     return `<div class="trade-status is-ok"><span aria-hidden="true">✓</span><span>${esc(t('trade.buy.done'))} `
-      + `<a href="${esc(EXPLORER)}/tx/${esc(buyState.hash)}" target="_blank" rel="noopener">${esc(t('trade.status.view'))}</a></span></div>`;
+      + `<a href="${esc(txExplorerUrl(buyState.hash))}" target="_blank" rel="noopener">${esc(t('trade.status.view'))}</a></span></div>`;
   }
   if (buyState.phase === 'error') {
     return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(buyState.msg)}</span></div>`;
@@ -822,13 +980,14 @@ function buyAreaHtml(it) {
     btn = `<a class="trade-send trade-buy-btn" href="https://metamask.io/download/" target="_blank" rel="noopener">${esc(t('trade.install.btn'))}</a>`;
   } else if (!account) {
     btn = `<button class="trade-send trade-buy-btn" data-act="connect" type="button">${esc(t('trade.buy.connect'))}</button>`;
-  } else if (!onZk()) {
+  } else if (!onRightChain()) {
     btn = `<button class="trade-send trade-buy-btn" data-act="switch" type="button">${esc(t('trade.net.switch'))}</button>`;
   } else {
     btn = `<button class="trade-send trade-buy-btn" data-act="buy" data-listing="${esc(it.listingId)}" type="button" ${busyNow ? 'disabled' : ''}>
       ${esc(t('trade.buy.btn'))} · ${esc(fmtEthFiat(it.totalEth ?? it.priceEth))}</button>`;
   }
-  return `<div class="trade-buy">${btn}<p class="trade-beta-micro">${esc(t('trade.beta.micro'))}</p>${buyStatusHtml()}</div>`;
+  const gasNote = coll === 'land' ? `<p class="trade-beta-micro">${esc(t('trade.land.gasMicro'))}</p>` : '';
+  return `<div class="trade-buy">${btn}<p class="trade-beta-micro">${esc(t('trade.beta.micro'))}</p>${gasNote}${buyStatusHtml()}</div>`;
 }
 
 function setBuy(phase, extra) {
@@ -841,7 +1000,7 @@ function buyServerError(code) {
   const KEY = {
     not_found: 'trade.err.gone', not_active: 'trade.err.gone',
     insufficient: 'trade.err.funds', rate_limited: 'trade.err.rate',
-    own_listing: 'trade.buy.own',
+    own_listing: 'trade.buy.own', blocked_account: 'trade.err.osBlocked',
   };
   return t(KEY[code] || 'trade.err.unavailable');
 }
@@ -859,10 +1018,57 @@ async function waitForReceipt(hash, timeoutMs = 180000) {
   return null;
 }
 
+// LAND buy: Ethereum mainnet, native-ETH value transaction, no approvals. The
+// prepared calldata is zone-bound to this buyer, so it can't be hijacked.
+async function handleBuyLand(it) {
+  try {
+    setBuy('prepare');
+    // Pre-flight: price + a gas cushion must already sit on MAINNET (no bridge here —
+    // this is the opposite direction from the zkEVM funds helper).
+    const needWei = BigInt(Math.round((it.totalEth ?? it.priceEth) * 1e6)) * 10n ** 12n + 10n ** 16n; // +0.01 ETH gas cushion
+    try {
+      const ee = await fetch(`/api/market/creatures/eth-elsewhere/${account}`).then(r => r.ok ? r.json() : null);
+      if (ee?.mainnetEthWei != null && BigInt(ee.mainnetEthWei) < needWei) {
+        setBuy('error', { msg: t('trade.err.landFunds').replace('{x}', fmtEth(Number(needWei) / 1e18)).replace('{y}', fmtEth(Number(BigInt(ee.mainnetEthWei)) / 1e18)) });
+        return;
+      }
+    } catch { /* pre-flight unavailable — the wallet will still guard */ }
+
+    const res = await fetch('/api/market/land/buy/prepare', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ orderHash: it.listingId, protocolAddress: it.protocolAddress, takerAddress: account }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { setBuy('error', { msg: buyServerError(data.error) }); return; }
+
+    await switchToChain('0x1');
+    for (const tx of (data.transactions || [])) {
+      setBuy('fulfill');
+      const hash = await eth().request({
+        method: 'eth_sendTransaction',
+        params: [{ from: account, to: tx.to, data: tx.data, value: tx.value && tx.value !== '0x0' ? tx.value : undefined }],
+      });
+      setBuy('fulfillWait', { hash });
+      const receipt = await waitForReceipt(hash);
+      if (!receipt || receipt.status !== '0x1') { setBuy('error', { msg: t('trade.err.txFailed') }); return; }
+      setBuy('done', { hash });
+      listings = listings.filter(l => l.listingId !== it.listingId);
+      patchGrid();
+      loadSellerData(); // their LAND count changed
+      return;
+    }
+    setBuy('error', { msg: t('trade.err.unavailable') });
+  } catch (err) {
+    console.error('LAND buy failed:', err);
+    setBuy('error', { msg: friendlyError(err) });
+  }
+}
+
 async function handleBuy(listingId) {
   if (buyState && BUY_BUSY_PHASES.has(buyState.phase)) return;
   const it = listings.find(l => l.listingId === listingId);
   if (!it) return;
+  if (coll === 'land') return handleBuyLand(it);
 
   try {
     setBuy('prepare');
@@ -1260,6 +1466,7 @@ function flashBanner() {
   return `<div class="apply-alert" role="alert"><span aria-hidden="true">⚠</span><span>${esc(m)}</span></div>`;
 }
 
+// Compact wallet chip — lives inside the command bar, not a row of its own.
 function walletBarHtml() {
   if (!eth()) {
     return `<div class="trade-bar">
@@ -1275,62 +1482,268 @@ function walletBarHtml() {
         <img class="trade-mm-logo" src="${METAMASK_IMG}" alt="" /><span>${esc(busy ? t('trade.connecting') : t('trade.connect.btn'))}</span></button>
     </div>`;
   }
-  const net = onZk()
-    ? `<span class="trade-net is-ok">${esc(t('trade.net.ok'))}</span>`
-    : `<span class="trade-net is-bad">${esc(t('trade.net.bad'))}</span>`;
+  // Wrong network is an action, not a status — the pill itself switches.
+  const net = onRightChain()
+    ? `<span class="trade-net is-ok">${esc(coll === 'land' ? t('trade.net.eth') : t('trade.net.ok'))}</span>`
+    : `<button class="trade-net is-bad" data-act="switch" type="button" title="${esc(t('trade.net.switch'))}">${esc(t('trade.net.bad'))}</button>`;
   // Live on-chain balances straight from the RPC — the user's ground truth when a
   // wallet UI mis-reports (e.g. MetaMask's phantom "insufficient IMX" on custom nets).
-  const bal = onZk()
-    ? `<span class="trade-bar-bal">${esc(t('trade.balance.label'))}: <b id="trade-bal">—</b></span>
-       <span class="trade-bar-bal">ETH: <b id="trade-bal-eth">—</b></span>
-       <span class="trade-bar-bal">IMX: <b id="trade-bal-imx">—</b></span>`
-    : '';
+  const bal = coll === 'land'
+    ? `<span class="trade-bar-bal" title="${esc(t('trade.balance.landLabel'))}">🗺️ <b id="trade-bal">—</b></span>
+       <span class="trade-bar-bal">ETH <b id="trade-bal-eth">—</b></span>`
+    : (onZk()
+        ? `<span class="trade-bar-bal" title="${esc(t('trade.balance.label'))}">🐾 <b id="trade-bal">—</b></span>
+           <span class="trade-bar-bal">ETH <b id="trade-bal-eth">—</b></span>
+           <span class="trade-bar-bal">IMX <b id="trade-bal-imx">—</b></span>`
+        : '');
   return `<div class="trade-bar is-connected">
     <img class="trade-mm-dot" src="${METAMASK_IMG}" alt="" />
     <code class="trade-addr" title="${esc(account)}">${esc(shortWallet(account))}</code>
-    ${net}${bal}
+    ${net}${bal ? `<span class="trade-bar-bals">${bal}</span>` : ''}
     <button class="apply-logout" data-act="disconnect" type="button">${esc(t('trade.disconnect'))}</button>
   </div>`;
 }
 
-function browseHtml() {
-  return `<section class="trade-browse">
-    <div class="trade-browse-head">
-      <div>
-        <h3 class="trade-browse-h">${esc(t('trade.browse.h'))}</h3>
-        <p class="trade-browse-sub">${esc(t('trade.browse.sub'))}</p>
+// --- Filter bar (Creatures explorer) ---
+// Browse like a pro: name search, rarity tiers, every trait as a faceted popover,
+// price range, and sort — all server-filtered against the full listing snapshot.
+
+function rarityFacet() {
+  // Live counts come from the server; the tier vocabulary is stable so the chips can
+  // render (uncounted) before the first response lands.
+  const f = (browseFacets || []).find(x => /rarity/i.test(x.type));
+  return { type: f?.type || 'Rarity', counts: new Map((f?.values || []).map(({ v, n }) => [v, n])) };
+}
+
+function traitSelected(type, v) { return flt.traits.get(type)?.has(v) || false; }
+
+function toggleTrait(type, v) {
+  const cur = flt.traits.get(type) || new Set();
+  if (cur.has(v)) cur.delete(v); else cur.add(v);
+  if (cur.size) flt.traits.set(type, cur); else flt.traits.delete(type);
+}
+
+function rarityChipsHtml() {
+  const { type, counts } = rarityFacet();
+  return RARITY_TIERS.map(tier => {
+    const sel = traitSelected(type, tier);
+    // A tier absent from the facets has zero listings — render it disabled, same as
+    // an explicit zero (before the first response, counts are unknown: leave enabled).
+    const n = browseFacets ? (counts.get(tier) ?? 0) : null;
+    return `<button type="button" class="trade-flt-rchip ${sel ? 'is-on' : ''}" data-r="${tier.toLowerCase()}"
+      data-act="flt-val" data-type="${esc(type)}" data-val="${esc(tier)}" aria-pressed="${sel}" ${n === 0 && !sel ? 'disabled' : ''}>
+      <span class="trade-flt-rdot" aria-hidden="true"></span>${esc(tier)}${n != null ? `<span class="trade-flt-n">${n}</span>` : ''}
+    </button>`;
+  }).join('');
+}
+
+function traitPopHtml(f) {
+  return `<div class="trade-flt-pop" role="listbox" aria-label="${esc(f.type)}">
+    ${f.values.map(({ v, n }) => {
+      const sel = traitSelected(f.type, v);
+      return `<button type="button" class="trade-flt-opt ${sel ? 'is-on' : ''}" role="option" aria-selected="${sel}"
+        data-act="flt-val" data-type="${esc(f.type)}" data-val="${esc(v)}" ${n === 0 && !sel ? 'disabled' : ''}>
+        <span class="trade-flt-check" aria-hidden="true">${sel ? '✓' : ''}</span>
+        <span class="trade-flt-optv">${esc(v)}</span><span class="trade-flt-n">${n}</span>
+      </button>`;
+    }).join('')}
+  </div>`;
+}
+
+function traitDropsHtml() {
+  if (!browseFacets) return `<span class="trade-flt-loading">${esc(t('trade.filter.loading'))}</span>`;
+  return browseFacets.filter(f => !/rarity/i.test(f.type)).map(f => {
+    const selCount = flt.traits.get(f.type)?.size || 0;
+    const open = openFacet === f.type;
+    return `
+    <div class="trade-flt-dd ${open ? 'is-open' : ''}">
+      <button type="button" class="trade-flt-ddbtn ${selCount ? 'has-sel' : ''}" data-act="flt-open" data-type="${esc(f.type)}"
+        aria-expanded="${open}" aria-haspopup="listbox">
+        ${esc(f.type)}${selCount ? `<span class="trade-flt-badge">${selCount}</span>` : ''}<span class="trade-flt-caret" aria-hidden="true">▾</span>
+      </button>
+      ${open ? traitPopHtml(f) : ''}
+    </div>`;
+  }).join('');
+}
+
+// "On sale ⟷ All Creatures" — a view mode beside the filters, not one of them.
+function scopeSegHtml() {
+  const opts = [['listed', 'scopeListed'], ['all', 'scopeAll']];
+  return opts.map(([v, k]) => `
+    <button type="button" role="tab" class="seg-btn ${flt.scope === v ? 'is-active' : ''}"
+      aria-selected="${flt.scope === v}" data-act="flt-scope" data-scope="${v}">${esc(t('trade.filter.' + k))}</button>`).join('');
+}
+
+function countLineHtml() {
+  // Everything here is response-time state (browse*) — mixing in live flt state mid-
+  // fetch produced nonsense like "103 in the collection". Dim it while a fetch runs.
+  const allScope = browseScope === 'all';
+  const denom = allScope ? browseCollectionTotal : browseListedTotal;
+  if (browseTotal == null || denom == null) return '';
+  const key = browseHadFilters ? 'trade.filter.countFiltered' : (allScope ? 'trade.filter.countCollection' : 'trade.filter.countAll');
+  const note = browseIndexing && flt.scope === 'all'
+    ? ` <span class="trade-flt-note">${esc(t('trade.filter.indexing'))}</span>` : '';
+  return `<span class="trade-flt-count ${listingsLoading ? 'is-stale' : ''}" role="status">${esc(t(key)
+    .replace('{n}', browseTotal.toLocaleString()).replace('{total}', denom.toLocaleString()))}</span>${note}`;
+}
+
+function activeChipsHtml() {
+  const chips = [];
+  if (flt.q)   chips.push({ k: 'q',   label: `“${flt.q}”` });
+  if (flt.min) chips.push({ k: 'min', label: `≥ ${flt.min} ETH` });
+  if (flt.max) chips.push({ k: 'max', label: `≤ ${flt.max} ETH` });
+  for (const [type, vals] of flt.traits) for (const v of vals) chips.push({ k: 't', type, v, label: `${type}: ${v}` });
+  const count = countLineHtml();
+  if (!chips.length) return count;
+  return `${count}${chips.map(c => `
+    <button type="button" class="trade-flt-chip" data-act="flt-rm" data-kind="${c.k}"
+      ${c.type ? `data-type="${esc(c.type)}" data-val="${esc(c.v)}"` : ''} aria-label="${esc(t('trade.filter.removeAria').replace('{f}', c.label))}">
+      ${esc(c.label)}<span class="trade-flt-x" aria-hidden="true">×</span>
+    </button>`).join('')}
+    <button type="button" class="trade-flt-clearall" data-act="flt-clear">${esc(t('trade.filter.clear'))}</button>`;
+}
+
+// Filter sidebar (desktop) / slide-up sheet (mobile): rarity, price and every trait
+// as an inline accordion. Search/scope/sort live in the toolbar above the grid.
+function filterSideHtml() {
+  const pr = browsePriceRange;
+  return `
+  <aside class="trade-side ${fltOpenMobile ? 'is-open' : ''}" id="trade-side" aria-label="${esc(t('trade.filter.toggle'))}">
+    <div class="trade-side-backdrop" data-act="flt-drawer"></div>
+    <div class="trade-side-card">
+      <div class="trade-side-head">
+        <h3 class="trade-side-title">${esc(t('trade.filter.toggle'))}</h3>
+        <button type="button" class="trade-flt-clearall" data-act="flt-clear">${esc(t('trade.filter.clear'))}</button>
+        <button type="button" class="trade-side-x" data-act="flt-drawer" aria-label="${esc(t('trade.modal.close'))}">×</button>
       </div>
-      <div class="trade-browse-actions">
-        <select class="seg-select trade-currency" id="trade-currency" aria-label="${esc(t('trade.currency.aria'))}">
-          ${CURRENCIES.map(c => `<option value="${c}" ${currency === c ? 'selected' : ''}>${c.toUpperCase()}</option>`).join('')}
-        </select>
-        <button class="apply-btn-ghost trade-refresh" data-act="refresh" type="button">${esc(t('trade.refresh'))}</button>
+      <div class="trade-side-sec">
+        <h4 class="trade-side-h">${esc(t('trade.filter.rarityH'))}</h4>
+        <div class="trade-flt-rar" id="flt-rar" role="group" aria-label="${esc(t('trade.filter.rarityAria'))}">${rarityChipsHtml()}</div>
       </div>
+      <div class="trade-side-sec">
+        <h4 class="trade-side-h">${esc(t('trade.filter.priceH'))}</h4>
+        <div class="trade-flt-price" role="group" aria-label="${esc(t('trade.filter.priceAria'))}">
+          <input id="flt-min" inputmode="decimal" autocomplete="off" placeholder="${pr ? esc(String(pr.min)) : 'min'}" value="${esc(flt.min)}" aria-label="${esc(t('trade.filter.minAria'))}" />
+          <span class="trade-flt-dash" aria-hidden="true">–</span>
+          <input id="flt-max" inputmode="decimal" autocomplete="off" placeholder="${pr ? esc(String(pr.max)) : 'max'}" value="${esc(flt.max)}" aria-label="${esc(t('trade.filter.maxAria'))}" />
+          <span class="trade-flt-eth" aria-hidden="true">ETH</span>
+        </div>
+      </div>
+      <div class="trade-side-sec">
+        <h4 class="trade-side-h">${esc(t('trade.filter.traitsH'))}</h4>
+        <div class="trade-flt-traits" id="flt-traits">${traitDropsHtml()}</div>
+      </div>
+      <button type="button" class="trade-send trade-side-done" data-act="flt-drawer">${esc(t('trade.filter.done'))}</button>
     </div>
-    ${collStripHtml()}
-    <div class="trade-grid" id="trade-grid">${gridInnerHtml()}</div>
-    <div class="trade-loadmore" id="trade-loadmore">${loadMoreHtml()}</div>
+  </aside>`;
+}
+
+// Slim toolbar above the grid: scope, search, sort — plus the sheet toggle on mobile.
+function browseToolbarHtml() {
+  const sorts = [['price-asc', 'sortPriceAsc'], ['price-desc', 'sortPriceDesc'], ['rarity', 'sortRarity'], ['newest', 'sortNewest']];
+  return `
+  <div class="trade-toolbar">
+    <div class="seg trade-flt-scope" id="flt-scope" role="tablist" aria-label="${esc(t('trade.filter.scopeAria'))}">${scopeSegHtml()}</div>
+    <label class="trade-flt-search">
+      <svg class="trade-flt-sico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M16.5 16.5L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input id="flt-q" type="search" autocomplete="off" enterkeyhint="search" placeholder="${esc(t('trade.filter.search'))}" value="${esc(flt.q)}" aria-label="${esc(t('trade.filter.search'))}" />
+    </label>
+    <select id="flt-sort" class="seg-select trade-flt-sort" aria-label="${esc(t('trade.filter.sortAria'))}">
+      ${sorts.map(([v, k]) => `<option value="${v}" ${flt.sort === v ? 'selected' : ''}>${esc(t('trade.filter.' + k))}</option>`).join('')}
+    </select>
+    <button type="button" class="apply-btn-ghost trade-flt-toggle" data-act="flt-drawer" aria-expanded="${fltOpenMobile}" aria-controls="trade-side">
+      ${esc(t('trade.filter.toggle'))}${fltCount() ? `<span class="trade-flt-badge">${fltCount()}</span>` : ''}
+    </button>
+  </div>
+  <div class="trade-flt-active" id="flt-active">${activeChipsHtml()}</div>`;
+}
+
+// Re-render the dynamic parts of the filter UI (facet counts, chips, badges) WITHOUT
+// touching the text inputs — focus and caret must survive every keystroke. The parts
+// live in two places now (sidebar + toolbar), so query each by id from the root.
+function patchFilters() {
+  const r = root();
+  if (!r || coll !== 'creatures') return;
+  const sc  = r.querySelector('#flt-scope');   if (sc)  sc.innerHTML = scopeSegHtml();
+  const rar = r.querySelector('#flt-rar');     if (rar) rar.innerHTML = rarityChipsHtml();
+  const tr  = r.querySelector('#flt-traits');  if (tr)  tr.innerHTML = traitDropsHtml();
+  const act = r.querySelector('#flt-active');  if (act) act.innerHTML = activeChipsHtml();
+  const tog = r.querySelector('.trade-flt-toggle');
+  if (tog) tog.innerHTML = `${esc(t('trade.filter.toggle'))}${fltCount() ? `<span class="trade-flt-badge">${fltCount()}</span>` : ''}`;
+  if (browsePriceRange) {
+    const mn = r.querySelector('#flt-min'); if (mn) mn.placeholder = String(browsePriceRange.min);
+    const mx = r.querySelector('#flt-max'); if (mx) mx.placeholder = String(browsePriceRange.max);
+  }
+}
+
+// Push state back into the inputs after a programmatic change (chip ×, clear all).
+function syncFilterInputs() {
+  const r = root();
+  if (!r) return;
+  const q  = r.querySelector('#flt-q');   if (q)  q.value = flt.q;
+  const mn = r.querySelector('#flt-min'); if (mn) mn.value = flt.min;
+  const mx = r.querySelector('#flt-max'); if (mx) mx.value = flt.max;
+}
+
+// Mobile filter sheet open/close — one place owns the class + body scroll lock.
+function setFltSheet(open) {
+  fltOpenMobile = open;
+  document.body.classList.toggle('trade-sheet-open', open);
+  const r = root();
+  r?.querySelector('#trade-side')?.classList.toggle('is-open', open);
+  r?.querySelector('.trade-flt-toggle')?.setAttribute('aria-expanded', String(open));
+}
+
+function browseHtml() {
+  const isCreatures = coll === 'creatures';
+  return `<section class="trade-browse ${isCreatures ? 'has-side' : ''}">
+    ${isCreatures ? filterSideHtml() : ''}
+    <div class="trade-main">
+      <div class="trade-results-head">
+        <h3 class="trade-browse-h">${esc(t('trade.browse.h'))} ${tipHtml(isCreatures ? 'trade.browse.sub' : 'trade.browse.subLand')}</h3>
+        <div class="trade-browse-actions">
+          <select class="seg-select trade-currency" id="trade-currency" aria-label="${esc(t('trade.currency.aria'))}">
+            ${CURRENCIES.map(c => `<option value="${c}" ${currency === c ? 'selected' : ''}>${c.toUpperCase()}</option>`).join('')}
+          </select>
+          <button class="apply-btn-ghost trade-refresh" data-act="refresh" type="button">${esc(t('trade.refresh'))}</button>
+        </div>
+      </div>
+      ${isCreatures ? browseToolbarHtml() : ''}
+      ${isCreatures ? collStripHtml() : ''}
+      <div class="trade-grid" id="trade-grid">${gridInnerHtml()}</div>
+      <div class="trade-loadmore" id="trade-loadmore">${loadMoreHtml()}</div>
+    </div>
   </section>`;
 }
 
 // --- Seller hub (my listings + sell + transfer) ---
 
 async function loadSellerData() {
-  if (!account || !onZk() || sellerLoading) return;
+  if (!account || sellerLoading) return;
+  if (coll === 'creatures' && !onZk()) return; // creature data needs the wallet usable on zkEVM
   sellerLoading = true;
   try {
-    const [o, m] = await Promise.all([
-      fetch(`/api/market/creatures/owned/${account}`).then(r => r.ok ? r.json() : { items: [] }),
-      fetch(`/api/market/creatures/mine/${account}`).then(r => r.ok ? r.json() : { items: [] }),
-    ]);
-    owned = o.items || [];
-    mine = m.items || [];
+    if (coll === 'land') {
+      // LAND: owned comes from OpenSea (chain-independent); no in-site listings/offers yet.
+      const o = await fetch(`/api/market/land/owned/${account}`).then(r => r.ok ? r.json() : { items: [] });
+      owned = o.items || [];
+      mine = [];
+    } else {
+      const [o, m] = await Promise.all([
+        fetch(`/api/market/creatures/owned/${account}`).then(r => r.ok ? r.json() : { items: [] }),
+        fetch(`/api/market/creatures/mine/${account}`).then(r => r.ok ? r.json() : { items: [] }),
+      ]);
+      owned = o.items || [];
+      mine = m.items || [];
+    }
   } catch (err) {
     console.error('Seller data failed:', err);
     owned = owned || []; mine = mine || [];
   } finally {
     sellerLoading = false;
     patchSellView();
+    patchTransferView();
+    refreshBalance();
   }
 }
 
@@ -1389,6 +1802,19 @@ function sellPickerHtml() {
     </div>`;
 }
 
+// Collection scope: Creatures (zkEVM) ⟷ LAND (Ethereum). Sits above the action tabs.
+function collSwitcherHtml() {
+  return `<div class="seg trade-coll-switch" role="tablist" aria-label="${esc(t('trade.coll.aria'))}">
+    ${Object.entries(COLLECTIONS).map(([id, c]) => `
+      <button type="button" role="tab" class="seg-btn ${coll === id ? 'is-active' : ''}"
+        aria-selected="${coll === id}" data-act="coll" data-coll="${id}">${c.ico} ${esc(t(c.labelKey))}</button>`).join('')}
+  </div>`;
+}
+
+function maybeLoadSeller() {
+  if (account && owned === null && !sellerLoading && (coll === 'land' || onZk())) loadSellerData();
+}
+
 // Segmented Buy / Sell / Transfer control (reuses the Market panel's .seg pattern).
 function tradeTabsHtml() {
   const TABS = [['buy', 'trade.tab.buy'], ['sell', 'trade.tab.sell'], ['transfer', 'trade.tab.transfer']];
@@ -1421,27 +1847,43 @@ function walletGateHtml() {
   }
   return `<div class="apply-state-box">
     <div class="apply-state-ico" aria-hidden="true">🔀</div>
-    <h3>${esc(t('trade.net.wrong.h'))}</h3>
-    <p>${esc(t('trade.net.wrong.p'))}</p>
+    <h3>${esc(t(coll === 'land' ? 'trade.net.wrongEth.h' : 'trade.net.wrong.h'))}</h3>
+    <p>${esc(t(coll === 'land' ? 'trade.net.wrongEth.p' : 'trade.net.wrong.p'))}</p>
     <button class="apply-btn-ghost" data-act="switch" type="button">${esc(t('trade.net.switch'))}</button>
   </div>`;
 }
 
 function sellViewHtml() {
+  if (coll === 'land') {
+    return `<div class="apply-state-box">
+      <div class="apply-state-ico" aria-hidden="true">🗺️</div>
+      <h3>${esc(t('trade.land.sellSoon.h'))}</h3>
+      <p>${esc(t('trade.land.sellSoon.p'))}</p>
+    </div>`;
+  }
   if (!account || !onZk()) return walletGateHtml();
   const sellBusy = sellState && SELL_BUSY_PHASES.has(sellState.phase);
+  // Workbench split: picker browses wide on the left, the action card (price + list
+  // + instant sell) stays put on the right — no scrolling past your own Creatures to
+  // find the button. The price input must stay inside the form (handleSell reads it).
   return `
     ${myListingsHtml()}
-    ${instantSellHtml()}
-    <form class="trade-form" id="trade-sell-form" novalidate>
-      <h4 class="trade-form-h">${esc(t('trade.sell.h'))} ${tipHtml('trade.sell.p')}</h4>
-      ${sellPickerHtml()}
-      <label class="trade-field"><span>${esc(t('trade.sell.price'))}</span>
-        <input id="trade-sell-price" type="text" inputmode="decimal" placeholder="${esc(t('trade.sell.price.ph'))}" autocomplete="off" /></label>
-      <button class="trade-send" id="trade-sell-submit" type="submit" ${sellBusy || !sellSel ? 'disabled' : ''}>
-        ${esc(t('trade.sell.btn'))} <span aria-hidden="true">→</span></button>
-      <div id="trade-sell-status" role="status" aria-live="polite">${sellStatusHtml()}</div>
-    </form>`;
+    <div class="trade-workbench">
+      <div class="trade-wb-main">
+        <h4 class="trade-form-h">${esc(t('trade.sell.h'))} ${tipHtml('trade.sell.p')}</h4>
+        ${sellPickerHtml()}
+      </div>
+      <div class="trade-wb-side">
+        <form class="trade-form" id="trade-sell-form" novalidate>
+          <label class="trade-field"><span>${esc(t('trade.sell.price'))}</span>
+            <input id="trade-sell-price" type="text" inputmode="decimal" placeholder="${esc(t('trade.sell.price.ph'))}" autocomplete="off" /></label>
+          <button class="trade-send" id="trade-sell-submit" type="submit" ${sellBusy || !sellSel ? 'disabled' : ''}>
+            ${esc(t('trade.sell.btn'))} <span aria-hidden="true">→</span></button>
+          <div id="trade-sell-status" role="status" aria-live="polite">${sellStatusHtml()}</div>
+        </form>
+        ${instantSellHtml()}
+      </div>
+    </div>`;
 }
 
 // Picker of transferable Creatures (owned minus actively listed — transferring a
@@ -1459,8 +1901,10 @@ function transferPickerHtml() {
         <button class="trade-pick-tile ${String(transferSel) === String(o.tokenId) ? 'is-sel' : ''}" type="button"
           role="option" aria-selected="${String(transferSel) === String(o.tokenId)}"
           data-act="transfer-pick" data-token="${esc(o.tokenId)}" title="${esc(o.name)}">
-          ${o.image ? `<img src="${esc(o.image)}" alt="" loading="lazy" />` : '<div class="trade-tile-noimg">🐾</div>'}
-          <span>${esc(o.name.replace('Highrise Creature ', ''))}</span>
+          ${coll === 'land' && petUrl(o)
+            ? `<img src="${esc(petUrl(o))}" ${o.image ? `data-fallback="${esc(o.image)}"` : ''} alt="" loading="lazy" />`
+            : (o.image ? `<img src="${esc(o.image)}" alt="" loading="lazy" />` : '<div class="trade-tile-noimg">🐾</div>')}
+          <span>${esc(o.name.replace(/^Highrise (Creature|LAND) /, ''))}</span>
         </button>`).join('')}
     </div>${hiddenNote}`;
 }
@@ -1513,18 +1957,26 @@ function transferSendAllowed() {
 }
 
 function transferViewHtml() {
-  if (!account || !onZk()) return walletGateHtml();
+  if (!account || !onRightChain()) return walletGateHtml();
+  // Same workbench split as Sell. Recipient input, check rows, send button and status
+  // must all stay inside the form — handleTransferSubmit queries them through it.
   return `
-    <form class="trade-form" id="trade-transfer-form" novalidate>
-      <h4 class="trade-form-h">${esc(t('trade.transfer.h'))} ${tipHtml('trade.transfer.p')}</h4>
-      <span class="trade-field-label">${esc(t('trade.transfer.pick'))}</span>
-      ${transferPickerHtml()}
-      <label class="trade-field"><span>${esc(t('trade.field.recipient'))}</span>
-        <input id="trade-to" type="text" placeholder="0x…" autocomplete="off" spellcheck="false" /></label>
-      <div id="trade-to-check" aria-live="polite">${transferCheckHtml()}</div>
-      <button class="trade-send" id="trade-send" type="submit" ${transferSendAllowed() ? '' : 'disabled'}>${esc(t('trade.transfer.btn'))} <span aria-hidden="true">→</span></button>
-      <div class="trade-status" id="trade-status" role="status" aria-live="polite"></div>
-    </form>`;
+    <div class="trade-workbench">
+      <div class="trade-wb-main">
+        <h4 class="trade-form-h">${esc(t('trade.transfer.h'))} ${tipHtml('trade.transfer.p')}</h4>
+        <span class="trade-field-label">${esc(t('trade.transfer.pick'))}</span>
+        ${transferPickerHtml()}
+      </div>
+      <div class="trade-wb-side">
+        <form class="trade-form" id="trade-transfer-form" novalidate>
+          <label class="trade-field"><span>${esc(t('trade.field.recipient'))}</span>
+            <input id="trade-to" type="text" placeholder="0x…" autocomplete="off" spellcheck="false" /></label>
+          <div id="trade-to-check" aria-live="polite">${transferCheckHtml()}</div>
+          <button class="trade-send" id="trade-send" type="submit" ${transferSendAllowed() ? '' : 'disabled'}>${esc(t('trade.transfer.btn'))} <span aria-hidden="true">→</span></button>
+          <div class="trade-status" id="trade-status" role="status" aria-live="polite"></div>
+        </form>
+      </div>
+    </div>`;
 }
 
 function patchTransferView() {
@@ -1568,7 +2020,7 @@ function queueTransferCheck(raw) {
     try {
       const res = await fetch('/api/market/creatures/transfer/check', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ to: addr }),
+        body: JSON.stringify({ to: addr, chain: coll === 'land' ? 'ethereum' : 'zkevm' }),
       });
       const c = res.ok ? await res.json() : { valid: true, active: false, activityKnown: false, checksum: 'none', contract: false, creatures: null };
       const cur = root()?.querySelector('#trade-to')?.value?.trim();
@@ -1709,7 +2161,7 @@ async function handleTransferSubmit(form) {
   const info = m => { status.className = 'trade-status is-info';  status.innerHTML = `<span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(m)}</span>`; };
   const done = (msg, hash) => {
     status.className = 'trade-status is-ok';
-    status.innerHTML = `<span aria-hidden="true">✓</span><span>${esc(msg)} <a href="${esc(EXPLORER)}/tx/${esc(hash)}" target="_blank" rel="noopener">${esc(t('trade.status.view'))}</a></span>`;
+    status.innerHTML = `<span aria-hidden="true">✓</span><span>${esc(msg)} <a href="${esc(txExplorerUrl(hash))}" target="_blank" rel="noopener">${esc(t('trade.status.view'))}</a></span>`;
   };
 
   if (btn.disabled) return;
@@ -1727,11 +2179,13 @@ async function handleTransferSubmit(form) {
   btn.disabled = true;
   try {
     info(t('trade.status.checking'));
-    const owner = await ownerOf(tokenId);
+    // ownerOf reads via the wallet provider — ensure it's on the collection's chain.
+    await switchToChain(C().chainHex);
+    const owner = await ownerOf(C().contract, tokenId);
     if (owner === null)    { fail(t('trade.err.noToken'));  btn.disabled = false; return; }
     if (owner !== account) { fail(t('trade.err.notOwner')); btn.disabled = false; return; }
     info(t('trade.status.confirm'));
-    const hash = await sendTransfer(tokenId, to);
+    const hash = await sendTransfer(C().contract, tokenId, to);
     done(t('trade.status.sent'), hash);
     transferSel = null; transferCheck = null; transferAck = false;
     form.querySelector('#trade-to').value = '';
@@ -1747,6 +2201,17 @@ async function handleTransferSubmit(form) {
 async function refreshBalance() {
   const el = root()?.querySelector('#trade-bal');
   if (!el) return;
+  if (coll === 'land') {
+    // LAND count from the owned list (loaded by loadSellerData), mainnet ETH from the
+    // server (provider-independent — works whatever chain the wallet sits on).
+    el.textContent = Array.isArray(owned) ? String(owned.length) : '—';
+    try {
+      const ee = await fetch(`/api/market/creatures/eth-elsewhere/${account}`).then(r => r.ok ? r.json() : null);
+      const ethEl = root()?.querySelector('#trade-bal-eth');
+      if (ethEl) ethEl.textContent = ee?.mainnetEthWei != null ? fmtWeiEth(BigInt(ee.mainnetEthWei)) : '—';
+    } catch { /* leave em-dash */ }
+    return;
+  }
   const [bal, zkEth, imx] = await Promise.all([readBalance(), readErc20(IMX_ETH_TOKEN, account), readNative(account)]);
   el.textContent = bal == null ? '—' : String(bal);
   const ethEl = root()?.querySelector('#trade-bal-eth');
@@ -1760,12 +2225,18 @@ function render() {
   const el = root();
   if (!el) return;
   el.setAttribute('aria-busy', 'false');
-  el.innerHTML = `${flashBanner()}${walletBarHtml()}<div id="trade-mmwarn-slot">${walletNoticeHtml()}</div><div id="trade-bridgebar-slot">${bridgeBannerHtml()}</div>${tradeTabsHtml()}${viewHtml()}${modalHtml()}${safetyHtml()}`;
+  // One command bar carries collection, action tabs and wallet — the old stack of
+  // full-width rows (wallet bar / switcher / tabs) cost three screens of chrome.
+  el.innerHTML = `${flashBanner()}
+    <div class="trade-command">${collSwitcherHtml()}${tradeTabsHtml()}${walletBarHtml()}</div>
+    <div id="trade-mmwarn-slot">${walletNoticeHtml()}</div>
+    <div id="trade-bridgebar-slot">${bridgeBannerHtml()}</div>
+    ${viewHtml()}${modalHtml()}${safetyHtml()}`;
   ensureDelegation();
-  if (account && onZk()) {
+  if (account && (coll === 'land' || onZk())) {
     refreshBalance();
-    if (owned === null && !sellerLoading) loadSellerData();
-    if (myOffers === null) loadMyOffers();
+    maybeLoadSeller();
+    if (coll === 'creatures' && myOffers === null) loadMyOffers();
   }
 }
 
@@ -1779,9 +2250,30 @@ function onClick(e) {
     case 'trade-tab':
       if (tradeTab === target.dataset.tab) return;
       tradeTab = target.dataset.tab;
+      setFltSheet(false);
       render();
-      if (tradeTab === 'sell' && account && onZk() && owned === null && !sellerLoading) loadSellerData();
+      if (tradeTab === 'sell' || tradeTab === 'transfer') maybeLoadSeller();
       return;
+    case 'coll': {
+      if (coll === target.dataset.coll || !COLLECTIONS[target.dataset.coll]) return;
+      coll = target.dataset.coll;
+      try { localStorage.setItem('hcc-trade-coll', coll); } catch { /* fine */ }
+      // Collection-scoped state must not bleed across worlds.
+      listings = []; listingsCursor = null; listingsError = false;
+      modalToken = null; modalMeta = null; buyState = null; tokenOffers = null;
+      resetFilters();
+      flt.scope = 'listed';
+      browseFacets = null; browseTotal = null; browseListedTotal = null; browsePriceRange = null;
+      browseCollectionTotal = null; browseScope = 'listed'; browseIndexing = false;
+      browsePage = 0; browseHasMore = false; setFltSheet(false);
+      clearTimeout(fltDebounce);
+      resetSellerState();
+      render();
+      loadListings(true);
+      if (coll === 'creatures') loadCollOffers();
+      maybeLoadSeller();
+      return;
+    }
     case 'sell-pick':
       sellSel = String(sellSel) === String(target.dataset.token) ? null : target.dataset.token;
       sellState = null;
@@ -1816,6 +2308,31 @@ function onClick(e) {
     case 'loadmore':   return loadListings(false);
     case 'retry':      return loadListings(true);
     case 'refresh':    return loadListings(true);
+    case 'flt-scope':
+      if (flt.scope === target.dataset.scope) return;
+      flt.scope = target.dataset.scope === 'all' ? 'all' : 'listed';
+      return applyFilters();
+    case 'flt-val':
+      toggleTrait(target.dataset.type, target.dataset.val);
+      return applyFilters();
+    case 'flt-open':
+      openFacet = openFacet === target.dataset.type ? null : target.dataset.type;
+      return patchFilters();
+    case 'flt-clear':
+      resetFilters();
+      syncFilterInputs();
+      return applyFilters();
+    case 'flt-rm': {
+      const { kind, type, val } = target.dataset;
+      if (kind === 'q') flt.q = '';
+      else if (kind === 'min') flt.min = '';
+      else if (kind === 'max') flt.max = '';
+      else if (kind === 't') toggleTrait(type, val);
+      syncFilterInputs();
+      return applyFilters();
+    }
+    case 'flt-drawer':
+      return setFltSheet(!fltOpenMobile);
   }
 }
 function onSubmit(e) {
@@ -1837,6 +2354,10 @@ function onChange(e) {
     if (btn) btn.disabled = !transferSendAllowed();
     return;
   }
+  if (e.target?.id === 'flt-sort') {
+    flt.sort = e.target.value;
+    return applyFilters();
+  }
   if (e.target?.id !== 'trade-currency') return;
   currency = e.target.value;
   try { localStorage.setItem('hcc-trade-cur', currency); } catch { /* private mode — fine */ }
@@ -1844,7 +2365,16 @@ function onChange(e) {
   if (modalToken) patchModal();
 }
 function onInput(e) {
-  if (e.target?.id === 'trade-to') queueTransferCheck(e.target.value);
+  if (e.target?.id === 'trade-to') return queueTransferCheck(e.target.value);
+  if (e.target?.id === 'flt-q') {
+    flt.q = e.target.value.trim();
+    return applyFilters(300);
+  }
+  if (e.target?.id === 'flt-min' || e.target?.id === 'flt-max') {
+    const v = e.target.value.trim().replace(',', '.');
+    if (v === '' || /^\d*\.?\d*$/.test(v)) flt[e.target.id === 'flt-min' ? 'min' : 'max'] = v;
+    return applyFilters(400);
+  }
 }
 function resetSellerState() {
   owned = null; mine = null; sellSel = null; sellState = null; cancelBusy = null;
@@ -1861,6 +2391,16 @@ function ensureDelegation() {
   el.addEventListener('submit', onSubmit);
   el.addEventListener('change', onChange);
   el.addEventListener('input', onInput);
+  // Image fallbacks (error doesn't bubble — capture phase): LAND pet renders fall
+  // back to the real plot image when the parcel has no pet or the render fails.
+  el.addEventListener('error', e => {
+    const img = e.target;
+    if (img?.tagName === 'IMG' && img.dataset.fallback) {
+      img.src = img.dataset.fallback;
+      img.classList.remove('is-pet');
+      delete img.dataset.fallback;
+    }
+  }, true);
 }
 
 let escWired = false;
@@ -1868,8 +2408,15 @@ function wireEsc() {
   if (escWired) return; escWired = true;
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
+    if (openFacet) { openFacet = null; patchFilters(); return; }
+    if (fltOpenMobile) { setFltSheet(false); return; }
     if (safetyOpen) { safetyOpen = false; render(); return; }
     if (modalToken) closeModal();
+  });
+  // Any click outside an open trait popover closes it (multi-select clicks inside
+  // keep it open — picking three Eyes values shouldn't take three reopens).
+  document.addEventListener('click', e => {
+    if (openFacet && !e.target.closest('.trade-flt-dd')) { openFacet = null; patchFilters(); }
   });
 }
 
@@ -1884,6 +2431,7 @@ function wireProviderEvents() {
 export async function loadMarketplace() {
   loadedOnce = true;
   try { const c = localStorage.getItem('hcc-trade-cur'); if (c && CURRENCIES.includes(c)) currency = c; } catch { /* fine */ }
+  try { const k = localStorage.getItem('hcc-trade-coll'); if (k && COLLECTIONS[k]) coll = k; } catch { /* fine */ }
   wireEsc();
   wireTips();
   wireProviderEvents();
@@ -1907,7 +2455,7 @@ export async function loadMarketplace() {
   }
   render();
   loadListings(true);
-  loadCollOffers();
+  if (coll === 'creatures') loadCollOffers();
 }
 
 // Re-render from in-memory state on language switch (no refetch).
