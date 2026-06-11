@@ -7,6 +7,8 @@ node_modules/
 .railway/
 .claude/
 .tmp/
+# Internal planning docs — keep out of the public repo
+docs/
 
 # Local-only dev auth bypass — never commit/deploy the active file.
 # The committed lib/dev-login.example.js is the inert template; copy it to enable.

@@ -2550,7 +2550,8 @@ const SERVABLE_EXT = new Set([
 
 // Content-Security-Policy for HTML pages: scripts only from self + the Chart.js CDN
 // (no inline/eval scripts); images from self + the Discord & Highrise avatar CDNs;
-// inline styles allowed (the markup uses style="" attributes); everything else self.
+// inline styles allowed (the markup uses style="" attributes); frames only for the
+// YouTube guide embeds; everything else self.
 const CSP = [
   "default-src 'self'",
   "script-src 'self' https://cdn.jsdelivr.net",
@@ -2558,6 +2559,7 @@ const CSP = [
   "img-src 'self' data: https://cdn.highrisegame.com https://cdn.discordapp.com https://cdn-production.joinhighrise.com https://i2c.seadn.io",
   "font-src 'self'",
   "connect-src 'self'",
+  "frame-src https://www.youtube.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
