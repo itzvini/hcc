@@ -691,6 +691,155 @@ footer p  { color: var(--hr-fg-2); font-size: 14px; max-width: 420px; margin: 10
   color: var(--hr-fg-3);
 }
 
+/* ---------- GEN 2 SHOWCASE (Roadmap tab) ---------- */
+/* Premium spotlight for the public Gen 2 roadmap. Reuses the Apply shell pieces
+   (.apply-aurora + the apply-rise / apply-pill-glow keyframes); per-set theming
+   runs on --accent / --accent-soft, same pattern as .apply-member tiers. */
+/* Status chips */
+.g2-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--hr-sans); font-weight: 900; font-size: 10.5px;
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase;
+  padding: 5px 11px; border-radius: var(--hr-radius-pill);
+  border: 1px solid var(--hr-line-strong); color: var(--hr-fg-2); background: var(--hr-bg-3);
+}
+.g2-chip-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--hr-fg-3); }
+.g2-chip.is-live {
+  color: var(--hr-on-primary); border-color: transparent;
+  background: var(--accent, var(--hr-primary));
+  box-shadow: 0 0 18px var(--accent-soft, var(--hr-primary-25));
+}
+.g2-chip.is-live .g2-chip-dot { background: var(--hr-on-primary); animation: g2-blink 1.4s ease-in-out infinite; }
+.g2-chip.is-next {
+  color: var(--accent, var(--hr-secondary)); background: transparent;
+  border-color: color-mix(in srgb, var(--accent, var(--hr-secondary)) 50%, transparent);
+}
+@keyframes g2-blink { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+/* Horizontal roadmap — a metro-style line with one stop per set; each stop card
+   lists the set's five phases. States come from gen2-progress.json via js/gen2.js
+   (the markup in index.html is the static fallback). */
+.g2-road {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(185px, 210px);
+  /* Break out of the 920px column and center on the viewport: the symmetric
+     padding floor is 22px, and 630px = half the road's max width (6 stops ×
+     210px), so once the viewport can hold the whole road it sits centered;
+     narrower screens scroll it from the left edge. */
+  margin: 30px calc(50% - 50vw) 0;
+  padding: 0 max(22px, calc(50vw - 630px)) 12px;
+  overflow-x: auto; scroll-snap-type: x proximity;
+  scrollbar-width: thin; scrollbar-color: var(--hr-tuna) transparent;
+}
+.g2-stop { position: relative; padding: 0 7px 6px; scroll-snap-align: start; }
+.g2-stop::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 11px; height: 3px;
+  background: var(--hr-line-strong); border-radius: var(--hr-radius-pill);
+}
+.g2-stop:first-child::before { left: 50%; }
+.g2-stop:last-child::before { right: 50%; }
+.g2-stop.is-live::before,
+.g2-stop.is-past::before { background: color-mix(in srgb, var(--accent) 60%, transparent); }
+.g2-stop-node {
+  position: relative; z-index: 1; display: block; margin: 0 auto 16px;
+  width: 25px; height: 25px; border-radius: 50%; box-sizing: border-box;
+  background: var(--hr-bg-3); border: 3px solid var(--hr-line-strong);
+}
+.g2-stop.is-live .g2-stop-node,
+.g2-stop.is-past .g2-stop-node { background: var(--accent); border-color: var(--accent); }
+.g2-stop.is-live .g2-stop-node { box-shadow: 0 0 18px var(--accent-soft); animation: pulse 1.8s infinite; }
+.g2-stop-card {
+  position: relative; overflow: hidden; isolation: isolate; height: calc(100% - 41px);
+  padding: 18px 16px 16px; border-radius: var(--hr-radius-xl);
+  border: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(40,39,45,.66), rgba(20,19,23,.82));
+  backdrop-filter: blur(8px);
+  box-shadow: var(--hr-shadow-2), inset 0 1px 0 rgba(255,255,255,.05);
+  transition: transform .25s cubic-bezier(.2,.7,.2,1), box-shadow .25s, border-color .25s;
+}
+.g2-stop:hover .g2-stop-card {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: var(--hr-shadow-3), 0 0 28px var(--accent-soft), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.g2-stop-card > * { position: relative; z-index: 1; }
+.g2-stop-card .g2-set-glow {
+  position: absolute; z-index: 0; inset: -30% -30% auto; height: 75%; pointer-events: none;
+  background: radial-gradient(60% 80% at 50% 0%, var(--accent-soft), transparent 75%);
+  opacity: .5; transition: opacity .25s;
+}
+.g2-stop:hover .g2-set-glow { opacity: .9; }
+.g2-set-ico { display: block; font-size: 2rem; line-height: 1; margin-bottom: 10px; filter: drop-shadow(0 4px 14px var(--accent-soft)); }
+.g2-set-h { font: 800 16px/1.2 var(--hr-sans); color: var(--hr-fg-0); margin-bottom: 9px; }
+
+/* Phase checklist inside a stop */
+.g2-phases { list-style: none; display: grid; gap: 7px; margin-top: 14px; }
+.g2-phase {
+  display: flex; align-items: center; gap: 8px;
+  font: 700 12px/1.2 var(--hr-sans); color: var(--hr-fg-4);
+}
+.g2-phase::before {
+  content: ""; width: 16px; height: 16px; border-radius: 50%; flex: 0 0 auto;
+  box-sizing: border-box; border: 2px solid var(--hr-line-strong);
+}
+.g2-phase.is-done { color: var(--hr-fg-2); }
+.g2-phase.is-done::before {
+  content: "✓"; display: inline-flex; align-items: center; justify-content: center;
+  font: 900 10px/1 var(--hr-sans); color: var(--hr-on-primary);
+  background: var(--accent); border-color: transparent;
+}
+.g2-phase.is-now { color: var(--hr-fg-0); }
+.g2-phase.is-now::before {
+  background: var(--accent); border-color: transparent;
+  box-shadow: 0 0 10px var(--accent-soft);
+  animation: g2-blink 1.4s ease-in-out infinite;
+}
+.g2-stop-note { font-size: 12px; color: var(--hr-fg-3); line-height: 1.45; margin-top: 12px; }
+
+/* Production pipeline */
+.g2-pipe-wrap { margin-top: 48px; }
+.g2-pipe-h { font: 700 17px/1.3 var(--hr-sans); color: var(--hr-fg-0); margin-bottom: 10px; }
+.g2-pipe { list-style: none; counter-reset: g2step; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 24px; }
+.g2-stage {
+  counter-increment: g2step; position: relative;
+  padding: 16px 14px 14px; border-radius: var(--hr-radius-lg);
+  border: 1px solid var(--hr-line); background: var(--hr-bg-2);
+}
+.g2-stage::before {
+  content: counter(g2step);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%; margin-bottom: 10px;
+  font: 800 13px/1 var(--hr-sans); color: var(--hr-fg-2);
+  background: var(--hr-bg-4); border: 1px solid var(--hr-line-strong);
+}
+.g2-stage h5 { font: 800 13.5px/1.2 var(--hr-sans); color: var(--hr-fg-0); margin-bottom: 5px; }
+.g2-stage p { font-size: 12px; color: var(--hr-fg-2); line-height: 1.45; }
+
+/* "The next two weeks" focus note (filled by js/gen2.js) */
+.g2-focus {
+  margin-top: 26px; padding: 20px 22px;
+  border-radius: var(--hr-radius-lg);
+  border: 1px solid rgba(81,255,165,.28);
+  background: linear-gradient(180deg, rgba(81,255,165,.07), rgba(20,19,23,.4));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+}
+.g2-focus p { margin-top: 4px; font-size: 14px; color: var(--hr-fg-1); line-height: 1.55; }
+
+/* Scroll-in reveal — hidden only when motion is welcome; reduced-motion users
+   (and any browser without the observer) see everything in place. */
+@media (prefers-reduced-motion: no-preference) {
+  .g2-reveal:not(.is-in) { opacity: 0; }
+  .g2-reveal.is-in { animation: apply-rise .7s cubic-bezier(.16,.84,.3,1) backwards; animation-delay: var(--d, 0s); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .g2-chip-dot, .g2-phase.is-now::before,
+  .g2-stop.is-live .g2-stop-node { animation: none !important; }
+}
+
+@media (max-width: 760px) {
+  .g2-road { grid-auto-columns: minmax(200px, 78vw); }
+  .g2-pipe { grid-template-columns: 1fr; }
+}
+
 /* ---------- GUIDES ---------- */
 .guide-track { margin-top: 32px; display: grid; gap: 20px; }
 .guide-card {
@@ -765,7 +914,7 @@ footer p  { color: var(--hr-fg-2); font-size: 14px; max-width: 420px; margin: 10
 }
 
 /* anchors for smooth-scroll under the sticky (two-row) tab bar */
-#guides-top, #council-top { scroll-margin-top: 124px; }
+#guides-top, #council-top, #roadmap-top { scroll-margin-top: 124px; }
 
 /* ---------- LANDING HUB ---------- */
 .hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-top: 22px; }

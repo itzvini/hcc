@@ -1,0 +1,13 @@
+{
+  "_howto": "Bi-weekly Gen 2 update lives here. Per set: 'done' = stages fully completed (1 Direction, 2 Concepts, 3 Sketches, 4 Final art, 5 In game), 'active' = being worked right now (shows the next stage as in-progress), optional 'status':'next' shows an 'Up next' chip on a queued set. 'note' is shown verbatim on the card; 'focus' is the global 'next two weeks' line; 'updated' is the announcement date (YYYY-MM-DD) — the site shows the next update as +14 days. Optional translations per entry: \"i18n\": { \"pt\": { \"note\": \"…\" } }.",
+  "updated": "2026-06-11",
+  "focus": "Right now it's all about landing the Zombies: the last sketches are being finished and final art is moving item by item. Vampire concept exploration lines up next — expect the first peeks in an upcoming update.",
+  "sets": [
+    { "id": "zombies", "done": 3, "active": true, "note": "The last sketches are wrapping while final art gets polished, item by item." },
+    { "id": "vampires", "done": 1, "active": false, "status": "next", "note": "Concept exploration kicks off as the Zombies wrap. Elegant, dramatic, a little dangerous." },
+    { "id": "werewolves", "done": 1, "active": false, "note": "Direction locked — the pack is waiting for its turn in the studio." },
+    { "id": "demons", "done": 1, "active": false, "note": "Direction locked — horns, attitude, and a wardrobe to match." },
+    { "id": "ghosts", "done": 1, "active": false, "note": "Direction locked — soft, eerie, see-through fits incoming." },
+    { "id": "slimes", "done": 1, "active": false, "note": "Direction locked — the gooiest finale, cousins of the slime pets you already know." }
+  ]
+}

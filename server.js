@@ -1919,7 +1919,7 @@ function rateLimited(key, max, windowMs) {
 
 // Send the user back to the Apply panel; `error` (if set) is read by the front-end.
 function redirectToApp(request, response, error) {
-  const location = error ? `/?auth=${encodeURIComponent(error)}#apply` : '/#apply';
+  const location = error ? `/apply?auth=${encodeURIComponent(error)}` : '/apply';
   response.writeHead(302, { Location: location, 'Cache-Control': 'no-store' });
   response.end();
 }
@@ -2097,7 +2097,7 @@ async function handleAuthApi(request, response, url) {
 
       const secure = auth.isSecure(request);
       response.writeHead(302, {
-        Location: '/#apply',
+        Location: '/apply',
         'Set-Cookie': [
           auth.serializeCookie(auth.SESSION_COOKIE, sid, { maxAge: SESSION_MAX_AGE, secure }),
           auth.serializeCookie(auth.STATE_COOKIE, '', { maxAge: 0, secure }),
@@ -2804,7 +2804,11 @@ const contentTypes = {
 // server.js, package.json, node_modules, etc.) returns 404. This is the primary
 // guard against leaking secrets or source on an open-source, self-hostable repo.
 const PUBLIC_DIRS  = new Set(['css', 'js', 'img', 'assets', 'fonts', 'locales']);
-const PUBLIC_FILES = new Set(['index.html', 'changelog.json', 'favicon.ico', 'robots.txt']);
+const PUBLIC_FILES = new Set(['index.html', 'changelog.json', 'gen2-progress.json', 'favicon.ico', 'robots.txt']);
+// Clean tab URLs (/council, /roadmap/gen2, …) all serve the app shell; the client
+// router in js/app.js opens the matching tab from location.pathname.
+const TAB_ROUTES = new Set(['club', 'council', 'apply', 'roadmap', 'guides', 'perks',
+  'holders', 'market', 'trade', 'changelog', 'contribute', 'terms', 'privacy']);
 const SERVABLE_EXT = new Set([
   '.html', '.css', '.js', '.json',
   '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp',
@@ -2859,6 +2863,13 @@ function resolveFile(requestUrl) {
 
   // Reject traversal and any dotfile/dot-directory segment (.env, .git, .github…).
   if (segments.some(s => s === '..' || s.startsWith('.'))) return null;
+
+  // Clean tab routes: one or two short lowercase segments with no extension
+  // (e.g. /roadmap, /roadmap/gen2) serve the app shell.
+  if (segments.length <= 2 && TAB_ROUTES.has(segments[0]) &&
+      !path.extname(normalized) && segments.every(s => /^[a-z0-9-]+$/.test(s))) {
+    return path.join(root, 'index.html');
+  }
 
   // Allowlist: a single public root file, or a file inside a public directory.
   const top = segments[0];

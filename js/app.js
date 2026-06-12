@@ -7,6 +7,7 @@ import { loadElection, rerenderElection } from './election.js';
 import { loadBallot, rerenderBallot } from './ballot.js';
 import { loadVote, rerenderVote } from './vote.js';
 import { loadMarketplace, rerenderMarketplace } from './marketplace.js';
+import { loadGen2, rerenderGen2 } from './gen2.js';
 
 // Language switcher — re-render dynamic views after language change
 document.querySelectorAll('.lang-btn').forEach(btn => {
@@ -18,6 +19,7 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
     rerenderBallot();
     rerenderVote();
     rerenderMarketplace();
+    rerenderGen2();
   }));
 });
 
@@ -32,6 +34,7 @@ let marketLoaded    = false;
 let changelogLoaded = false;
 let applyLoaded     = false;
 let tradeLoaded     = false;
+let roadmapLoaded   = false;
 
 // Mobile drawer open/close
 function setDrawer(open) {
@@ -59,7 +62,7 @@ if (pageTabs && 'IntersectionObserver' in window) {
   }).observe(sentinel);
 }
 
-function selectTab(name, updateHash = true) {
+function selectTab(name, updateUrl = true) {
   tabButtons.forEach(btn => {
     const active = btn.dataset.tab === name;
     btn.classList.toggle('is-active', active);
@@ -81,7 +84,8 @@ function selectTab(name, updateHash = true) {
   if (name === 'changelog' && !changelogLoaded) { changelogLoaded = true; loadChangelog(); }
   if (name === 'apply'     && !applyLoaded)     { applyLoaded     = true; loadApply(); loadElection(); loadBallot(); loadVote(); }
   if (name === 'trade'     && !tradeLoaded)     { tradeLoaded     = true; loadMarketplace(); }
-  if (updateHash) history.replaceState(null, '', `#${name}`);
+  if (name === 'roadmap'   && !roadmapLoaded)   { roadmapLoaded   = true; loadGen2(); }
+  if (updateUrl && location.pathname !== urlFor(name)) history.pushState(null, '', urlFor(name));
 }
 
 tabButtons.forEach(btn => btn.addEventListener('click', () => selectTab(btn.dataset.tab)));
@@ -94,35 +98,70 @@ document.querySelectorAll('[data-goto]').forEach(el => {
   });
 });
 
-// Guides sub-tabs (Basics / Walkthroughs / Stay safe / Links)
-const subTabs   = document.querySelectorAll('[data-subtab]');
-const subPanels = document.querySelectorAll('[data-subpanel]');
-function selectSubTab(name) {
-  subTabs.forEach(btn => {
+// Sub-tabs (Guides: Basics/Walkthroughs/…, Roadmap: Milestones/Gen 2) — scoped to
+// the page panel the sub-nav lives in, so each page only drives its own subpanels.
+function selectSubTab(scope, name) {
+  scope.querySelectorAll('[data-subtab]').forEach(btn => {
     const active = btn.dataset.subtab === name;
     btn.classList.toggle('is-active', active);
     btn.setAttribute('aria-selected', String(active));
   });
-  subPanels.forEach(p => { p.hidden = p.dataset.subpanel !== name; });
+  scope.querySelectorAll('[data-subpanel]').forEach(p => { p.hidden = p.dataset.subpanel !== name; });
 }
-subTabs.forEach(btn => btn.addEventListener('click', () => {
-  selectSubTab(btn.dataset.subtab);
-  document.getElementById('guides-top')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}));
+function jumpSubTab(el, name) {
+  const scope = el.closest('.tab-panel');
+  if (!scope) return;
+  selectSubTab(scope, name);
+  history.replaceState(null, '', urlFor(scope.id.replace(/^panel-/, ''), name));
+  scope.querySelector('.subnav-top')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+document.querySelectorAll('[data-subtab]').forEach(btn =>
+  btn.addEventListener('click', () => jumpSubTab(btn, btn.dataset.subtab)));
+// In-page jumps that switch sub-tab (e.g. the Gen 2 CTA at the end of Milestones)
+document.querySelectorAll('[data-subgoto]').forEach(el =>
+  el.addEventListener('click', () => jumpSubTab(el, el.dataset.subgoto)));
 
-const HASH_TABS = ['club', 'council', 'apply', 'roadmap', 'guides', 'perks', 'holders', 'market', 'trade', 'changelog', 'contribute', 'terms', 'privacy'];
+// Clean tab URLs — every tab (and sub-tab) is a real path the server also serves:
+// /council, /roadmap/gen2, … Tab clicks push the path; legacy #tab links and
+// in-page anchors (#terms, #council) still work and get normalized to paths.
+const ROUTE_TABS = ['club', 'council', 'apply', 'roadmap', 'guides', 'perks', 'holders', 'market', 'trade', 'changelog', 'contribute', 'terms', 'privacy'];
 
-// Footer / in-page links like #terms and #privacy switch tabs (and deep-links on load)
+function urlFor(name, sub) {
+  return name === 'club' && !sub ? '/' : `/${name}${sub ? `/${sub}` : ''}`;
+}
+
+function route(pathname) {
+  const segs = pathname.split('/').filter(Boolean);
+  const tab = ROUTE_TABS.includes(segs[0]) ? segs[0] : 'club';
+  selectTab(tab, false);
+  if (segs[1] && /^[a-z0-9-]+$/.test(segs[1])) {
+    const scope = document.getElementById(`panel-${tab}`);
+    if (scope && scope.querySelector(`[data-subtab="${segs[1]}"]`)) selectSubTab(scope, segs[1]);
+  }
+}
+
+// Back/forward navigation
+window.addEventListener('popstate', () => route(location.pathname));
+
+// Legacy hash links switch tabs; the URL is normalized to the path form.
 window.addEventListener('hashchange', () => {
   const name = location.hash.slice(1);
-  if (HASH_TABS.includes(name)) {
+  if (ROUTE_TABS.includes(name)) {
+    history.replaceState(null, '', urlFor(name) + location.search);
     selectTab(name, false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 });
 
-const initialTab = HASH_TABS.filter(n => n !== 'club').find(name => location.hash === `#${name}`);
-if (initialTab) selectTab(initialTab, false);
+// Initial route: a legacy #tab hash (e.g. an old OAuth redirect or shared link)
+// wins and is rewritten to its path; otherwise the path decides the tab.
+const legacyTab = ROUTE_TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : null;
+if (legacyTab) {
+  history.replaceState(null, '', urlFor(legacyTab) + location.search);
+  route(urlFor(legacyTab));
+} else {
+  route(location.pathname);
+}
 
 // Re-render dynamic views once translations are loaded. A deep-link to #apply (e.g.
 // the OAuth callback redirect) triggers loadApply() before initI18n() resolves, so
@@ -135,6 +174,7 @@ initI18n().then(() => {
   rerenderVote();
   rerenderMarket();
   rerenderMarketplace();
+  rerenderGen2();
 });
 
 // Jump animation on hover / click / tap
@@ -150,6 +190,38 @@ document.querySelectorAll('.pet-wrap').forEach(pet => {
     if (e.animationName === 'pet-jump') pet.classList.remove('is-jumping');
   });
 });
+
+// Gen 2 roadmap — scroll-in reveals + count-up stats. Both no-op under reduced
+// motion; the CSS only hides .g2-reveal when motion is welcome, so content stays
+// visible even if the observer never fires.
+const g2MotionOK = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function g2CountUp(el) {
+  const target = parseInt(el.dataset.countup, 10);
+  if (!Number.isFinite(target)) return;
+  const dur = 900;
+  let t0 = null;
+  function frame(ts) {
+    if (t0 === null) t0 = ts;
+    const p = Math.min((ts - t0) / dur, 1);
+    el.textContent = String(Math.round(target * (1 - Math.pow(1 - p, 3))));
+    if (p < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+const g2Reveals = document.querySelectorAll('.g2-reveal');
+if (g2MotionOK && 'IntersectionObserver' in window && g2Reveals.length) {
+  const g2io = new IntersectionObserver(entries => entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    entry.target.classList.add('is-in');
+    entry.target.querySelectorAll('[data-countup]').forEach(g2CountUp);
+    g2io.unobserve(entry.target);
+  }), { threshold: 0.15 });
+  g2Reveals.forEach(el => g2io.observe(el));
+} else {
+  g2Reveals.forEach(el => el.classList.add('is-in'));
+}
 
 // Fetch and inline pet SVGs so internal <g transform> paths render in document context
 (async () => {

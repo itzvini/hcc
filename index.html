@@ -17,10 +17,10 @@
     <span class="kicker" data-i18n="hero.kicker">Highrise Creature Club</span>
     <h1><span data-i18n="hero.h1">Creatures + LAND get a </span><span class="pop" data-i18n="hero.pop">voice.</span></h1>
     <div class="mascot-row">
-      <div class="pet-wrap"><object data="assets/pets/slime-composite.svg" type="image/svg+xml" aria-label="Slime pet"></object></div>
-      <div class="pet-wrap"><object data="assets/pets/snoozlepuff-composite.svg" type="image/svg+xml" aria-label="Snoozlepuff pet"></object></div>
-      <div class="pet-wrap"><object data="assets/pets/purploofie-composite.svg" type="image/svg+xml" aria-label="Purploofie pet"></object></div>
-      <div class="pet-wrap"><object data="assets/pets/oranchuplump-composite.svg" type="image/svg+xml" aria-label="Oranchuplump pet"></object></div>
+      <div class="pet-wrap"><object data="/assets/pets/slime-composite.svg" type="image/svg+xml" aria-label="Slime pet"></object></div>
+      <div class="pet-wrap"><object data="/assets/pets/snoozlepuff-composite.svg" type="image/svg+xml" aria-label="Snoozlepuff pet"></object></div>
+      <div class="pet-wrap"><object data="/assets/pets/purploofie-composite.svg" type="image/svg+xml" aria-label="Purploofie pet"></object></div>
+      <div class="pet-wrap"><object data="/assets/pets/oranchuplump-composite.svg" type="image/svg+xml" aria-label="Oranchuplump pet"></object></div>
     </div>
   </div>
 </header>
@@ -348,11 +348,19 @@
 </main>
 
 <main id="panel-roadmap" class="tab-panel roadmap-panel" role="tabpanel" aria-labelledby="tab-roadmap" hidden>
-  <section class="wrap">
+  <section class="wrap subnav-top" id="roadmap-top">
     <div class="eyebrow" data-i18n="roadmap.eyebrow">What's coming</div>
     <h2 data-i18n="roadmap.h2">The path ahead</h2>
     <p class="lead" data-i18n="roadmap.lead">From the next drop to Gen 2 — every milestone we're working toward, in order.</p>
+  </section>
 
+  <nav class="guide-subnav wrap" role="tablist" aria-label="Roadmap sections">
+    <button class="guide-subtab is-active" type="button" role="tab" aria-selected="true" data-subtab="milestones" data-i18n="roadmap.sub.milestones">Milestones</button>
+    <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="gen2" data-i18n="roadmap.sub.gen2">Gen 2</button>
+  </nav>
+
+  <div class="guide-subpanel" data-subpanel="milestones">
+  <section class="wrap">
     <div class="rm-track">
 
       <div class="rm-item rm-done">
@@ -462,11 +470,163 @@
     </div>
 
     <p class="rm-note" data-i18n="rm.note">Milestones in approximate order — dates announced as confirmed</p>
+    <div style="text-align:center;margin-top:30px">
+      <button type="button" data-subgoto="gen2" style="display:inline-block;padding:13px 28px;border-radius:999px;background:var(--hr-primary);color:var(--hr-on-primary);font:700 15px/1 var(--hr-sans);border:0;cursor:pointer" data-i18n="rm.gen2cta">Dive into the Gen 2 roadmap →</button>
+    </div>
   </section>
+  </div><!-- /milestones -->
+
+  <div class="guide-subpanel" data-subpanel="gen2" hidden>
+  <section class="wrap" id="gen2">
+    <div class="eyebrow" data-i18n="g2.eyebrow">The big one</div>
+    <h2 data-i18n="g2.h2">Gen 2 — the full picture</h2>
+    <p class="lead" data-i18n="g2.lead">Six full creature sets are being built right now — the biggest content push in club history. Follow the road, stop by stop, to see exactly where each set stands.</p>
+
+    <div class="facts g2-reveal">
+      <div class="fact"><div class="n" data-countup="6">6</div><div class="l" data-i18n="g2.fact1">creature sets in the works</div></div>
+      <div class="fact"><div class="n" data-countup="17">17</div><div class="l" data-i18n="g2.fact2">trait categories per set</div></div>
+      <div class="fact"><div class="n"><span data-countup="700">700</span>+</div><div class="l" data-i18n="g2.fact3">wearable items planned</div></div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="eyebrow" data-i18n="g2.sets.eyebrow">The roadmap</div>
+    <h2 data-i18n="g2.sets.h2">Six stops to Gen 2</h2>
+    <p class="lead" data-i18n="g2.sets.lead">Follow the line — one stop per set, in production order. Each stop shows the four phases a set walks before it lands in Highrise.</p>
+
+    <div class="g2-road g2-reveal" id="g2-road">
+      <div class="g2-stop is-live" style="--accent:var(--hr-primary);--accent-soft:var(--hr-primary-25)">
+        <span class="g2-stop-node"></span>
+        <div class="g2-stop-card">
+          <span class="g2-set-glow"></span>
+          <span class="g2-set-ico">🧟</span>
+          <h4 class="g2-set-h" data-i18n="g2.set.zombies.h">Zombies</h4>
+          <span class="g2-chip is-live"><span class="g2-chip-dot"></span><span data-i18n="g2.pipe.s4.h">Final art</span></span>
+          <ul class="g2-phases">
+            <li class="g2-phase is-done" data-i18n="g2.pipe.s1.h">Direction</li>
+            <li class="g2-phase is-done" data-i18n="g2.pipe.s2.h">Concepts</li>
+            <li class="g2-phase is-done" data-i18n="g2.pipe.s3.h">Sketches</li>
+            <li class="g2-phase is-now" data-i18n="g2.pipe.s4.h">Final art</li>          </ul>
+        </div>
+      </div>
+      <div class="g2-stop" style="--accent:var(--hr-alert);--accent-soft:var(--hr-alert-15)">
+        <span class="g2-stop-node"></span>
+        <div class="g2-stop-card">
+          <span class="g2-set-glow"></span>
+          <span class="g2-set-ico">🧛</span>
+          <h4 class="g2-set-h" data-i18n="g2.set.vampires.h">Vampires</h4>
+          <span class="g2-chip is-next"><span data-i18n="g2.status.next">Up next</span></span>
+          <ul class="g2-phases">
+            <li class="g2-phase is-done" data-i18n="g2.pipe.s1.h">Direction</li>
+            <li class="g2-phase" data-i18n="g2.pipe.s2.h">Concepts</li>
+            <li class="g2-phase" data-i18n="g2.pipe.s3.h">Sketches</li>
+            <li class="g2-phase" data-i18n="g2.pipe.s4.h">Final art</li>          </ul>
+        </div>
+      </div>
+      <div class="g2-stop" style="--accent:var(--hr-tangerine);--accent-soft:color-mix(in srgb, var(--hr-tangerine) 25%, transparent)">
+        <span class="g2-stop-node"></span>
+        <div class="g2-stop-card">
+          <span class="g2-set-glow"></span>
+          <span class="g2-set-ico">🐺</span>
+          <h4 class="g2-set-h" data-i18n="g2.set.werewolves.h">Werewolves</h4>
+          <span class="g2-chip"><span data-i18n="g2.status.queued">Queued</span></span>
+          <ul class="g2-phases">
+            <li class="g2-phase is-done" data-i18n="g2.pipe.s1.h">Direction</li>
+            <li class="g2-phase" data-i18n="g2.pipe.s2.h">Concepts</li>
+            <li class="g2-phase" data-i18n="g2.pipe.s3.h">Sketches</li>
+            <li class="g2-phase" data-i18n="g2.pipe.s4.h">Final art</li>          </ul>
+        </div>
+      </div>
+      <div class="g2-stop" style="--accent:var(--hr-secondary);--accent-soft:var(--hr-secondary-25)">
+        <span class="g2-stop-node"></span>
+        <div class="g2-stop-card">
+          <span class="g2-set-glow"></span>
+          <span class="g2-set-ico">😈</span>
+          <h4 class="g2-set-h" data-i18n="g2.set.demons.h">Demons</h4>
+          <span class="g2-chip"><span data-i18n="g2.status.queued">Queued</span></span>
+          <ul class="g2-phases">
+            <li class="g2-phase is-done" data-i18n="g2.pipe.s1.h">Direction</li>
+            <li class="g2-phase" data-i18n="g2.pipe.s2.h">Concepts</li>
+            <li class="g2-phase" data-i18n="g2.pipe.s3.h">Sketches</li>
+            <li class="g2-phase" data-i18n="g2.pipe.s4.h">Final art</li>          </ul>
+        </div>
+      </div>
+      <div class="g2-stop" style="--accent:var(--hr-blueberry);--accent-soft:color-mix(in srgb, var(--hr-blueberry) 25%, transparent)">
+        <span class="g2-stop-node"></span>
+        <div class="g2-stop-card">
+          <span class="g2-set-glow"></span>
+          <span class="g2-set-ico">👻</span>
+          <h4 class="g2-set-h" data-i18n="g2.set.ghosts.h">Ghosts</h4>
+          <span class="g2-chip"><span data-i18n="g2.status.queued">Queued</span></span>
+          <ul class="g2-phases">
+            <li class="g2-phase is-done" data-i18n="g2.pipe.s1.h">Direction</li>
+            <li class="g2-phase" data-i18n="g2.pipe.s2.h">Concepts</li>
+            <li class="g2-phase" data-i18n="g2.pipe.s3.h">Sketches</li>
+            <li class="g2-phase" data-i18n="g2.pipe.s4.h">Final art</li>          </ul>
+        </div>
+      </div>
+      <div class="g2-stop" style="--accent:var(--hr-banana);--accent-soft:var(--hr-banana-25)">
+        <span class="g2-stop-node"></span>
+        <div class="g2-stop-card">
+          <span class="g2-set-glow"></span>
+          <span class="g2-set-ico">🫠</span>
+          <h4 class="g2-set-h" data-i18n="g2.set.slimes.h">Slimes</h4>
+          <span class="g2-chip"><span data-i18n="g2.status.queued">Queued</span></span>
+          <ul class="g2-phases">
+            <li class="g2-phase is-done" data-i18n="g2.pipe.s1.h">Direction</li>
+            <li class="g2-phase" data-i18n="g2.pipe.s2.h">Concepts</li>
+            <li class="g2-phase" data-i18n="g2.pipe.s3.h">Sketches</li>
+            <li class="g2-phase" data-i18n="g2.pipe.s4.h">Final art</li>          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="g2-pipe-wrap">
+      <div class="eyebrow" data-i18n="g2.pipe.eyebrow">Behind the curtain</div>
+      <h3 class="g2-pipe-h" data-i18n="g2.pipe.h3">How a set gets made</h3>
+      <p class="lead" data-i18n="g2.pipe.lead">Every set walks the same four steps. So when an update says "final art", you'll know exactly where that set stands.</p>
+      <ol class="g2-pipe g2-reveal">
+        <li class="g2-stage">
+          <h5 data-i18n="g2.pipe.s1.h">Direction</h5>
+          <p data-i18n="g2.pipe.s1.p">The set's look and attitude get locked.</p>
+        </li>
+        <li class="g2-stage">
+          <h5 data-i18n="g2.pipe.s2.h">Concepts</h5>
+          <p data-i18n="g2.pipe.s2.p">Artists explore options across all 17 trait categories.</p>
+        </li>
+        <li class="g2-stage">
+          <h5 data-i18n="g2.pipe.s3.h">Sketches</h5>
+          <p data-i18n="g2.pipe.s3.p">The chosen designs are drawn for every item in the set.</p>
+        </li>
+        <li class="g2-stage">
+          <h5 data-i18n="g2.pipe.s4.h">Final art</h5>
+          <p data-i18n="g2.pipe.s4.p">Every item is cleaned and finished — front and back.</p>
+        </li>
+      </ol>
+
+      <div class="g2-focus" id="g2-focus" hidden>
+        <div class="eyebrow" data-i18n="g2.focus.eyebrow">The next two weeks</div>
+        <p id="g2-focus-p"></p>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider">• • •</div>
+
+  <section class="wrap">
+    <div class="eyebrow" data-i18n="g2.word.eyebrow">Hold us to it</div>
+    <h2 data-i18n="g2.word.h2">Our word on Gen 2</h2>
+    <div class="perks g2-reveal">
+      <div class="perk"><span class="ico">📡</span><h4 data-i18n="g2.word.c1h">Proof every two weeks</h4><p data-i18n="g2.word.c1p">A work-in-progress update every two weeks — even when it's not pretty or finished. Silence is the one thing you'll never get.</p></div>
+      <div class="perk"><span class="ico">🎯</span><h4 data-i18n="g2.word.c3h">Quality over deadlines</h4><p data-i18n="g2.word.c3p">If a date has to move, you'll hear it from us early — with the why. We won't rush a set out broken.</p></div>
+    </div>
+    <p class="rm-note" data-i18n="g2.note">Set order and pacing can shift as the Council weighs in — every change gets explained in the bi-weekly updates.</p>
+  </section>
+  </div><!-- /gen2 -->
 </main>
 
 <main id="panel-guides" class="tab-panel" role="tabpanel" aria-labelledby="tab-guides" hidden>
-  <section class="wrap" id="guides-top">
+  <section class="wrap subnav-top" id="guides-top">
     <div class="eyebrow" data-i18n="guide.eyebrow">New here?</div>
     <h2 data-i18n="guide.h2">Owning your creature, made simple</h2>
     <p class="lead" data-i18n="guide.lead">Everything you need to buy, sell, move, and protect your HCC NFTs — step by step. Put together with the community.</p>
