@@ -293,6 +293,7 @@
   "trade.err.collAccept": "That offer couldn't be accepted — it may have just been filled, cancelled or changed. We've refreshed the offers; pick another or list your Creature for sale.",
   "trade.coll.unfunded": "Not funded — the ETH backing this offer left your wallet, so nobody can accept it. Top your wallet back up or cancel the offer.",
   "trade.modal.notListed": "Not currently listed",
+  "trade.modal.syncing": "This listing's brand new — we're syncing it now…",
   "trade.modal.loading": "Loading traits…",
   "trade.modal.owner": "Owner",
   "trade.modal.tokenId": "Token ID",

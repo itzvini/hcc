@@ -1469,6 +1469,19 @@ async function handleMarketplaceApi(request, response, url) {
     return;
   }
 
+  // One token's active listing, from the browse snapshot — powers ?token= deep links
+  // (e.g. Discord new-listing pings), where the paged grid feed may not contain the
+  // token. Same wire shape as a /listings item; null when the token isn't listed.
+  const listingForMatch = pathname.match(/^\/api\/market\/creatures\/listing\/(\d{1,80})$/);
+  if (listingForMatch) {
+    const listIdx = await getBrowseIndex();
+    const found = listIdx.items.find(it => String(it.tokenId) === listingForMatch[1]);
+    let listing = null;
+    if (found) { const { traits, listedAt, ...pub } = found; listing = pub; }
+    sendJson(response, 200, { listing }, { 'Cache-Control': 'public, max-age=15' });
+    return;
+  }
+
   const tokenMatch = pathname.match(/^\/api\/market\/creatures\/token\/(\d{1,80})$/);
   if (tokenMatch) {
     const data = await getCreatureToken(tokenMatch[1]);

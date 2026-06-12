@@ -2138,6 +2138,10 @@ body.trade-modal-open { overflow: hidden; }
 .trade-modal-price-usd { font-size: 14px; color: var(--hr-fg-2); }
 .trade-modal-fees { font-size: 11px; color: var(--hr-fg-3); width: 100%; }
 .trade-modal-notlisted { font-size: 14px; color: var(--hr-fg-2); font-weight: 600; }
+.trade-modal-syncing {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13.5px; color: var(--hr-fg-2); font-weight: 600;
+}
 .trade-modal-meta-row { font-size: 12.5px; color: var(--hr-fg-2); margin-bottom: 6px; }
 .trade-modal-meta-row code { font-family: ui-monospace, Menlo, monospace; color: var(--hr-fg-1); }
 .trade-modal-tokenid { font-size: 11px; word-break: break-all; }

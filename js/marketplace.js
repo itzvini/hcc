@@ -129,6 +129,14 @@ let modalToken = null;
 let modalMeta = null;
 let modalLoading = false;
 
+// Deep-link state (/trade?coll=…&token=… — e.g. the Discord new-listing pings).
+// linkListing holds the resolved listing for a deep-linked token the paged grid feed
+// doesn't contain; linkSync is the tokenId still being hunted — a listing created
+// moments ago can lag the server's snapshot, so the modal shows a syncing state
+// instead of a premature "not listed".
+let linkListing = null;
+let linkSync = null;
+
 // Buy state — survives modal re-renders so a language switch or balance refresh can't
 // wipe an in-flight purchase status. {phase, msg?, hash?}; null = idle.
 let buyState = null;
@@ -575,12 +583,31 @@ function patchGrid() {
 }
 
 // --- Token detail modal ---
+
+// The open modal's listing: the grid feed first, then the deep-link fallback (a token
+// arriving via ?token= is often beyond the feed's first page, or newer than it).
+function listingForToken(tokenId) {
+  return listings.find(l => String(l.tokenId) === String(tokenId))
+    || (linkListing && String(linkListing.tokenId) === String(tokenId) ? linkListing : null);
+}
+
+// Mirror the open modal into the address bar (/trade?coll=…&token=…) so every token
+// view is a shareable deep link. replaceState only — modals must not stack history.
+function syncTradeUrl() {
+  if (!location.pathname.startsWith('/trade')) return;
+  const url = modalToken
+    ? `/trade?coll=${coll}&token=${encodeURIComponent(modalToken)}`
+    : '/trade';
+  history.replaceState(null, '', url);
+}
+
 async function openModal(tokenId) {
   modalToken = tokenId; modalMeta = null; modalLoading = true; buyState = null;
   tokenOffers = null;
   if (offerCtx === 'modal') { offerState = null; offerCtx = null; }
   acceptState = null;
   if (coll === 'creatures') loadTokenOffers(tokenId); // offers are Creatures-only for now
+  syncTradeUrl();
   patchModal();
   try {
     const res = await fetch(`${C().api}/token/${encodeURIComponent(tokenId)}`, { headers: { Accept: 'application/json' } });
@@ -591,11 +618,62 @@ async function openModal(tokenId) {
 }
 function closeModal() {
   if (buyState && BUY_BUSY_PHASES.has(buyState.phase)) return; // don't lose an in-flight purchase
-  modalToken = null; modalMeta = null; buyState = null; patchModal();
+  modalToken = null; modalMeta = null; buyState = null;
+  syncTradeUrl();
+  patchModal();
+}
+
+// Resolve the listing for a deep-linked token the grid feed doesn't have. Creatures
+// get an exact-token endpoint backed by the full listing snapshot; LAND walks its
+// cursor feed (the collection's active listings span only a few pages).
+async function fetchListingFor(tokenId) {
+  try {
+    if (coll === 'creatures') {
+      const res = await fetch(`/api/market/creatures/listing/${encodeURIComponent(tokenId)}`, { headers: { Accept: 'application/json' } });
+      return res.ok ? (await res.json()).listing || null : null;
+    }
+    let cursor = '';
+    for (let page = 0; page < 5; page++) {
+      const url = `${C().api}/listings${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`;
+      const res = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const hit = (data.items || []).find(it => String(it.tokenId) === String(tokenId));
+      if (hit) {
+        // Same normalization as loadListings: orderHash plays the listingId role.
+        return { listingId: hit.orderHash, protocolAddress: hit.protocolAddress, tokenId: hit.tokenId, seller: hit.seller, priceEth: hit.priceEth, totalEth: hit.priceEth, name: hit.name, image: hit.image, coords: hit.coords, rarity: null };
+      }
+      cursor = data.nextCursor || '';
+      if (!cursor) return null;
+    }
+  } catch (err) { console.error('Deep-link listing lookup failed:', err); }
+  return null;
+}
+
+// A brand-new listing (the Discord ping case) can trail the server snapshot by a
+// minute, so retry on a short backoff before settling on "not listed". Bails the
+// moment the user moves on — closes the modal, opens another token, switches worlds.
+const LINK_RETRY_MS = [0, 10000, 25000];
+
+async function openDeepLink(tokenId) {
+  const wantColl = coll;
+  linkSync = tokenId;
+  openModal(tokenId);
+  const moved = () => coll !== wantColl || String(modalToken) !== String(tokenId);
+  for (const ms of LINK_RETRY_MS) {
+    if (ms) await new Promise(resolve => setTimeout(resolve, ms));
+    if (moved()) { linkSync = null; return; }
+    if (listingForToken(tokenId)?.priceEth != null) break; // the grid feed had it
+    const found = await fetchListingFor(tokenId);
+    if (moved()) { linkSync = null; return; }
+    if (found) { linkListing = found; break; }
+  }
+  linkSync = null;
+  patchModal();
 }
 
 function modalCardHtml() {
-  const it = listings.find(l => String(l.tokenId) === String(modalToken)) || {};
+  const it = listingForToken(modalToken) || {};
   const meta = modalMeta || {};
   const image = meta.image || it.image;
   const name = meta.name || it.name || `Highrise Creature #${modalToken}`;
@@ -612,7 +690,9 @@ function modalCardHtml() {
          <span class="trade-modal-fees">${esc(t('trade.price.allin'))} ${tipHtml('trade.price.allin.tip')}</span>
        </div>
        ${buyAreaHtml(it)}`
-    : `<div class="trade-modal-price"><span class="trade-modal-notlisted">${esc(t('trade.modal.notListed'))}</span></div>`;
+    : (String(linkSync) === String(modalToken)
+        ? `<div class="trade-modal-price"><span class="trade-modal-syncing"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.modal.syncing'))}</span></div>`
+        : `<div class="trade-modal-price"><span class="trade-modal-notlisted">${esc(t('trade.modal.notListed'))}</span></div>`);
 
   const attrs = meta.attributes || meta.traits; // creatures vs LAND field name
   const traits = modalLoading
@@ -1066,7 +1146,8 @@ async function handleBuyLand(it) {
 
 async function handleBuy(listingId) {
   if (buyState && BUY_BUSY_PHASES.has(buyState.phase)) return;
-  const it = listings.find(l => l.listingId === listingId);
+  const it = listings.find(l => l.listingId === listingId)
+    || (linkListing?.listingId === listingId ? linkListing : null);
   if (!it) return;
   if (coll === 'land') return handleBuyLand(it);
 
@@ -2261,6 +2342,8 @@ function onClick(e) {
       // Collection-scoped state must not bleed across worlds.
       listings = []; listingsCursor = null; listingsError = false;
       modalToken = null; modalMeta = null; buyState = null; tokenOffers = null;
+      linkListing = null; linkSync = null;
+      syncTradeUrl();
       resetFilters();
       flt.scope = 'listed';
       browseFacets = null; browseTotal = null; browseListedTotal = null; browsePriceRange = null;
@@ -2432,6 +2515,15 @@ export async function loadMarketplace() {
   loadedOnce = true;
   try { const c = localStorage.getItem('hcc-trade-cur'); if (c && CURRENCIES.includes(c)) currency = c; } catch { /* fine */ }
   try { const k = localStorage.getItem('hcc-trade-coll'); if (k && COLLECTIONS[k]) coll = k; } catch { /* fine */ }
+  // Deep link (/trade?coll=…&token=…): land straight on that token's detail modal.
+  // The coll param wins over the saved preference for this visit, without persisting.
+  let deepToken = null;
+  try {
+    const params = new URLSearchParams(location.search);
+    if (COLLECTIONS[params.get('coll')]) coll = params.get('coll');
+    const tk = (params.get('token') || '').trim();
+    if (/^\d{1,80}$/.test(tk)) deepToken = tk;
+  } catch { /* malformed query — ignore */ }
   wireEsc();
   wireTips();
   wireProviderEvents();
@@ -2456,6 +2548,7 @@ export async function loadMarketplace() {
   render();
   loadListings(true);
   if (coll === 'creatures') loadCollOffers();
+  if (deepToken) openDeepLink(deepToken);
 }
 
 // Re-render from in-memory state on language switch (no refetch).
