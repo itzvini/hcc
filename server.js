@@ -2165,6 +2165,65 @@ const APPLICATIONS_OPEN = envFlag(process.env.APPLICATIONS_OPEN);
 // preview of the field without revealing who's who. Names are revealed once VOTING_OPEN=1.
 const VOTING_OPEN = envFlag(process.env.VOTING_OPEN);
 
+// Results phase — set RESULTS_OPEN=1 once voting has closed to publish per-race
+// tallies and outcomes on /api/election. Aggregates only — individual ballots are
+// never exposed, and there is no live tally while VOTING_OPEN (publishing a running
+// count would invite pile-ons in a confirmation race).
+const RESULTS_OPEN = envFlag(process.env.RESULTS_OPEN);
+
+// --- Unopposed races: the confirmation-vote rule ---
+// A race with no more candidates than seats is NOT auto-won. Its ballot becomes a
+// choice between "Seat the candidate(s)" and "Reopen nominations":
+//   • Seat wins a majority of votes cast on that race → seated with a real mandate.
+//   • Reopen wins a STRICT majority → that bracket's candidacy window reopens once
+//     (set REOPENED_BRACKETS + REOPEN_DEADLINE). A new candidate entering makes the
+//     re-run a normal contested race (bump VOTE_ROUND=2 for the re-vote). If nobody
+//     new enters by the deadline, the original candidates are seated by rule.
+// Rejection therefore has to be CONSTRUCTIVE — the only way to unseat an unopposed
+// candidate is to field someone who beats them. A hostile voting bloc can force a
+// real contest but can never vote a bracket's representation into a vacancy, which
+// closes the gatekeeping/sabotage exploit. Ties favour seating for the same reason.
+const VOTE_ROUND = Math.max(1, parseInt(process.env.VOTE_ROUND, 10) || 1);
+const REOPENED_BRACKETS = String(process.env.REOPENED_BRACKETS || '')
+  .split(',').map(s => s.trim()).filter(id => BRACKETS.some(b => b.id === id));
+const REOPEN_DEADLINE_MS = Date.parse(process.env.REOPEN_DEADLINE || '') || 0;
+
+// Confirmation-ballot choice tokens as stored on ballot rows (never candidate ids).
+const SEAT_TOKEN = '__seat__';
+const REOPEN_TOKEN = '__reopen__';
+
+// True while a bracket's one-time post-rejection nomination window is open.
+function reopenActiveFor(bracket) {
+  return REOPENED_BRACKETS.includes(bracket) && Date.now() < REOPEN_DEADLINE_MS;
+}
+
+// The candidacy window for a bracket: the global window, or that bracket's reopen.
+function applicationWindowOpenFor(bracket) {
+  return APPLICATIONS_OPEN || (!!bracket && reopenActiveFor(bracket));
+}
+
+// How long a SUBMITTED application stays editable: through the candidacy window and
+// the quiet period after it, locking only once voting begins (VOTING_OPEN — or
+// RESULTS_OPEN, so the lock holds through the phases after). A bracket's
+// post-rejection reopen counts as its window, so its candidates can edit for the
+// re-run even though the wider election has moved on.
+function applicationEditableFor(bracket) {
+  return (!VOTING_OPEN && !RESULTS_OPEN) || applicationWindowOpenFor(bracket);
+}
+
+// The round a bracket's race is decided in: reopened brackets re-vote in round 2
+// (once VOTE_ROUND is bumped); every other race concluded in round 1.
+function roundFor(bracket) {
+  return REOPENED_BRACKETS.includes(bracket) ? VOTE_ROUND : 1;
+}
+
+// 'confirmation' when the field is unopposed (0 < candidates ≤ seats), 'contested'
+// when there are more runners than seats, null while the field is empty.
+function raceMode(candidateCount, seats) {
+  if (!candidateCount) return null;
+  return candidateCount <= seats ? 'confirmation' : 'contested';
+}
+
 // --- Election status (public) ---
 // A cached snapshot of the race: submitted candidates per holding bracket, the seats
 // each bracket elects, and whether the candidacy window is open. Public — it's the
@@ -2182,18 +2241,85 @@ async function getElectionStatus() {
   }
   const counts = await db.getCandidateCounts();
   const seatsFor = id => BRACKETS.find(b => b.id === id)?.seats ?? 0;
-  const races = RACE_ORDER.map(id => ({ bracket: id, seats: seatsFor(id), candidates: counts[id] || 0 }));
+  const races = RACE_ORDER.map(id => ({
+    bracket: id,
+    seats: seatsFor(id),
+    candidates: counts[id] || 0,
+    mode: raceMode(counts[id] || 0, seatsFor(id)),
+    reopened: reopenActiveFor(id),
+    reopenDeadline: reopenActiveFor(id) ? new Date(REOPEN_DEADLINE_MS).toISOString() : null,
+  }));
   const data = {
     applicationsOpen: APPLICATIONS_OPEN,
+    votingOpen: VOTING_OPEN,
+    resultsOpen: RESULTS_OPEN,
     races,
     totalCandidates: races.reduce((n, r) => n + r.candidates, 0),
     electedSeats: races.reduce((n, r) => n + r.seats, 0),
     appointedSeats: APPOINTED_SEATS,
     lastUpdated: new Date().toISOString(),
   };
+  if (RESULTS_OPEN) data.results = await computeElectionResults();
   electionCache.data = data;
   electionCache.at = Date.now();
   return data;
+}
+
+// Final per-race results — published on /api/election only once RESULTS_OPEN. Reads
+// ONLY aggregate tallies (no voter identities) and resolves each race per the rules
+// above. Candidate names are public by this point (voting has opened), so seated
+// names + per-candidate counts are included.
+async function computeElectionResults() {
+  const [candidates, tallies] = await Promise.all([db.getCandidates(), db.getBallotTallies()]);
+  return RACE_ORDER.map(id => {
+    const seats = BRACKETS.find(b => b.id === id)?.seats ?? 0;
+    // getCandidates() orders by submitted_at ASC — kept as the transparent tie-break
+    // (first to declare wins a dead heat).
+    const cands = candidates.filter(c => c.bracket === id);
+    const round = roundFor(id);
+    const mode = raceMode(cands.length, seats);
+    const roundTallies = tallies.filter(t => t.bracket === id && Number(t.round) === round);
+    const turnout = roundTallies.reduce((n, t) => n + t.n, 0);
+    const votesFor = choice => roundTallies.find(t => t.choice === choice)?.n || 0;
+
+    const base = { bracket: id, seats, mode, round, turnout };
+    if (!mode) return { ...base, status: 'vacant', seated: [] }; // empty field → appointment track
+
+    if (mode === 'contested') {
+      // A reopened race that gained candidates is contested, but its re-vote lives in
+      // round 2 — until VOTE_ROUND is bumped the round-1 tallies are confirmation
+      // tokens, not candidate votes, so the result is still pending.
+      if (REOPENED_BRACKETS.includes(id) && round === 1) {
+        return { ...base, status: 'revote', seated: [] };
+      }
+      const rows = cands
+        .map(c => ({ name: c.display_name || '', votes: votesFor(c.discord_id) }))
+        .sort((a, b) => b.votes - a.votes); // stable sort → submission order breaks ties
+      rows.forEach((r, i) => { r.seated = i < seats; });
+      return { ...base, status: 'seated', rows, seated: rows.filter(r => r.seated).map(r => r.name) };
+    }
+
+    // Confirmation race: "Seat" vs "Reopen nominations".
+    const seatVotes = votesFor(SEAT_TOKEN);
+    const reopenVotes = votesFor(REOPEN_TOKEN);
+    const names = cands.map(c => c.display_name || '');
+    const conf = { ...base, seatVotes, reopenVotes };
+    if (reopenVotes <= seatVotes) {
+      // Majority (or tie — status quo favours seating) to seat.
+      return { ...conf, status: 'seated', seated: names };
+    }
+    if (reopenActiveFor(id)) {
+      // Reopen won and the window is live: nominations are open right now.
+      return { ...conf, status: 'reopened', seated: [], reopenDeadline: new Date(REOPEN_DEADLINE_MS).toISOString() };
+    }
+    if (REOPENED_BRACKETS.includes(id) && REOPEN_DEADLINE_MS && Date.now() >= REOPEN_DEADLINE_MS) {
+      // Window came and went with no new entrant (the field is still ≤ seats, or we'd
+      // be in the contested branch) → the original candidates are seated by rule.
+      return { ...conf, status: 'seatedByRule', seated: names };
+    }
+    // Reopen won but the window hasn't been scheduled yet.
+    return { ...conf, status: 'reopenPending', seated: [] };
+  });
 }
 
 // Draft open questions for the self-nomination form (owner will refine the copy;
@@ -2357,6 +2483,116 @@ async function handleVoteApi(request, response) {
   sendJson(response, 405, { error: 'Method not allowed.' });
 }
 
+// /api/ballot — the OFFICIAL vote (the matcher above is advisory and casts nothing).
+// Gated to signed-in, voting-eligible holders; the 3-month continuous-hold rule is
+// verified against the candidacy-window snapshot, as on the rest of the panel.
+//   GET  → phase + the voter's races: candidates (opaque id, name once voting is
+//          open, pitch), each race's mode, and the caller's own ballot if cast.
+//   POST { bracket, choice } → casts the ballot. Votes are FINAL once cast (the
+//          published rule) — storage is insert-only and re-votes get a 409.
+// PRIVACY: the ballot row (voter ↔ choice) exists only to enforce one vote per race;
+// it never leaves the server. The audit event records THAT a ballot was cast, never
+// the choice. Tallies are published only as aggregates once RESULTS_OPEN.
+async function handleBallotApi(request, response) {
+  const cookies = auth.parseCookies(request);
+  const session = await db.getSession(cookies[auth.SESSION_COOKIE]);
+  if (!session) { sendJson(response, 401, { error: 'Sign in to vote.' }); return; }
+  const elig = session.eligibility || {};
+  if (!elig.canVotePendingHoldTime) { sendJson(response, 403, { error: 'Only eligible holders can vote.' }); return; }
+
+  if (request.method === 'GET') {
+    const [candidates, own] = await Promise.all([
+      db.getCandidates(),
+      db.getBallotsFor(session.discord_id),
+    ]);
+    const seatsFor = id => BRACKETS.find(b => b.id === id)?.seats ?? 0;
+    const races = RACE_ORDER.map(id => {
+      const cands = candidates.filter(c => c.bracket === id);
+      const round = roundFor(id);
+      const mine = own.find(b => b.bracket === id && Number(b.round) === round) || null;
+      return {
+        bracket: id,
+        seats: seatsFor(id),
+        mode: raceMode(cands.length, seatsFor(id)),
+        round,
+        // Round-1 races are read-only once a later round is running (they concluded).
+        concluded: VOTE_ROUND > 1 && !REOPENED_BRACKETS.includes(id),
+        candidates: cands.map(c => ({
+          id: candidateId(c.discord_id),
+          pitch: c.pitch || '',
+          // Names are public from the moment voting opens, including the results phase.
+          ...(VOTING_OPEN || RESULTS_OPEN ? { name: c.display_name || '' } : {}),
+        })),
+        yourBallot: mine ? {
+          // Translate the stored choice into client-safe form: confirmation tokens
+          // become 'seat'/'reopen'; a candidate Discord id becomes the opaque hash.
+          choice: mine.choice === SEAT_TOKEN ? 'seat'
+                : mine.choice === REOPEN_TOKEN ? 'reopen'
+                : candidateId(mine.choice),
+          receipt: mine.receipt,
+          castAt: mine.cast_at || null,
+        } : null,
+      };
+    });
+    sendJson(response, 200, { votingOpen: VOTING_OPEN, resultsOpen: RESULTS_OPEN, round: VOTE_ROUND, races });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    if (!VOTING_OPEN) { sendJson(response, 403, { error: 'Voting is not open.' }); return; }
+    // 3 races and final votes — a low cap comfortably covers honest use.
+    const wait = rateLimited(`ballot:${session.discord_id}`, 20, 60 * 60 * 1000);
+    if (wait) { sendJson(response, 429, { error: 'Too many requests. Try again shortly.' }, { 'Retry-After': String(wait) }); return; }
+
+    let body;
+    try { body = await readJsonBody(request); }
+    catch (err) { sendJson(response, err.statusCode || 400, { error: err.message }); return; }
+
+    const bracket = RACE_ORDER.includes(body.bracket) ? body.bracket : null;
+    if (!bracket) { sendJson(response, 400, { error: 'Unknown race.' }); return; }
+    if (VOTE_ROUND > 1 && !REOPENED_BRACKETS.includes(bracket)) {
+      sendJson(response, 403, { error: 'This race has already concluded.' });
+      return;
+    }
+
+    const cands = (await db.getCandidates()).filter(c => c.bracket === bracket);
+    const seats = BRACKETS.find(b => b.id === bracket)?.seats ?? 0;
+    const mode = raceMode(cands.length, seats);
+    if (!mode) { sendJson(response, 400, { error: 'This race has no candidates.' }); return; }
+
+    // Resolve the client choice into the stored value, validating it against the mode.
+    const rawChoice = String(body.choice || '');
+    let choice = null;
+    if (mode === 'confirmation') {
+      if (rawChoice === 'seat') choice = SEAT_TOKEN;
+      else if (rawChoice === 'reopen') choice = REOPEN_TOKEN;
+    } else {
+      choice = cands.find(c => candidateId(c.discord_id) === rawChoice)?.discord_id || null;
+    }
+    if (!choice) { sendJson(response, 400, { error: 'That choice isn\'t on this ballot.' }); return; }
+
+    const receipt = crypto.randomBytes(5).toString('hex').toUpperCase();
+    const saved = await db.castBallot({
+      discordId: session.discord_id,
+      bracket,
+      round: roundFor(bracket),
+      choice,
+      receipt,
+    });
+    if (!saved) {
+      sendJson(response, 409, { error: 'You already voted in this race — votes are final once cast.' });
+      return;
+    }
+
+    // Audit THAT a ballot was cast (turnout traceability) — never the choice.
+    db.recordEvent({ event: 'ballot.cast', discordId: session.discord_id, detail: { bracket, round: saved.round, mode } });
+    sendJson(response, 200, { ok: true, bracket, receipt: saved.receipt, castAt: saved.cast_at || null });
+    return;
+  }
+
+  sendJson(response, 405, { error: 'Method not allowed.' });
+}
+
 // Validate a client-sent positions map into { id: { stance 1-5, rationale } }.
 function cleanPositions(raw) {
   const out = {};
@@ -2392,7 +2628,15 @@ async function handleApplicationApi(request, response) {
   // AI-draft positions from the candidate's current answers (review-before-save).
   if (pathname === '/api/application/derive') {
     if (request.method !== 'POST') { sendJson(response, 405, { error: 'Method not allowed.' }); return; }
-    if (!APPLICATIONS_OPEN) { sendJson(response, 403, { error: 'Applications are not open yet.' }); return; }
+    if (!applicationWindowOpenFor(elig.bracket)) {
+      // Outside the window, only a submitted candidate who can still edit (i.e.
+      // voting hasn't begun) keeps the AI draft — it exists to polish their live profile.
+      const existing = await db.getApplication(session.discord_id);
+      if (!(existing?.status === 'submitted' && applicationEditableFor(elig.bracket))) {
+        sendJson(response, 403, { error: 'Applications are not open yet.' });
+        return;
+      }
+    }
     if (!elig.canRun) { sendJson(response, 403, { error: 'You are not eligible to run for a seat.' }); return; }
     if (!derive.isConfigured()) { sendJson(response, 503, { error: 'AI drafting is not configured.' }); return; }
     // Rate limit the paid AI endpoint per user (cost / abuse protection).
@@ -2418,7 +2662,11 @@ async function handleApplicationApi(request, response) {
     const application = await db.getApplication(session.discord_id);
     sendJson(response, 200, {
       eligibleToRun: !!elig.canRun,
-      applicationsOpen: APPLICATIONS_OPEN,
+      // Per-user window: the global candidacy phase, or this holder's bracket having
+      // its one-time reopen after a "reopen nominations" outcome.
+      applicationsOpen: applicationWindowOpenFor(elig.bracket),
+      // Whether a submitted application can still be edited — true until voting begins.
+      canEdit: applicationEditableFor(elig.bracket),
       bracket: elig.bracket || null,
       ballotName,
       avatar: session.profile?.highriseIcon || null,
@@ -2444,10 +2692,24 @@ async function handleApplicationApi(request, response) {
     try { body = await readJsonBody(request); }
     catch (err) { sendJson(response, err.statusCode || 400, { error: err.message }); return; }
 
-    const status = body.status === 'submitted' ? 'submitted' : 'draft';
+    // Editing a live candidacy: once submitted, an application STAYS submitted — a
+    // "draft" save must never silently pull the candidate out of the race — and it
+    // stays editable until voting begins, then freezes so the field voters see
+    // can't shift mid-vote. Every edit re-runs full validation.
+    const existing = await db.getApplication(session.discord_id);
+    const alreadySubmitted = existing?.status === 'submitted';
+    if (alreadySubmitted && !applicationEditableFor(elig.bracket)) {
+      db.recordEvent({ event: 'application.edit_blocked', discordId: session.discord_id, ok: false, detail: { reason: 'voting_open' } });
+      sendJson(response, 403, { error: 'Voting has begun — your submitted application is locked.' });
+      return;
+    }
+
+    const status = (alreadySubmitted || body.status === 'submitted') ? 'submitted' : 'draft';
     // Candidacy window closed — drafts are allowed (so candidates can prepare),
-    // but final submission is blocked until APPLICATIONS_OPEN=1.
-    if (status === 'submitted' && !APPLICATIONS_OPEN) {
+    // but a FIRST submission is blocked until the window (global or the bracket's
+    // post-rejection reopen) is open. Edits to an already-submitted application
+    // passed the editable gate above instead.
+    if (status === 'submitted' && !alreadySubmitted && !applicationWindowOpenFor(elig.bracket)) {
       db.recordEvent({ event: 'application.submit_blocked', discordId: session.discord_id, ok: false, detail: { reason: 'applications_closed' } });
       sendJson(response, 403, { error: 'Applications are not open for submission yet.' });
       return;
@@ -2498,6 +2760,7 @@ async function handleApplicationApi(request, response) {
           bracket: elig.bracket || null,
           ethWallet: elig.ethWallet || null,
           submittedAt: saved.submitted_at || null,
+          resubmission: alreadySubmitted,
           snapshot: { displayName, pitch, answers, positions },
         },
       });
@@ -2648,6 +2911,14 @@ const server = http.createServer((request, response) => {
   if (request.url.startsWith('/api/vote')) {
     handleVoteApi(request, response).catch(err => {
       console.error('Vote match API error:', err.message);
+      if (!response.headersSent) sendJson(response, 500, { error: 'Something went wrong.' });
+    });
+    return;
+  }
+
+  if (request.url.startsWith('/api/ballot')) {
+    handleBallotApi(request, response).catch(err => {
+      console.error('Ballot API error:', err.message);
       if (!response.headersSent) sendJson(response, 500, { error: 'Something went wrong.' });
     });
     return;

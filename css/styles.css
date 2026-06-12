@@ -2399,6 +2399,29 @@ a.trade-buy-btn { display: inline-flex; }
   letter-spacing: var(--hr-tracking-caps); text-transform: uppercase; color: var(--hr-on-primary);
   padding: 4px 9px; border-radius: var(--hr-radius-pill); background: var(--accent);
 }
+/* Unopposed race → seat-or-reopen confirmation ballot (outlined, vs the filled "contested") */
+.race-confirmation {
+  font-family: var(--hr-sans); font-weight: 900; font-size: 10px;
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase; color: var(--accent);
+  padding: 4px 9px; border-radius: var(--hr-radius-pill);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.race-reopened { margin: 10px 0 0; font-size: 12px; font-weight: 700; color: var(--accent); }
+
+/* Final results on a race card (RESULTS_OPEN): per-option tallies + outcome note */
+.race-result { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hr-line); }
+.race-tally { display: flex; flex-direction: column; gap: 6px; }
+.race-tally-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-size: 12.5px; color: var(--hr-fg-2);
+}
+.race-tally-row.is-seated { color: var(--hr-fg-0); font-weight: 700; }
+.race-tally-row.is-seated i { font-style: normal; color: var(--accent); margin-right: 6px; }
+.race-tally-votes { font-variant-numeric: tabular-nums; font-weight: 800; color: var(--hr-fg-1); }
+.race-tally-row.is-seated .race-tally-votes { color: var(--accent); }
+.race-result-note { margin: 10px 0 0; font-size: 12px; color: var(--hr-fg-1); line-height: 1.5; }
+.race-turnout { display: block; margin-top: 8px; font-size: 11px; color: var(--hr-fg-3); }
 
 .race-foot { margin-top: 18px; font-size: 12.5px; color: var(--hr-fg-2); line-height: 1.5; }
 .race-error { text-align: center; }
@@ -2411,6 +2434,143 @@ a.trade-buy-btn { display: inline-flex; }
 @media (prefers-reduced-motion: reduce) {
   .race-card { opacity: 1; transform: none; animation: none !important; }
   .race-status.is-open .race-status-dot { animation: none !important; }
+}
+
+/* ---------- OFFICIAL BALLOT (one vote per seat race, final once cast) ---------- */
+.ballot-box { margin: 22px 0 4px; }
+.ballot-box:empty { margin: 0; }
+.ballot-box .apply-loading { min-height: 80px; }
+
+.ballot-wrap {
+  --accent: var(--hr-primary); --accent-soft: var(--hr-primary-25);
+  position: relative; overflow: hidden; isolation: isolate;
+  padding: 28px; border-radius: var(--hr-radius-2xl);
+  border: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(40,39,45,.72), rgba(20,19,23,.86));
+  backdrop-filter: blur(10px);
+  box-shadow: var(--hr-shadow-3), inset 0 1px 0 rgba(255,255,255,.06);
+}
+.ballot-wrap > * { position: relative; z-index: 1; }
+.ballot-wrap .apply-aurora { z-index: 0; opacity: .4; }
+
+.ballot-head { margin-bottom: 22px; }
+.ballot-h {
+  font-family: var(--hr-sans); font-weight: 900; letter-spacing: var(--hr-tracking-tight);
+  font-size: clamp(22px, 3.4vw, 30px); line-height: 1.05; color: var(--hr-fg-0); margin: 14px 0 10px;
+}
+.ballot-intro { color: var(--hr-fg-1); max-width: 560px; font-size: 15px; }
+
+/* One stacked card per seat race, tier-accented, staggered entrance */
+.ballot-races { display: flex; flex-direction: column; gap: 14px; }
+.ballot-race {
+  --accent: var(--hr-primary); --accent-soft: var(--hr-primary-25);
+  position: relative; overflow: hidden; isolation: isolate;
+  padding: 18px; border-radius: var(--hr-radius-lg);
+  background: rgba(0,0,0,.28); border: 1px solid var(--hr-line);
+  opacity: 0; transform: translateY(12px);
+  animation: apply-rise .55s cubic-bezier(.2,.7,.2,1) forwards;
+  animation-delay: calc(.1s * var(--i) + .15s);
+}
+.ballot-race > * { position: relative; z-index: 1; }
+.ballot-race[data-tier="single"] { --accent: var(--hr-primary);   --accent-soft: var(--hr-primary-25); }
+.ballot-race[data-tier="mid"]    { --accent: var(--hr-secondary); --accent-soft: var(--hr-secondary-25); }
+.ballot-race[data-tier="whale"]  { --accent: var(--hr-banana);    --accent-soft: var(--hr-banana-25); }
+.ballot-race::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(75% 55% at 50% 0%, var(--accent-soft), transparent 70%); opacity: .35;
+}
+.ballot-race-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.ballot-conf-chip {
+  font-family: var(--hr-sans); font-weight: 900; font-size: 10px;
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase; color: var(--hr-on-primary);
+  padding: 4px 9px; border-radius: var(--hr-radius-pill); background: var(--accent);
+}
+
+.ballot-explain { font-size: 13.5px; color: var(--hr-fg-1); line-height: 1.55; margin: 0 0 12px; max-width: 620px; }
+.ballot-note { font-size: 13px; color: var(--hr-fg-2); margin: 0; }
+
+/* Choice rows — real radios, styled as selectable glass cards */
+.ballot-opts { display: flex; flex-direction: column; gap: 10px; }
+.ballot-opt {
+  display: flex; align-items: flex-start; gap: 12px; cursor: pointer;
+  padding: 13px 14px; border-radius: var(--hr-radius-md);
+  background: rgba(255,255,255,.04); border: 1px solid var(--hr-line);
+  transition: transform .2s, border-color .2s, box-shadow .2s, background .2s;
+}
+.ballot-opt:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.ballot-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.ballot-opt-dot {
+  flex: 0 0 auto; width: 18px; height: 18px; margin-top: 2px; border-radius: 50%;
+  border: 2px solid var(--hr-fg-3); transition: border-color .2s, box-shadow .2s, background .2s;
+}
+.ballot-opt.is-checked {
+  background: color-mix(in srgb, var(--accent) 10%, rgba(255,255,255,.03));
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  box-shadow: 0 0 24px var(--accent-soft);
+}
+.ballot-opt.is-checked .ballot-opt-dot {
+  border-color: var(--accent);
+  background: radial-gradient(circle at center, var(--accent) 0 45%, transparent 50%);
+  box-shadow: 0 0 10px var(--accent-soft);
+}
+.ballot-opt:focus-within { outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 2px; }
+.ballot-opt-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ballot-opt-name { font-family: var(--hr-sans); font-weight: 800; font-size: 14.5px; color: var(--hr-fg-0); }
+.ballot-opt-pitch { font-size: 12.5px; color: var(--hr-fg-2); line-height: 1.45; }
+
+/* Cast row — two-tap confirm; the armed state glows to signal "this is final" */
+.ballot-cast-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+.ballot-cast.is-armed {
+  background: var(--hr-banana); color: var(--hr-on-primary);
+  box-shadow: 0 0 26px var(--hr-banana-25);
+  animation: ballot-armed 1.1s ease-in-out infinite;
+}
+@keyframes ballot-armed { 0%,100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+.ballot-final-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 12px; border-radius: var(--hr-radius-pill);
+  font-size: 11.5px; font-weight: 800; color: var(--hr-fg-2);
+  background: rgba(0,0,0,.28); border: 1px solid var(--hr-line);
+}
+.ballot-final-chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--hr-banana); box-shadow: 0 0 8px var(--hr-banana); flex: 0 0 auto; }
+.ballot-msg { margin-top: 12px; padding: 11px 14px; border-radius: var(--hr-radius-md); font-size: 13.5px; font-weight: 600; }
+.ballot-msg.is-error { background: var(--hr-alert-15); color: var(--hr-fg-0); }
+
+/* Voted state — confirmation chip + the private receipt */
+.ballot-voted { display: flex; flex-direction: column; gap: 8px; }
+.ballot-voted.is-fresh { animation: apply-rise .5s cubic-bezier(.2,.7,.2,1); }
+.ballot-voted-chip {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 13px; border-radius: var(--hr-radius-pill);
+  font-size: 12.5px; font-weight: 800; color: var(--hr-primary);
+  background: var(--hr-primary-25); border: 1px solid color-mix(in srgb, var(--hr-primary) 40%, transparent);
+}
+.ballot-voted-chip i { font-style: normal; font-weight: 900; }
+.ballot-voted-choice { font-size: 14px; color: var(--hr-fg-1); margin: 0; }
+.ballot-voted-choice strong { color: var(--hr-fg-0); }
+.ballot-receipt-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ballot-receipt-l { font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: var(--hr-tracking-caps); color: var(--hr-fg-2); }
+.ballot-receipt {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px; font-weight: 700; letter-spacing: .12em; color: var(--accent, var(--hr-primary));
+  padding: 5px 12px; border-radius: var(--hr-radius-md);
+  background: rgba(0,0,0,.35); border: 1px dashed color-mix(in srgb, var(--accent, var(--hr-primary)) 45%, transparent);
+}
+.ballot-receipt-keep { font-size: 12px; color: var(--hr-fg-3); margin: 0; }
+
+/* Post-voting receipts card */
+.ballot-wrap.is-closed .ballot-receipts { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.ballot-error { text-align: center; }
+.ballot-error p { color: var(--hr-fg-1); margin-bottom: 4px; }
+
+@media (max-width: 560px) {
+  .ballot-wrap { padding: 20px 16px; }
+  .ballot-cast-row .appf-btn-primary { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ballot-race, .ballot-voted.is-fresh { opacity: 1; transform: none; animation: none !important; }
+  .ballot-cast.is-armed { animation: none !important; }
+  .ballot-opt, .ballot-opt-dot { transition: none; }
 }
 
 /* ---------- VOTING-ADVICE MATCHER (voter view) ---------- */

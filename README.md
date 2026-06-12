@@ -62,6 +62,10 @@ That's 4 elected seats; 3 more are appointed for continuity.
 answers with an AI assistant (OpenAI, strict JSON schema — see
 [lib/derive-positions.js](lib/derive-positions.js)); the candidate reviews and edits
 every line before submitting. Final submission is gated by `APPLICATIONS_OPEN`.
+A submitted application can be edited (full validation re-runs) until voting begins —
+through the candidacy window and the quiet period after it. It always stays submitted —
+a draft save can't silently withdraw a candidacy — and it locks once `VOTING_OPEN` is
+set, so the field can't shift mid-vote.
 
 **Election board.** `GET /api/election` returns the public race snapshot — seats and
 candidate counts per bracket — that powers the status board. No auth or wallet needed;
@@ -72,6 +76,48 @@ takes the voter's stances and ranks candidates by affinity. Matching runs **enti
 server-side** so candidate positions never ship to the browser, and the voter's answers
 are never stored or logged. Candidate names and free-text answers stay hidden during the
 candidacy phase and are revealed once `VOTING_OPEN` is set.
+
+**The official ballot.** `GET /api/ballot` returns the voter's races (mode, candidates,
+their own ballot if cast); `POST /api/ballot { bracket, choice }` casts a vote. The
+published rules, enforced in code:
+
+- One vote per seat race; every eligible holder votes in all of them, never weighted
+  by holdings.
+- **Votes are final once cast** — ballot storage is insert-only ([lib/db.js](lib/db.js));
+  a re-vote gets a 409.
+- **Secret ballot.** The voter↔choice row exists only to enforce one-vote-per-race and
+  never leaves the server; the audit log records *that* a ballot was cast, never the
+  choice; there is no live tally. Each voter gets a private receipt code as proof their
+  vote was counted. Only aggregate per-seat tallies are ever published, and only once
+  `RESULTS_OPEN` is set.
+
+**Unopposed races — the confirmation-vote rule.** A race with no more candidates than
+seats (e.g. one 15+ candidate for the one 15+ seat) is *not* auto-won. The ballot for
+that race becomes **"Seat the candidate(s)" vs "Reopen nominations"**:
+
+- Seat wins a majority of votes cast on that race → seated with a real mandate.
+- Reopen wins a **strict majority** (ties favour seating) → that bracket's candidacy
+  window reopens once. A new candidate entering turns the re-run into a normal
+  contested race; if **nobody new enters by the deadline, the original candidates are
+  seated by rule**.
+
+Rejection therefore has to be constructive: the only way to unseat an unopposed
+candidate is to field someone who beats them. Since brackets gate running but not
+voting, the wider electorate could otherwise veto a small bracket's only candidate at
+zero cost — a brigade can force a real contest, but never vote a seat into a vacancy.
+
+Election phases are driven by env flags, in order:
+
+1. `APPLICATIONS_OPEN=1` — candidacy window (the application form accepts submissions).
+2. `VOTING_OPEN=1` — voting; names go public, ballots can be cast.
+3. `RESULTS_OPEN=1` (with `VOTING_OPEN` cleared) — `/api/election` publishes tallies
+   and per-race outcomes; the board renders them.
+4. If a confirmation race resolved to "reopen": set `REOPENED_BRACKETS=whale` (csv) and
+   `REOPEN_DEADLINE=<ISO date>` — that bracket's application window reopens until the
+   deadline (everything else stays closed). If new candidates entered, re-run the vote
+   with `VOTE_ROUND=2` + `VOTING_OPEN=1` (only reopened brackets are votable in round 2);
+   if nobody entered, just re-set `RESULTS_OPEN=1` — the board shows the original
+   candidates seated by rule.
 
 Required env vars (see `.env`):
 
@@ -85,7 +131,11 @@ Required env vars (see `.env`):
   the eligibility check and draft-saving stay live but final submission is blocked.
 - `VOTING_OPEN` — distinct from `APPLICATIONS_OPEN`. Until it's set, candidates are an
   anonymous preview (pitch + matchable positions only); once set, names and full answers
-  go public and the matcher returns live results.
+  go public, the matcher returns live results, and the ballot accepts votes.
+- `RESULTS_OPEN` — set after voting closes to publish per-race tallies and outcomes on
+  `/api/election`. Aggregates only; never set together with `VOTING_OPEN`.
+- `REOPENED_BRACKETS` / `REOPEN_DEADLINE` / `VOTE_ROUND` — the one-time reopen flow for
+  a confirmation race that resolved to "reopen nominations" (see above).
 - `OPENAI_API_KEY` — enables AI-assisted position drafting on the self-nomination form.
   Optional; without it the form still works, candidates just fill in stances themselves.
   `OPENAI_MODEL` overrides the default (`gpt-5.4-mini`).

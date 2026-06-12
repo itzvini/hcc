@@ -23,9 +23,57 @@ function seatsLabel(n) {
   return `${n} ${n === 1 ? t('apply.race.seat') : t('apply.race.seats')}`;
 }
 
-function raceCard(r, i) {
-  const contested = r.candidates > r.seats; // more runners than seats — a real contest
+// Final-result block for one race (only rendered once the server publishes results).
+function resultBlock(res) {
+  if (!res) return '';
+  const turnout = `<span class="race-turnout">${esc(t('apply.result.turnout').replace('{n}', res.turnout))}</span>`;
+  if (res.status === 'vacant') {
+    return `<div class="race-result"><p class="race-result-note">${esc(t('apply.result.vacant'))}</p></div>`;
+  }
+  if (res.status === 'revote') {
+    return `<div class="race-result"><p class="race-result-note">${esc(t('apply.result.revote'))}</p></div>`;
+  }
+  if (res.mode === 'contested') {
+    const rows = (res.rows || []).map(row => `
+      <div class="race-tally-row ${row.seated ? 'is-seated' : ''}">
+        <span class="race-tally-name">${row.seated ? '<i aria-hidden="true">✓</i>' : ''}${esc(row.name)}</span>
+        <span class="race-tally-votes">${row.votes}</span>
+      </div>`).join('');
+    return `<div class="race-result"><div class="race-tally">${rows}</div>${turnout}</div>`;
+  }
+  // Confirmation race: the two option counts plus the resolved outcome.
+  const counts = `
+    <div class="race-tally">
+      <div class="race-tally-row ${res.status.startsWith('seated') ? 'is-seated' : ''}">
+        <span class="race-tally-name">${res.status.startsWith('seated') ? '<i aria-hidden="true">✓</i>' : ''}${esc(t('ballot.choice.seat'))}</span>
+        <span class="race-tally-votes">${res.seatVotes}</span>
+      </div>
+      <div class="race-tally-row ${res.status === 'reopened' || res.status === 'reopenPending' ? 'is-seated' : ''}">
+        <span class="race-tally-name">${esc(t('ballot.choice.reopen'))}</span>
+        <span class="race-tally-votes">${res.reopenVotes}</span>
+      </div>
+    </div>`;
+  let note = '';
+  if (res.status === 'seated')        note = `${t('apply.result.seated')}: ${res.seated.join(', ')}`;
+  if (res.status === 'seatedByRule')  note = `${t('apply.result.seated')}: ${res.seated.join(', ')} — ${t('apply.result.seatedByRule')}`;
+  if (res.status === 'reopened')      note = t('apply.result.reopened');
+  if (res.status === 'reopenPending') note = t('apply.result.reopenPending');
+  return `<div class="race-result">${counts}<p class="race-result-note">${esc(note)}</p>${turnout}</div>`;
+}
+
+function raceCard(r, i, results) {
+  // Server-declared mode: 'contested' (more runners than seats), 'confirmation'
+  // (unopposed — seat-or-reopen ballot), or null while the field is empty.
+  const chip = r.mode === 'contested'
+    ? `<span class="race-contested">${esc(t('apply.race.contested'))}</span>`
+    : r.mode === 'confirmation'
+      ? `<span class="race-confirmation">${esc(t('apply.race.confirmation'))}</span>`
+      : '';
+  const reopened = r.reopened && r.reopenDeadline
+    ? `<p class="race-reopened">${esc(t('apply.race.reopenuntil').replace('{date}', new Date(r.reopenDeadline).toLocaleDateString()))}</p>`
+    : '';
   const countLabel = r.candidates === 1 ? t('apply.race.candidate') : t('apply.race.candidates');
+  const res = (results || []).find(x => x.bracket === r.bracket);
   return `
     <div class="race-card" data-tier="${esc(r.bracket)}" style="--i:${i}">
       <div class="race-card-glow" aria-hidden="true"></div>
@@ -37,8 +85,10 @@ function raceCard(r, i) {
       <div class="race-count-l">${esc(countLabel)}</div>
       <div class="race-seatbar">
         <span class="race-seat-chip">${esc(seatsLabel(r.seats))}</span>
-        ${contested ? `<span class="race-contested">${esc(t('apply.race.contested'))}</span>` : ''}
+        ${chip}
       </div>
+      ${reopened}
+      ${resultBlock(res)}
     </div>`;
 }
 
@@ -55,9 +105,17 @@ function footNote(d) {
   return `${t('apply.race.empty')} ${seats}`;
 }
 
+// The phase pill reflects the furthest-along phase: results > voting > candidacy.
+function phasePill(d) {
+  if (d.resultsOpen) return { cls: 'is-open', label: t('apply.race.results') };
+  if (d.votingOpen)  return { cls: 'is-open', label: t('apply.race.voting') };
+  if (d.applicationsOpen) return { cls: 'is-open', label: t('apply.race.open') };
+  return { cls: 'is-closed', label: t('apply.race.closed') };
+}
+
 function boardView(d) {
-  const open = !!d.applicationsOpen;
-  const cards = (d.races || []).map(raceCard).join('');
+  const pill = phasePill(d);
+  const cards = (d.races || []).map((r, i) => raceCard(r, i, d.results)).join('');
   return `
     <div class="race-wrap" data-reveal>
       <div class="apply-aurora" aria-hidden="true"></div>
@@ -66,8 +124,8 @@ function boardView(d) {
           <span class="apply-pill">${esc(t('apply.race.eyebrow'))}</span>
           <h3 class="race-h">${esc(t('apply.race.h'))}</h3>
         </div>
-        <span class="race-status ${open ? 'is-open' : 'is-closed'}">
-          <i class="race-status-dot" aria-hidden="true"></i>${esc(open ? t('apply.race.open') : t('apply.race.closed'))}
+        <span class="race-status ${pill.cls}">
+          <i class="race-status-dot" aria-hidden="true"></i>${esc(pill.label)}
         </span>
       </div>
       <div class="race-grid">${cards}</div>

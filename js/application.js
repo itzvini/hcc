@@ -57,8 +57,9 @@ function candidatePreview(data) {
     </div>`;
 }
 
-function submittedView(data, onBack) {
+function submittedView(data) {
   const app = data.application || {};
+  const canEdit = data.canEdit !== false; // editable until voting begins
   const answers = app.answers || {};
   const rows = QUESTIONS.map(id => `
     <div class="appf-review">
@@ -82,8 +83,9 @@ function submittedView(data, onBack) {
         <div class="app-success-ico" aria-hidden="true">🏛️</div>
         <span class="apply-pill">${esc(t('app.submitted.badge'))}</span>
         <h3>${esc(t('app.submitted.h'))}</h3>
-        <p>${esc(t('app.submitted.p'))}</p>
+        <p>${esc(canEdit ? t('app.submitted.p') : t('app.locked.note'))}</p>
       </div>
+      ${data.justUpdated ? `<div class="appf-msg is-ok" role="status">${esc(t('app.updated'))}</div>` : ''}
       ${candidatePreview(data)}
       <div class="appf-summary">
         <div class="appf-review"><div class="appf-review-q">${esc(t('app.field.pitch.label'))}</div><div class="appf-review-a">${esc(app.pitch || '—')}</div></div>
@@ -92,7 +94,7 @@ function submittedView(data, onBack) {
       </div>
       <div class="appf-actions">
         <button class="apply-btn-ghost" type="button" id="app-back">${esc(t('app.back'))}</button>
-        <button class="appf-btn-primary" type="button" id="app-edit">${esc(t('app.edit'))}</button>
+        ${canEdit ? `<button class="appf-btn-primary" type="button" id="app-edit">${esc(t('app.edit'))}</button>` : ''}
       </div>
     </div>`;
 }
@@ -100,7 +102,8 @@ function submittedView(data, onBack) {
 // VAA positions: a 1-5 scale + optional rationale per proposition, with an
 // "AI-draft from my answers" button. Statement text comes from i18n (prop.<id>).
 function positionsSection(data) {
-  const open = data.applicationsOpen !== false;
+  const isUpdate = data.application?.status === 'submitted';
+  const open = isUpdate ? data.canEdit !== false : data.applicationsOpen !== false;
   const saved = (data.application && data.application.positions) || {};
   const rows = (data.propositions || []).map(p => {
     const cur = saved[p.id] || {};
@@ -130,7 +133,10 @@ function positionsSection(data) {
 function formView(data) {
   const app = data.application || {};
   const answers = app.answers || {};
-  const open = data.applicationsOpen !== false; // submit + AI gated until the window opens
+  const isUpdate = app.status === 'submitted';  // editing a live candidacy, not drafting
+  // First submissions unlock with the candidacy window; edits to a live candidacy
+  // stay open until voting begins. The AI draft follows the same gate (so does the server).
+  const open = isUpdate ? data.canEdit !== false : data.applicationsOpen !== false;
   const bracketLabel = data.bracket ? t(BRACKET_KEY[data.bracket]) : '';
   const draftBadge = app.status === 'draft' && app.updatedAt
     ? `<span class="appf-draft-badge">${esc(t('app.draft.badge'))}</span>` : '';
@@ -139,9 +145,10 @@ function formView(data) {
     field(id, t(`app.q.${id}.q`), answers[id], { textarea: true, max: LIMITS.answer })
   ).join('');
 
+  // Acknowledgements were already given at submission, so they start ticked on an edit.
   const consents = CONSENTS.map(id => `
     <label class="appf-consent">
-      <input type="checkbox" id="appf-consent-${id}" />
+      <input type="checkbox" id="appf-consent-${id}" ${isUpdate ? 'checked' : ''} />
       <span>${esc(t(`app.consent.${id}`))}</span>
     </label>`).join('');
 
@@ -156,7 +163,8 @@ function formView(data) {
         ${bracketLabel ? `<span class="apply-tier" data-tier="${esc(data.bracket)}">${esc(bracketLabel)}</span>` : ''}
       </div>
       <p class="app-intro">${esc(t('app.intro'))} ${draftBadge}</p>
-      ${open ? '' : `<div class="appf-banner" role="note">${esc(t('app.closed.banner'))}</div>`}
+      ${open || isUpdate ? '' : `<div class="appf-banner" role="note">${esc(t('app.closed.banner'))}</div>`}
+      ${isUpdate ? `<div class="appf-banner" role="note">${esc(t('app.editing.note'))}</div>` : ''}
 
       ${candidatePreview(data)}
       <p class="appf-hint appf-hint-name">${esc(t('app.field.name.hint'))}</p>
@@ -171,9 +179,9 @@ function formView(data) {
 
       <div class="appf-msg" id="app-msg" role="status" hidden></div>
       <div class="appf-actions">
-        <button class="apply-btn-ghost" type="button" id="app-back">${esc(t('app.back'))}</button>
-        <button class="apply-btn-ghost" type="button" id="app-save">${esc(t('app.save'))}</button>
-        <button class="appf-btn-primary" type="button" id="app-submit" ${open ? '' : 'disabled'} title="${open ? '' : esc(t('app.closed.note'))}">${esc(t('app.submit'))}</button>
+        <button class="apply-btn-ghost" type="button" id="app-back">${esc(t(isUpdate ? 'app.cancel' : 'app.back'))}</button>
+        ${isUpdate ? '' : `<button class="apply-btn-ghost" type="button" id="app-save">${esc(t('app.save'))}</button>`}
+        <button class="appf-btn-primary" type="button" id="app-submit" ${open ? '' : 'disabled'} title="${open ? '' : esc(t('app.closed.note'))}">${esc(t(isUpdate ? 'app.update' : 'app.submit'))}</button>
       </div>
     </div>`;
 }
@@ -233,13 +241,18 @@ export async function openApplication(container, onBack) {
     currentMode = mode;
     const submitted = data.application && data.application.status === 'submitted';
     container.innerHTML = (mode === 'view' && submitted)
-      ? submittedView(data, back)
+      ? submittedView(data)
       : formView(data);
     bind(mode);
+    data.justUpdated = false; // the "changes saved" flash shows once
   };
 
   const bind = (mode) => {
-    container.querySelector('#app-back')?.addEventListener('click', back);
+    const submitted = data.application && data.application.status === 'submitted';
+    // While editing a live candidacy, "Cancel" discards unsaved edits and returns to
+    // the summary; everywhere else the button leaves for the eligibility card.
+    container.querySelector('#app-back')?.addEventListener('click',
+      mode === 'edit' && submitted ? () => render('view') : back);
     container.querySelector('#app-edit')?.addEventListener('click', () => render('edit'));
 
     // Live character counters
@@ -250,11 +263,13 @@ export async function openApplication(container, onBack) {
     });
 
     const save = async (status) => {
-      if (status === 'submitted' && data.applicationsOpen === false) { showMsg('error', t('app.closed.note')); return; }
+      const isUpdate = data.application?.status === 'submitted';
+      const canSave = isUpdate ? data.canEdit !== false : data.applicationsOpen !== false;
+      if (status === 'submitted' && !canSave) { showMsg('error', t(isUpdate ? 'app.locked.note' : 'app.closed.note')); return; }
       const payload = { ...collect(), status };
       if (status === 'submitted' && !payload.consent) { showMsg('error', t('app.err.consent')); return; }
       container.querySelectorAll('button').forEach(b => (b.disabled = true));
-      showMsg('info', status === 'submitted' ? t('app.submitting') : t('app.saving'));
+      showMsg('info', status === 'submitted' ? t(isUpdate ? 'app.updating' : 'app.submitting') : t('app.saving'));
       const { ok, status: code, data: res } = await postApplication(payload);
       container.querySelectorAll('button').forEach(b => (b.disabled = false));
       if (!ok) {
@@ -262,7 +277,7 @@ export async function openApplication(container, onBack) {
         return;
       }
       data.application = res.application;
-      if (status === 'submitted') { render('view'); }
+      if (status === 'submitted') { data.justUpdated = isUpdate; render('view'); }
       else { showMsg('ok', t('app.saved')); }
     };
 
