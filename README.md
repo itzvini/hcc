@@ -203,6 +203,27 @@ dev-login helper:
 
 **Never** create `lib/dev-login.js` or set `DEV_LOGIN` on Railway.
 
+### Testing the voting screens locally (test wallet + snapshot)
+
+The repo `.env` points at the production database — **don't** run voting experiments
+through it. Start the server from a directory without a `.env` so it uses the
+in-memory store, and seed the snapshot with the dev wallet:
+
+```powershell
+cd $env:TEMP   # any directory without the repo .env
+$env:DATABASE_URL=''; $env:DATABASE_PUBLIC_URL=''          # in-memory store
+$env:DEV_LOGIN='1'; $env:APPLICATIONS_OPEN='1'; $env:VOTING_OPEN='1'
+$env:VOTER_SNAPSHOT='local-test'
+$env:VOTER_SNAPSHOT_SEED='0xdev0000000000000000000000000000000000dead'
+node d:\hcc-player-council\server.js
+```
+
+- `…/api/auth/dev-login?user=Voter&creatures=2` → uses the default dev wallet, which
+  is seeded → full ballot renders (submit a candidate first to populate races).
+- `…/api/auth/dev-login?user=LateBuyer&creatures=2&wallet=0xdev-late` → wallet not in
+  the snapshot → the "not in the voting snapshot" gate screen.
+- Add `&icon=https://cdn.highrisegame.com/...` to test candidate avatars end-to-end.
+
 ## Railway
 
 Railway can deploy this repo directly. The app listens on `process.env.PORT` and serves `index.html`.

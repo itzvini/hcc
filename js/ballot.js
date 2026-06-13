@@ -41,10 +41,15 @@ function joinNames(cands) {
 
 function candidateOption(r, c) {
   const checked = sel[r.bracket] === c.id;
+  // Highrise profile picture when available; initial fallback keeps the row shape.
+  const face = c.avatar
+    ? `<span class="ballot-opt-avatar" aria-hidden="true"><img src="${esc(c.avatar)}" alt="" loading="lazy" /></span>`
+    : `<span class="ballot-opt-avatar is-initial" aria-hidden="true">${esc((c.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
   return `
     <label class="ballot-opt ${checked ? 'is-checked' : ''}">
       <input type="radio" name="ballot-${esc(r.bracket)}" value="${esc(c.id)}" ${checked ? 'checked' : ''} />
       <span class="ballot-opt-dot" aria-hidden="true"></span>
+      ${face}
       <span class="ballot-opt-body">
         <span class="ballot-opt-name">${esc(c.name || t('vote.anon'))}</span>
         ${c.pitch ? `<span class="ballot-opt-pitch">${esc(c.pitch)}</span>` : ''}
@@ -60,11 +65,19 @@ function confirmationOptions(r) {
   const reopenChecked = sel[r.bracket] === 'reopen';
   const explain = (r.candidates.length > 1 ? t('ballot.unopposed.many') : t('ballot.unopposed'))
     .replace('{name}', names).replace('{names}', names);
+  // Single unopposed candidate → show their face on the seat option (recognition).
+  const c = r.candidates.length === 1 ? r.candidates[0] : null;
+  const face = c
+    ? (c.avatar
+        ? `<span class="ballot-opt-avatar" aria-hidden="true"><img src="${esc(c.avatar)}" alt="" loading="lazy" /></span>`
+        : `<span class="ballot-opt-avatar is-initial" aria-hidden="true">${esc((c.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`)
+    : '';
   return `
     <p class="ballot-explain">${esc(explain)}</p>
     <label class="ballot-opt ballot-opt-seat ${seatChecked ? 'is-checked' : ''}">
       <input type="radio" name="ballot-${esc(r.bracket)}" value="seat" ${seatChecked ? 'checked' : ''} />
       <span class="ballot-opt-dot" aria-hidden="true"></span>
+      ${face}
       <span class="ballot-opt-body">
         <span class="ballot-opt-name">${esc(t('ballot.opt.seat').replace('{name}', names))}</span>
         <span class="ballot-opt-pitch">${esc(t('ballot.opt.seat.p'))}</span>

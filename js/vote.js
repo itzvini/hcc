@@ -133,8 +133,11 @@ function candidateCard(r, rank, votingOpen) {
   const named = votingOpen && r.name;
   const label = named ? r.name : t('vote.anon');
   const based = r.n ? t('vote.basedon').replace('{n}', r.n) : t('vote.nomatch');
+  // Highrise profile picture when the server sent one (names public); initial fallback.
   const avatar = named
-    ? `<div class="vote-cand-avatar" data-tier="${esc(bracket)}" aria-hidden="true">${esc((r.name || '?').trim().charAt(0).toUpperCase() || '?')}</div>`
+    ? `<div class="vote-cand-avatar" data-tier="${esc(bracket)}" aria-hidden="true">${
+        r.avatar ? `<img src="${esc(r.avatar)}" alt="" loading="lazy" />` : esc((r.name || '?').trim().charAt(0).toUpperCase() || '?')
+      }</div>`
     : `<div class="vote-cand-avatar is-anon" data-tier="${esc(bracket)}" aria-hidden="true">👤</div>`;
   const scoreNode = pct == null
     ? `<div class="vote-score-n">—</div>`
@@ -252,7 +255,9 @@ function profileView(profile) {
   const label = named ? profile.name : t('vote.anon');
   const bracket = profile.bracket || 'none';
   const tier = profile.bracket ? t(TIER_KEY[profile.bracket]) : '';
-  const initial = named ? ((profile.name || '?').trim().charAt(0).toUpperCase() || '?') : '👤';
+  const face = named && profile.avatar
+    ? `<img src="${esc(profile.avatar)}" alt="" loading="lazy" />`
+    : esc(named ? ((profile.name || '?').trim().charAt(0).toUpperCase() || '?') : '👤');
   const matchRow = (lastResults || []).find(r => r.id === profile.id);
   const matchChip = matchRow && matchRow.pct != null
     ? `<span class="vote-profile-match">${esc(t('vote.yourmatch'))} <strong>${matchRow.pct}%</strong></span>` : '';
@@ -274,7 +279,7 @@ function profileView(profile) {
     ${backRow}
     <div class="vote-profile" data-tier="${esc(bracket)}">
       <div class="vote-profile-head">
-        <div class="vote-cand-avatar ${named ? '' : 'is-anon'}" data-tier="${esc(bracket)}" aria-hidden="true">${esc(initial)}</div>
+        <div class="vote-cand-avatar ${named ? '' : 'is-anon'}" data-tier="${esc(bracket)}" aria-hidden="true">${face}</div>
         <div class="vote-profile-id">
           <div class="vote-cand-name">${esc(label)} ${tier ? `<span class="apply-tier" data-tier="${esc(bracket)}">${esc(tier)}</span>` : ''}</div>
           ${matchChip}

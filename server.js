@@ -2089,6 +2089,8 @@ async function handleAuthApi(request, response, url) {
         bracket: eligibility.bracket,
         canRun: eligibility.canRun,
       });
+      // Self-heal a candidate's stored avatar on every login (best-effort, no await).
+      db.updateApplicationAvatar(profile.id, safeIconUrl(sessionProfile.highriseIcon));
 
       db.recordEvent({
         event: 'auth.login',
@@ -2486,6 +2488,13 @@ function candidateId(discordId) {
   return crypto.createHash('sha256').update(String(discordId)).digest('hex').slice(0, 16);
 }
 
+// A candidate avatar is served only if it's a Highrise CDN URL — both on the way into
+// the DB (server-derived from the session, never the client) and on the way out, so a
+// bad stored value can never reach a page (CSP img-src is the second fence).
+function safeIconUrl(u) {
+  return typeof u === 'string' && /^https:\/\/cdn\.highrisegame\.com\//.test(u) ? u : null;
+}
+
 // A single candidate's public profile for the click-through detail view. Consented
 // fields only — never wallet or Discord id. During the CANDIDACY phase it's an
 // anonymous preview: pitch + VAA positions (the matchable part) are shown, but the
@@ -2500,6 +2509,7 @@ function publicCandidateProfile(c) {
   };
   if (VOTING_OPEN) {
     profile.name = c.display_name || '';
+    profile.avatar = safeIconUrl(c.avatar);
     profile.answers = c.answers || {};
   }
   return profile;
@@ -2559,9 +2569,12 @@ async function handleVoteApi(request, response) {
             const m = affinity(voterPos, c.positions);
             // `id` is the opaque handle the client uses to open this candidate's profile.
             const row = { id: candidateId(c.discord_id), bracket: c.bracket || null, pitch: c.pitch || '', pct: m ? m.pct : null, n: m ? m.n : 0 };
-            // Candidate names are withheld until the voting phase opens — never sent
-            // to the client during the application/preview phase.
-            if (VOTING_OPEN) row.name = c.display_name || '';
+            // Candidate names (and avatars — equally identifying) are withheld until
+            // the voting phase opens — never sent during the anonymous preview.
+            if (VOTING_OPEN) {
+              row.name = c.display_name || '';
+              row.avatar = safeIconUrl(c.avatar);
+            }
             return row;
           })
           .sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1))
@@ -2619,8 +2632,8 @@ async function handleBallotApi(request, response) {
         candidates: cands.map(c => ({
           id: candidateId(c.discord_id),
           pitch: c.pitch || '',
-          // Names are public from the moment voting opens, including the results phase.
-          ...(VOTING_OPEN || RESULTS_OPEN ? { name: c.display_name || '' } : {}),
+          // Names + avatars are public from the moment voting opens, results included.
+          ...(VOTING_OPEN || RESULTS_OPEN ? { name: c.display_name || '', avatar: safeIconUrl(c.avatar) } : {}),
         })),
         yourBallot: mine ? {
           // Translate the stored choice into client-safe form: confirmation tokens
@@ -2857,6 +2870,7 @@ async function handleApplicationApi(request, response) {
       discordUsername: session.profile?.username,
       ethWallet: elig.ethWallet || null,
       bracket: elig.bracket || null,
+      avatar: safeIconUrl(session.profile?.highriseIcon),
       displayName, pitch, answers, positions, status,
     });
 
