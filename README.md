@@ -90,6 +90,12 @@ published rules, enforced in code:
   choice; there is no live tally. Each voter gets a private receipt code as proof their
   vote was counted. Only aggregate per-seat tallies are ever published, and only once
   `RESULTS_OPEN` is set.
+- **Inclusion verifiability.** With the results, each race publishes its full list of
+  receipt codes (codes only — random, sorted, linked to neither voter nor choice).
+  A voter finds their own code to confirm their ballot is in the count, and the list's
+  length always equals the published turnout. Receipts deliberately do NOT encode the
+  choice — a receipt that could prove *how* you voted would invite coercion and
+  vote-buying.
 
 **Unopposed races — the confirmation-vote rule.** A race with no more candidates than
 seats (e.g. one 15+ candidate for the one 15+ seat) is *not* auto-won. The ballot for

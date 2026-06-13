@@ -23,6 +23,19 @@ function seatsLabel(n) {
   return `${n} ${n === 1 ? t('apply.race.seat') : t('apply.race.seats')}`;
 }
 
+// Published receipt codes for a decided race — voters verify their ballot was counted
+// by finding their own code; the list length always equals the published turnout.
+function receiptsBlock(res) {
+  const codes = res.receipts || [];
+  if (!codes.length) return '';
+  return `
+    <details class="race-receipts">
+      <summary>${esc(t('apply.result.receipts').replace('{n}', codes.length))}</summary>
+      <p class="race-receipts-p">${esc(t('apply.result.receipts.p'))}</p>
+      <div class="race-receipt-grid">${codes.map(c => `<code>${esc(c)}</code>`).join('')}</div>
+    </details>`;
+}
+
 // Final-result block for one race (only rendered once the server publishes results).
 function resultBlock(res) {
   if (!res) return '';
@@ -39,7 +52,7 @@ function resultBlock(res) {
         <span class="race-tally-name">${row.seated ? '<i aria-hidden="true">✓</i>' : ''}${esc(row.name)}</span>
         <span class="race-tally-votes">${row.votes}</span>
       </div>`).join('');
-    return `<div class="race-result"><div class="race-tally">${rows}</div>${turnout}</div>`;
+    return `<div class="race-result"><div class="race-tally">${rows}</div>${turnout}${receiptsBlock(res)}</div>`;
   }
   // Confirmation race: the two option counts plus the resolved outcome.
   const counts = `
@@ -58,7 +71,7 @@ function resultBlock(res) {
   if (res.status === 'seatedByRule')  note = `${t('apply.result.seated')}: ${res.seated.join(', ')} — ${t('apply.result.seatedByRule')}`;
   if (res.status === 'reopened')      note = t('apply.result.reopened');
   if (res.status === 'reopenPending') note = t('apply.result.reopenPending');
-  return `<div class="race-result">${counts}<p class="race-result-note">${esc(note)}</p>${turnout}</div>`;
+  return `<div class="race-result">${counts}<p class="race-result-note">${esc(note)}</p>${turnout}${receiptsBlock(res)}</div>`;
 }
 
 function raceCard(r, i, results) {

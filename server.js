@@ -2283,7 +2283,9 @@ async function getElectionStatus() {
 // above. Candidate names are public by this point (voting has opened), so seated
 // names + per-candidate counts are included.
 async function computeElectionResults() {
-  const [candidates, tallies] = await Promise.all([db.getCandidates(), db.getBallotTallies()]);
+  const [candidates, tallies, allReceipts] = await Promise.all([
+    db.getCandidates(), db.getBallotTallies(), db.getBallotReceipts(),
+  ]);
   return RACE_ORDER.map(id => {
     const seats = BRACKETS.find(b => b.id === id)?.seats ?? 0;
     // getCandidates() orders by submitted_at ASC — kept as the transparent tie-break
@@ -2295,7 +2297,14 @@ async function computeElectionResults() {
     const turnout = roundTallies.reduce((n, t) => n + t.n, 0);
     const votesFor = choice => roundTallies.find(t => t.choice === choice)?.n || 0;
 
-    const base = { bracket: id, seats, mode, round, turnout };
+    // Inclusion verifiability: the race's receipt codes are published with the result
+    // (codes only — random, linked to neither voter nor choice, sorted neutrally).
+    // Every voter can find their own code, and receipts.length must equal turnout.
+    const receipts = allReceipts
+      .filter(r => r.bracket === id && Number(r.round) === round)
+      .map(r => r.receipt);
+
+    const base = { bracket: id, seats, mode, round, turnout, receipts };
     if (!mode) return { ...base, status: 'vacant', seated: [] }; // empty field → appointment track
 
     if (mode === 'contested') {

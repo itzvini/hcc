@@ -921,6 +921,8 @@
   "apply.result.reopenPending": "Reopen nominations won — a new candidacy window will be announced",
   "apply.result.revote": "New candidates joined — this seat is decided by a fresh vote",
   "apply.result.vacant": "No candidates ran — this seat is filled from the appointed track",
+  "apply.result.receipts": "Verify your vote — {n} receipts",
+  "apply.result.receipts.p": "Every ballot cast in this race is listed here by its receipt code — codes are random and tied to neither voter nor choice. Find yours to confirm your vote was counted; the number of codes always equals the votes cast.",
 
   "vote.eyebrow": "Voting advice",
   "vote.h": "Find your match",
@@ -981,6 +983,7 @@
   "ballot.receipt": "Receipt",
   "ballot.receipt.keep": "Keep this code — it's your private proof that your vote was counted.",
   "ballot.thanks": "Voting has closed and your ballot was counted. Results are on the board above — these receipts are your proof.",
+  "ballot.verifynote": "Each race's results on the board publish the full list of receipt codes — find yours there to verify your vote was counted.",
   "ballot.concluded": "This race has concluded — see the results board.",
   "ballot.noCands": "Nobody ran for this seat — it's filled from the appointed track.",
   "ballot.already": "You already voted in this race — votes are final.",

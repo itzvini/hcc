@@ -17,6 +17,7 @@ const root = () => document.getElementById('ballot-app');
 let data = null;     // /api/ballot payload | { error, status } | null while loading
 let sel = {};        // bracket -> selected value ('seat' | 'reopen' | opaque candidate id)
 let armed = null;    // bracket whose cast button awaits the final confirming tap
+let armTimer = 0;    // pending auto-disarm — an armed button relaxes after 5s untouched
 let busy = null;     // bracket with a POST in flight
 let raceMsg = {};    // bracket -> { kind, text } inline feedback
 let justCast = {};   // bracket -> receipt from a cast made this visit (gets the reveal)
@@ -155,6 +156,7 @@ function receiptsView(d) {
       <h3 class="ballot-h">${esc(t('ballot.voted'))}</h3>
       <p class="ballot-intro">${esc(t('ballot.thanks'))}</p>
       <div class="ballot-receipts">${rows}</div>
+      <p class="ballot-receipt-keep">${esc(t('ballot.verifynote'))}</p>
     </div>`;
 }
 
@@ -182,6 +184,7 @@ function errorView() {
 }
 
 async function castVote(bracket) {
+  clearTimeout(armTimer);
   busy = bracket;
   raceMsg = { ...raceMsg, [bracket]: null };
   render();
@@ -216,17 +219,25 @@ function bind(el) {
     inp.addEventListener('change', () => {
       const bracket = inp.name.replace(/^ballot-/, '');
       sel[bracket] = inp.value;
-      if (armed === bracket) armed = null; // changing the pick disarms the final tap
+      if (armed === bracket) { armed = null; clearTimeout(armTimer); } // changing the pick disarms the final tap
       raceMsg[bracket] = null;
       render();
     });
   });
   // Final votes get a two-tap cast: first tap arms the button, second confirms.
+  // An armed button auto-disarms after 5s so it can't linger primed while the
+  // voter is away — confirming has to be one deliberate, continuous gesture.
   el.querySelectorAll('[data-cast]').forEach(btn => {
     btn.addEventListener('click', () => {
       const bracket = btn.dataset.cast;
       if (!sel[bracket] || busy) return;
-      if (armed !== bracket) { armed = bracket; render(); return; }
+      clearTimeout(armTimer);
+      if (armed !== bracket) {
+        armed = bracket;
+        armTimer = setTimeout(() => { if (armed === bracket) { armed = null; render(); } }, 5000);
+        render();
+        return;
+      }
       castVote(bracket);
     });
   });
