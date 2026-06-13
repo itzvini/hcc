@@ -32,6 +32,18 @@ function esc(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// Highrise icon URLs are versioned and 404 the moment a member restyles their look, so
+// an avatar <img> can fail even when the server sent one. `error` doesn't bubble, so
+// catch it in the capture phase and fall back to the initial carried in data-initial —
+// the server's hourly refresh closes the gap, this covers the window in between.
+document.addEventListener('error', e => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement)) return;
+  const box = img.closest('.vote-cand-avatar[data-initial]');
+  if (!box) return;
+  box.textContent = box.dataset.initial || '?';
+}, true);
+
 // --- local-only persistence (never throws — private mode degrades to in-memory) ---
 function readStore() { try { return JSON.parse(localStorage.getItem(STORE) || '{}'); } catch { return {}; } }
 function writeStore(obj) { try { localStorage.setItem(STORE, JSON.stringify(obj)); } catch { /* private mode */ } }
@@ -134,9 +146,10 @@ function candidateCard(r, rank, votingOpen) {
   const label = named ? r.name : t('vote.anon');
   const based = r.n ? t('vote.basedon').replace('{n}', r.n) : t('vote.nomatch');
   // Highrise profile picture when the server sent one (names public); initial fallback.
+  const initial = esc((r.name || '?').trim().charAt(0).toUpperCase() || '?');
   const avatar = named
-    ? `<div class="vote-cand-avatar" data-tier="${esc(bracket)}" aria-hidden="true">${
-        r.avatar ? `<img src="${esc(r.avatar)}" alt="" loading="lazy" />` : esc((r.name || '?').trim().charAt(0).toUpperCase() || '?')
+    ? `<div class="vote-cand-avatar" data-tier="${esc(bracket)}" ${r.avatar ? `data-initial="${initial}"` : ''} aria-hidden="true">${
+        r.avatar ? `<img src="${esc(r.avatar)}" alt="" loading="lazy" />` : initial
       }</div>`
     : `<div class="vote-cand-avatar is-anon" data-tier="${esc(bracket)}" aria-hidden="true">👤</div>`;
   const scoreNode = pct == null
@@ -255,9 +268,11 @@ function profileView(profile) {
   const label = named ? profile.name : t('vote.anon');
   const bracket = profile.bracket || 'none';
   const tier = profile.bracket ? t(TIER_KEY[profile.bracket]) : '';
-  const face = named && profile.avatar
+  const initial = esc(named ? ((profile.name || '?').trim().charAt(0).toUpperCase() || '?') : '👤');
+  const hasAvatar = named && profile.avatar;
+  const face = hasAvatar
     ? `<img src="${esc(profile.avatar)}" alt="" loading="lazy" />`
-    : esc(named ? ((profile.name || '?').trim().charAt(0).toUpperCase() || '?') : '👤');
+    : initial;
   const matchRow = (lastResults || []).find(r => r.id === profile.id);
   const matchChip = matchRow && matchRow.pct != null
     ? `<span class="vote-profile-match">${esc(t('vote.yourmatch'))} <strong>${matchRow.pct}%</strong></span>` : '';
@@ -279,7 +294,7 @@ function profileView(profile) {
     ${backRow}
     <div class="vote-profile" data-tier="${esc(bracket)}">
       <div class="vote-profile-head">
-        <div class="vote-cand-avatar ${named ? '' : 'is-anon'}" data-tier="${esc(bracket)}" aria-hidden="true">${face}</div>
+        <div class="vote-cand-avatar ${named ? '' : 'is-anon'}" data-tier="${esc(bracket)}" ${hasAvatar ? `data-initial="${initial}"` : ''} aria-hidden="true">${face}</div>
         <div class="vote-profile-id">
           <div class="vote-cand-name">${esc(label)} ${tier ? `<span class="apply-tier" data-tier="${esc(bracket)}">${esc(tier)}</span>` : ''}</div>
           ${matchChip}

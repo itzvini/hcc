@@ -2713,9 +2713,20 @@ a.trade-buy-btn { display: inline-flex; }
 .ballot-msg { margin-top: 12px; padding: 11px 14px; border-radius: var(--hr-radius-md); font-size: 13.5px; font-weight: 600; }
 .ballot-msg.is-error { background: var(--hr-alert-15); color: var(--hr-fg-0); }
 
-/* Voted state — confirmation chip + the private receipt */
-.ballot-voted { display: flex; flex-direction: column; gap: 8px; }
+/* Voted state — one locked row per pick (a Member voter sees up to two) */
+.ballot-voted { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.ballot-voted:last-child { margin-bottom: 0; }
 .ballot-voted.is-fresh { animation: apply-rise .5s cubic-bezier(.2,.7,.2,1); }
+.ballot-voted-pick {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 11px 14px; border-radius: var(--hr-radius-md);
+  background: color-mix(in srgb, var(--accent) 9%, rgba(255,255,255,.03));
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.ballot-receipt-pair { display: inline-flex; align-items: center; gap: 8px; }
+/* "All your votes are in" line for a fully-voted multi-seat race */
+.ballot-allin { display: flex; align-items: center; gap: 8px; margin: 4px 0 6px; font-weight: 800; color: var(--hr-primary); }
+.ballot-allin i { font-style: normal; font-weight: 900; }
 .ballot-voted-chip {
   align-self: flex-start; display: inline-flex; align-items: center; gap: 8px;
   padding: 6px 13px; border-radius: var(--hr-radius-pill);

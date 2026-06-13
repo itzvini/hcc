@@ -398,7 +398,7 @@
 
   "vote.eyebrow": "At the ballot",
   "vote.h2": "How voting works",
-  "vote.lead": "For each of the 4 seat races you pick one candidate. The candidate with the most votes wins that seat. One holder, one vote per seat — never weighted by how much you hold.",
+  "vote.lead": "You vote in every seat race, with one vote per seat — the Member race elects two, so you pick two candidates there. The candidates with the most votes win. One holder's vote is never weighted by how much you hold.",
   "vote.p1h": "Sign in to vote",
   "vote.p1p": "Vote here on the site — sign in with Discord (linked to your Highrise account) so we can confirm you're an eligible holder.",
   "vote.p2h": "Private & verifiable",
@@ -963,9 +963,12 @@
 
   "ballot.eyebrow": "Official vote",
   "ballot.h": "Cast your ballot",
-  "ballot.intro": "One vote per seat race, and every eligible holder votes in all of them. Your vote is final once cast, and you'll get a private receipt to confirm it was counted.",
+  "ballot.intro": "You get one vote for each seat in a race — the Member race elects two, so you can pick two candidates there. Every eligible holder votes in all races. Each vote is final once cast, and you'll get a private receipt for it.",
   "ballot.private": "Secret ballot — only per-seat tallies are ever published",
   "ballot.pick": "Pick your candidate, then cast your vote.",
+  "ballot.multi.intro": "This race elects {seats} seats, so you get {seats} votes. Pick your candidates one at a time — each is final once cast.",
+  "ballot.addmore": "You have {n} more vote — pick another candidate for the remaining seat.",
+  "ballot.allcast": "All your votes are in for this race",
   "ballot.unopposed": "This seat is unopposed. Seat {name}, or vote to reopen nominations — if reopening wins but nobody new runs, the seat goes to them anyway, so reopening only matters if someone steps up to compete.",
   "ballot.unopposed.many": "This race has no more candidates than seats. Seat {names}, or vote to reopen nominations — if reopening wins but nobody new runs, the seats go to them anyway.",
   "ballot.opt.seat": "Seat {name}",

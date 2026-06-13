@@ -29,6 +29,28 @@ function esc(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// Avatar markup with a graceful fallback. Highrise icon URLs are versioned and start
+// 404ing the moment a member restyles their look, so a stored URL can be live one day
+// and dead the next. `data-initial` carries the letter the error handler below falls
+// back to, so a broken image becomes the candidate's initial — never an empty square.
+function avatarFace(name, avatar) {
+  const initial = esc((name || '?').trim().charAt(0).toUpperCase() || '?');
+  return avatar
+    ? `<span class="ballot-opt-avatar" data-initial="${initial}" aria-hidden="true"><img src="${esc(avatar)}" alt="" loading="lazy" /></span>`
+    : `<span class="ballot-opt-avatar is-initial" aria-hidden="true">${initial}</span>`;
+}
+
+// `error` doesn't bubble, so catch it in the capture phase. The server refreshes
+// candidate avatars hourly; this covers the window between a restyle and that refresh.
+document.addEventListener('error', e => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement)) return;
+  const span = img.closest('.ballot-opt-avatar[data-initial]');
+  if (!span) return;
+  span.classList.add('is-initial');
+  span.textContent = span.dataset.initial || '?';
+}, true);
+
 function seatsLabel(n) {
   return `${n} ${n === 1 ? t('apply.race.seat') : t('apply.race.seats')}`;
 }
@@ -42,9 +64,7 @@ function joinNames(cands) {
 function candidateOption(r, c) {
   const checked = sel[r.bracket] === c.id;
   // Highrise profile picture when available; initial fallback keeps the row shape.
-  const face = c.avatar
-    ? `<span class="ballot-opt-avatar" aria-hidden="true"><img src="${esc(c.avatar)}" alt="" loading="lazy" /></span>`
-    : `<span class="ballot-opt-avatar is-initial" aria-hidden="true">${esc((c.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
+  const face = avatarFace(c.name, c.avatar);
   return `
     <label class="ballot-opt ${checked ? 'is-checked' : ''}">
       <input type="radio" name="ballot-${esc(r.bracket)}" value="${esc(c.id)}" ${checked ? 'checked' : ''} />
@@ -67,11 +87,7 @@ function confirmationOptions(r) {
     .replace('{name}', names).replace('{names}', names);
   // Single unopposed candidate → show their face on the seat option (recognition).
   const c = r.candidates.length === 1 ? r.candidates[0] : null;
-  const face = c
-    ? (c.avatar
-        ? `<span class="ballot-opt-avatar" aria-hidden="true"><img src="${esc(c.avatar)}" alt="" loading="lazy" /></span>`
-        : `<span class="ballot-opt-avatar is-initial" aria-hidden="true">${esc((c.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`)
-    : '';
+  const face = c ? avatarFace(c.name, c.avatar) : '';
   return `
     <p class="ballot-explain">${esc(explain)}</p>
     <label class="ballot-opt ballot-opt-seat ${seatChecked ? 'is-checked' : ''}">
@@ -95,21 +111,17 @@ function confirmationOptions(r) {
 
 // --- race states ---
 
-function votedState(r, fresh) {
-  const choice = r.yourBallot.choice;
-  const label = choice === 'seat' ? t('ballot.choice.seat')
-    : choice === 'reopen' ? t('ballot.choice.reopen')
-    : (r.candidates.find(c => c.id === choice)?.name || t('vote.anon'));
-  return `
-    <div class="ballot-voted ${fresh ? 'is-fresh' : ''}">
-      <span class="ballot-voted-chip"><i aria-hidden="true">✓</i>${esc(t('ballot.voted'))}</span>
-      <p class="ballot-voted-choice">${esc(t('ballot.youchose'))} <strong>${esc(label)}</strong></p>
-      <div class="ballot-receipt-row">
-        <span class="ballot-receipt-l">${esc(t('ballot.receipt'))}</span>
-        <code class="ballot-receipt">${esc(r.yourBallot.receipt)}</code>
-      </div>
-      <p class="ballot-receipt-keep">${esc(t('ballot.receipt.keep'))}</p>
-    </div>`;
+// The voter's locked-in picks for a race (each final, each with its own receipt).
+function castPicksBlock(r, fresh) {
+  const label = p => p.choice === 'seat' ? t('ballot.choice.seat')
+    : p.choice === 'reopen' ? t('ballot.choice.reopen')
+    : (r.candidates.find(c => c.id === p.choice)?.name || t('vote.anon'));
+  const rows = r.picks.map(p => `
+    <div class="ballot-voted-pick">
+      <span class="ballot-voted-chip"><i aria-hidden="true">✓</i>${esc(t('ballot.youchose'))} <strong>${esc(label(p))}</strong></span>
+      <span class="ballot-receipt-pair"><span class="ballot-receipt-l">${esc(t('ballot.receipt'))}</span><code class="ballot-receipt">${esc(p.receipt)}</code></span>
+    </div>`).join('');
+  return `<div class="ballot-voted ${fresh ? 'is-fresh' : ''}">${rows}</div>`;
 }
 
 function castControls(r) {
@@ -128,40 +140,64 @@ function castControls(r) {
 }
 
 function raceCard(r, i) {
+  const picks = r.picks || [];
+  const remaining = r.picksRemaining || 0;
+  const multi = r.seats > 1;          // a race that elects more than one seat → more than one vote
+  const fresh = !!justCast[r.bracket];
+
   let body;
-  if (r.yourBallot) {
-    // Even a concluded race keeps showing the voter their own receipt.
-    body = votedState(r, !!justCast[r.bracket]);
-  } else if (r.concluded) {
+  if (!picks.length && r.concluded) {
     body = `<p class="ballot-note">${esc(t('ballot.concluded'))}</p>`;
-  } else if (!r.mode) {
+  } else if (!picks.length && !r.mode) {
     body = `<p class="ballot-note">${esc(t('ballot.noCands'))}</p>`;
   } else {
-    const opts = r.mode === 'confirmation'
-      ? confirmationOptions(r)
-      : `<p class="ballot-explain">${esc(t('ballot.pick'))}</p>` + r.candidates.map(c => candidateOption(r, c)).join('');
-    body = `<div class="ballot-opts" role="radiogroup" aria-label="${esc(t(TIER_KEY[r.bracket]))}">${opts}</div>${castControls(r)}`;
+    const parts = [];
+    // Already-cast picks, locked in with their receipts.
+    if (picks.length) parts.push(castPicksBlock(r, fresh));
+
+    if (remaining > 0 && !r.concluded) {
+      // Prompt: in a multi-seat race, say how many votes remain.
+      if (multi) {
+        const key = picks.length ? 'ballot.addmore' : 'ballot.multi.intro';
+        parts.push(`<p class="ballot-explain">${esc(t(key).replace('{seats}', r.seats).replace('{n}', remaining))}</p>`);
+      } else if (r.mode !== 'confirmation') {
+        parts.push(`<p class="ballot-explain">${esc(t('ballot.pick'))}</p>`);
+      }
+      // Options for the next pick — candidates already chosen are dropped from the list.
+      const picked = new Set(picks.map(p => p.choice));
+      const opts = r.mode === 'confirmation'
+        ? confirmationOptions(r)
+        : r.candidates.filter(c => !picked.has(c.id)).map(c => candidateOption(r, c)).join('');
+      parts.push(`<div class="ballot-opts" role="radiogroup" aria-label="${esc(t(TIER_KEY[r.bracket]))}">${opts}</div>`);
+      parts.push(castControls(r));
+    } else {
+      // All picks used — this race is done for the voter.
+      parts.push(`<p class="ballot-allin"><i aria-hidden="true">✓</i> ${esc(multi ? t('ballot.allcast') : t('ballot.voted'))}</p>`);
+      parts.push(`<p class="ballot-receipt-keep">${esc(t('ballot.receipt.keep'))}</p>`);
+    }
+    body = parts.join('');
   }
+
   return `
     <div class="ballot-race" data-tier="${esc(r.bracket)}" style="--i:${i}">
       <div class="ballot-race-top">
         <span class="apply-tier" data-tier="${esc(r.bracket)}">${esc(t(TIER_KEY[r.bracket]))}</span>
         <span class="race-seat-chip">${esc(seatsLabel(r.seats))}</span>
-        ${r.mode === 'confirmation' && !r.yourBallot && !r.concluded ? `<span class="ballot-conf-chip">${esc(t('ballot.confchip'))}</span>` : ''}
+        ${r.mode === 'confirmation' && !picks.length && !r.concluded ? `<span class="ballot-conf-chip">${esc(t('ballot.confchip'))}</span>` : ''}
       </div>
       ${body}
     </div>`;
 }
 
 // After voting closes: a compact receipts card (only if this voter cast anything).
+// One row per pick — a Member voter who used both votes sees both receipts.
 function receiptsView(d) {
-  const voted = d.races.filter(r => r.yourBallot);
-  if (!voted.length) return '';
-  const rows = voted.map(r => `
+  const rows = d.races.flatMap(r => (r.picks || []).map(p => `
     <div class="ballot-receipt-row">
       <span class="apply-tier" data-tier="${esc(r.bracket)}">${esc(t(TIER_KEY[r.bracket]))}</span>
-      <code class="ballot-receipt">${esc(r.yourBallot.receipt)}</code>
-    </div>`).join('');
+      <code class="ballot-receipt">${esc(p.receipt)}</code>
+    </div>`)).join('');
+  if (!rows) return '';
   return `
     <div class="ballot-wrap is-closed" data-reveal>
       <div class="apply-aurora" aria-hidden="true"></div>
@@ -233,8 +269,9 @@ async function castVote(bracket) {
     return;
   }
   if (res && res.status === 409) {
-    raceMsg[bracket] = { kind: 'error', text: t('ballot.already') };
-    await loadBallot(false); // someone double-submitted from another tab — sync up
+    // Server distinguishes duplicate-candidate vs all-votes-used — use its message.
+    raceMsg[bracket] = { kind: 'error', text: out.error || t('ballot.already') };
+    await loadBallot(false); // re-sync (e.g. a second tab cast in the meantime)
     return;
   }
   raceMsg[bracket] = { kind: 'error', text: out.error || t('ballot.err') };

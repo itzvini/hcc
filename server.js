@@ -2495,6 +2495,53 @@ function safeIconUrl(u) {
   return typeof u === 'string' && /^https:\/\/cdn\.highrisegame\.com\//.test(u) ? u : null;
 }
 
+// Highrise icon URLs are versioned (…/{version}_icon.png) and the old URL is deleted —
+// it starts returning 404 — the moment a user restyles their avatar. Avatars are only
+// captured at apply/login, so over a multi-week election a candidate's stored URL goes
+// stale and the ballot shows a broken image. Periodically re-fetch each submitted
+// candidate's current icon from the Highrise profile API and refresh the stored value.
+// Same trust model as login: server-derived, cdn.highrisegame.com-only via safeIconUrl.
+// Best-effort — never throws, skips any candidate it can't resolve, and only writes
+// when the value actually changed.
+let avatarRefreshRunning = false;
+async function refreshCandidateAvatars() {
+  if (avatarRefreshRunning) return;
+  avatarRefreshRunning = true;
+  let updated = 0;
+  try {
+    const candidates = await db.getCandidates();
+    for (const c of candidates) {
+      try {
+        // The Highrise user_id is embedded in the stored icon URL (…/user/{id}/…), so a
+        // refresh usually needs no extra call. Fall back to the wallet lookup for
+        // candidates whose avatar was never captured (the empty ones).
+        let userId = (typeof c.avatar === 'string' && (c.avatar.match(/\/user\/([0-9a-f]+)\//i) || [])[1]) || null;
+        if (!userId) {
+          const wallet = await auth.fetchHighriseWallet(c.discord_id).catch(() => null);
+          userId = wallet?.userId || null;
+        }
+        if (!userId) continue;
+        const profile = await auth.fetchHighriseProfile(userId);
+        const icon = safeIconUrl(profile?.iconUrl);
+        if (icon && icon !== c.avatar) {
+          await db.updateApplicationAvatar(c.discord_id, icon);
+          updated++;
+        }
+        await new Promise(r => setTimeout(r, 150)); // gentle on the Highrise API
+      } catch { /* skip this candidate; keep the others going */ }
+    }
+    if (updated) console.log(`[avatars] refreshed ${updated} candidate avatar(s)`);
+  } catch (err) {
+    console.error('[avatars] refresh failed:', err.message);
+  } finally {
+    avatarRefreshRunning = false;
+  }
+}
+// Warm shortly after boot (backfills stale/empty avatars on deploy) then hourly, so
+// avatars stay current as candidates keep restyling through the election.
+setTimeout(() => { refreshCandidateAvatars(); }, 15 * 1000).unref();
+setInterval(() => { refreshCandidateAvatars(); }, 60 * 60 * 1000).unref();
+
 // A single candidate's public profile for the click-through detail view. Consented
 // fields only — never wallet or Discord id. During the CANDIDACY phase it's an
 // anonymous preview: pitch + VAA positions (the matchable part) are shown, but the
@@ -2618,14 +2665,21 @@ async function handleBallotApi(request, response) {
       db.getBallotsFor(session.discord_id),
     ]);
     const seatsFor = id => BRACKETS.find(b => b.id === id)?.seats ?? 0;
+    // Map a stored choice to its client-safe form: confirmation tokens become
+    // 'seat'/'reopen'; a candidate Discord id becomes the opaque hash.
+    const clientChoice = c => c === SEAT_TOKEN ? 'seat' : c === REOPEN_TOKEN ? 'reopen' : candidateId(c);
     const races = RACE_ORDER.map(id => {
       const cands = candidates.filter(c => c.bracket === id);
+      const seats = seatsFor(id);
       const round = roundFor(id);
-      const mine = own.find(b => b.bracket === id && Number(b.round) === round) || null;
+      const mode = raceMode(cands.length, seats);
+      // All of the voter's picks in this race (up to `seats`).
+      const mine = own.filter(b => b.bracket === id && Number(b.round) === round);
+      const picks = mine.map(b => ({ choice: clientChoice(b.choice), receipt: b.receipt, castAt: b.cast_at || null }));
       return {
         bracket: id,
-        seats: seatsFor(id),
-        mode: raceMode(cands.length, seatsFor(id)),
+        seats,
+        mode,
         round,
         // Round-1 races are read-only once a later round is running (they concluded).
         concluded: VOTE_ROUND > 1 && !REOPENED_BRACKETS.includes(id),
@@ -2635,15 +2689,9 @@ async function handleBallotApi(request, response) {
           // Names + avatars are public from the moment voting opens, results included.
           ...(VOTING_OPEN || RESULTS_OPEN ? { name: c.display_name || '', avatar: safeIconUrl(c.avatar) } : {}),
         })),
-        yourBallot: mine ? {
-          // Translate the stored choice into client-safe form: confirmation tokens
-          // become 'seat'/'reopen'; a candidate Discord id becomes the opaque hash.
-          choice: mine.choice === SEAT_TOKEN ? 'seat'
-                : mine.choice === REOPEN_TOKEN ? 'reopen'
-                : candidateId(mine.choice),
-          receipt: mine.receipt,
-          castAt: mine.cast_at || null,
-        } : null,
+        picks,
+        // How many more picks this voter may still cast in this race.
+        picksRemaining: mode ? Math.max(0, seats - picks.length) : 0,
       };
     });
     sendJson(response, 200, {
@@ -2700,21 +2748,31 @@ async function handleBallotApi(request, response) {
     if (!choice) { sendJson(response, 400, { error: 'That choice isn\'t on this ballot.' }); return; }
 
     const receipt = crypto.randomBytes(5).toString('hex').toUpperCase();
-    const saved = await db.castBallot({
+    // A voter may cast up to `seats` distinct picks in this race (the Member race
+    // elects 2; single-seat and confirmation races cap at 1).
+    const { row: saved, reason, count } = await db.castBallot({
       discordId: session.discord_id,
       bracket,
       round: roundFor(bracket),
       choice,
       receipt,
+      maxPicks: seats,
     });
     if (!saved) {
-      sendJson(response, 409, { error: 'You already voted in this race — votes are final once cast.' });
+      // seats === 1 → any rejection just means "already voted here". seats > 1 → tell
+      // them whether it's a duplicate candidate or they're out of votes.
+      const msg = seats <= 1
+        ? 'You already voted in this race — votes are final once cast.'
+        : reason === 'duplicate'
+          ? 'You already voted for that candidate — pick a different one for your other vote.'
+          : `You've used all ${seats} of your votes in this race.`;
+      sendJson(response, 409, { error: msg });
       return;
     }
 
-    // Audit THAT a ballot was cast (turnout traceability) — never the choice.
-    db.recordEvent({ event: 'ballot.cast', discordId: session.discord_id, detail: { bracket, round: saved.round, mode } });
-    sendJson(response, 200, { ok: true, bracket, receipt: saved.receipt, castAt: saved.cast_at || null });
+    // Audit THAT a pick was cast (turnout traceability) — never the choice.
+    db.recordEvent({ event: 'ballot.cast', discordId: session.discord_id, detail: { bracket, round: saved.round, mode, pick: count, seats } });
+    sendJson(response, 200, { ok: true, bracket, receipt: saved.receipt, castAt: saved.cast_at || null, picksRemaining: Math.max(0, seats - count) });
     return;
   }
 

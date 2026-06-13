@@ -81,10 +81,14 @@ candidacy phase and are revealed once `VOTING_OPEN` is set.
 their own ballot if cast); `POST /api/ballot { bracket, choice }` casts a vote. The
 published rules, enforced in code:
 
-- One vote per seat race; every eligible holder votes in all of them, never weighted
-  by holdings.
-- **Votes are final once cast** — ballot storage is insert-only ([lib/db.js](lib/db.js));
-  a re-vote gets a 409.
+- **One vote per seat** — a race elects `seats` seats and each voter gets that many
+  votes in it (the Member race elects 2, so members pick two candidates; single-seat
+  and confirmation races give one). The top `seats` candidates win. Never weighted by
+  holdings. Picks are cast one at a time and a candidate can't be picked twice.
+- **Each pick is final once cast** — ballot storage is insert-only, one row per pick
+  ([lib/db.js](lib/db.js)); the per-race cap and de-dupe are enforced under an advisory
+  lock so concurrent submits can't exceed it. A voter can ADD their unused picks later
+  but can never change a cast one (a duplicate or over-cap pick gets a 409).
 - **Secret ballot.** The voter↔choice row exists only to enforce one-vote-per-race and
   never leaves the server; the audit log records *that* a ballot was cast, never the
   choice; there is no live tally. Each voter gets a private receipt code as proof their
