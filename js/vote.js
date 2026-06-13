@@ -97,6 +97,7 @@ function headerHtml(d) {
       <h3 class="vote-h">${esc(t('vote.h'))}</h3>
       ${compact ? '' : `<p class="vote-intro">${esc(t('vote.intro'))}</p>
       <span class="vote-private"><i aria-hidden="true"></i>${esc(t('vote.private'))}</span>`}
+      ${!compact && d.votingOpen ? `<p class="vote-unlock-note">${esc(t('vote.unlocknote'))}</p>` : ''}
       ${d.votingOpen === false ? `<p class="vote-anon-note">${esc(t('vote.namesHidden'))}</p>` : ''}
     </div>`;
 }
@@ -108,7 +109,7 @@ function quizBody(d) {
     <div class="vote-props">${rows}</div>
     <div class="vote-actions">
       <button class="apply-btn-ghost" type="button" id="vote-clear">${esc(t('vote.clear'))}</button>
-      <button class="appf-btn-primary" type="button" id="vote-go">${esc(t('vote.see'))} <span aria-hidden="true">→</span></button>
+      <button class="appf-btn-primary" type="button" id="vote-go">${esc(d.votingOpen ? t('vote.see.unlock') : t('vote.see'))} <span aria-hidden="true">→</span></button>
     </div>
     <div class="vote-msg" id="vote-msg" role="status" hidden></div>`;
 }

@@ -2795,6 +2795,15 @@ a.trade-buy-btn { display: inline-flex; }
 }
 .vote-private i { width: 8px; height: 8px; border-radius: 50%; background: var(--hr-primary); box-shadow: 0 0 8px var(--hr-primary); flex: 0 0 auto; }
 
+/* "This is how you vote" callout — shown on the questionnaire while voting is open, so a
+   voter who just wants to vote sees the match is the path to the ballot, not a detour. */
+.vote-unlock-note {
+  margin-top: 16px; padding: 12px 16px; border-radius: var(--hr-radius-md);
+  font-size: 13.5px; font-weight: 700; line-height: 1.45; color: var(--hr-fg-0);
+  background: var(--hr-secondary-25);
+  border: 1px solid color-mix(in srgb, var(--hr-secondary) 35%, transparent);
+}
+
 /* Questionnaire — reuses the .vaa-* statement/scale styles from the application form */
 .vote-props { display: flex; flex-direction: column; gap: 14px; }
 

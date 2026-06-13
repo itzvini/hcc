@@ -2137,6 +2137,10 @@ async function handleAuthApi(request, response, url) {
     sendJson(response, 200, {
       authenticated: true,
       profile: publicProfile(session.profile),
+      // Election phase (non-sensitive — same flags the public board exposes) so the
+      // eligibility card can hide "Run for a seat" once candidacy closes and steer
+      // eligible holders to the ballot once voting opens.
+      phase: { applicationsOpen: APPLICATIONS_OPEN, votingOpen: VOTING_OPEN, resultsOpen: RESULTS_OPEN },
       // Recompute against current holdings so the panel reflects buys/sells without re-login.
       eligibility: await refreshEligibility(session, sid),
     });

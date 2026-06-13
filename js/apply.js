@@ -97,7 +97,7 @@ function statTile(value, label, accent) {
     </div>`;
 }
 
-function eligibilityView(profile, e) {
+function eligibilityView(profile, e, phase = {}) {
   // No wallet linked at Highrise — nothing to check.
   if (!e.linked || !e.ethWallet) {
     return `
@@ -131,6 +131,16 @@ function eligibilityView(profile, e) {
   const bracketLabel = e.bracket ? t(BRACKET_KEY[e.bracket]) : t('apply.bracket.none');
   const eligible = e.isMember;
 
+  // Running is only an option while the candidacy window is open; once it closes the
+  // "Run for a seat" CTA disappears. During the voting phase the primary action for an
+  // eligible holder is to vote — and voting runs through the candidate match below, so
+  // we point them straight at it instead of leaving "Run for a seat" as the only button.
+  const showRun  = e.canRun && phase.applicationsOpen;
+  const showVote = phase.votingOpen && e.canVotePendingHoldTime;
+  const note = !e.isMember ? t('apply.note.nothold')
+    : showVote ? t('apply.note.vote')
+    : t('apply.note.holdtime');
+
   return `
     <div class="apply-member ${eligible ? 'is-eligible' : ''}" data-tier="${esc(e.bracket || 'none')}" data-reveal>
       <div class="apply-aurora" aria-hidden="true"></div>
@@ -151,8 +161,9 @@ function eligibilityView(profile, e) {
         ${checkRow(e.canRun, e.canRun ? `${t('apply.is.run')} · ${bracketLabel}` : t('apply.is.run'), 2)}
       </div>
 
-      <p class="apply-note">${esc(e.isMember ? t('apply.note.holdtime') : t('apply.note.nothold'))}</p>
-      ${e.canRun ? `<button class="appf-btn-primary apply-run-cta" type="button" id="apply-run">${esc(t('app.cta'))} <span aria-hidden="true">→</span></button>` : ''}
+      <p class="apply-note">${esc(note)}</p>
+      ${showVote ? `<button class="appf-btn-primary apply-run-cta apply-vote-cta" type="button" id="apply-vote">${esc(t('apply.cta.vote'))} <span aria-hidden="true">↓</span></button>` : ''}
+      ${showRun ? `<button class="${showVote ? 'apply-btn-ghost' : 'appf-btn-primary'} apply-run-cta" type="button" id="apply-run">${esc(t('app.cta'))} <span aria-hidden="true">→</span></button>` : ''}
     </div>`;
 }
 
@@ -182,9 +193,17 @@ function render() {
     el.innerHTML = signedOutView();
     return;
   }
-  el.innerHTML = eligibilityView(lastState.profile || {}, lastState.eligibility || {});
+  el.innerHTML = eligibilityView(lastState.profile || {}, lastState.eligibility || {}, lastState.phase || {});
   el.querySelector('#apply-retry')?.addEventListener('click', () => loadApply(true));
   el.querySelector('#apply-run')?.addEventListener('click', () => openApplication(el, () => loadApply()));
+  // "Vote now" scrolls to the voting flow: the unlocked ballot if the voter has already
+  // reviewed their matches, otherwise the candidate match that unlocks it.
+  el.querySelector('#apply-vote')?.addEventListener('click', () => {
+    let adviceSeen = false;
+    try { adviceSeen = localStorage.getItem('hcc-advice-seen') === '1'; } catch { /* private mode */ }
+    const target = document.getElementById(adviceSeen ? 'ballot-app' : 'vote-app');
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
   animateCounts(el);
 }
 
