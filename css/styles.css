@@ -2727,6 +2727,11 @@ a.trade-buy-btn { display: inline-flex; }
 }
 .ballot-receipt-keep { font-size: 12px; color: var(--hr-fg-3); margin: 0; }
 
+/* Snapshot gate — holds now, but not part of the frozen electorate */
+.ballot-gate { text-align: center; }
+.ballot-gate .ballot-intro { margin: 0 auto; }
+.ballot-gate-ico { font-size: 34px; margin-bottom: 10px; }
+
 /* Post-voting receipts card */
 .ballot-wrap.is-closed .ballot-receipts { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
 .ballot-error { text-align: center; }

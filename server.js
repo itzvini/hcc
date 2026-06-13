@@ -2237,6 +2237,69 @@ function raceMode(candidateCount, seats) {
   return candidateCount <= seats ? 'confirmation' : 'contested';
 }
 
+// --- The frozen electorate (continuous-holding rule, enforceable form) ---
+// True continuous holding can't be proven from a single chain read, so it's enforced
+// as TWO checkpoints: when VOTER_SNAPSHOT=<label> is set, voting requires the voter's
+// wallet to be (1) in that snapshot — the holder set frozen when the election was
+// announced — AND (2) holding at vote time (the live eligibility check). Assets bought
+// after the announcement can't vote in this election. The snapshot is captured ONCE,
+// at startup, from the bulk holder data, unioned with the authoritative per-wallet
+// reads in `applicants` (covers holders the bulk snapshot's indexer missed); re-runs
+// are no-ops because the existing snapshot is found and reused. FAIL-CLOSED: while
+// the flag is set but the snapshot isn't captured yet, ballots are rejected.
+const VOTER_SNAPSHOT = String(process.env.VOTER_SNAPSHOT || '').trim();
+let voterSnapshotInfo = null; // { wallets, capturedAt } once captured/loaded
+
+async function ensureVoterSnapshot() {
+  if (!VOTER_SNAPSHOT) return;
+  for (let attempt = 0; attempt < 120; attempt++) {
+    try {
+      // Local testing seed — honored only when the gitignored dev-login helper is
+      // loaded (the same trust gate as dev-login itself), so it can't exist in prod.
+      if (devLogin && process.env.VOTER_SNAPSHOT_SEED) {
+        const rows = process.env.VOTER_SNAPSHOT_SEED.split(',').map(s => s.trim()).filter(Boolean)
+          .map(wallet => ({ wallet, creatureCount: 1, landCount: 0 }));
+        await db.saveVoterSnapshot(VOTER_SNAPSHOT, rows);
+        voterSnapshotInfo = await db.getVoterSnapshotInfo(VOTER_SNAPSHOT);
+        console.warn(`[snapshot] '${VOTER_SNAPSHOT}' seeded with ${voterSnapshotInfo?.wallets ?? 0} dev wallets (dev-login present).`);
+        return;
+      }
+      const existing = await db.getVoterSnapshotInfo(VOTER_SNAPSHOT);
+      if (existing) {
+        // Captured on a previous boot — the electorate stays frozen across restarts.
+        voterSnapshotInfo = existing;
+        console.log(`[snapshot] '${VOTER_SNAPSHOT}' already captured: ${existing.wallets} wallets (${existing.capturedAt}).`);
+        return;
+      }
+      if (holderCounts.fetchedAt > 0) {
+        const byWallet = new Map();
+        const add = (w, key, n) => {
+          const r = byWallet.get(w) || { wallet: w, creatureCount: 0, landCount: 0 };
+          r[key] = Math.max(r[key], n | 0); // union keeps the higher count per source
+          byWallet.set(w, r);
+        };
+        for (const [w, n] of holderCounts.creature) add(w.toLowerCase(), 'creatureCount', n);
+        for (const [w, n] of holderCounts.land) add(w.toLowerCase(), 'landCount', n);
+        for (const a of await db.getApplicantWallets()) {
+          add(a.wallet.toLowerCase(), 'creatureCount', a.creature_count);
+          add(a.wallet.toLowerCase(), 'landCount', a.land_count);
+        }
+        const rows = [...byWallet.values()].filter(r => r.creatureCount + r.landCount > 0);
+        await db.saveVoterSnapshot(VOTER_SNAPSHOT, rows);
+        voterSnapshotInfo = await db.getVoterSnapshotInfo(VOTER_SNAPSHOT);
+        db.recordEvent({ event: 'snapshot.captured', detail: { label: VOTER_SNAPSHOT, wallets: rows.length } });
+        console.log(`[snapshot] '${VOTER_SNAPSHOT}' captured: ${rows.length} holder wallets.`);
+        return;
+      }
+    } catch (err) {
+      console.error('[snapshot] capture attempt failed:', err.message);
+    }
+    await new Promise(r => setTimeout(r, 15000)); // holder data / DB not ready yet — retry
+  }
+  console.error(`[snapshot] '${VOTER_SNAPSHOT}' could NOT be captured — ballots stay blocked (fail-closed).`);
+}
+ensureVoterSnapshot();
+
 // --- Election status (public) ---
 // A cached snapshot of the race: submitted candidates per holding bracket, the seats
 // each bracket elects, and whether the candidacy window is open. Public — it's the
@@ -2266,6 +2329,11 @@ async function getElectionStatus() {
     applicationsOpen: APPLICATIONS_OPEN,
     votingOpen: VOTING_OPEN,
     resultsOpen: RESULTS_OPEN,
+    // Electorate transparency: the size + capture date of the frozen voter snapshot
+    // (count only — never the wallet list).
+    voterSnapshot: VOTER_SNAPSHOT && voterSnapshotInfo
+      ? { wallets: voterSnapshotInfo.wallets, capturedAt: voterSnapshotInfo.capturedAt }
+      : null,
     races,
     totalCandidates: races.reduce((n, r) => n + r.candidates, 0),
     electedSeats: races.reduce((n, r) => n + r.seats, 0),
@@ -2519,8 +2587,17 @@ async function handleBallotApi(request, response) {
   const cookies = auth.parseCookies(request);
   const session = await db.getSession(cookies[auth.SESSION_COOKIE]);
   if (!session) { sendJson(response, 401, { error: 'Sign in to vote.' }); return; }
-  const elig = session.eligibility || {};
+  // LIVE eligibility — recompute against current holdings (same as the application
+  // API) so a wallet emptied since login can't vote on a stale session snapshot.
+  const elig = await refreshEligibility(session, cookies[auth.SESSION_COOKIE]);
   if (!elig.canVotePendingHoldTime) { sendJson(response, 403, { error: 'Only eligible holders can vote.' }); return; }
+
+  // Checkpoint two of the continuous-holding rule: the wallet must be in the frozen
+  // electorate. Fail-closed while the snapshot flag is set but capture hasn't landed.
+  const snapshotActive = !!VOTER_SNAPSHOT;
+  const snapshotReady = !snapshotActive || !!(voterSnapshotInfo && voterSnapshotInfo.wallets);
+  const inSnapshot = !snapshotActive
+    || (snapshotReady && await db.isInVoterSnapshot(VOTER_SNAPSHOT, elig.ethWallet));
 
   if (request.method === 'GET') {
     const [candidates, own] = await Promise.all([
@@ -2556,12 +2633,28 @@ async function handleBallotApi(request, response) {
         } : null,
       };
     });
-    sendJson(response, 200, { votingOpen: VOTING_OPEN, resultsOpen: RESULTS_OPEN, round: VOTE_ROUND, races });
+    sendJson(response, 200, {
+      votingOpen: VOTING_OPEN,
+      resultsOpen: RESULTS_OPEN,
+      round: VOTE_ROUND,
+      snapshot: snapshotActive
+        ? { active: true, ready: snapshotReady, in: inSnapshot, capturedAt: voterSnapshotInfo?.capturedAt || null }
+        : { active: false },
+      races,
+    });
     return;
   }
 
   if (request.method === 'POST') {
     if (!VOTING_OPEN) { sendJson(response, 403, { error: 'Voting is not open.' }); return; }
+    if (snapshotActive && !snapshotReady) {
+      sendJson(response, 503, { error: 'The voter snapshot isn\'t ready yet — try again in a moment.' });
+      return;
+    }
+    if (!inSnapshot) {
+      sendJson(response, 403, { error: 'Voting is limited to wallets in the official holder snapshot.' });
+      return;
+    }
     // 3 races and final votes — a low cap comfortably covers honest use.
     const wait = rateLimited(`ballot:${session.discord_id}`, 20, 60 * 60 * 1000);
     if (wait) { sendJson(response, 429, { error: 'Too many requests. Try again shortly.' }, { 'Retry-After': String(wait) }); return; }

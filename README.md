@@ -97,6 +97,28 @@ published rules, enforced in code:
   choice — a receipt that could prove *how* you voted would invite coercion and
   vote-buying.
 
+**The frozen electorate (continuous-holding rule).** True continuous holding can't be
+proven from a single chain read, so it's enforced as **two checkpoints**: set
+`VOTER_SNAPSHOT=<label>` and the server captures the current holder set **once** at
+startup (bulk holder data unioned with the authoritatively-verified `applicants`
+wallets, so indexing gaps can't disenfranchise a real holder). From then on, casting a
+ballot requires the voter's wallet to be **in the snapshot AND holding at vote time**
+(eligibility is recomputed live on every ballot request — a stale session can't vote
+with an emptied wallet). Assets bought after the snapshot can't vote in this election.
+Operations notes:
+
+- Capture is idempotent: restarts find the existing snapshot and reuse it; the
+  electorate stays frozen. Verify the capture in the deploy logs
+  (`[snapshot] '<label>' captured: N holder wallets`) before opening voting.
+- **Fail-closed**: while `VOTER_SNAPSHOT` is set but capture hasn't completed,
+  ballots are rejected (503) rather than silently skipping the check.
+- Transparency: `/api/election` publishes the snapshot's size and capture date
+  (never the wallet list), and the board states it under the race cards. Voters not
+  in the snapshot see a clear gate explaining the rule instead of a 403.
+- A wrongly-excluded holder can be remedied with a manual
+  `INSERT INTO voter_snapshots` row — auditable, and far rarer than the union
+  capture leaves room for.
+
 **Unopposed races — the confirmation-vote rule.** A race with no more candidates than
 seats (e.g. one 15+ candidate for the one 15+ seat) is *not* auto-won. The ballot for
 that race becomes **"Seat the candidate(s)" vs "Reopen nominations"**:
@@ -115,10 +137,12 @@ zero cost — a brigade can force a real contest, but never vote a seat into a v
 Election phases are driven by env flags, in order:
 
 1. `APPLICATIONS_OPEN=1` — candidacy window (the application form accepts submissions).
-2. `VOTING_OPEN=1` — voting; names go public, ballots can be cast.
-3. `RESULTS_OPEN=1` (with `VOTING_OPEN` cleared) — `/api/election` publishes tallies
+2. `VOTER_SNAPSHOT=<label>` (with everything else still closed) — freezes the
+   electorate; verify the capture count in the logs.
+3. `VOTING_OPEN=1` — voting; names go public, ballots can be cast.
+4. `RESULTS_OPEN=1` (with `VOTING_OPEN` cleared) — `/api/election` publishes tallies
    and per-race outcomes; the board renders them.
-4. If a confirmation race resolved to "reopen": set `REOPENED_BRACKETS=whale` (csv) and
+5. If a confirmation race resolved to "reopen": set `REOPENED_BRACKETS=whale` (csv) and
    `REOPEN_DEADLINE=<ISO date>` — that bracket's application window reopens until the
    deadline (everything else stays closed). If new candidates entered, re-run the vote
    with `VOTE_ROUND=2` + `VOTING_OPEN=1` (only reopened brackets are votable in round 2);
@@ -142,6 +166,10 @@ Required env vars (see `.env`):
   `/api/election`. Aggregates only; never set together with `VOTING_OPEN`.
 - `REOPENED_BRACKETS` / `REOPEN_DEADLINE` / `VOTE_ROUND` — the one-time reopen flow for
   a confirmation race that resolved to "reopen nominations" (see above).
+- `VOTER_SNAPSHOT` — label of the frozen electorate snapshot (see above). Captured once
+  at startup; voting is gated on membership while set. Local testing can seed it with
+  `VOTER_SNAPSHOT_SEED=<csv wallets>` (honored only when the gitignored dev-login
+  helper is present — inert in production).
 - `OPENAI_API_KEY` — enables AI-assisted position drafting on the self-nomination form.
   Optional; without it the form still works, candidates just fill in stances themselves.
   `OPENAI_MODEL` overrides the default (`gpt-5.4-mini`).

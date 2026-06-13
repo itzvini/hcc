@@ -183,6 +183,20 @@ function errorView() {
     </div>`;
 }
 
+// Voter holds now but isn't in the frozen electorate — assets were bought after the
+// official snapshot. A clear gate beats a confusing 403 at cast time.
+function snapshotGate(snap) {
+  const date = snap.capturedAt ? new Date(snap.capturedAt).toLocaleDateString() : '—';
+  return `
+    <div class="ballot-wrap ballot-gate" data-reveal>
+      <div class="apply-aurora" aria-hidden="true"></div>
+      <div class="ballot-gate-ico" aria-hidden="true">🗳️</div>
+      <span class="apply-pill">${esc(t('ballot.eyebrow'))}</span>
+      <h3 class="ballot-h">${esc(t('ballot.gate.snapshot.h'))}</h3>
+      <p class="ballot-intro">${esc(t('ballot.gate.snapshot.p').replace('{date}', date))}</p>
+    </div>`;
+}
+
 async function castVote(bracket) {
   clearTimeout(armTimer);
   busy = bracket;
@@ -256,6 +270,17 @@ function render() {
     return;
   }
   if (data.votingOpen) {
+    const snap = data.snapshot || {};
+    if (snap.active && !snap.ready) {
+      // Snapshot flag set but capture hasn't landed — voting is fail-closed; show retry.
+      el.innerHTML = errorView();
+      el.querySelector('#ballot-retry')?.addEventListener('click', () => loadBallot(true));
+      return;
+    }
+    if (snap.active && !snap.in) {
+      el.innerHTML = snapshotGate(snap);
+      return;
+    }
     el.innerHTML = ballotView(data);
     bind(el);
     return;

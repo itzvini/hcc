@@ -111,9 +111,15 @@ function footNote(d) {
   const seats = t('apply.race.foot')
     .replace('{elected}', d.electedSeats)
     .replace('{appointed}', d.appointedSeats);
+  // Electorate transparency: who may vote was frozen in the official snapshot.
+  const snap = d.voterSnapshot?.wallets
+    ? ` ${t('apply.race.snapshot')
+        .replace('{n}', d.voterSnapshot.wallets)
+        .replace('{date}', new Date(d.voterSnapshot.capturedAt).toLocaleDateString())}`
+    : '';
   // Once anyone's in the race, just state the seats — the "pre-window" / "be the
   // first" lines only make sense while the field is empty.
-  if (d.totalCandidates > 0) return seats;
+  if (d.totalCandidates > 0) return seats + snap;
   if (!d.applicationsOpen) return `${t('apply.race.foot.closed')} ${seats}`;
   return `${t('apply.race.empty')} ${seats}`;
 }

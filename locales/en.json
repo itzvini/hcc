@@ -910,6 +910,7 @@
   "apply.race.results": "Final results",
   "apply.race.reopenuntil": "Nominations reopened for this seat until {date}",
   "apply.race.foot": "{elected} seats are filled by holder vote, plus {appointed} appointed for continuity.",
+  "apply.race.snapshot": "Eligible voters were frozen in the official snapshot of {n} holder wallets taken {date}.",
   "apply.race.foot.closed": "These are the seats up for election — self-nominations open when the candidacy window starts.",
   "apply.race.empty": "No candidacies in yet — be the first to run.",
   "apply.race.err": "We couldn't load the election status. Try again in a moment.",
@@ -989,6 +990,8 @@
   "ballot.already": "You already voted in this race — votes are final.",
   "ballot.err": "We couldn't cast your vote. Try again in a moment.",
   "ballot.loaderr": "We couldn't load your ballot. Try again in a moment.",
+  "ballot.gate.snapshot.h": "Your wallet isn't in the voting snapshot",
+  "ballot.gate.snapshot.p": "To vote in this election, your wallet must already have been holding when the official snapshot was taken on {date} — and still be holding now. Assets picked up after the snapshot can't vote this time, but they'll count for the next election.",
 
   "app.cta": "Run for a seat",
   "app.closed.banner": "Applications open when the candidacy window starts. You can fill this in and save a draft now — submitting and AI drafting unlock when it opens.",
