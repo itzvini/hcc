@@ -16,6 +16,10 @@ import { t } from './i18n.js';
 
 const root = () => document.getElementById('vote-app');
 const STORE = 'hcc-vote-advice'; // localStorage key — { positions: { [propId]: stance 1-5 } }
+// Set once the voter has run the matcher and seen their named matches WHILE VOTING IS
+// OPEN — this is what unlocks the official ballot below (see ballot.js). Lives only in
+// this browser; the server never learns who did or didn't view the advice.
+const ADVICE_SEEN = 'hcc-advice-seen';
 
 let data = null;          // { propositions, candidateCount, votingOpen } | { error, status } | null (loading)
 let lastResults = null;   // last server ranking, cached so a language switch re-renders without re-POSTing
@@ -372,6 +376,11 @@ async function runMatch(el) {
   lastResults = out.results || [];
   lastVotingOpen = !!out.votingOpen;
   mode = 'results';
+  // Reviewing the named candidates (voting phase only) unlocks the official ballot.
+  if (lastVotingOpen) {
+    try { localStorage.setItem(ADVICE_SEEN, '1'); } catch { /* private mode — gate stays until they re-run */ }
+    try { window.dispatchEvent(new CustomEvent('hcc:advice-seen')); } catch { /* ignore */ }
+  }
   render();                                                  // swap the questionnaire out for the matches
   root()?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }

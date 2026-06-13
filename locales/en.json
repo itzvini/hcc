@@ -993,6 +993,8 @@
   "ballot.already": "You already voted in this race — votes are final.",
   "ballot.err": "We couldn't cast your vote. Try again in a moment.",
   "ballot.loaderr": "We couldn't load your ballot. Try again in a moment.",
+  "ballot.locked.h": "Meet your candidates first",
+  "ballot.locked.p": "Before your official ballot opens, use the voting advice above — set where you stand and see how each candidate lines up with you. Your ballot unlocks the moment you've reviewed your matches, so the names you pick are ones you actually know.",
   "ballot.gate.snapshot.h": "Your wallet isn't in the voting snapshot",
   "ballot.gate.snapshot.p": "To vote in this election, your wallet must already have been holding when the official snapshot was taken on {date} — and still be holding now. Assets picked up after the snapshot can't vote this time, but they'll count for the next election.",
 

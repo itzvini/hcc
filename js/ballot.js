@@ -14,6 +14,15 @@ import { t } from './i18n.js';
 
 const root = () => document.getElementById('ballot-app');
 
+// Advice-first gate: the ballot stays locked until the voter has run the voting-advice
+// matcher and reviewed their named matches (vote.js sets this localStorage flag during
+// the voting phase). Client-side only — the server stores nothing about the advice, so
+// this keeps the matcher's "never logged" privacy guarantee while still funnelling every
+// voter through the candidates before they pick names. No skip: completing the advice is
+// the only path to the ballot.
+const ADVICE_SEEN = 'hcc-advice-seen';
+function adviceSeen() { try { return localStorage.getItem(ADVICE_SEEN) === '1'; } catch { return false; } }
+
 let data = null;     // /api/ballot payload | { error, status } | null while loading
 let sel = {};        // bracket -> selected value ('seat' | 'reopen' | opaque candidate id)
 let armed = null;    // bracket whose cast button awaits the final confirming tap
@@ -232,6 +241,21 @@ function errorView() {
     </div>`;
 }
 
+// Advice-first lock: shown in place of the ballot until the voter has reviewed their
+// matches in the advice tool above. No bypass — reviewing the candidates is the only
+// way through, so everyone picks names they've actually seen lined up against their own
+// positions.
+function lockedView() {
+  return `
+    <div class="ballot-wrap ballot-gate ballot-locked" data-reveal>
+      <div class="apply-aurora" aria-hidden="true"></div>
+      <div class="ballot-gate-ico" aria-hidden="true">🔒</div>
+      <span class="apply-pill">${esc(t('ballot.eyebrow'))}</span>
+      <h3 class="ballot-h">${esc(t('ballot.locked.h'))}</h3>
+      <p class="ballot-intro">${esc(t('ballot.locked.p'))}</p>
+    </div>`;
+}
+
 // Voter holds now but isn't in the frozen electorate — assets were bought after the
 // official snapshot. A clear gate beats a confusing 403 at cast time.
 function snapshotGate(snap) {
@@ -331,6 +355,11 @@ function render() {
       el.innerHTML = snapshotGate(snap);
       return;
     }
+    // Advice-first: no ballot until they've reviewed their matches above.
+    if (!adviceSeen()) {
+      el.innerHTML = lockedView();
+      return;
+    }
     el.innerHTML = ballotView(data);
     bind(el);
     return;
@@ -359,3 +388,11 @@ export async function loadBallot(showSpinner = true) {
 export function rerenderBallot() {
   if (data !== null) render();
 }
+
+// The advice tool fires this once the voter has reviewed their matches — swap the lock
+// out for the live ballot and bring it into view so the unlock is obvious.
+window.addEventListener('hcc:advice-seen', () => {
+  if (data === null || !data.votingOpen) return;
+  render();
+  if (adviceSeen()) root()?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
