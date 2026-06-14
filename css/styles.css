@@ -1842,6 +1842,8 @@ button.trade-net:hover { box-shadow: 0 0 12px var(--hr-banana-25); }
   box-shadow: 0 2px 8px rgba(0,0,0,.4);
 }
 .trade-tile-price.is-unlisted { color: var(--hr-fg-3); font-weight: 700; }
+/* LAND card: the parcel coords under the slime's nickname. */
+.trade-tile-sub { font-size: 11.5px; color: var(--hr-fg-3); font-weight: 600; margin-top: 1px; }
 .trade-modal-rank { font-size: 13px; font-weight: 700; color: var(--hr-fg-2); margin: -4px 0 2px; }
 .trade-flt-chip {
   display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px;
@@ -2024,6 +2026,12 @@ body.trade-sheet-open { overflow: hidden; }
   background: radial-gradient(60% 60% at 50% 42%, rgba(133,97,255,.18), rgba(20,19,23,.0)), var(--hr-bg-2);
 }
 .trade-pick-tile img.is-pet, .trade-pick-tile img[data-fallback] { object-fit: contain; padding: 10%; box-sizing: border-box; background: var(--hr-bg-2); }
+
+/* Slime detail art in the modal: contain-fit on the same soft brand tint as its tile. */
+.trade-modal-img[src*="/land/pet/"] {
+  object-fit: contain; padding: 6%;
+  background: radial-gradient(60% 60% at 50% 42%, rgba(133,97,255,.18), rgba(20,19,23,0)), var(--hr-bg-2);
+}
 
 /* Buy / Sell / Transfer segmented tabs — primary actions, so scaled up from the
    compact .seg base (which is sized for the Market panel's chart controls) to sit

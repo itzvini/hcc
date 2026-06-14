@@ -26,6 +26,10 @@ const COLLECTIONS = {
   land:      { api: '/api/market/land',      chainHex: '0x1',           contract: LAND_CONTRACT_L1, labelKey: 'trade.coll.land',      ico: '🗺️' },
 };
 let coll = 'creatures';
+// Both collections use the same faceted browse. LAND is browsed via its attached Slime
+// (a parcel and its slime are one NFT): one card per parcel, filtered by slime traits +
+// rarity rank, priced/buyable when the parcel is listed.
+const isBrowseView = () => coll === 'creatures' || coll === 'land';
 const C = () => COLLECTIONS[coll];
 const onRightChain = () => (chainId || '').toLowerCase() === C().chainHex;
 // Every LAND parcel comes with a slime pet in-game — the plot tiles all look alike, so
@@ -99,6 +103,27 @@ let fltDebounce = null;
 let browseReqId = 0;           // drops stale responses when filters change mid-flight
 const RARITY_TIERS = ['Legendary', 'Epic', 'Rare', 'Uncommon', 'Common'];
 
+// What's being browsed — endpoint, the noun for copy, which i18n count keys to use,
+// and whether the dataset has rarity TIERS (Creatures do; Slimes don't — their parts
+// are all "rare", so only the computed rank distinguishes them). Lets one filter bar
+// serve both the Creature collection and the Slime catalogue.
+function browseDataset() {
+  if (coll === 'land') {
+    return {
+      api: '/api/market/land/browse', hasRarityChips: false, defaultScope: 'listed',
+      scopeAll: 'trade.filter.scopeAllLand', noMatch: 'trade.filter.noMatchLand',
+      countAll: 'trade.filter.countAllLand', countCollection: 'trade.filter.countCollectionLand',
+      countFiltered: 'trade.filter.countFilteredLand', indexing: 'trade.filter.indexingLand',
+    };
+  }
+  return {
+    api: `${C().api}/browse`, hasRarityChips: true, defaultScope: 'listed',
+    scopeAll: 'trade.filter.scopeAll', noMatch: 'trade.filter.noMatch',
+    countAll: 'trade.filter.countAll', countCollection: 'trade.filter.countCollection',
+    countFiltered: 'trade.filter.countFiltered', indexing: 'trade.filter.indexing',
+  };
+}
+
 function fltActive() {
   return !!(flt.q || flt.min || flt.max || flt.traits.size);
 }
@@ -111,6 +136,21 @@ function resetFilters() {
   // Scope is a view mode, not a filter — clearing filters keeps you where you are.
   flt = { q: '', traits: new Map(), min: '', max: '', sort: flt.sort, scope: flt.scope };
   openFacet = null;
+}
+
+// Switching collection (Creatures⟷LAND) starts a fresh browse: drop the grid, modal,
+// deep-link, and every filter, and lead with the new collection's On-sale scope.
+function resetBrowseForView() {
+  listings = []; listingsCursor = null; listingsError = false;
+  modalToken = null; modalMeta = null; buyState = null;
+  linkListing = null; linkSync = null;
+  resetFilters();
+  flt.scope = browseDataset().defaultScope;
+  browseFacets = null; browseTotal = null; browseListedTotal = null; browsePriceRange = null;
+  browseCollectionTotal = null; browseScope = flt.scope; browseIndexing = false;
+  browsePage = 0; browseHasMore = false; browseHadFilters = false;
+  setFltSheet(false);
+  clearTimeout(fltDebounce);
 }
 function browseQuery(page) {
   const p = new URLSearchParams();
@@ -444,47 +484,26 @@ async function sendTransfer(contract, tokenId, to) {
 }
 
 // --- Browse ---
-async function loadListings(reset = true) {
-  if (coll === 'creatures') return loadBrowse(reset);
-  if (reset) { listings = []; listingsCursor = null; listingsError = false; }
-  if (!reset && (!listingsCursor || listingsLoading)) return;
-  listingsLoading = true; patchGrid();
-  try {
-    const base = `${C().api}/listings`;
-    const url = reset ? base : `${base}?cursor=${encodeURIComponent(listingsCursor)}`;
-    const res = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!res.ok) throw new Error('http ' + res.status);
-    const data = await res.json();
-    if (data.ethUsd != null) ethUsd = data.ethUsd;
-    if (data.fxRates) fxRates = data.fxRates;
-    // Normalize LAND (OpenSea) rows onto the creature listing shape the UI renders:
-    // orderHash plays the listingId role, and OpenSea prices are already all-in.
-    const items = (data.items || []).map(it =>
-      ({ listingId: it.orderHash, protocolAddress: it.protocolAddress, tokenId: it.tokenId, seller: it.seller, priceEth: it.priceEth, totalEth: it.priceEth, name: it.name, image: it.image, coords: it.coords, rarity: null }));
-    listings = reset ? items : listings.concat(items);
-    listingsCursor = data.nextCursor || null;
-  } catch (err) {
-    console.error('Listings load failed:', err);
-    if (reset) listingsError = true;
-  } finally { listingsLoading = false; patchGrid(); }
-}
+// Both Creatures and LAND use the faceted offset-paged browse below.
+function loadListings(reset = true) { return loadBrowse(reset); }
 
-// Creatures explorer feed: the server filters/sorts its full listing snapshot, so a
-// "page" is an offset into the current filtered set. A request id guards against a
-// slow stale response landing after the user already changed filters.
+// Faceted explorer feed (Creatures and LAND): the server filters/sorts its full
+// snapshot, so a "page" is an offset into the current filtered set. A request id
+// guards against a slow stale response landing after the user already changed filters.
 async function loadBrowse(reset = true) {
   if (!reset && (!browseHasMore || listingsLoading)) return;
   const page = reset ? 0 : browsePage + 1;
   if (reset) { listings = []; browsePage = 0; browseHasMore = false; listingsError = false; }
   const rid = ++browseReqId;
   const hadFilters = fltActive(); // captured at request time, applied at response time
+  const ds = browseDataset();
   listingsLoading = true; patchGrid(); patchFilters();
   try {
     const qs = browseQuery(page);
-    const res = await fetch(`/api/market/creatures/browse${qs ? '?' + qs : ''}`, { headers: { Accept: 'application/json' } });
+    const res = await fetch(`${ds.api}${qs ? '?' + qs : ''}`, { headers: { Accept: 'application/json' } });
     if (!res.ok) throw new Error('http ' + res.status);
     const data = await res.json();
-    if (rid !== browseReqId || coll !== 'creatures') return; // superseded — newer request owns the grid
+    if (rid !== browseReqId || ds.api !== browseDataset().api) return; // superseded — newer request (or view) owns the grid
     if (data.ethUsd != null) ethUsd = data.ethUsd;
     if (data.fxRates) fxRates = data.fxRates;
     listings = reset ? (data.items || []) : listings.concat(data.items || []);
@@ -542,11 +561,16 @@ function tileHtml(it) {
   const price = unlisted
     ? `<span class="trade-tile-price is-unlisted">${esc(t('trade.filter.unlisted'))}</span>`
     : `<span class="trade-tile-price">${esc(fmtEth(it.totalEth ?? it.priceEth))}</span>`;
+  // LAND: one card is a parcel, shown via its slime — lead with the slime's nickname,
+  // with the parcel coordinates (the asset you're buying) as the subtitle.
+  const sub = coll === 'land' && it.slimeName && it.parcelName
+    ? `<span class="trade-tile-sub">${esc(it.parcelName)}</span>` : '';
   return `
     <button class="trade-tile" type="button" data-act="open" data-token="${esc(it.tokenId)}">
       <div class="trade-tile-media">${img}${rankChip(it.rank)}${rarityChip(it.rarity)}</div>
       <div class="trade-tile-body">
         <span class="trade-tile-name">${esc(it.name)}</span>
+        ${sub}
         ${price}
         ${fiat ? `<span class="trade-tile-usd">${esc(fiat)}</span>` : ''}
       </div>
@@ -560,8 +584,12 @@ function gridInnerHtml() {
       <button class="apply-btn-ghost" data-act="retry" type="button">${esc(t('trade.browse.retry'))}</button></div>`;
   }
   if (!listings.length) {
-    if (coll === 'creatures' && fltActive()) {
-      return `<div class="trade-grid-state"><div class="trade-grid-state-ico" aria-hidden="true">🔍</div><p>${esc(t('trade.filter.noMatch'))}</p>
+    // Slime catalogue still sweeping Highrise — say so rather than "nothing here".
+    if (isBrowseView() && browseIndexing) {
+      return `<div class="trade-grid-state"><span class="trade-mini-spin" aria-hidden="true"></span><p>${esc(t(browseDataset().indexing))}</p></div>`;
+    }
+    if (isBrowseView() && fltActive()) {
+      return `<div class="trade-grid-state"><div class="trade-grid-state-ico" aria-hidden="true">🔍</div><p>${esc(t(browseDataset().noMatch))}</p>
         <button class="apply-btn-ghost" data-act="flt-clear" type="button">${esc(t('trade.filter.clear'))}</button></div>`;
     }
     return `<div class="trade-grid-state"><div class="trade-grid-state-ico" aria-hidden="true">🛒</div><p>${esc(t('trade.browse.empty'))}</p></div>`;
@@ -570,7 +598,7 @@ function gridInnerHtml() {
 }
 
 function loadMoreHtml() {
-  const more = coll === 'creatures' ? browseHasMore : !!listingsCursor;
+  const more = isBrowseView() ? browseHasMore : !!listingsCursor;
   if (!listings.length || !more) return '';
   return `<button class="apply-btn-ghost" data-act="loadmore" type="button" ${listingsLoading ? 'disabled' : ''}>${esc(listingsLoading ? t('trade.browse.loadingMore') : t('trade.browse.loadMore'))}</button>`;
 }
@@ -601,6 +629,23 @@ function syncTradeUrl() {
   history.replaceState(null, '', url);
 }
 
+// A slime's full detail (traits, rank, art) already rides in its browse row — the LAND
+// token endpoint returns the PARCEL's metadata, not the slime — so shape the modal
+// straight from the row, no fetch.
+function slimeModalMeta(it) {
+  if (!it) return null;
+  return {
+    isSlime: true,
+    name: it.slimeName || it.parcelName,
+    image: petUrl(it),
+    attributes: Object.entries(it.traits || {}).map(([trait, value]) => ({ trait, value })),
+    rank: it.rank,
+    rankOf: browseCollectionTotal,
+    coords: it.coords,
+    parcelName: it.parcelName,
+  };
+}
+
 async function openModal(tokenId) {
   modalToken = tokenId; modalMeta = null; modalLoading = true; buyState = null;
   tokenOffers = null;
@@ -608,6 +653,13 @@ async function openModal(tokenId) {
   acceptState = null;
   if (coll === 'creatures') loadTokenOffers(tokenId); // offers are Creatures-only for now
   syncTradeUrl();
+  const slimeRow = coll === 'land' ? listingForToken(tokenId) : null;
+  if (slimeRow) { // LAND detail is in the row — render immediately, no token fetch
+    modalMeta = slimeModalMeta(slimeRow);
+    modalLoading = false;
+    patchModal();
+    return;
+  }
   patchModal();
   try {
     const res = await fetch(`${C().api}/token/${encodeURIComponent(tokenId)}`, { headers: { Accept: 'application/json' } });
@@ -703,11 +755,14 @@ function modalCardHtml() {
         : '');
 
   const owner = meta.owner ? `<div class="trade-modal-meta-row">${esc(t('trade.modal.owner'))}: <code>${esc(shortWallet(meta.owner))}</code></div>` : '';
-  const idRow = `<div class="trade-modal-meta-row">${esc(t('trade.modal.tokenId'))}: <code class="trade-modal-tokenid">${esc(modalToken)}</code></div>`;
+  // Slimes live on a parcel — show its coordinates, not the parcel's 50-digit token id.
+  const idRow = meta.isSlime
+    ? `<div class="trade-modal-meta-row">${esc(t('trade.land.parcel'))}: <code>${esc(meta.parcelName || `(${meta.coords?.x}, ${meta.coords?.y})`)}</code></div>`
+    : `<div class="trade-modal-meta-row">${esc(t('trade.modal.tokenId'))}: <code class="trade-modal-tokenid">${esc(modalToken)}</code></div>`;
   const explorer = tokenExplorerUrl(modalToken);
 
   const rank = meta.rank != null
-    ? `<div class="trade-modal-rank">${esc(t('trade.modal.rank')
+    ? `<div class="trade-modal-rank">${esc(t(meta.isSlime ? 'trade.modal.rankSlime' : 'trade.modal.rank')
         .replace('{r}', Number(meta.rank).toLocaleString())
         .replace('{t}', Number(meta.rankOf || 0).toLocaleString()))}</div>`
     : '';
@@ -1647,23 +1702,26 @@ function traitDropsHtml() {
   }).join('');
 }
 
-// "On sale ⟷ All Creatures" — a view mode beside the filters, not one of them.
+// "On sale ⟷ All …" — a view mode beside the filters, not one of them. The "All"
+// label is dataset-specific ("All Creatures" vs "All Slimes").
 function scopeSegHtml() {
-  const opts = [['listed', 'scopeListed'], ['all', 'scopeAll']];
-  return opts.map(([v, k]) => `
+  const ds = browseDataset();
+  const opts = [['listed', 'trade.filter.scopeListed'], ['all', ds.scopeAll]];
+  return opts.map(([v, key]) => `
     <button type="button" role="tab" class="seg-btn ${flt.scope === v ? 'is-active' : ''}"
-      aria-selected="${flt.scope === v}" data-act="flt-scope" data-scope="${v}">${esc(t('trade.filter.' + k))}</button>`).join('');
+      aria-selected="${flt.scope === v}" data-act="flt-scope" data-scope="${v}">${esc(t(key))}</button>`).join('');
 }
 
 function countLineHtml() {
   // Everything here is response-time state (browse*) — mixing in live flt state mid-
   // fetch produced nonsense like "103 in the collection". Dim it while a fetch runs.
+  const ds = browseDataset();
   const allScope = browseScope === 'all';
   const denom = allScope ? browseCollectionTotal : browseListedTotal;
   if (browseTotal == null || denom == null) return '';
-  const key = browseHadFilters ? 'trade.filter.countFiltered' : (allScope ? 'trade.filter.countCollection' : 'trade.filter.countAll');
+  const key = browseHadFilters ? ds.countFiltered : (allScope ? ds.countCollection : ds.countAll);
   const note = browseIndexing && flt.scope === 'all'
-    ? ` <span class="trade-flt-note">${esc(t('trade.filter.indexing'))}</span>` : '';
+    ? ` <span class="trade-flt-note">${esc(t(ds.indexing))}</span>` : '';
   return `<span class="trade-flt-count ${listingsLoading ? 'is-stale' : ''}" role="status">${esc(t(key)
     .replace('{n}', browseTotal.toLocaleString()).replace('{total}', denom.toLocaleString()))}</span>${note}`;
 }
@@ -1697,10 +1755,10 @@ function filterSideHtml() {
         <button type="button" class="trade-flt-clearall" data-act="flt-clear">${esc(t('trade.filter.clear'))}</button>
         <button type="button" class="trade-side-x" data-act="flt-drawer" aria-label="${esc(t('trade.modal.close'))}">×</button>
       </div>
-      <div class="trade-side-sec">
+      ${browseDataset().hasRarityChips ? `<div class="trade-side-sec">
         <h4 class="trade-side-h">${esc(t('trade.filter.rarityH'))}</h4>
         <div class="trade-flt-rar" id="flt-rar" role="group" aria-label="${esc(t('trade.filter.rarityAria'))}">${rarityChipsHtml()}</div>
-      </div>
+      </div>` : ''}
       <div class="trade-side-sec">
         <h4 class="trade-side-h">${esc(t('trade.filter.priceH'))}</h4>
         <div class="trade-flt-price" role="group" aria-label="${esc(t('trade.filter.priceAria'))}">
@@ -1744,7 +1802,7 @@ function browseToolbarHtml() {
 // live in two places now (sidebar + toolbar), so query each by id from the root.
 function patchFilters() {
   const r = root();
-  if (!r || coll !== 'creatures') return;
+  if (!r || !isBrowseView()) return;
   const sc  = r.querySelector('#flt-scope');   if (sc)  sc.innerHTML = scopeSegHtml();
   const rar = r.querySelector('#flt-rar');     if (rar) rar.innerHTML = rarityChipsHtml();
   const tr  = r.querySelector('#flt-traits');  if (tr)  tr.innerHTML = traitDropsHtml();
@@ -1776,12 +1834,12 @@ function setFltSheet(open) {
 }
 
 function browseHtml() {
-  const isCreatures = coll === 'creatures';
-  return `<section class="trade-browse ${isCreatures ? 'has-side' : ''}">
-    ${isCreatures ? filterSideHtml() : ''}
+  const subTip = coll === 'land' ? 'trade.land.subSlimes' : 'trade.browse.sub';
+  return `<section class="trade-browse has-side">
+    ${filterSideHtml()}
     <div class="trade-main">
       <div class="trade-results-head">
-        <h3 class="trade-browse-h">${esc(t('trade.browse.h'))} ${tipHtml(isCreatures ? 'trade.browse.sub' : 'trade.browse.subLand')}</h3>
+        <h3 class="trade-browse-h">${esc(t('trade.browse.h'))} ${tipHtml(subTip)}</h3>
         <div class="trade-browse-actions">
           <select class="seg-select trade-currency" id="trade-currency" aria-label="${esc(t('trade.currency.aria'))}">
             ${CURRENCIES.map(c => `<option value="${c}" ${currency === c ? 'selected' : ''}>${c.toUpperCase()}</option>`).join('')}
@@ -1789,8 +1847,8 @@ function browseHtml() {
           <button class="apply-btn-ghost trade-refresh" data-act="refresh" type="button">${esc(t('trade.refresh'))}</button>
         </div>
       </div>
-      ${isCreatures ? browseToolbarHtml() : ''}
-      ${isCreatures ? collStripHtml() : ''}
+      ${browseToolbarHtml()}
+      ${coll === 'creatures' ? collStripHtml() : ''}
       <div class="trade-grid" id="trade-grid">${gridInnerHtml()}</div>
       <div class="trade-loadmore" id="trade-loadmore">${loadMoreHtml()}</div>
     </div>
@@ -2339,17 +2397,9 @@ function onClick(e) {
       if (coll === target.dataset.coll || !COLLECTIONS[target.dataset.coll]) return;
       coll = target.dataset.coll;
       try { localStorage.setItem('hcc-trade-coll', coll); } catch { /* fine */ }
-      // Collection-scoped state must not bleed across worlds.
-      listings = []; listingsCursor = null; listingsError = false;
-      modalToken = null; modalMeta = null; buyState = null; tokenOffers = null;
-      linkListing = null; linkSync = null;
+      tokenOffers = null;
+      resetBrowseForView(); // clears the grid/filters; scope defaults per the new view
       syncTradeUrl();
-      resetFilters();
-      flt.scope = 'listed';
-      browseFacets = null; browseTotal = null; browseListedTotal = null; browsePriceRange = null;
-      browseCollectionTotal = null; browseScope = 'listed'; browseIndexing = false;
-      browsePage = 0; browseHasMore = false; setFltSheet(false);
-      clearTimeout(fltDebounce);
       resetSellerState();
       render();
       loadListings(true);
@@ -2515,6 +2565,7 @@ export async function loadMarketplace() {
   loadedOnce = true;
   try { const c = localStorage.getItem('hcc-trade-cur'); if (c && CURRENCIES.includes(c)) currency = c; } catch { /* fine */ }
   try { const k = localStorage.getItem('hcc-trade-coll'); if (k && COLLECTIONS[k]) coll = k; } catch { /* fine */ }
+  flt.scope = browseDataset().defaultScope;
   // Deep link (/trade?coll=…&token=…): land straight on that token's detail modal.
   // The coll param wins over the saved preference for this visit, without persisting.
   let deepToken = null;

@@ -14,6 +14,7 @@ const mktOrderbook = require('./lib/marketplace-orderbook');
 const squidBridge = require('./lib/squid-bridge');
 const landMarket = require('./lib/land-market');
 const landPets = require('./lib/land-pets');
+const slimeIndex = require('./lib/slime-index');
 const { computeEligibility, BRACKETS } = require('./lib/eligibility');
 const { PROPOSITIONS, PROPOSITION_IDS } = require('./lib/propositions');
 const derive = require('./lib/derive-positions');
@@ -1262,7 +1263,8 @@ function parseBrowseQuery(searchParams) {
 // skipType: evaluate every filter EXCEPT that trait type — how facet counts answer
 // "what would I get if I picked this value", given everything else stays selected.
 function browseMatch(it, f, skipType) {
-  if (f.q && !it.name.toLowerCase().includes(f.q)) return false;
+  // `search` lets a row be findable by more than its name (slimes: nickname + coords).
+  if (f.q && !(it.search || it.name || '').toLowerCase().includes(f.q)) return false;
   // Unlisted rows have no price — a price filter implies "for sale", so they drop out.
   const price = it.totalEth ?? it.priceEth ?? null;
   if (f.min != null && (price == null || price < f.min)) return false;
@@ -1446,15 +1448,113 @@ async function getCreatureBrowse(searchParams) {
   };
 }
 
+// --- Unified LAND browse: every parcel, shown via its attached Slime ---
+// A LAND parcel and its Slime are ONE NFT — you buy the parcel, the slime comes with
+// it — so there's a single faceted browse: filter parcels by their slime's traits +
+// rarity rank, price/buyability from the parcel's OpenSea listing. The catalogue
+// (traits, rank) comes from the background slime sweep (lib/slime-index); listings come
+// from OpenSea. Reuses the Creature browse machinery (parseBrowseQuery / browseMatch /
+// computeBrowseFacets / BROWSE_SORTS) by shaping each parcel into the same row contract.
+slimeIndex.getSlimeIndex(); // warm the sweep at boot, in the background
+
+// All active LAND listings as Map<tokenId, listing>, briefly cached — merged into the
+// parcel rows so a listed parcel shows its price and is buyable.
+const slimeListingsCache = { data: null, at: 0 };
+async function landListingsByToken() {
+  if (slimeListingsCache.data && Date.now() - slimeListingsCache.at < 60 * 1000) return slimeListingsCache.data;
+  const map = new Map();
+  if (landMarket.configured()) {
+    let cursor = '', pages = 0;
+    do {
+      const { items, nextCursor } = await landMarket.listListings(cursor);
+      for (const it of items) if (!map.has(String(it.tokenId))) map.set(String(it.tokenId), it);
+      cursor = nextCursor;
+    } while (cursor && ++pages < 20);
+  }
+  slimeListingsCache.data = map; slimeListingsCache.at = Date.now();
+  return map;
+}
+
+const landRowOf = (s, L) => ({
+  tokenId: s.tokenId,
+  coords: s.coords,
+  name: s.slimeName || s.parcelName,
+  slimeName: s.slimeName,
+  parcelName: s.parcelName,
+  search: `${s.slimeName || ''} ${s.parcelName} ${s.coords.x} ${s.coords.y}`,
+  traits: s.traits,
+  rank: s.rank,
+  listed: !!L,
+  priceEth: L ? L.priceEth : null,
+  totalEth: L ? L.priceEth : null, // OpenSea price is already all-in
+  listingId: L ? L.orderHash : null,
+  protocolAddress: L ? L.protocolAddress : null,
+  seller: L ? L.seller : null,
+  listedAt: 0,
+});
+// A listed parcel the slime catalogue doesn't know yet (still sweeping, or the rare
+// parcel with no pet) must still appear for sale — just without traits/rank.
+const listingRowOf = (tokenId, L) => landRowOf({
+  tokenId, coords: L.coords || {}, slimeName: null,
+  parcelName: L.name || `LAND #${tokenId}`, traits: {}, rank: null,
+}, L);
+
+async function getLandBrowse(searchParams) {
+  const f = parseBrowseQuery(searchParams);
+  const [fx, listings] = await Promise.all([getMarketplaceFx(), landListingsByToken()]);
+  const index = slimeIndex.getSlimeIndex(); // null while the first sweep runs
+
+  const rows = [];
+  const seen = new Set();
+  if (index) for (const s of index.items) { seen.add(String(s.tokenId)); rows.push(landRowOf(s, listings.get(String(s.tokenId)))); }
+  // Listed parcels missing from the catalogue still show for sale (completeness — a
+  // marketplace must never hide a buyable item behind an unfinished index).
+  for (const [tokenId, L] of listings) if (!seen.has(tokenId)) rows.push(listingRowOf(tokenId, L));
+
+  const wantAll = f.scope === 'all';
+  const pool = wantAll ? rows : rows.filter(r => r.listed);
+  const matched = pool.filter(it => browseMatch(it, f)).sort(BROWSE_SORTS[f.sort]);
+  const start = f.page * BROWSE_PAGE_SIZE;
+  let lo = null, hi = null;
+  for (const r of rows) {
+    if (r.totalEth == null) continue;
+    if (lo === null || r.totalEth < lo) lo = r.totalEth;
+    if (hi === null || r.totalEth > hi) hi = r.totalEth;
+  }
+  return {
+    // traits stay on the row (only 4 small fields) so the modal needs no extra fetch.
+    items: matched.slice(start, start + BROWSE_PAGE_SIZE).map(({ search, listedAt, ...pub }) => pub),
+    total: matched.length,
+    page: f.page,
+    hasMore: start + BROWSE_PAGE_SIZE < matched.length,
+    scope: wantAll ? 'all' : 'listed',
+    // 'all' needs the full catalogue; until it's built we can only show listed parcels.
+    indexing: !index,
+    facets: index ? computeBrowseFacets(pool, f) : [],
+    priceRange: lo === null ? null : { min: lo, max: hi },
+    listedTotal: rows.reduce((n, r) => n + (r.listed ? 1 : 0), 0),
+    collectionTotal: index ? index.total : null,
+    ethUsd: fx.ethUsd,
+    fxRates: fx.fxRates,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
 // Public marketplace API — browse only (no auth, no wallet, nothing sensitive).
 async function handleMarketplaceApi(request, response, url) {
   const { pathname } = url;
 
-  // Bound upstream load from public browsing (per client IP).
+  // Bound upstream load from public browsing (per client IP). The pet-render endpoint
+  // is image-like (a slime grid loads ~24 at once) and carries its OWN, looser limiter
+  // below — so it's exempt from this tight per-call API budget, which is sized for the
+  // JSON browse/detail calls, not an image wall.
   const ip = (request.headers['x-forwarded-for'] || '').split(',')[0].trim()
     || request.socket.remoteAddress || 'unknown';
-  const wait = rateLimited(`mkt:${ip}`, 90, 60 * 1000);
-  if (wait) { sendJson(response, 429, { error: 'Too many requests.' }, { 'Retry-After': String(wait) }); return; }
+  const isPetRender = /^\/api\/market\/land\/pet\//.test(pathname);
+  if (!isPetRender) {
+    const wait = rateLimited(`mkt:${ip}`, 90, 60 * 1000);
+    if (wait) { sendJson(response, 429, { error: 'Too many requests.' }, { 'Retry-After': String(wait) }); return; }
+  }
 
   if (pathname === '/api/market/creatures/listings') {
     const data = await getCreatureListings(url.searchParams.get('cursor') || '');
@@ -1836,6 +1936,13 @@ async function handleMarketplaceApi(request, response, url) {
     sendJson(response, 200, { ...data, ethUsd: fx.ethUsd, fxRates: fx.fxRates }, { 'Cache-Control': 'public, max-age=30' });
     return;
   }
+  // Unified LAND browse: every parcel via its Slime — trait facets, rarity rank,
+  // price when listed. (LAND and its Slime are one NFT — one browse, not two.)
+  if (pathname === '/api/market/land/browse') {
+    const data = await getLandBrowse(url.searchParams);
+    sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=15' });
+    return;
+  }
   const landTokenMatch = pathname.match(/^\/api\/market\/land\/token\/(\d{1,80})$/);
   if (landTokenMatch) {
     if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
@@ -1856,7 +1963,7 @@ async function handleMarketplaceApi(request, response, url) {
   // input and are pinned to integers, so this can't be used as an open proxy.
   const landPetMatch = pathname.match(/^\/api\/market\/land\/pet\/(-?\d{1,4})\/(-?\d{1,4})$/);
   if (landPetMatch) {
-    const petWait = rateLimited(`landpet:${ip}`, 300, 60 * 1000);
+    const petWait = rateLimited(`landpet:${ip}`, 900, 60 * 1000); // image-grid budget; renders are cached + ETagged
     if (petWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(petWait) }); return; }
     try {
       const pet = await landPets.renderPet(Number(landPetMatch[1]), Number(landPetMatch[2]));
