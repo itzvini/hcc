@@ -2318,6 +2318,54 @@ const REOPEN_DEADLINE_MS = Date.parse(process.env.REOPEN_DEADLINE || '') || 0;
 const SEAT_TOKEN = '__seat__';
 const REOPEN_TOKEN = '__reopen__';
 
+// --- Runoff: a constrained re-vote for a single vacated seat ---
+// When a winner of a CONTESTED race steps down, the seat is NOT refilled by a full
+// bracket re-run (that would discard valid ballots and re-contest the seats already
+// won). Instead a narrow runoff is held — only the next-in-line candidates, only the
+// vacated seat, on the SAME frozen electorate — and the round-1 winners who kept their
+// seats carry over into the final result untouched. Config (inert unless RUNOFF_BRACKET
+// is set):
+//   RUNOFF_BRACKET     bracket holding the runoff (e.g. 'single')
+//   RUNOFF_ROUND       ballot round for the runoff (default 2 — kept distinct from the
+//                      concluded round-1 ballots/tallies/receipts, never collides)
+//   RUNOFF_SEATS       seats the runoff fills (default 1)
+//   RUNOFF_CANDIDATES  comma-separated Discord ids of the candidates ON the runoff ballot
+//   RUNOFF_SEATED      comma-separated Discord ids of round-1 winners who KEEP their seat
+//                      (carried into the final result; not on the runoff ballot)
+//   RUNOFF_DEADLINE    ISO timestamp shown as the close time (the hard stop is flipping
+//                      VOTING_OPEN — this is for display)
+const RUNOFF = (() => {
+  const bracket = String(process.env.RUNOFF_BRACKET || '').trim();
+  if (!bracket || !BRACKETS.some(b => b.id === bracket)) return null;
+  const ids = s => String(s || '').split(',').map(x => x.trim()).filter(Boolean);
+  return {
+    bracket,
+    round: Math.max(2, parseInt(process.env.RUNOFF_ROUND, 10) || 2),
+    seats: Math.max(1, parseInt(process.env.RUNOFF_SEATS, 10) || 1),
+    candidates: new Set(ids(process.env.RUNOFF_CANDIDATES)),
+    seated: ids(process.env.RUNOFF_SEATED),
+    deadlineMs: Date.parse(process.env.RUNOFF_DEADLINE || '') || 0,
+  };
+})();
+const runoffActive = bracket => !!RUNOFF && RUNOFF.bracket === bracket;
+
+// The candidates actually on a bracket's ballot, and the seat count that ballot fills —
+// both narrowed to the runoff during one. Everywhere else: the full field + configured seats.
+function ballotCandidates(bracket, cands) {
+  return runoffActive(bracket) ? cands.filter(c => RUNOFF.candidates.has(c.discord_id)) : cands;
+}
+function ballotSeats(bracket) {
+  const seats = BRACKETS.find(b => b.id === bracket)?.seats ?? 0;
+  return runoffActive(bracket) ? RUNOFF.seats : seats;
+}
+// A bracket's race is concluded (its ballot read-only) when a later round is live and
+// this bracket isn't the one being re-voted: during a runoff only the runoff bracket
+// accepts votes; otherwise it's the reopen path (VOTE_ROUND bumped past round 1).
+function concludedFor(bracket) {
+  if (RUNOFF) return !runoffActive(bracket);
+  return VOTE_ROUND > 1 && !REOPENED_BRACKETS.includes(bracket);
+}
+
 // True while a bracket's one-time post-rejection nomination window is open.
 function reopenActiveFor(bracket) {
   return REOPENED_BRACKETS.includes(bracket) && Date.now() < REOPEN_DEADLINE_MS;
@@ -2340,6 +2388,7 @@ function applicationEditableFor(bracket) {
 // The round a bracket's race is decided in: reopened brackets re-vote in round 2
 // (once VOTE_ROUND is bumped); every other race concluded in round 1.
 function roundFor(bracket) {
+  if (runoffActive(bracket)) return RUNOFF.round;
   return REOPENED_BRACKETS.includes(bracket) ? VOTE_ROUND : 1;
 }
 
@@ -2430,14 +2479,30 @@ async function getElectionStatus() {
   }
   const counts = await db.getCandidateCounts();
   const seatsFor = id => BRACKETS.find(b => b.id === id)?.seats ?? 0;
-  const races = RACE_ORDER.map(id => ({
-    bracket: id,
-    seats: seatsFor(id),
-    candidates: counts[id] || 0,
-    mode: raceMode(counts[id] || 0, seatsFor(id)),
-    reopened: reopenActiveFor(id),
-    reopenDeadline: reopenActiveFor(id) ? new Date(REOPEN_DEADLINE_MS).toISOString() : null,
-  }));
+  const races = RACE_ORDER.map(id => {
+    // During a runoff the bracket's public card shows the narrowed contest (the two
+    // next-in-line candidates for the one vacated seat), not the full original field.
+    if (runoffActive(id)) {
+      return {
+        bracket: id,
+        seats: RUNOFF.seats,
+        candidates: RUNOFF.candidates.size,
+        mode: raceMode(RUNOFF.candidates.size, RUNOFF.seats),
+        runoff: true,
+        runoffDeadline: RUNOFF.deadlineMs ? new Date(RUNOFF.deadlineMs).toISOString() : null,
+        reopened: false,
+        reopenDeadline: null,
+      };
+    }
+    return {
+      bracket: id,
+      seats: seatsFor(id),
+      candidates: counts[id] || 0,
+      mode: raceMode(counts[id] || 0, seatsFor(id)),
+      reopened: reopenActiveFor(id),
+      reopenDeadline: reopenActiveFor(id) ? new Date(REOPEN_DEADLINE_MS).toISOString() : null,
+    };
+  });
   const data = {
     applicationsOpen: APPLICATIONS_OPEN,
     votingOpen: VOTING_OPEN,
@@ -2449,7 +2514,9 @@ async function getElectionStatus() {
       : null,
     races,
     totalCandidates: races.reduce((n, r) => n + r.candidates, 0),
-    electedSeats: races.reduce((n, r) => n + r.seats, 0),
+    // True elected-seat total (whole brackets), independent of a runoff narrowing one
+    // card to the single vacated seat — so the footnote's seat count stays correct.
+    electedSeats: RACE_ORDER.reduce((n, id) => n + seatsFor(id), 0),
     appointedSeats: APPOINTED_SEATS,
     lastUpdated: new Date().toISOString(),
   };
@@ -2473,7 +2540,6 @@ async function computeElectionResults() {
     // (first to declare wins a dead heat).
     const cands = candidates.filter(c => c.bracket === id);
     const round = roundFor(id);
-    const mode = raceMode(cands.length, seats);
     const roundTallies = tallies.filter(t => t.bracket === id && Number(t.round) === round);
     const turnout = roundTallies.reduce((n, t) => n + t.n, 0);
     const votesFor = choice => roundTallies.find(t => t.choice === choice)?.n || 0;
@@ -2485,6 +2551,25 @@ async function computeElectionResults() {
       .filter(r => r.bracket === id && Number(r.round) === round)
       .map(r => r.receipt);
 
+    // Runoff bracket: the final seats = the round-1 winner(s) who carried over PLUS the
+    // runoff winner(s). Only the runoff candidates are tallied (round = RUNOFF.round);
+    // the carried winner keeps their seat without re-running. Submission-order tie-break
+    // is preserved (getCandidates() is submitted_at ASC + a stable sort).
+    if (runoffActive(id)) {
+      const rows = cands
+        .filter(c => RUNOFF.candidates.has(c.discord_id))
+        .map(c => ({ name: c.display_name || '', votes: votesFor(c.discord_id) }))
+        .sort((a, b) => b.votes - a.votes);
+      rows.forEach((r, i) => { r.seated = i < RUNOFF.seats; });
+      const carried = cands.filter(c => RUNOFF.seated.includes(c.discord_id)).map(c => c.display_name || '');
+      return {
+        bracket: id, seats, round, turnout, receipts,
+        mode: 'contested', runoff: true, status: 'seated', rows, carried,
+        seated: [...carried, ...rows.filter(r => r.seated).map(r => r.name)],
+      };
+    }
+
+    const mode = raceMode(cands.length, seats);
     const base = { bracket: id, seats, mode, round, turnout, receipts };
     if (!mode) return { ...base, status: 'vacant', seated: [] }; // empty field → appointment track
 
@@ -2775,13 +2860,12 @@ async function handleBallotApi(request, response) {
       db.getCandidates(),
       db.getBallotsFor(session.discord_id),
     ]);
-    const seatsFor = id => BRACKETS.find(b => b.id === id)?.seats ?? 0;
     // Map a stored choice to its client-safe form: confirmation tokens become
     // 'seat'/'reopen'; a candidate Discord id becomes the opaque hash.
     const clientChoice = c => c === SEAT_TOKEN ? 'seat' : c === REOPEN_TOKEN ? 'reopen' : candidateId(c);
     const races = RACE_ORDER.map(id => {
-      const cands = candidates.filter(c => c.bracket === id);
-      const seats = seatsFor(id);
+      const cands = ballotCandidates(id, candidates.filter(c => c.bracket === id)); // runoff narrows the field
+      const seats = ballotSeats(id);                                                // runoff fills only the vacated seat(s)
       const round = roundFor(id);
       const mode = raceMode(cands.length, seats);
       // All of the voter's picks in this race (up to `seats`).
@@ -2792,8 +2876,11 @@ async function handleBallotApi(request, response) {
         seats,
         mode,
         round,
-        // Round-1 races are read-only once a later round is running (they concluded).
-        concluded: VOTE_ROUND > 1 && !REOPENED_BRACKETS.includes(id),
+        runoff: runoffActive(id) || undefined,
+        runoffDeadline: runoffActive(id) && RUNOFF.deadlineMs ? new Date(RUNOFF.deadlineMs).toISOString() : undefined,
+        // Concluded races are read-only: the other brackets while a runoff is live, or
+        // round-1 races once a later round is running.
+        concluded: concludedFor(id),
         candidates: cands.map(c => ({
           id: candidateId(c.discord_id),
           pitch: c.pitch || '',
@@ -2837,13 +2924,14 @@ async function handleBallotApi(request, response) {
 
     const bracket = RACE_ORDER.includes(body.bracket) ? body.bracket : null;
     if (!bracket) { sendJson(response, 400, { error: 'Unknown race.' }); return; }
-    if (VOTE_ROUND > 1 && !REOPENED_BRACKETS.includes(bracket)) {
+    if (concludedFor(bracket)) {
       sendJson(response, 403, { error: 'This race has already concluded.' });
       return;
     }
 
-    const cands = (await db.getCandidates()).filter(c => c.bracket === bracket);
-    const seats = BRACKETS.find(b => b.id === bracket)?.seats ?? 0;
+    // During a runoff only the two runoff candidates are accepted, and only one pick.
+    const cands = ballotCandidates(bracket, (await db.getCandidates()).filter(c => c.bracket === bracket));
+    const seats = ballotSeats(bracket);
     const mode = raceMode(cands.length, seats);
     if (!mode) { sendJson(response, 400, { error: 'This race has no candidates.' }); return; }
 

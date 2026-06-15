@@ -2568,6 +2568,14 @@ a.trade-buy-btn { display: inline-flex; }
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
+/* Runoff → a head-to-head re-vote for one vacated seat (banana accent to stand apart
+   from the mint "contested" and outlined "confirmation" chips) */
+.race-runoff {
+  font-family: var(--hr-sans); font-weight: 900; font-size: 10px;
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase; color: var(--hr-on-primary);
+  padding: 4px 9px; border-radius: var(--hr-radius-pill); background: var(--hr-banana);
+  box-shadow: 0 0 16px var(--hr-banana-25);
+}
 .race-reopened { margin: 10px 0 0; font-size: 12px; font-weight: 700; color: var(--accent); }
 
 /* Final results on a race card (RESULTS_OPEN): per-option tallies + outcome note */

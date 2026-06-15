@@ -52,7 +52,11 @@ function resultBlock(res) {
         <span class="race-tally-name">${row.seated ? '<i aria-hidden="true">✓</i>' : ''}${esc(row.name)}</span>
         <span class="race-tally-votes">${row.votes}</span>
       </div>`).join('');
-    return `<div class="race-result"><div class="race-tally">${rows}</div>${turnout}${receiptsBlock(res)}</div>`;
+    // Runoff result: note the round-1 winner(s) who kept their seat without re-running.
+    const carried = res.runoff && res.carried?.length
+      ? `<p class="race-result-note">${esc(t('apply.result.runoffcarried').replace('{names}', res.carried.join(', ')))}</p>`
+      : '';
+    return `<div class="race-result"><div class="race-tally">${rows}</div>${carried}${turnout}${receiptsBlock(res)}</div>`;
   }
   // Confirmation race: the two option counts plus the resolved outcome.
   const counts = `
@@ -77,14 +81,18 @@ function resultBlock(res) {
 function raceCard(r, i, results) {
   // Server-declared mode: 'contested' (more runners than seats), 'confirmation'
   // (unopposed — seat-or-reopen ballot), or null while the field is empty.
-  const chip = r.mode === 'contested'
-    ? `<span class="race-contested">${esc(t('apply.race.contested'))}</span>`
-    : r.mode === 'confirmation'
-      ? `<span class="race-confirmation">${esc(t('apply.race.confirmation'))}</span>`
-      : '';
+  const chip = r.runoff
+    ? `<span class="race-runoff">${esc(t('apply.race.runoff'))}</span>`
+    : r.mode === 'contested'
+      ? `<span class="race-contested">${esc(t('apply.race.contested'))}</span>`
+      : r.mode === 'confirmation'
+        ? `<span class="race-confirmation">${esc(t('apply.race.confirmation'))}</span>`
+        : '';
   const reopened = r.reopened && r.reopenDeadline
     ? `<p class="race-reopened">${esc(t('apply.race.reopenuntil').replace('{date}', new Date(r.reopenDeadline).toLocaleDateString()))}</p>`
-    : '';
+    : r.runoff && r.runoffDeadline
+      ? `<p class="race-reopened">${esc(t('apply.race.runoffuntil').replace('{date}', new Date(r.runoffDeadline).toLocaleDateString()))}</p>`
+      : '';
   const countLabel = r.candidates === 1 ? t('apply.race.candidate') : t('apply.race.candidates');
   const res = (results || []).find(x => x.bracket === r.bracket);
   return `
