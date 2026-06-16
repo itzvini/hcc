@@ -108,7 +108,6 @@ const RARITY_TIERS = ['Legendary', 'Epic', 'Rare', 'Uncommon', 'Common'];
 // No price/scope (your items aren't all priced/listed); facets recomputed locally.
 let invFlt = { q: '', traits: new Map(), sort: 'rank' };
 let invFacets = null;          // [{type, values:[{v,n}]}] computed from the owned set
-let landListRefreshTimer = null; // delayed browse refresh after a LAND listing (OpenSea index lag)
 
 // What's being browsed — endpoint, the noun for copy, which i18n count keys to use,
 // and whether the dataset has rarity TIERS (Creatures do; Slimes don't — their parts
@@ -1197,7 +1196,7 @@ async function handleBuyLand(it) {
       setBuy('done', { hash });
       listings = listings.filter(l => l.listingId !== it.listingId);
       patchGrid();
-      loadSellerData(); // their LAND count changed
+      refreshAfterTx(); // they gained a LAND (+ it left the market) — refresh, then retry as OpenSea indexes
       return;
     }
     setBuy('error', { msg: t('trade.err.unavailable') });
@@ -1252,7 +1251,7 @@ async function handleBuy(listingId) {
         setBuy('done', { hash });
         listings = listings.filter(l => l.listingId !== listingId); // it's sold — drop from the grid
         patchGrid();
-        refreshBalance();
+        refreshAfterTx(); // they gained a Creature (+ it left the market) — refresh, then retry as Immutable indexes
         return;
       }
     }
@@ -1541,8 +1540,7 @@ async function handleAcceptOffer(offerId, tokenId) {
       if (!isApproval) {
         setAccept('done', { hash });
         sellSel = null;
-        refreshBalance();
-        loadSellerData();
+        refreshAfterTx(); // sold a Creature into a bid — refresh holdings/balance, retry as Immutable indexes
         loadCollOffers();
         if (modalToken) loadTokenOffers(modalToken);
         return;
@@ -2017,6 +2015,7 @@ function invToolbarHtml() {
     <select id="inv-sort" class="seg-select trade-flt-sort" aria-label="${esc(t('trade.filter.sortAria'))}">
       ${sorts.map(([v, k]) => `<option value="${v}" ${invFlt.sort === v ? 'selected' : ''}>${esc(t('trade.filter.' + k))}</option>`).join('')}
     </select>
+    <button type="button" class="apply-btn-ghost trade-refresh" data-act="seller-refresh">${esc(t('trade.refresh'))}</button>
     <button type="button" class="apply-btn-ghost trade-flt-toggle" data-act="flt-drawer" aria-expanded="${fltOpenMobile}" aria-controls="trade-side">
       ${esc(t('trade.filter.toggle'))}${invFltCount() ? `<span class="trade-flt-badge">${invFltCount()}</span>` : ''}
     </button>
@@ -2094,6 +2093,22 @@ async function loadSellerData() {
     patchTransferView();
     refreshBalance();
   }
+}
+
+// After ANY on-chain action (buy / sell / transfer / cancel / accept), the user's holdings,
+// listings and balance change — but the external indexers (OpenSea for LAND, Immutable for
+// Creatures) take a few seconds to reflect a just-mined tx. So refresh now, then again twice
+// over the next ~15s, so a freshly bought/sold/transferred item shows up on its own — no
+// manual reconnect needed. loadSellerData() also refreshes the wallet bar (its `finally`).
+let txRefreshTimers = [];
+function refreshAfterTx() {
+  const tick = () => { if (!account) return; loadSellerData(); loadListings(true); };
+  tick();                                       // immediate (optimistic; may pre-date indexing)
+  // Staggered retries — OpenSea NFT re-indexing after a buy/transfer is usually a few
+  // seconds but can run 20s+; these catch it without the user reconnecting. The manual
+  // Refresh button on the Sell/Transfer toolbar is the fallback for the rare slower case.
+  txRefreshTimers.forEach(clearTimeout);
+  txRefreshTimers = [5000, 12000, 25000].map(ms => setTimeout(tick, ms));
 }
 
 function sellStatusHtml() {
@@ -2502,8 +2517,7 @@ async function handleSell(form) {
     setSell('done');
     sellSel = null;
     form.reset();
-    loadSellerData();      // refresh "my listings" + picker
-    loadListings(true);    // the new listing appears in browse
+    refreshAfterTx();      // "my listings" + picker + browse; retries as the orderbook indexes
   } catch (err) {
     console.error('Sell failed:', err);
     setSell('error', { msg: friendlyError(err) });
@@ -2560,12 +2574,10 @@ async function handleSellLand(form) {
     setSell('done');
     sellSel = null;
     form.reset();
-    loadSellerData();        // refresh "my listings" + picker
-    // OpenSea takes a few seconds to index a brand-new listing, and the server re-warms its
-    // listings cache ~10s out — so refresh "my listings" + the On-sale browse again then,
-    // otherwise the freshly-listed parcel wouldn't show on the market until the cache aged out.
-    clearTimeout(landListRefreshTimer);
-    landListRefreshTimer = setTimeout(() => { loadSellerData(); loadListings(true); }, 11000);
+    // "my listings" + picker + browse, with retries — OpenSea takes a few seconds to index
+    // the order and the server re-warms its listings cache ~10s out, so the ~14s retry tick
+    // captures the freshly-listed parcel on the On-sale browse.
+    refreshAfterTx();
   } catch (err) {
     console.error('LAND sell failed:', err);
     setSell('error', { msg: friendlyError(err) });
@@ -2594,7 +2606,7 @@ async function handleCancelListing(listingId) {
     if (!subRes.ok) throw Object.assign(new Error('submit'), { friendly: sellServerError(sub.error) });
 
     mine = (mine || []).filter(l => l.listingId !== listingId);
-    loadListings(true); // drop it from browse too
+    refreshAfterTx(); // listing gone + token sellable again — refresh + retry as the orderbook indexes
   } catch (err) {
     console.error('Cancel failed:', err);
     pendingFlash = err.friendly || friendlyError(err);
@@ -2627,7 +2639,7 @@ async function handleCancelLandListing(orderHash) {
     }
 
     mine = (mine || []).filter(l => l.listingId !== orderHash);
-    loadListings(true); // drop it from browse too
+    refreshAfterTx(); // listing gone + parcel sellable again — refresh + retry as OpenSea de-indexes
   } catch (err) {
     console.error('LAND cancel failed:', err);
     pendingFlash = err.friendly || friendlyError(err);
@@ -2672,8 +2684,7 @@ async function handleTransferSubmit(form) {
     done(t('trade.status.sent'), hash);
     transferSel = null; transferCheck = null; transferAck = false;
     form.querySelector('#trade-to').value = '';
-    refreshBalance();
-    loadSellerData(); // the Creature left this wallet — refresh pickers
+    refreshAfterTx(); // the item left this wallet — refresh holdings/balance, retry as the indexer catches up
   } catch (err) {
     console.error('Transfer failed:', err);
     fail(friendlyError(err));
@@ -2792,6 +2803,7 @@ function onClick(e) {
     case 'loadmore':   return loadListings(false);
     case 'retry':      return loadListings(true);
     case 'refresh':    return loadListings(true);
+    case 'seller-refresh': loadSellerData(); loadListings(true); return; // manual wallet refresh (Sell/Transfer)
     case 'flt-scope':
       if (flt.scope === target.dataset.scope) return;
       flt.scope = target.dataset.scope === 'all' ? 'all' : 'listed';
