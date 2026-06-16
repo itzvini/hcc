@@ -1143,7 +1143,9 @@ function buyServerError(code) {
     insufficient: 'trade.err.funds', rate_limited: 'trade.err.rate',
     own_listing: 'trade.buy.own', blocked_account: 'trade.err.osBlocked',
   };
-  return t(KEY[code] || 'trade.err.unavailable');
+  // skey() swaps in the LAND variant when buying a parcel ("...another parcel", mainnet
+  // wording) and falls back to the Creature copy otherwise.
+  return t(skey(KEY[code] || 'trade.err.unavailable'));
 }
 
 // Poll the wallet provider for a receipt; resolves to it (or null on timeout).
@@ -1157,6 +1159,14 @@ async function waitForReceipt(hash, timeoutMs = 180000) {
     await new Promise(res => setTimeout(res, 1500));
   }
   return null;
+}
+
+// A listing that turned out to be already sold/cancelled: remove it from the local grid
+// now (instant feedback) and pull a fresh page so it's gone everywhere.
+function dropStaleListing(listingId) {
+  listings = listings.filter(l => l.listingId !== listingId);
+  patchGrid();
+  loadListings(true);
 }
 
 // LAND buy: Ethereum mainnet, native-ETH value transaction, no approvals. The
@@ -1182,17 +1192,35 @@ async function handleBuyLand(it) {
       body: JSON.stringify({ orderHash: it.listingId, protocolAddress: it.protocolAddress, takerAddress: account }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) { setBuy('error', { msg: buyServerError(data.error) }); return; }
+    if (!res.ok) {
+      setBuy('error', { msg: buyServerError(data.error) });
+      // OpenSea already knows it's filled/cancelled — drop the stale tile + refresh the grid.
+      if (data.error === 'not_active' || data.error === 'not_found') dropStaleListing(it.listingId);
+      return;
+    }
 
     for (const tx of (data.transactions || [])) {
       setBuy('fulfill');
+      // Simulate before signing. OpenSea can still hand out a "fulfillable" order for a few
+      // seconds after a sale, but Seaport reverts an already-filled order — so estimateGas
+      // reverts here. Bail with a clear message + refresh instead of charging the buyer gas
+      // for a doomed tx (funds are never at risk — Seaport reverts atomically either way).
+      try {
+        await eth().request({ method: 'eth_estimateGas', params: [{ from: account, to: tx.to, data: tx.data, value: tx.value && tx.value !== '0x0' ? tx.value : '0x0' }] });
+      } catch (simErr) {
+        console.warn('LAND buy pre-flight reverted (likely just sold):', simErr?.message);
+        setBuy('error', { msg: t(skey('trade.err.gone')) });
+        dropStaleListing(it.listingId);
+        return;
+      }
       const hash = await eth().request({
         method: 'eth_sendTransaction',
         params: [{ from: account, to: tx.to, data: tx.data, value: tx.value && tx.value !== '0x0' ? tx.value : undefined }],
       });
       setBuy('fulfillWait', { hash });
       const receipt = await waitForReceipt(hash);
-      if (!receipt || receipt.status !== '0x1') { setBuy('error', { msg: t('trade.err.txFailed') }); return; }
+      // A revert here means someone won the same-block race; funds are safe, only gas spent.
+      if (!receipt || receipt.status !== '0x1') { setBuy('error', { msg: t(skey('trade.err.txFailed')) }); dropStaleListing(it.listingId); return; }
       setBuy('done', { hash });
       listings = listings.filter(l => l.listingId !== it.listingId);
       patchGrid();
