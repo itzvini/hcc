@@ -1053,11 +1053,24 @@ async function getOwnedCreatures(address) {
     if (cursor) url.searchParams.set('page_cursor', cursor);
     const body = await imxFetch(url.toString());
     for (const n of (body.result ?? [])) {
-      items.push({ tokenId: String(n.token_id), name: n.name || `Highrise Creature #${n.token_id}`, image: n.image || null });
+      const tokenId = String(n.token_id);
+      // Capture any inline attributes immediately so traits exist even if the catalogue
+      // (statistical rank) isn't warm yet; the catalogue overlay below refines them.
+      const traits = {};
+      for (const a of (n.attributes ?? [])) {
+        const type = a.trait_type || a.trait || a.name;
+        if (type && a.value != null && a.value !== '') traits[String(type)] = String(a.value);
+      }
+      items.push({ tokenId, name: n.name || `Highrise Creature #${tokenId}`, image: n.image || null, traits });
     }
     cursor = body.page?.next_cursor ?? null;
     pages++;
   } while (cursor && pages < 5); // 500 Creatures is plenty for a picker
+  // Traits come from each NFT's inline attributes above — enough for the Sell/Transfer
+  // inventory filters (incl. the Rarity tier). We deliberately DON'T join the browse
+  // catalogue for a statistical rank: the account endpoint's packed token_id doesn't
+  // match the collection endpoint's, and awaiting a cold catalogue build would stall the
+  // picker. The client sorts "Rarest first" by the Rarity tier instead.
   return { items, truncated: !!cursor };
 }
 
@@ -1954,6 +1967,14 @@ async function handleMarketplaceApi(request, response, url) {
   if (landOwnedMatch) {
     if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
     const data = await landMarket.ownedLand(landOwnedMatch[1]);
+    // Attach slime traits + rank from the background sweep so the Sell/Transfer pickers
+    // filter like Browse. Sync peek (no build) — empty traits until the parcel is swept.
+    const sidx = slimeIndex.getSlimeIndex();
+    if (sidx) for (const it of (data.items || [])) {
+      const s = sidx.byToken.get(String(it.tokenId));
+      it.traits = s?.traits || {};
+      it.rank = s?.rank ?? null;
+    }
     sendJson(response, 200, data, { 'Cache-Control': 'no-store' });
     return;
   }
@@ -2066,7 +2087,15 @@ async function handleMarketplaceApi(request, response, url) {
   if (landMineMatch) {
     if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
     try {
-      sendJson(response, 200, await landMarket.myListings(landMineMatch[1]), { 'Cache-Control': 'no-store' });
+      const data = await landMarket.myListings(landMineMatch[1]);
+      // Attach coords + slime traits (same sweep join as /owned) so "My listings" shows the
+      // parcel's slime pet, matching the grid + pickers rather than the flat plot tile.
+      const sidx = slimeIndex.getSlimeIndex();
+      if (sidx) for (const it of (data.items || [])) {
+        const s = sidx.byToken.get(String(it.tokenId));
+        if (s) { it.coords = s.coords; it.traits = s.traits; it.rank = s.rank ?? null; }
+      }
+      sendJson(response, 200, data, { 'Cache-Control': 'no-store' });
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }

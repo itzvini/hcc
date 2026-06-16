@@ -103,6 +103,12 @@ let fltDebounce = null;
 let browseReqId = 0;           // drops stale responses when filters change mid-flight
 const RARITY_TIERS = ['Legendary', 'Epic', 'Rare', 'Uncommon', 'Common'];
 
+// Inventory filter (Sell & Transfer pickers) — the same faceted search as Browse, but
+// run CLIENT-SIDE over the owned set (which the server now enriches with traits/rank).
+// No price/scope (your items aren't all priced/listed); facets recomputed locally.
+let invFlt = { q: '', traits: new Map(), sort: 'rank' };
+let invFacets = null;          // [{type, values:[{v,n}]}] computed from the owned set
+
 // What's being browsed — endpoint, the noun for copy, which i18n count keys to use,
 // and whether the dataset has rarity TIERS (Creatures do; Slimes don't — their parts
 // are all "rare", so only the computed rank distinguishes them). Lets one filter bar
@@ -1833,6 +1839,205 @@ function setFltSheet(open) {
   r?.querySelector('.trade-flt-toggle')?.setAttribute('aria-expanded', String(open));
 }
 
+// --- Inventory filter (Sell & Transfer pickers) ---
+// Same faceted search as Browse, but run client-side over the owned set (server-enriched
+// with traits + rank). Reuses the .trade-flt-* styling; no price/scope (your items aren't
+// all priced/listed). Trait popovers share `openFacet` with Browse — only one tab shows
+// at a time. The match/facet logic mirrors the server's browseMatch/computeBrowseFacets.
+
+// The pickable owned set for the active tab (owned minus your active listings — you can't
+// sell or transfer something that's already listed). Same base for Sell and Transfer.
+function invBase() {
+  if (!Array.isArray(owned)) return [];
+  const listedIds = new Set((mine || []).map(l => String(l.tokenId)));
+  return owned.filter(o => !listedIds.has(String(o.tokenId)));
+}
+function invTraitSelected(type, v) { return invFlt.traits.get(type)?.has(v) || false; }
+function invToggleTrait(type, v) {
+  const cur = invFlt.traits.get(type) || new Set();
+  if (cur.has(v)) cur.delete(v); else cur.add(v);
+  if (cur.size) invFlt.traits.set(type, cur); else invFlt.traits.delete(type);
+}
+function invActive() { return !!(invFlt.q || invFlt.traits.size); }
+// OR within a trait type, AND across types (skipType lets faceting count "if I also pick this").
+function invMatch(it, skipType) {
+  if (invFlt.q) {
+    const hay = `${it.name || ''} ${it.tokenId} ${it.coords ? `${it.coords.x} ${it.coords.y}` : ''}`.toLowerCase();
+    if (!hay.includes(invFlt.q.toLowerCase())) return false;
+  }
+  for (const [type, vals] of invFlt.traits) {
+    if (type === skipType) continue;
+    if (!vals.has((it.traits || {})[type])) return false;
+  }
+  return true;
+}
+function computeInvFacets() {
+  const base = invBase();
+  const types = new Map(); // type -> Map(value -> count)
+  for (const it of base) for (const [type, v] of Object.entries(it.traits || {})) {
+    if (v == null || v === '') continue;
+    if (!types.has(type)) types.set(type, new Map());
+    const m = types.get(type); if (!m.has(v)) m.set(v, 0);
+  }
+  for (const [type, vals] of types) for (const it of base) {
+    const v = (it.traits || {})[type];
+    if (v != null && v !== '' && invMatch(it, type)) vals.set(v, (vals.get(v) || 0) + 1);
+  }
+  const out = [];
+  for (const [type, vals] of types) {
+    const values = [...vals.entries()].map(([v, n]) => ({ v, n }));
+    if (/rarity/i.test(type)) values.sort((a, b) => (RARITY_TIERS.indexOf(a.v) + 1 || 99) - (RARITY_TIERS.indexOf(b.v) + 1 || 99));
+    else values.sort((a, b) => a.v.localeCompare(b.v));
+    out.push({ type, values });
+  }
+  out.sort((a, b) => a.type.localeCompare(b.type));
+  return out;
+}
+// "Rarest first" uses a statistical rank when present (LAND slimes carry one), else the
+// Rarity tier (Creatures expose it as a trait), else token number as a stable tiebreak.
+function invRarityRank(it) {
+  if (it.rank != null) return it.rank;
+  const tier = it.traits && Object.entries(it.traits).find(([k]) => /rarity/i.test(k))?.[1];
+  const i = RARITY_TIERS.indexOf(tier);
+  return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+}
+function invFilteredItems() {
+  const items = invBase().filter(it => invMatch(it, null));
+  const byNum = (a, b) => { try { const d = BigInt(a.tokenId) - BigInt(b.tokenId); return d < 0n ? -1 : d > 0n ? 1 : 0; } catch { return String(a.tokenId).localeCompare(String(b.tokenId)); } };
+  if (invFlt.sort === 'num-desc') items.sort((a, b) => byNum(b, a));
+  else if (invFlt.sort === 'rank') items.sort((a, b) => (invRarityRank(a) - invRarityRank(b)) || byNum(a, b));
+  else items.sort(byNum); // num-asc
+  return items;
+}
+
+function invRarityChipsHtml() {
+  const facet = (invFacets || []).find(x => /rarity/i.test(x.type));
+  if (!facet) return '';
+  const counts = new Map(facet.values.map(({ v, n }) => [v, n]));
+  return RARITY_TIERS.map(tier => {
+    const sel = invTraitSelected(facet.type, tier);
+    const n = counts.get(tier) ?? 0;
+    if (n === 0 && !sel) return ''; // only tiers actually present in your inventory
+    return `<button type="button" class="trade-flt-rchip ${sel ? 'is-on' : ''}" data-r="${tier.toLowerCase()}"
+      data-act="inv-val" data-type="${esc(facet.type)}" data-val="${esc(tier)}" aria-pressed="${sel}">
+      <span class="trade-flt-rdot" aria-hidden="true"></span>${esc(tier)}<span class="trade-flt-n">${n}</span>
+    </button>`;
+  }).join('');
+}
+function invTraitPopHtml(f) {
+  return `<div class="trade-flt-pop" role="listbox" aria-label="${esc(f.type)}">
+    ${f.values.map(({ v, n }) => {
+      const sel = invTraitSelected(f.type, v);
+      return `<button type="button" class="trade-flt-opt ${sel ? 'is-on' : ''}" role="option" aria-selected="${sel}"
+        data-act="inv-val" data-type="${esc(f.type)}" data-val="${esc(v)}" ${n === 0 && !sel ? 'disabled' : ''}>
+        <span class="trade-flt-check" aria-hidden="true">${sel ? '✓' : ''}</span>
+        <span class="trade-flt-optv">${esc(v)}</span><span class="trade-flt-n">${n}</span>
+      </button>`;
+    }).join('')}
+  </div>`;
+}
+function invTraitDropsHtml() {
+  // Show every trait type as an accordion entry (same as the Buy sidebar) — a single value
+  // is fine here; it just opens to the one value you hold.
+  return (invFacets || []).filter(f => !/rarity/i.test(f.type) && f.values.length).map(f => {
+    const selCount = invFlt.traits.get(f.type)?.size || 0;
+    const open = openFacet === f.type;
+    return `
+    <div class="trade-flt-dd ${open ? 'is-open' : ''}">
+      <button type="button" class="trade-flt-ddbtn ${selCount ? 'has-sel' : ''}" data-act="inv-open" data-type="${esc(f.type)}"
+        aria-expanded="${open}" aria-haspopup="listbox">
+        ${esc(f.type)}${selCount ? `<span class="trade-flt-badge">${selCount}</span>` : ''}<span class="trade-flt-caret" aria-hidden="true">▾</span>
+      </button>
+      ${open ? invTraitPopHtml(f) : ''}
+    </div>`;
+  }).join('');
+}
+function invActiveChipsHtml() {
+  const chips = [];
+  if (invFlt.q) chips.push({ k: 'q', label: `“${invFlt.q}”` });
+  for (const [type, vals] of invFlt.traits) for (const v of vals) chips.push({ k: 't', type, v, label: `${type}: ${v}` });
+  const total = invBase().length;
+  const count = total ? `<span class="trade-flt-count">${esc(t('trade.filter.invCount').replace('{n}', invFilteredItems().length).replace('{total}', total))}</span>` : '';
+  if (!chips.length) return count;
+  return `${count}${chips.map(c => `
+    <button type="button" class="trade-flt-chip" data-act="inv-rm" data-kind="${c.k}"
+      ${c.type ? `data-type="${esc(c.type)}" data-val="${esc(c.v)}"` : ''} aria-label="${esc(t('trade.filter.removeAria').replace('{f}', c.label))}">
+      ${esc(c.label)}<span class="trade-flt-x" aria-hidden="true">×</span>
+    </button>`).join('')}
+    <button type="button" class="trade-flt-clearall" data-act="inv-clear">${esc(t('trade.filter.clear'))}</button>`;
+}
+function invFltCount() {
+  let n = invFlt.q ? 1 : 0;
+  for (const vals of invFlt.traits.values()) n += vals.size;
+  return n;
+}
+// Is there an inventory worth showing the filter sidebar for? (owned loaded + has facets)
+function invHasFilters() {
+  return Array.isArray(owned) && invBase().length >= 1 && (invFacets || []).some(f => f.values.length);
+}
+// The Sell/Transfer filter SIDEBAR — same markup + classes as the Buy sidebar
+// (filterSideHtml), minus the Price section (your items aren't priced). Rarity shows for
+// Creatures; LAND has none. Traits render as the vertical accordion via .trade-side CSS.
+function invFilterSideHtml() {
+  const hasRarity = coll === 'creatures' && (invFacets || []).some(f => /rarity/i.test(f.type));
+  const drops = invTraitDropsHtml();
+  return `
+  <aside class="trade-side ${fltOpenMobile ? 'is-open' : ''}" id="trade-side" aria-label="${esc(t('trade.filter.toggle'))}">
+    <div class="trade-side-backdrop" data-act="flt-drawer"></div>
+    <div class="trade-side-card">
+      <div class="trade-side-head">
+        <h3 class="trade-side-title">${esc(t('trade.filter.toggle'))}</h3>
+        <button type="button" class="trade-flt-clearall" data-act="inv-clear">${esc(t('trade.filter.clear'))}</button>
+        <button type="button" class="trade-side-x" data-act="flt-drawer" aria-label="${esc(t('trade.modal.close'))}">×</button>
+      </div>
+      ${hasRarity ? `<div class="trade-side-sec">
+        <h4 class="trade-side-h">${esc(t('trade.filter.rarityH'))}</h4>
+        <div class="trade-flt-rar" id="inv-rar" role="group" aria-label="${esc(t('trade.filter.rarityAria'))}">${invRarityChipsHtml()}</div>
+      </div>` : ''}
+      ${drops ? `<div class="trade-side-sec">
+        <h4 class="trade-side-h">${esc(t('trade.filter.traitsH'))}</h4>
+        <div class="trade-flt-traits" id="inv-traits">${drops}</div>
+      </div>` : ''}
+      <button type="button" class="trade-send trade-side-done" data-act="flt-drawer">${esc(t('trade.filter.done'))}</button>
+    </div>
+  </aside>`;
+}
+// The Sell/Transfer toolbar — same markup as the Buy toolbar (browseToolbarHtml), minus
+// the on-sale/all scope toggle. Search + inventory sorts + the mobile Filters button.
+function invToolbarHtml() {
+  const sorts = [['rank', 'sortRarity'], ['num-asc', 'sortNumAsc'], ['num-desc', 'sortNumDesc']];
+  return `
+  <div class="trade-toolbar">
+    <label class="trade-flt-search">
+      <svg class="trade-flt-sico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M16.5 16.5L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input id="inv-q" type="search" autocomplete="off" enterkeyhint="search" placeholder="${esc(t('trade.filter.searchInv'))}" value="${esc(invFlt.q)}" aria-label="${esc(t('trade.filter.searchInv'))}" />
+    </label>
+    <select id="inv-sort" class="seg-select trade-flt-sort" aria-label="${esc(t('trade.filter.sortAria'))}">
+      ${sorts.map(([v, k]) => `<option value="${v}" ${invFlt.sort === v ? 'selected' : ''}>${esc(t('trade.filter.' + k))}</option>`).join('')}
+    </select>
+    <button type="button" class="apply-btn-ghost trade-flt-toggle" data-act="flt-drawer" aria-expanded="${fltOpenMobile}" aria-controls="trade-side">
+      ${esc(t('trade.filter.toggle'))}${invFltCount() ? `<span class="trade-flt-badge">${invFltCount()}</span>` : ''}
+    </button>
+  </div>
+  <div class="trade-flt-active" id="inv-active">${invActiveChipsHtml()}</div>`;
+}
+// Re-render the live filter bits + the picker WITHOUT touching the search input (focus +
+// caret survive every keystroke), mirroring how patchFilters works for Browse.
+function patchInvFilter() {
+  const r = root(); if (!r) return;
+  invFacets = computeInvFacets();
+  const rar = r.querySelector('#inv-rar');    if (rar) rar.innerHTML = invRarityChipsHtml();
+  const tr  = r.querySelector('#inv-traits'); if (tr)  tr.innerHTML = invTraitDropsHtml();
+  const act = r.querySelector('#inv-active'); if (act) act.innerHTML = invActiveChipsHtml();
+  const tog = r.querySelector('.trade-flt-toggle');
+  if (tog) tog.innerHTML = `${esc(t('trade.filter.toggle'))}${invFltCount() ? `<span class="trade-flt-badge">${invFltCount()}</span>` : ''}`;
+  const pick = r.querySelector('#trade-pick-wrap');
+  if (pick) pick.innerHTML = tradeTab === 'transfer' ? transferPickerHtml() : sellPickerHtml();
+}
+function resetInvFilter() { invFlt = { q: '', traits: new Map(), sort: 'rank' }; invFacets = null; }
+// Close-popover repaint routes to the right tab (Esc / outside-click share `openFacet`).
+function repaintFacetUI() { (tradeTab === 'sell' || tradeTab === 'transfer') ? patchInvFilter() : patchFilters(); }
+
 function browseHtml() {
   const subTip = coll === 'land' ? 'trade.land.subSlimes' : 'trade.browse.sub';
   return `<section class="trade-browse has-side">
@@ -1915,7 +2120,9 @@ function myListingsHtml() {
       <div class="trade-mine-row">
         ${mine.map(l => `
           <div class="trade-mine-card">
-            ${l.image ? `<img src="${esc(l.image)}" alt="" loading="lazy" />` : '<div class="trade-tile-noimg">🐾</div>'}
+            ${coll === 'land' && petUrl(l)
+              ? `<img src="${esc(petUrl(l))}" ${l.image ? `data-fallback="${esc(l.image)}"` : ''} alt="" loading="lazy" />`
+              : (l.image ? `<img src="${esc(l.image)}" alt="" loading="lazy" />` : '<div class="trade-tile-noimg">🐾</div>')}
             <div class="trade-mine-info">
               <span class="trade-mine-name">${esc(l.name)}</span>
               <span class="trade-mine-price">${esc(fmtEthFiat(l.priceEth))}</span>
@@ -1929,9 +2136,9 @@ function myListingsHtml() {
 
 function sellPickerHtml() {
   if (owned === null) return `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t(skey('trade.sell.loadingOwned')))}</div>`;
-  const listedIds = new Set((mine || []).map(l => String(l.tokenId)));
-  const sellable = owned.filter(o => !listedIds.has(String(o.tokenId)));
-  if (!sellable.length) return `<p class="trade-form-p">${esc(t(skey('trade.sell.none')))}</p>`;
+  if (!invBase().length) return `<p class="trade-form-p">${esc(t(skey('trade.sell.none')))}</p>`;
+  const sellable = invFilteredItems();
+  if (!sellable.length) return `<p class="trade-form-p">${esc(t('trade.filter.invNone'))} <button type="button" class="trade-flt-clearall" data-act="inv-clear">${esc(t('trade.filter.clear'))}</button></p>`;
   return `
     <div class="trade-pick" role="listbox" aria-label="${esc(t(skey('trade.sell.pickAria')))}">
       ${sellable.map(o => `
@@ -2009,16 +2216,15 @@ function sellViewHtml() {
   if (!account || !onRightChain()) return walletGateHtml();
   const sellBusy = sellState && SELL_BUSY_PHASES.has(sellState.phase);
   const isLand = coll === 'land';
+  invFacets = computeInvFacets();
   // Workbench split: picker browses wide on the left, the action card (price + list)
-  // stays put on the right — no scrolling past your own items to find the button. The
-  // price/duration inputs must stay inside the form (handleSell reads them). LAND lists
-  // on OpenSea's Seaport (native ETH, no in-site "instant sell" into offers yet).
-  return `
-    ${myListingsHtml()}
+  // stays put on the right. The price/duration inputs must stay inside the form
+  // (handleSell reads them). LAND lists on OpenSea's Seaport (native ETH).
+  const wb = `
     <div class="trade-workbench">
       <div class="trade-wb-main">
         <h4 class="trade-form-h">${esc(t(skey('trade.sell.h')))} ${tipHtml(skey('trade.sell.p'))}</h4>
-        ${sellPickerHtml()}
+        <div id="trade-pick-wrap">${sellPickerHtml()}</div>
       </div>
       <div class="trade-wb-side">
         <form class="trade-form" id="trade-sell-form" novalidate>
@@ -2033,6 +2239,10 @@ function sellViewHtml() {
         ${isLand ? '' : instantSellHtml()}
       </div>
     </div>`;
+  // Same left filter sidebar + toolbar as Buy, once there's an inventory worth filtering.
+  return invHasFilters()
+    ? `<section class="trade-browse has-side">${invFilterSideHtml()}<div class="trade-main">${myListingsHtml()}${invToolbarHtml()}${wb}</div></section>`
+    : `${myListingsHtml()}${wb}`;
 }
 
 // LAND listing length (Seaport startTime→endTime). A short expiry means abandoned test
@@ -2056,11 +2266,12 @@ function landSellNetHtml(priceStr) {
 // listed Creature would leave a phantom listing behind).
 function transferPickerHtml() {
   if (owned === null) return `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.sell.loadingOwned'))}</div>`;
-  const listedIds = new Set((mine || []).map(l => String(l.tokenId)));
-  const transferable = owned.filter(o => !listedIds.has(String(o.tokenId)));
-  const hiddenNote = owned.length > transferable.length
+  const base = invBase();
+  const hiddenNote = owned.length > base.length
     ? `<p class="trade-form-p">${esc(t('trade.transfer.listedNote'))}</p>` : '';
-  if (!transferable.length) return `<p class="trade-form-p">${esc(t('trade.transfer.none'))}</p>${hiddenNote}`;
+  if (!base.length) return `<p class="trade-form-p">${esc(t('trade.transfer.none'))}</p>${hiddenNote}`;
+  const transferable = invFilteredItems();
+  if (!transferable.length) return `<p class="trade-form-p">${esc(t('trade.filter.invNone'))} <button type="button" class="trade-flt-clearall" data-act="inv-clear">${esc(t('trade.filter.clear'))}</button></p>${hiddenNote}`;
   return `
     <div class="trade-pick" role="listbox" aria-label="${esc(t('trade.transfer.pick'))}">
       ${transferable.map(o => `
@@ -2124,14 +2335,15 @@ function transferSendAllowed() {
 
 function transferViewHtml() {
   if (!account || !onRightChain()) return walletGateHtml();
+  invFacets = computeInvFacets();
   // Same workbench split as Sell. Recipient input, check rows, send button and status
   // must all stay inside the form — handleTransferSubmit queries them through it.
-  return `
+  const wb = `
     <div class="trade-workbench">
       <div class="trade-wb-main">
         <h4 class="trade-form-h">${esc(t('trade.transfer.h'))} ${tipHtml('trade.transfer.p')}</h4>
         <span class="trade-field-label">${esc(t('trade.transfer.pick'))}</span>
-        ${transferPickerHtml()}
+        <div id="trade-pick-wrap">${transferPickerHtml()}</div>
       </div>
       <div class="trade-wb-side">
         <form class="trade-form" id="trade-transfer-form" novalidate>
@@ -2143,6 +2355,10 @@ function transferViewHtml() {
         </form>
       </div>
     </div>`;
+  // Same left filter sidebar + toolbar as Buy, once there's an inventory worth filtering.
+  return invHasFilters()
+    ? `<section class="trade-browse has-side">${invFilterSideHtml()}<div class="trade-main">${invToolbarHtml()}${wb}</div></section>`
+    : wb;
 }
 
 function patchTransferView() {
@@ -2512,6 +2728,7 @@ function onClick(e) {
       if (tradeTab === target.dataset.tab) return;
       tradeTab = target.dataset.tab;
       setFltSheet(false);
+      openFacet = null; // browse + inventory share the popover state; don't carry it across
       render();
       if (tradeTab === 'sell' || tradeTab === 'transfer') maybeLoadSeller();
       return;
@@ -2589,6 +2806,25 @@ function onClick(e) {
     }
     case 'flt-drawer':
       return setFltSheet(!fltOpenMobile);
+    // --- Inventory filter (Sell/Transfer pickers) ---
+    case 'inv-val':
+      invToggleTrait(target.dataset.type, target.dataset.val);
+      return patchInvFilter();
+    case 'inv-open':
+      openFacet = openFacet === target.dataset.type ? null : target.dataset.type;
+      return patchInvFilter();
+    case 'inv-clear': {
+      resetInvFilter();
+      openFacet = null;
+      const q = root()?.querySelector('#inv-q'); if (q) q.value = '';
+      return patchInvFilter();
+    }
+    case 'inv-rm': {
+      const { kind, type, val } = target.dataset;
+      if (kind === 'q') { invFlt.q = ''; const q = root()?.querySelector('#inv-q'); if (q) q.value = ''; }
+      else if (kind === 't') invToggleTrait(type, val);
+      return patchInvFilter();
+    }
   }
 }
 function onSubmit(e) {
@@ -2614,6 +2850,10 @@ function onChange(e) {
     flt.sort = e.target.value;
     return applyFilters();
   }
+  if (e.target?.id === 'inv-sort') {
+    invFlt.sort = e.target.value;
+    return patchInvFilter();
+  }
   if (e.target?.id !== 'trade-currency') return;
   currency = e.target.value;
   try { localStorage.setItem('hcc-trade-cur', currency); } catch { /* private mode — fine */ }
@@ -2622,6 +2862,10 @@ function onChange(e) {
 }
 function onInput(e) {
   if (e.target?.id === 'trade-to') return queueTransferCheck(e.target.value);
+  if (e.target?.id === 'inv-q') {
+    invFlt.q = e.target.value.trim();
+    return patchInvFilter(); // patches facets/chips/picker, not the input — focus survives
+  }
   if (e.target?.id === 'trade-sell-price') {
     const net = root()?.querySelector('#trade-sell-net'); // LAND only — element absent for Creatures
     if (net) net.innerHTML = landSellNetHtml(e.target.value);
@@ -2642,6 +2886,7 @@ function resetSellerState() {
   myOffers = null; offerState = null; offerCtx = null; acceptState = null; acceptBusyId = null;
   sellPickOffers = null;
   transferSel = null; transferCheck = null; transferAck = false;
+  resetInvFilter(); openFacet = null; // inventory traits differ per collection
   clearTimeout(transferCheckTimer);
 }
 function ensureDelegation() {
@@ -2669,7 +2914,7 @@ function wireEsc() {
   if (escWired) return; escWired = true;
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    if (openFacet) { openFacet = null; patchFilters(); return; }
+    if (openFacet) { openFacet = null; repaintFacetUI(); return; }
     if (fltOpenMobile) { setFltSheet(false); return; }
     if (safetyOpen) { safetyOpen = false; render(); return; }
     if (modalToken) closeModal();
@@ -2677,7 +2922,7 @@ function wireEsc() {
   // Any click outside an open trait popover closes it (multi-select clicks inside
   // keep it open — picking three Eyes values shouldn't take three reopens).
   document.addEventListener('click', e => {
-    if (openFacet && !e.target.closest('.trade-flt-dd')) { openFacet = null; patchFilters(); }
+    if (openFacet && !e.target.closest('.trade-flt-dd')) { openFacet = null; repaintFacetUI(); }
   });
 }
 

@@ -1736,6 +1736,7 @@ button.trade-net:hover { box-shadow: 0 0 12px var(--hr-banana-25); }
 .trade-flt-sort { font-size: 13px; padding-top: 9px; padding-bottom: 9px; flex: 0 0 auto; }
 .trade-flt-toggle { display: none; margin-top: 0; align-items: center; gap: 7px; }
 
+
 /* Sidebar variants: price row stretches, trait dropdowns become inline accordions */
 .trade-side .trade-flt-price { display: flex; width: 100%; box-sizing: border-box; }
 .trade-side .trade-flt-price input { flex: 1 1 0; min-width: 0; }
@@ -2100,6 +2101,8 @@ body.trade-sheet-open { overflow: hidden; }
 .trade-mine-card img, .trade-mine-card .trade-tile-noimg {
   width: 44px; height: 44px; border-radius: var(--hr-radius-sm); object-fit: cover; font-size: 20px;
 }
+/* LAND slime pet: contain-fit on a soft tile so the transparent-padded SVG isn't cropped. */
+.trade-mine-card img[data-fallback] { object-fit: contain; padding: 8%; box-sizing: border-box; background: var(--hr-bg-2); }
 .trade-mine-info { display: flex; flex-direction: column; min-width: 0; }
 .trade-mine-name { font-size: 12.5px; font-weight: 800; color: var(--hr-fg-0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .trade-mine-price { font-size: 12.5px; font-weight: 900; color: var(--hr-primary); }
@@ -2324,7 +2327,7 @@ a.trade-buy-btn { display: inline-flex; }
 .trade-tip-btn:hover { color: var(--hr-fg-0); border-color: var(--hr-fg-3); }
 .trade-tip-pop {
   position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
-  width: max-content; max-width: 260px; padding: 10px 12px; z-index: 60;
+  width: max-content; max-width: min(260px, calc(100vw - 24px)); padding: 10px 12px; z-index: 60;
   border-radius: var(--hr-radius-md); background: var(--hr-bg-3);
   border: 1px solid var(--hr-line-strong); box-shadow: var(--hr-shadow-2);
   font-family: var(--hr-body); font-size: 12px; font-weight: 500; line-height: 1.5;
@@ -2333,6 +2336,10 @@ a.trade-buy-btn { display: inline-flex; }
 }
 .trade-tip:hover .trade-tip-pop, .trade-tip.is-open .trade-tip-pop,
 .trade-tip-btn:focus-visible + .trade-tip-pop { opacity: 1; visibility: visible; }
+/* The risk note sits at the top-right of the header, so its ⓘ is near the viewport edge:
+   anchor the popover's right edge to the icon and let it grow leftward instead of centring
+   (which overflowed off-screen and collided with the wallet bar). */
+.trade-hero-risk .trade-tip-pop { left: auto; right: 0; transform: none; }
 
 /* ---- Wallet safety primer (one-time, before first connect) + 🛡 pill ---- */
 .trade-safety { z-index: 1100; } /* above the token modal */
