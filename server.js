@@ -67,6 +67,11 @@ const SEL_TOTAL_SUPPLY        = '0x18160ddd'; // totalSupply()
 const SEL_TOKEN_BY_INDEX      = '0x4f6ccce7'; // tokenByIndex(uint256)
 const SEL_OWNER_OF            = '0x6352211e'; // ownerOf(uint256)
 const ETH_RPC_URL             = process.env.ETH_RPC_URL || 'https://eth.blockscout.com/api/eth-rpc';
+// Balance reads MUST reflect a fresh top-up. Blockscout's eth-rpc has been observed to lag
+// recent balance changes (reporting a stale, lower balance), which wrongly blocks funded
+// buyers — so wallet-balance lookups use a full node. Heavy estate/LAND eth_calls (cached,
+// slow-changing) stay on ETH_RPC_URL to avoid hammering a public node.
+const ETH_BALANCE_RPC         = process.env.ETH_BALANCE_RPC || 'https://ethereum-rpc.publicnode.com';
 const ZK_RPC_URL              = process.env.ZK_RPC_URL || 'https://rpc.immutable.com'; // Immutable zkEVM (Creatures)
 // Read selectors for the authoritative per-wallet eligibility lookup (see getWalletHoldings).
 const SEL_BALANCE_OF          = '0x70a08231'; // balanceOf(address)
@@ -1473,8 +1478,11 @@ slimeIndex.getSlimeIndex(); // warm the sweep at boot, in the background
 // All active LAND listings as Map<tokenId, listing>, briefly cached — merged into the
 // parcel rows so a listed parcel shows its price and is buyable.
 const slimeListingsCache = { data: null, at: 0 };
-async function landListingsByToken() {
-  if (slimeListingsCache.data && Date.now() - slimeListingsCache.at < 60 * 1000) return slimeListingsCache.data;
+const LAND_LISTINGS_TTL_MS = 30 * 1000; // shorter than Creatures: OpenSea indexes new listings within seconds
+// `force` bypasses the cache READ (still refreshes it) — used right after a listing is
+// created so the freshly-indexed order overwrites any cached "not listed yet" snapshot.
+async function landListingsByToken(force = false) {
+  if (!force && slimeListingsCache.data && Date.now() - slimeListingsCache.at < LAND_LISTINGS_TTL_MS) return slimeListingsCache.data;
   const map = new Map();
   if (landMarket.configured()) {
     let cursor = '', pages = 0;
@@ -1608,7 +1616,7 @@ async function handleMarketplaceApi(request, response, url) {
   const elsewhereMatch = pathname.match(/^\/api\/market\/creatures\/eth-elsewhere\/(0x[0-9a-fA-F]{40})$/);
   if (elsewhereMatch) {
     let mainnetEthWei = null;
-    try { mainnetEthWei = await ethGetBalance(ETH_RPC_URL, elsewhereMatch[1]); }
+    try { mainnetEthWei = await ethGetBalance(ETH_BALANCE_RPC, elsewhereMatch[1]); }
     catch (err) { console.error('Mainnet ETH balance failed:', err.message); }
     sendJson(response, 200, { mainnetEthWei }, { 'Cache-Control': 'no-store' });
     return;
@@ -2074,7 +2082,14 @@ async function handleMarketplaceApi(request, response, url) {
       sendJson(response, 400, { error: 'bad_order' }); return;
     }
     try {
-      sendJson(response, 200, await landMarket.createListing({ orderParameters, signature }));
+      const created = await landMarket.createListing({ orderParameters, signature });
+      // The new listing should appear on the "On sale" browse promptly. Drop the cached
+      // listings snapshot now, and force-refresh it ~10s out — by then OpenSea has indexed
+      // the order, so the refresh captures it (a plain re-fetch right now could re-cache a
+      // still-missing snapshot for a full TTL). See landListingsByToken(force).
+      slimeListingsCache.data = null;
+      setTimeout(() => { landListingsByToken(true).catch(() => {}); }, 10000);
+      sendJson(response, 200, created);
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }

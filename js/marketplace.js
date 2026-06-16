@@ -108,6 +108,7 @@ const RARITY_TIERS = ['Legendary', 'Epic', 'Rare', 'Uncommon', 'Common'];
 // No price/scope (your items aren't all priced/listed); facets recomputed locally.
 let invFlt = { q: '', traits: new Map(), sort: 'rank' };
 let invFacets = null;          // [{type, values:[{v,n}]}] computed from the owned set
+let landListRefreshTimer = null; // delayed browse refresh after a LAND listing (OpenSea index lag)
 
 // What's being browsed — endpoint, the noun for copy, which i18n count keys to use,
 // and whether the dataset has rarity TIERS (Creatures do; Slimes don't — their parts
@@ -1164,16 +1165,18 @@ async function waitForReceipt(hash, timeoutMs = 180000) {
 async function handleBuyLand(it) {
   try {
     setBuy('prepare');
-    // Pre-flight: price + a gas cushion must already sit on MAINNET (no bridge here —
-    // this is the opposite direction from the zkEVM funds helper).
     const needWei = BigInt(Math.round((it.totalEth ?? it.priceEth) * 1e6)) * 10n ** 12n + 10n ** 16n; // +0.01 ETH gas cushion
-    try {
-      const ee = await fetch(`/api/market/creatures/eth-elsewhere/${account}`).then(r => r.ok ? r.json() : null);
-      if (ee?.mainnetEthWei != null && BigInt(ee.mainnetEthWei) < needWei) {
-        setBuy('error', { msg: t('trade.err.landFunds').replace('{x}', fmtEth(Number(needWei) / 1e18)).replace('{y}', fmtEth(Number(BigInt(ee.mainnetEthWei)) / 1e18)) });
-        return;
-      }
-    } catch { /* pre-flight unavailable — the wallet will still guard */ }
+    // Switch to mainnet first so the pre-flight reads the AUTHORITATIVE balance straight
+    // from the wallet — the exact figure MetaMask shows and uses to fund the tx. A
+    // third-party RPC (e.g. Blockscout) can lag a recent top-up and wrongly block a funded
+    // buyer; the wallet's own eth_getBalance never does. null = read failed → let it through
+    // (the wallet still guards at signing).
+    await switchToChain('0x1');
+    const balWei = await readNative(account);
+    if (balWei != null && balWei < needWei) {
+      setBuy('error', { msg: t('trade.err.landFunds').replace('{x}', fmtEth(Number(needWei) / 1e18)).replace('{y}', fmtEth(Number(balWei) / 1e18)) });
+      return;
+    }
 
     const res = await fetch('/api/market/land/buy/prepare', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -1182,7 +1185,6 @@ async function handleBuyLand(it) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { setBuy('error', { msg: buyServerError(data.error) }); return; }
 
-    await switchToChain('0x1');
     for (const tx of (data.transactions || [])) {
       setBuy('fulfill');
       const hash = await eth().request({
@@ -2558,8 +2560,12 @@ async function handleSellLand(form) {
     setSell('done');
     sellSel = null;
     form.reset();
-    loadSellerData();      // refresh "my listings" + picker
-    loadListings(true);    // the new listing appears in browse (after OpenSea indexes it)
+    loadSellerData();        // refresh "my listings" + picker
+    // OpenSea takes a few seconds to index a brand-new listing, and the server re-warms its
+    // listings cache ~10s out — so refresh "my listings" + the On-sale browse again then,
+    // otherwise the freshly-listed parcel wouldn't show on the market until the cache aged out.
+    clearTimeout(landListRefreshTimer);
+    landListRefreshTimer = setTimeout(() => { loadSellerData(); loadListings(true); }, 11000);
   } catch (err) {
     console.error('LAND sell failed:', err);
     setSell('error', { msg: friendlyError(err) });
@@ -2679,14 +2685,19 @@ async function refreshBalance() {
   const el = root()?.querySelector('#trade-bal');
   if (!el) return;
   if (coll === 'land') {
-    // LAND count from the owned list (loaded by loadSellerData), mainnet ETH from the
-    // server (provider-independent — works whatever chain the wallet sits on).
     el.textContent = Array.isArray(owned) ? String(owned.length) : '—';
-    try {
-      const ee = await fetch(`/api/market/creatures/eth-elsewhere/${account}`).then(r => r.ok ? r.json() : null);
-      const ethEl = root()?.querySelector('#trade-bal-eth');
-      if (ethEl) ethEl.textContent = ee?.mainnetEthWei != null ? fmtWeiEth(BigInt(ee.mainnetEthWei)) : '—';
-    } catch { /* leave em-dash */ }
+    const ethEl = root()?.querySelector('#trade-bal-eth');
+    // On mainnet, read straight from the wallet (authoritative — matches MetaMask exactly).
+    // Off mainnet, fall back to the server (it can read mainnet whatever chain the wallet
+    // sits on). A third-party RPC can lag a recent top-up, so prefer the wallet when we can.
+    if (onRightChain()) {
+      if (ethEl) ethEl.textContent = fmtWeiEth(await readNative(account));
+    } else {
+      try {
+        const ee = await fetch(`/api/market/creatures/eth-elsewhere/${account}`).then(r => r.ok ? r.json() : null);
+        if (ethEl) ethEl.textContent = ee?.mainnetEthWei != null ? fmtWeiEth(BigInt(ee.mainnetEthWei)) : '—';
+      } catch { /* leave em-dash */ }
+    }
     return;
   }
   const [bal, zkEth, imx] = await Promise.all([readBalance(), readErc20(IMX_ETH_TOKEN, account), readNative(account)]);

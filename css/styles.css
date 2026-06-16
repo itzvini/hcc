@@ -1565,9 +1565,11 @@ footer { margin-top: 28px; }
   background: color-mix(in srgb, var(--hr-banana) 8%, rgba(20,19,23,.6));
   border: 1px solid rgba(255,249,95,.35);
   backdrop-filter: blur(8px);
-  /* backdrop-filter makes this a stacking context; without an explicit z-index the
-     later command bar (its own context) paints OVER this note's open ⓘ tooltip. */
-  position: relative; z-index: 6;
+  /* backdrop-filter makes this a stacking context, so its open ⓘ tooltip can't escape it.
+     The command bar below is z-index 6 and comes later in the DOM, so an equal z-index let
+     it paint OVER the tooltip — this must sit ABOVE the command bar (6), but below the
+     sticky nav (20) so the tooltip never covers the nav. */
+  position: relative; z-index: 10;
 }
 .trade-hero-risk .trade-beta-chip { font-size: 9.5px; padding: 5px 9px; }
 .trade-hero-risk p { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--hr-fg-1); }
