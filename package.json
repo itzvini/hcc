@@ -1,8 +1,8 @@
 {
-  "name": "hcc-player-council",
+  "name": "hcc-site",
   "version": "1.0.0",
   "private": true,
-  "description": "Static HCC Player Council announcement site for Railway deployment.",
+  "description": "The Highrise Creature Club member site — club hub, market data, in-wallet trading, holders, roadmap, and the Player Council election. Static front-end served by a small Node server on Railway.",
   "main": "server.js",
   "scripts": {
     "start": "node --env-file-if-exists=.env server.js",

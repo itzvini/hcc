@@ -1,4 +1,4 @@
-# Contributing to HCC Player Council
+# Contributing to the Highrise Creature Club site
 
 Thanks for wanting to help improve this site! Here's everything you need to get started.
 
