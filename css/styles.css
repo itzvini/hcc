@@ -1415,6 +1415,19 @@ footer { margin-top: 28px; }
   outline: none; border-color: var(--hr-primary);
   box-shadow: 0 0 0 3px var(--hr-primary-25);
 }
+/* Listing-length select on the LAND sell form — matches the text inputs above. */
+.trade-field select {
+  width: 100%; box-sizing: border-box; cursor: pointer; appearance: none; -webkit-appearance: none;
+  background: var(--hr-bg-2); border: 1px solid var(--hr-line-strong);
+  border-radius: var(--hr-radius-md); padding: 13px 15px;
+  font-family: var(--hr-sans); font-size: 15px; font-weight: 700; color: var(--hr-fg-0);
+  transition: border-color .2s, box-shadow .2s;
+}
+.trade-field select:focus { outline: none; border-color: var(--hr-primary); box-shadow: 0 0 0 3px var(--hr-primary-25); }
+/* Live "you'll receive after fees" hint under the LAND price field. */
+.trade-sell-net { margin: -4px 0 12px; min-height: 18px; }
+.trade-sell-net-hint { font-size: 12px; font-weight: 600; color: var(--hr-fg-3); line-height: 1.45; }
+.trade-sell-net-hint b { color: var(--hr-primary); font-weight: 800; }
 
 /* Primary send button (mint pill) */
 .trade-send {

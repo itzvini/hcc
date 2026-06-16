@@ -1863,10 +1863,13 @@ async function loadSellerData() {
   sellerLoading = true;
   try {
     if (coll === 'land') {
-      // LAND: owned comes from OpenSea (chain-independent); no in-site listings/offers yet.
-      const o = await fetch(`/api/market/land/owned/${account}`).then(r => r.ok ? r.json() : { items: [] });
+      // LAND: owned + the wallet's own active listings, both from OpenSea (chain-independent).
+      const [o, m] = await Promise.all([
+        fetch(`/api/market/land/owned/${account}`).then(r => r.ok ? r.json() : { items: [] }),
+        fetch(`/api/market/land/mine/${account}`).then(r => r.ok ? r.json() : { items: [] }),
+      ]);
       owned = o.items || [];
-      mine = [];
+      mine = m.items || [];
     } else {
       const [o, m] = await Promise.all([
         fetch(`/api/market/creatures/owned/${account}`).then(r => r.ok ? r.json() : { items: [] }),
@@ -1896,12 +1899,12 @@ function sellStatusHtml() {
     create: 'trade.sell.create',
   };
   if (sellState.phase === 'done') {
-    return `<div class="trade-status is-ok"><span aria-hidden="true">✓</span><span>${esc(t('trade.sell.done'))}</span></div>`;
+    return `<div class="trade-status is-ok"><span aria-hidden="true">✓</span><span>${esc(t(skey('trade.sell.done')))}</span></div>`;
   }
   if (sellState.phase === 'error') {
     return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(sellState.msg)}</span></div>`;
   }
-  return `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t(STEP_KEY[sellState.phase]))}</span></div>`;
+  return `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t(skey(STEP_KEY[sellState.phase])))}</span></div>`;
 }
 
 function myListingsHtml() {
@@ -1925,18 +1928,20 @@ function myListingsHtml() {
 }
 
 function sellPickerHtml() {
-  if (owned === null) return `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.sell.loadingOwned'))}</div>`;
+  if (owned === null) return `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t(skey('trade.sell.loadingOwned')))}</div>`;
   const listedIds = new Set((mine || []).map(l => String(l.tokenId)));
   const sellable = owned.filter(o => !listedIds.has(String(o.tokenId)));
-  if (!sellable.length) return `<p class="trade-form-p">${esc(t('trade.sell.none'))}</p>`;
+  if (!sellable.length) return `<p class="trade-form-p">${esc(t(skey('trade.sell.none')))}</p>`;
   return `
-    <div class="trade-pick" role="listbox" aria-label="${esc(t('trade.sell.pickAria'))}">
+    <div class="trade-pick" role="listbox" aria-label="${esc(t(skey('trade.sell.pickAria')))}">
       ${sellable.map(o => `
         <button class="trade-pick-tile ${String(sellSel) === String(o.tokenId) ? 'is-sel' : ''}" type="button"
           role="option" aria-selected="${String(sellSel) === String(o.tokenId)}"
           data-act="sell-pick" data-token="${esc(o.tokenId)}" title="${esc(o.name)}">
-          ${o.image ? `<img src="${esc(o.image)}" alt="" loading="lazy" />` : '<div class="trade-tile-noimg">🐾</div>'}
-          <span>${esc(o.name.replace('Highrise Creature ', ''))}</span>
+          ${coll === 'land' && petUrl(o)
+            ? `<img src="${esc(petUrl(o))}" ${o.image ? `data-fallback="${esc(o.image)}"` : ''} alt="" loading="lazy" />`
+            : (o.image ? `<img src="${esc(o.image)}" alt="" loading="lazy" />` : '<div class="trade-tile-noimg">🐾</div>')}
+          <span>${esc(o.name.replace(/^Highrise (Creature|LAND) /, ''))}</span>
         </button>`).join('')}
     </div>`;
 }
@@ -1992,37 +1997,59 @@ function walletGateHtml() {
   </div>`;
 }
 
+// LAND reuses the Creature sell views; copy that must read differently has a `.land`
+// variant in the locale file. Falls back to the base (Creature) copy when none exists.
+function skey(base) {
+  if (coll !== 'land') return base;
+  const k = `${base}.land`;
+  return t(k) === k ? base : k;
+}
+
 function sellViewHtml() {
-  if (coll === 'land') {
-    return `<div class="apply-state-box">
-      <div class="apply-state-ico" aria-hidden="true">🗺️</div>
-      <h3>${esc(t('trade.land.sellSoon.h'))}</h3>
-      <p>${esc(t('trade.land.sellSoon.p'))}</p>
-    </div>`;
-  }
-  if (!account || !onZk()) return walletGateHtml();
+  if (!account || !onRightChain()) return walletGateHtml();
   const sellBusy = sellState && SELL_BUSY_PHASES.has(sellState.phase);
-  // Workbench split: picker browses wide on the left, the action card (price + list
-  // + instant sell) stays put on the right — no scrolling past your own Creatures to
-  // find the button. The price input must stay inside the form (handleSell reads it).
+  const isLand = coll === 'land';
+  // Workbench split: picker browses wide on the left, the action card (price + list)
+  // stays put on the right — no scrolling past your own items to find the button. The
+  // price/duration inputs must stay inside the form (handleSell reads them). LAND lists
+  // on OpenSea's Seaport (native ETH, no in-site "instant sell" into offers yet).
   return `
     ${myListingsHtml()}
     <div class="trade-workbench">
       <div class="trade-wb-main">
-        <h4 class="trade-form-h">${esc(t('trade.sell.h'))} ${tipHtml('trade.sell.p')}</h4>
+        <h4 class="trade-form-h">${esc(t(skey('trade.sell.h')))} ${tipHtml(skey('trade.sell.p'))}</h4>
         ${sellPickerHtml()}
       </div>
       <div class="trade-wb-side">
         <form class="trade-form" id="trade-sell-form" novalidate>
           <label class="trade-field"><span>${esc(t('trade.sell.price'))}</span>
             <input id="trade-sell-price" type="text" inputmode="decimal" placeholder="${esc(t('trade.sell.price.ph'))}" autocomplete="off" /></label>
+          ${isLand ? landSellDurationHtml() : ''}
+          ${isLand ? `<div class="trade-sell-net" id="trade-sell-net">${landSellNetHtml('')}</div>` : ''}
           <button class="trade-send" id="trade-sell-submit" type="submit" ${sellBusy || !sellSel ? 'disabled' : ''}>
             ${esc(t('trade.sell.btn'))} <span aria-hidden="true">→</span></button>
           <div id="trade-sell-status" role="status" aria-live="polite">${sellStatusHtml()}</div>
         </form>
-        ${instantSellHtml()}
+        ${isLand ? '' : instantSellHtml()}
       </div>
     </div>`;
+}
+
+// LAND listing length (Seaport startTime→endTime). A short expiry means abandoned test
+// listings self-clear; the seller can still cancel early on-chain via "My listings".
+function landSellDurationHtml() {
+  return `<label class="trade-field"><span>${esc(t('trade.sell.duration'))}</span>
+    <select id="trade-sell-duration">
+      ${[1, 3, 7, 14, 30].map(d => `<option value="${d}" ${d === 7 ? 'selected' : ''}>${esc(t('trade.sell.days').replace('{n}', String(d)))}</option>`).join('')}
+    </select></label>`;
+}
+
+// Live "you'll receive" estimate under the LAND price field — the 6% (1% OpenSea + 5%
+// royalty) is shown up front; the exact split is in the order the wallet shows on sign.
+function landSellNetHtml(priceStr) {
+  const p = parseFloat(String(priceStr).replace(',', '.'));
+  if (!(p > 0)) return `<span class="trade-sell-net-hint">${esc(t('trade.sell.feeNote'))}</span>`;
+  return `<span class="trade-sell-net-hint">${t('trade.sell.netNote').replace('{net}', `<b>${esc(fmtEth(p * 0.94))} ETH</b>`).replace('{fee}', '6')}</span>`;
 }
 
 // Picker of transferable Creatures (owned minus actively listed — transferring a
@@ -2204,12 +2231,15 @@ function sellServerError(code) {
   const KEY = {
     insufficient: 'trade.err.notOwner', bad_price: 'trade.err.badPrice',
     bad_token: 'trade.err.badId', rate_limited: 'trade.err.rate',
+    not_owner: 'trade.err.notOwner', not_found: 'trade.err.notOwner',
+    disabled: 'trade.err.sellDisabled', blocked_account: 'trade.err.osBlocked',
   };
   return t(KEY[code] || 'trade.err.unavailable');
 }
 
 async function handleSell(form) {
   if (sellState && SELL_BUSY_PHASES.has(sellState.phase)) return;
+  if (coll === 'land') return handleSellLand(form);
   const priceRaw = (form.querySelector('#trade-sell-price').value || '').trim().replace(',', '.');
   if (!sellSel) return setSell('error', { msg: t('trade.err.noSel') });
   if (!/^\d{1,6}(\.\d{1,18})?$/.test(priceRaw) || Number(priceRaw) <= 0) {
@@ -2262,8 +2292,67 @@ async function handleSell(form) {
   }
 }
 
+// LAND listing: build + sign a Seaport order on Ethereum mainnet, then relay it to
+// OpenSea. The server constructs the order (so fees/recipients can't be tampered with);
+// the wallet signs the EIP-712 order and, the first time only, a one-off conduit approval.
+async function handleSellLand(form) {
+  const priceRaw = (form.querySelector('#trade-sell-price').value || '').trim().replace(',', '.');
+  const durationDays = Number(form.querySelector('#trade-sell-duration')?.value) || 7;
+  if (!sellSel) return setSell('error', { msg: t(skey('trade.err.noSel')) });
+  if (!/^\d{1,6}(\.\d{1,18})?$/.test(priceRaw) || Number(priceRaw) <= 0) {
+    return setSell('error', { msg: t('trade.err.badPrice') });
+  }
+
+  try {
+    setSell('prepare');
+    await switchToChain('0x1'); // sign + approve happen on mainnet (no-op if already there)
+    const res = await fetch('/api/market/land/sell/prepare', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ makerAddress: account, tokenId: sellSel, priceEth: priceRaw, durationDays }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return setSell('error', { msg: sellServerError(data.error) });
+
+    let signature = null;
+    for (const action of (data.actions || [])) {
+      if (action.type === 'TRANSACTION') { // one-time setApprovalForAll to OpenSea's conduit
+        setSell('approve');
+        const hash = await eth().request({
+          method: 'eth_sendTransaction',
+          params: [{ from: account, to: action.to, data: action.data, value: action.value && action.value !== '0x0' ? action.value : undefined }],
+        });
+        setSell('approveWait', { hash });
+        const receipt = await waitForReceipt(hash);
+        if (!receipt || receipt.status !== '0x1') return setSell('error', { msg: t('trade.err.txFailed') });
+      } else if (action.type === 'SIGNABLE') {
+        setSell('sign');
+        signature = await signTypedData(action.typedData);
+      }
+    }
+    if (!signature) return setSell('error', { msg: t('trade.err.unavailable') });
+
+    setSell('create');
+    const createRes = await fetch('/api/market/land/sell/create', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ orderParameters: data.orderParameters, signature }),
+    });
+    const created = await createRes.json().catch(() => ({}));
+    if (!createRes.ok) return setSell('error', { msg: sellServerError(created.error) });
+
+    setSell('done');
+    sellSel = null;
+    form.reset();
+    loadSellerData();      // refresh "my listings" + picker
+    loadListings(true);    // the new listing appears in browse (after OpenSea indexes it)
+  } catch (err) {
+    console.error('LAND sell failed:', err);
+    setSell('error', { msg: friendlyError(err) });
+  }
+}
+
 async function handleCancelListing(listingId) {
   if (cancelBusy) return;
+  if (coll === 'land') return handleCancelLandListing(listingId);
   cancelBusy = listingId; patchSellView();
   try {
     const prepRes = await fetch('/api/market/creatures/cancel/prepare', {
@@ -2286,6 +2375,39 @@ async function handleCancelListing(listingId) {
     loadListings(true); // drop it from browse too
   } catch (err) {
     console.error('Cancel failed:', err);
+    pendingFlash = err.friendly || friendlyError(err);
+  } finally {
+    cancelBusy = null;
+    if (pendingFlash) render(); else patchSellView();
+  }
+}
+
+// Cancel a LAND listing on-chain (Seaport cancel). Costs a little mainnet gas, but it
+// truly invalidates the order — an off-chain hide would leave the signature fillable.
+async function handleCancelLandListing(orderHash) {
+  cancelBusy = orderHash; patchSellView();
+  try {
+    const prepRes = await fetch('/api/market/land/cancel/prepare', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ orderHash, accountAddress: account }),
+    });
+    const prep = await prepRes.json().catch(() => ({}));
+    if (!prepRes.ok) throw Object.assign(new Error('prepare'), { friendly: sellServerError(prep.error) });
+
+    await switchToChain('0x1');
+    for (const tx of (prep.transactions || [])) {
+      const hash = await eth().request({
+        method: 'eth_sendTransaction',
+        params: [{ from: account, to: tx.to, data: tx.data, value: tx.value && tx.value !== '0x0' ? tx.value : undefined }],
+      });
+      const receipt = await waitForReceipt(hash);
+      if (!receipt || receipt.status !== '0x1') throw Object.assign(new Error('tx'), { friendly: t('trade.err.txFailed') });
+    }
+
+    mine = (mine || []).filter(l => l.listingId !== orderHash);
+    loadListings(true); // drop it from browse too
+  } catch (err) {
+    console.error('LAND cancel failed:', err);
     pendingFlash = err.friendly || friendlyError(err);
   } finally {
     cancelBusy = null;
@@ -2411,7 +2533,8 @@ function onClick(e) {
       sellSel = String(sellSel) === String(target.dataset.token) ? null : target.dataset.token;
       sellState = null;
       sellPickOffers = null;
-      if (sellSel != null) fetchSellPickOffers(sellSel);
+      // Instant-sell-into-offers is Creatures-only; LAND has no in-site offers yet.
+      if (sellSel != null && coll === 'creatures') fetchSellPickOffers(sellSel);
       return patchSellView();
     case 'transfer-pick':
       transferSel = String(transferSel) === String(target.dataset.token) ? null : target.dataset.token;
@@ -2499,6 +2622,11 @@ function onChange(e) {
 }
 function onInput(e) {
   if (e.target?.id === 'trade-to') return queueTransferCheck(e.target.value);
+  if (e.target?.id === 'trade-sell-price') {
+    const net = root()?.querySelector('#trade-sell-net'); // LAND only — element absent for Creatures
+    if (net) net.innerHTML = landSellNetHtml(e.target.value);
+    return;
+  }
   if (e.target?.id === 'flt-q') {
     flt.q = e.target.value.trim();
     return applyFilters(300);

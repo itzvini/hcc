@@ -2011,6 +2011,88 @@ async function handleMarketplaceApi(request, response, url) {
     return;
   }
 
+  // Prepare a LAND listing: one-time conduit approval (if needed) + the Seaport order
+  // typed-data the seller signs. Same trust model as the Creature sell flow; the order
+  // is built server-side so the client can't smuggle a different collection or recipient.
+  if (pathname === '/api/market/land/sell/prepare' && request.method === 'POST') {
+    if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    if (!landMarket.sellEnabled()) { sendJson(response, 503, { error: 'disabled' }); return; }
+    const sWait = rateLimited(`mktsell:${ip}`, 15, 60 * 1000);
+    if (sWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(sWait) }); return; }
+
+    const body = await readJsonBody(request, 4 * 1024);
+    const maker = String(body.makerAddress || '').toLowerCase();
+    const tokenId = String(body.tokenId || '');
+    const wei = parseEthToWei(body.priceEth);
+    if (!HEX_ADDRESS.test(maker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
+    if (!/^\d{1,80}$/.test(tokenId)) { sendJson(response, 400, { error: 'bad_token' }); return; }
+    if (wei == null || wei <= 0n) { sendJson(response, 400, { error: 'bad_price' }); return; }
+
+    try {
+      sendJson(response, 200, await landMarket.prepareListing({
+        tokenId, priceWei: wei.toString(), maker, durationDays: body.durationDays,
+      }));
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // Create the LAND listing from the signed order (relayed to OpenSea). The scope guard
+  // in createListing keeps our API key from posting anything but LAND listings.
+  if (pathname === '/api/market/land/sell/create' && request.method === 'POST') {
+    if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    if (!landMarket.sellEnabled()) { sendJson(response, 503, { error: 'disabled' }); return; }
+    const cWait = rateLimited(`mktsell:${ip}`, 15, 60 * 1000);
+    if (cWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(cWait) }); return; }
+
+    const body = await readJsonBody(request, 32 * 1024);
+    const { orderParameters, signature } = body || {};
+    if (!orderParameters || typeof orderParameters !== 'object'
+      || !/^0x[0-9a-f]{60,2600}$/i.test(String(signature || ''))) {
+      sendJson(response, 400, { error: 'bad_order' }); return;
+    }
+    try {
+      sendJson(response, 200, await landMarket.createListing({ orderParameters, signature }));
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // The caller's own active LAND listings (for "my listings" + cancel). Public on-chain
+  // data keyed to the connected wallet — no-store so it's never shared-cached.
+  const landMineMatch = pathname.match(/^\/api\/market\/land\/mine\/(0x[0-9a-f]{40})$/);
+  if (landMineMatch) {
+    if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    try {
+      sendJson(response, 200, await landMarket.myListings(landMineMatch[1]), { 'Cache-Control': 'no-store' });
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // Prepare an on-chain Seaport cancel for one of the caller's own LAND listings. Only
+  // the order's offerer can produce a valid cancel — Seaport enforces it, and we re-check.
+  if (pathname === '/api/market/land/cancel/prepare' && request.method === 'POST') {
+    if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    const kWait = rateLimited(`mktsell:${ip}`, 15, 60 * 1000);
+    if (kWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(kWait) }); return; }
+
+    const body = await readJsonBody(request, 4 * 1024);
+    const orderHash = String(body.orderHash || '').toLowerCase();
+    const maker = String(body.accountAddress || '').toLowerCase();
+    if (!/^0x[0-9a-f]{64}$/.test(orderHash)) { sendJson(response, 400, { error: 'bad_listing' }); return; }
+    if (!HEX_ADDRESS.test(maker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
+    try {
+      sendJson(response, 200, await landMarket.prepareCancel({ orderHash, maker }));
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
   sendJson(response, 404, { error: 'Not found' });
 }
 
