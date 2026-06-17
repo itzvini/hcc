@@ -1431,14 +1431,18 @@ footer { margin-top: 28px; }
 
 /* Price field with an ETH/fiat unit toggle — list in either, auto-converting between. */
 .trade-price-row { display: flex; gap: 8px; align-items: stretch; }
-.trade-price-row input { flex: 1 1 auto; min-width: 0; }
-.trade-price-unit {
-  flex: 0 0 auto; border-radius: var(--hr-radius-md); font-size: 13px; font-weight: 800;
+.trade-price-row input { flex: 1 1 auto; width: auto; min-width: 0; }
+/* Higher specificity than `.trade-field select` (which would force width:100% and reset
+   the chevron via the `background` shorthand) — keep the unit chip auto-width + arrowed. */
+.trade-field select.trade-price-unit {
+  flex: 0 0 auto; width: auto;
+  border-radius: var(--hr-radius-md); font-size: 13px; font-weight: 800;
   padding: 13px 34px 13px 14px; color: var(--hr-fg-0);
   border-color: var(--hr-line-strong); background-color: var(--hr-bg-2);
-  background-position: right 13px center;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237D7C88' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 13px center;
 }
-.trade-price-unit:disabled { opacity: .55; cursor: default; }
+.trade-field select.trade-price-unit:disabled { opacity: .55; cursor: default; }
 .trade-price-conv {
   display: block; margin-top: 7px; min-height: 16px;
   font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px;
