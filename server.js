@@ -1879,6 +1879,30 @@ async function handleMarketplaceApi(request, response, url) {
     return;
   }
 
+  // Exact-output GAS top-up quote: "send X ETH on Ethereum, receive ≥ Y native IMX on
+  // Immutable zkEVM". IMX (not the ETH ERC-20) is what pays gas, so a seller/transferrer
+  // with no IMX can't sign their one on-chain action — this bridges a little over. The
+  // in-panel tracker reuses /bridge/status (it keys on the tx hash, asset-agnostic).
+  if (pathname === '/api/market/creatures/bridge/gas/quote' && request.method === 'POST') {
+    if (!squidBridge.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    const gWait = rateLimited(`mktbridge:${ip}`, 6, 60 * 1000);
+    if (gWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(gWait) }); return; }
+
+    const body = await readJsonBody(request, 4 * 1024);
+    const addr = String(body.address || '').toLowerCase();
+    const wei = parseEthToWei(body.needImx);
+    if (!HEX_ADDRESS.test(addr)) { sendJson(response, 400, { error: 'bad_address' }); return; }
+    // A gas top-up is a few IMX; cap it so a tampered request can't quote a huge bridge.
+    if (wei == null || wei > 50n * 10n ** 18n) { sendJson(response, 400, { error: 'bad_price' }); return; }
+
+    try {
+      sendJson(response, 200, await squidBridge.quoteBridge(wei, addr, { toToken: squidBridge.ZK_IMX }));
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
   // Live bridge progress for the in-panel tracker. Squid's status API is the primary
   // signal; before Squid indexes the tx (~1 min) we fall back to the source-chain
   // receipt so the tracker can still show "confirmed on Ethereum".

@@ -63,6 +63,16 @@ const IS_ADDR = /^0x[0-9a-f]{40}$/;
 const IMX_ETH_TOKEN = '0x52a6c53869ce09a731cd772f245b97a4401d3348';
 const SQUID_NATIVE = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'; // Squid's native-coin placeholder
 const BRIDGE_URL = `https://app.squidrouter.com/?chains=1,13371&tokens=${SQUID_NATIVE},${IMX_ETH_TOKEN}`;
+// IMX is the NATIVE gas token on Immutable zkEVM — every on-chain action (a buy, a sell's
+// one-time collection approval, a transfer) needs a little, and the ETH ERC-20 can't pay
+// for it. This deep-link bridges native ETH on Ethereum → native IMX on zkEVM (both the
+// Squid native placeholder, resolved per chain); the one-tap quote does the same exactly.
+const GAS_BRIDGE_URL = `https://app.squidrouter.com/?chains=1,13371&tokens=${SQUID_NATIVE},${SQUID_NATIVE}`;
+const GAS_MIN_WEI = 10n ** 15n;        // < 0.001 IMX on hand → surface the gas helper
+const GAS_OK_WEI  = 5n * 10n ** 15n;   // ≥ 0.005 IMX → "you're set for gas" (matches the buy panel)
+const GAS_TARGET_IMX = 5;              // one-tap top-up target, in IMX (tunable) — a lot of
+                                       // runway (gas is fractions of a cent/tx) while still
+                                       // clearing typical bridge minimums; deep-link covers the rest
 
 // Wallet state
 let account = null;
@@ -188,6 +198,11 @@ let linkSync = null;
 // wipe an in-flight purchase status. {phase, msg?, hash?}; null = idle.
 let buyState = null;
 const BUY_BUSY_PHASES = new Set(['prepare', 'approve', 'approveWait', 'fulfill', 'fulfillWait']);
+
+// Gas-help state — the shared "you just need a little IMX for gas on zkEVM" panel that
+// Buy, Sell and Transfer all surface when a wallet can't cover its on-chain action.
+// {ctx:'buy'|'sell'|'transfer', imxBal, mainnetEthWei, quote:'loading'|null|{...}}; null = idle.
+let gasState = null;
 
 // Which action tab is active inside the Trade panel: 'buy' | 'sell' | 'transfer'.
 let tradeTab = 'buy';
@@ -876,6 +891,7 @@ function buyStatusHtml() {
     return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(buyState.msg)}</span></div>`;
   }
   if (buyState.phase === 'funds') return fundsHelpHtml();
+  if (buyState.phase === 'gas') return gasHelpHtml();
   return `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t(STEP_KEY[buyState.phase] || 'trade.buy.preparing'))}</span></div>`;
 }
 
@@ -986,6 +1002,122 @@ async function showFundsHelp(it) {
   }
 }
 
+// --- Gas (IMX) help — shared by Buy, Sell and Transfer ---------------------------------
+// The wall almost everyone hits at least once: trades settle on Immutable zkEVM, where
+// IMX is the native gas coin — and a buy, a first-time sell approval, or a transfer all
+// need a little of it. Bridged ETH can't pay it. So when a wallet's IMX runs dry we show
+// the same warm, one-tap path the Buy funds panel uses, but pointed at native IMX.
+
+function fmtImx(n) {
+  if (n == null || !Number.isFinite(Number(n))) return '—';
+  return `${Number(n).toLocaleString(undefined, { maximumFractionDigits: 3 })} IMX`;
+}
+
+// Gas-bridge status, with a context-agnostic "you're set" line on completion (the buy
+// "tap Buy again" copy would be wrong in Sell/Transfer). Other phases are asset-neutral,
+// so they reuse the shared tracker.
+function gasBridgeStatusHtml() {
+  const b = bridgeJob;
+  if (!b || b.kind !== 'gas') return '';
+  if (b.phase === 'done') {
+    return `<div class="trade-status is-ok"><span aria-hidden="true">✓</span><span>${esc(t('trade.gas.bridge.done'))}</span></div>`;
+  }
+  return bridgeStatusHtml();
+}
+
+// The panel itself. Mirrors fundsHelpHtml's bridge branch but for native IMX: one-tap
+// quoted top-up when the user holds mainnet ETH, a prefilled Squid deep-link otherwise.
+function gasHelpHtml() {
+  const g = gasState;
+  if (!g) return '';
+  const imx = fmtWeiEth(g.imxBal);
+  let hasMainnet = false;
+  try { hasMainnet = g.mainnetEthWei != null && BigInt(g.mainnetEthWei) > 0n; } catch { hasMainnet = false; }
+
+  let bridgeArea;
+  if (hasMainnet && g.quote === 'loading') {
+    bridgeArea = `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.bridge.quote.loading'))}</div>`;
+  } else if (hasMainnet && g.quote && g.quote.tx) {
+    const q = g.quote;
+    const mins = q.durationSeconds ? Math.max(1, Math.ceil(q.durationSeconds / 60)) : null;
+    const meta = [
+      q.feeUsd != null ? t('trade.bridge.quote.fees').replace('{f}', String(q.feeUsd)) : null,
+      mins != null ? t('trade.bridge.quote.mins').replace('{m}', String(mins)) : null,
+      t('trade.bridge.quote.by'),
+    ].filter(Boolean).join(' · ');
+    const busyBridge = bridgeJob && !BRIDGE_TERMINAL.has(bridgeJob.phase);
+    bridgeArea = `
+      <div class="trade-bridge-quote">
+        <div class="trade-bridge-line">${esc(t('trade.gas.bridge.line').replace('{x}', fmtEthFiat(q.fromEth)).replace('{y}', fmtImx(q.toEth)))}</div>
+        <div class="trade-bridge-meta">${esc(meta)}</div>
+        ${bridgeJob?.phase === 'done' ? '' : `<button class="trade-funds-btn" data-act="gas-bridge-now" type="button" ${busyBridge ? 'disabled' : ''}>${esc(t('trade.gas.bridge.now'))}</button>`}
+        ${gasBridgeStatusHtml()}
+      </div>`;
+  } else {
+    bridgeArea = `<a class="trade-funds-btn" href="${GAS_BRIDGE_URL}" target="_blank" rel="noopener">${esc(t('trade.gas.getBtn'))} ↗</a>
+      <p class="trade-funds-foot">${esc(t('trade.gas.foot'))}</p>`;
+  }
+
+  return `
+    <div class="trade-funds trade-gas">
+      <div class="trade-funds-h"><span aria-hidden="true">⛽</span> ${esc(t('trade.gas.h'))} ${tipHtml('trade.gas.p')}</div>
+      <ul class="trade-funds-list">
+        <li><span class="trade-funds-ic" aria-hidden="true">•</span><div>
+          <b>IMX</b> — ${esc(t('trade.gas.imxLine'))}<br>
+          <span>${esc(t('trade.funds.have'))} ${esc(imx)} IMX · ${esc(t('trade.funds.gasHint'))}</span>
+        </div></li>
+      </ul>
+      ${hasMainnet ? `<p class="trade-funds-net">${esc(t('trade.gas.bridgeNote'))}</p>` : ''}
+      ${bridgeArea}
+    </div>`;
+}
+
+// Read the IMX balance (+ mainnet ETH for the one-tap path), then, when there's ETH to
+// bridge, quote an exact-output top-up of GAS_TARGET_IMX. Renders into whichever surface
+// the calling flow lives in (Buy modal, or the inline Sell/Transfer status slot).
+async function showGasHelp(ctx) {
+  gasState = { ctx, imxBal: null, mainnetEthWei: null, quote: 'loading' };
+  patchGas();
+  const [imxBal, elsewhere] = await Promise.all([
+    readNative(account),
+    fetch(`/api/market/creatures/eth-elsewhere/${account}`).then(r => r.ok ? r.json() : null).catch(() => null),
+  ]);
+  if (gasState?.ctx !== ctx) return; // user moved on
+  const mainnetEthWei = elsewhere?.mainnetEthWei ?? null;
+  gasState = { ctx, imxBal, mainnetEthWei, quote: 'loading' };
+  patchGas();
+
+  let hasMainnet = false;
+  try { hasMainnet = mainnetEthWei != null && BigInt(mainnetEthWei) > 0n; } catch { hasMainnet = false; }
+  if (!hasMainnet) { gasState.quote = null; patchGas(); return; }
+  try {
+    const res = await fetch('/api/market/creatures/bridge/gas/quote', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ address: account, needImx: String(GAS_TARGET_IMX) }),
+    });
+    const q = res.ok ? await res.json() : null;
+    if (gasState?.ctx === ctx) { gasState.quote = q; patchGas(); }
+  } catch {
+    if (gasState?.ctx === ctx) { gasState.quote = null; patchGas(); }
+  }
+}
+
+// Repaint the gas panel wherever it currently lives. Buy renders it inside the modal
+// (buyStatusHtml), Sell inside its status row (sellStatusHtml), Transfer writes it into
+// the form's status element directly.
+function patchGas() {
+  if (!gasState) return;
+  if (gasState.ctx === 'buy')  return patchModal();
+  if (gasState.ctx === 'sell') return patchSellStatus();
+  if (gasState.ctx === 'transfer') {
+    // #trade-status is hidden until it carries an is-* state class; for the full panel we
+    // drop that class so the slot shows as a plain block (handleTransferSubmit restores
+    // the status styling on the next attempt).
+    const el = root()?.querySelector('#trade-status');
+    if (el) { el.className = 'trade-gas-slot'; el.innerHTML = gasHelpHtml(); }
+  }
+}
+
 // --- One-tap bridge (Squid): persistent job + live tracker ---
 // The bridge outlives any one screen: the job is held module-wide AND persisted to
 // localStorage, so closing the modal, switching tabs, or reloading the page never
@@ -1060,7 +1192,7 @@ function bridgeBannerHtml() {
   const dismiss = BRIDGE_TERMINAL.has(b.phase)
     ? `<button class="trade-bridgebar-x" data-act="bridge-dismiss" type="button" aria-label="${esc(t('trade.bridgebar.dismiss'))}">×</button>` : '';
   if (b.phase === 'done') {
-    return `<div class="trade-bridgebar is-ok"><span aria-hidden="true">✓</span><span>${esc(t('trade.bridgebar.done'))}</span><span class="trade-bridgebar-links">${bridgeLinksHtml(b)}</span>${dismiss}</div>`;
+    return `<div class="trade-bridgebar is-ok"><span aria-hidden="true">✓</span><span>${esc(t(isGasBridge(b) ? 'trade.gas.bridgebar.done' : 'trade.bridgebar.done'))}</span><span class="trade-bridgebar-links">${bridgeLinksHtml(b)}</span>${dismiss}</div>`;
   }
   if (b.phase === 'error') {
     return `<div class="trade-bridgebar is-bad"><span aria-hidden="true">⚠</span><span>${esc(b.msg || t('trade.bridge.failed'))}</span><span class="trade-bridgebar-links">${bridgeLinksHtml(b)}</span>${dismiss}</div>`;
@@ -1069,7 +1201,7 @@ function bridgeBannerHtml() {
   return `
     <div class="trade-bridgebar" role="status" aria-live="polite">
       <span class="trade-mini-spin" aria-hidden="true"></span>
-      <span>${esc(t('trade.bridgebar.bridging'))} — ${esc(t(stageKey))}${slow} · <b data-bridge-elapsed>${esc(fmtElapsed(Date.now() - b.startedAt))}</b>${b.mins ? ` / ~${esc(String(b.mins))} min` : ''}</span>
+      <span>${esc(t(isGasBridge(b) ? 'trade.gas.bridgebar.bridging' : 'trade.bridgebar.bridging'))} — ${esc(t(stageKey))}${slow} · <b data-bridge-elapsed>${esc(fmtElapsed(Date.now() - b.startedAt))}</b>${b.mins ? ` / ~${esc(String(b.mins))} min` : ''}</span>
       <span class="trade-bridgebar-links">${bridgeLinksHtml(b)}</span>
       ${dismiss}
     </div>`;
@@ -1100,7 +1232,7 @@ function bridgeStatusHtml() {
   if (!b) return '';
   const STEP = { switch: 'trade.bridge.switch', confirm: 'trade.bridge.confirm', back: 'trade.bridge.back' };
   if (b.phase === 'waiting') return bridgeTrackerHtml(b);
-  if (b.phase === 'done')  return `<div class="trade-status is-ok"><span aria-hidden="true">✓</span><span>${esc(t('trade.bridge.done'))}</span></div>`;
+  if (b.phase === 'done')  return `<div class="trade-status is-ok"><span aria-hidden="true">✓</span><span>${esc(t(isGasBridge(b) ? 'trade.gas.bridge.done' : 'trade.bridge.done'))}</span></div>`;
   if (b.phase === 'slow') {
     return `${bridgeTrackerHtml(b)}<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t('trade.bridge.slow'))}</span></div>`;
   }
@@ -1115,7 +1247,12 @@ function setBridgeJob(patchFields) {
   saveBridge();
   patchModal();
   patchBridgeBanner();
+  patchGas(); // keep the inline Sell/Transfer gas panels in step with the bridge
 }
+
+// A gas bridge moves native IMX (not the ETH ERC-20), so it lands in a different balance
+// and gets its own copy. kind defaults to 'eth' for older persisted jobs.
+const isGasBridge = b => (b || bridgeJob)?.kind === 'gas';
 
 // The tracking loop — independent of any screen. Resumable: runs off bridgeJob alone,
 // so it works identically right after sending and after a page reload mid-bridge.
@@ -1130,7 +1267,9 @@ async function trackBridge() {
   let tick = 0;
   while (Date.now() < deadline) {
     if (bridgeJob !== job || job.phase !== 'waiting') return;
-    const bal = await readErc20(IMX_ETH_TOKEN, job.account);
+    // Watch the asset the bridge actually delivers: native IMX for a gas top-up, the
+    // ETH ERC-20 for a price bridge.
+    const bal = isGasBridge(job) ? await readNative(job.account) : await readErc20(IMX_ETH_TOKEN, job.account);
     if (bal != null && bal >= needWei) return setBridgeJob({ phase: 'done', stage: 'arrived' });
     if (tick++ % 2 === 0) { // status every ~20s — visible movement without rate pressure
       try {
@@ -1151,14 +1290,16 @@ async function trackBridge() {
   if (bridgeJob === job && job.phase === 'waiting') setBridgeJob({ phase: 'slow' });
 }
 
-async function handleBridgeNow() {
-  const f = buyState;
-  const q = f?.quote;
+// Send the prepared Squid bridge tx, then hand off to the resumable tracker. Shared by
+// the ETH price bridge (Buy) and the IMX gas top-up (Buy/Sell/Transfer); `kind` and the
+// arrival target `needWei` are all that differ.
+async function runBridge(q, { kind, needWei }) {
   if (!q || q === 'loading' || !q.tx) return;
   if (bridgeJob && !BRIDGE_TERMINAL.has(bridgeJob.phase)) return; // one bridge at a time
   try {
-    bridgeJob = { phase: 'switch', account, mins: null, startedAt: Date.now() };
+    bridgeJob = { phase: 'switch', account, mins: null, startedAt: Date.now(), kind };
     patchModal();
+    patchGas();
     await eth().request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1' }] });
     setBridgeJob({ phase: 'confirm' });
     const hash = await eth().request({
@@ -1168,16 +1309,27 @@ async function handleBridgeNow() {
     setBridgeJob({ phase: 'back', hash });
     await ensureNetwork(); // back to Immutable zkEVM
     const mins = q.durationSeconds ? Math.max(1, Math.ceil(q.durationSeconds / 60)) : null;
-    const needWei = (BigInt(Math.round((f?.need ?? 0) * 1e6)) * 10n ** 12n).toString();
     setBridgeJob({
-      phase: 'waiting', hash, mins, startedAt: Date.now(), stage: 'submitted',
-      axelarUrl: null, needWei, quoteId: q.quoteId || '', requestId: q.requestId || '', account,
+      phase: 'waiting', hash, mins, startedAt: Date.now(), stage: 'submitted', kind,
+      axelarUrl: null, needWei: needWei.toString(), quoteId: q.quoteId || '', requestId: q.requestId || '', account,
     });
     trackBridge();
   } catch (err) {
     console.error('Bridge failed:', err);
     setBridgeJob({ phase: 'error', msg: friendlyError(err) });
   }
+}
+
+function handleBridgeNow() {
+  const f = buyState;
+  const needWei = BigInt(Math.round((f?.need ?? 0) * 1e6)) * 10n ** 12n; // arrive when the ETH price is covered
+  return runBridge(f?.quote, { kind: 'eth', needWei });
+}
+
+function handleGasBridgeNow() {
+  // Arrive when the top-up target's worth of native IMX has landed.
+  const needWei = BigInt(Math.round(GAS_TARGET_IMX * 1e6)) * 10n ** 12n;
+  return runBridge(gasState?.quote, { kind: 'gas', needWei });
 }
 
 function buyAreaHtml(it) {
@@ -1321,7 +1473,9 @@ async function handleBuy(listingId) {
     const [zkEthBal, imxBal] = await Promise.all([readErc20(IMX_ETH_TOKEN, account), readNative(account)]);
     const needWei = BigInt(Math.round((it.totalEth ?? it.priceEth) * 1e6)) * 10n ** 12n;
     if (zkEthBal != null && zkEthBal < needWei) { await showFundsHelp(it); return; }
-    if (imxBal != null && imxBal === 0n) { setBuy('error', { msg: t('trade.err.gas') }); return; }
+    // Has the ETH but no gas — the exact wall in the Discord report. Same guided IMX
+    // top-up the Sell/Transfer flows now use, instead of a terse "add some IMX".
+    if (imxBal != null && imxBal < GAS_MIN_WEI) { setBuy('gas'); showGasHelp('buy'); return; }
 
     const res = await fetch('/api/market/creatures/buy/prepare', {
       method: 'POST',
@@ -2224,6 +2378,7 @@ function sellStatusHtml() {
   if (sellState.phase === 'error') {
     return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(sellState.msg)}</span></div>`;
   }
+  if (sellState.phase === 'gas') return gasHelpHtml();
   return `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t(skey(STEP_KEY[sellState.phase])))}</span></div>`;
 }
 
@@ -2601,6 +2756,12 @@ async function handleSell(form) {
     let signature = null;
     for (const action of (data.actions || [])) {
       if (action.type === 'TRANSACTION') { // one-time collection approval
+        // The only on-chain step in an otherwise gasless listing — so check for IMX gas
+        // right here, not before prepare (a re-list with the approval already in place is
+        // gasless and must never be blocked). No gas → guided top-up instead of MetaMask's
+        // phantom "not enough IMX".
+        const imxBal = await readNative(account);
+        if (imxBal != null && imxBal < GAS_MIN_WEI) { setSell('gas'); showGasHelp('sell'); return; }
         setSell('approve');
         const hash = await eth().request({
           method: 'eth_sendTransaction',
@@ -2788,6 +2949,13 @@ async function handleTransferSubmit(form) {
     const owner = await ownerOf(C().contract, tokenId);
     if (owner === null)    { fail(t('trade.err.noToken'));  btn.disabled = false; return; }
     if (owner !== account) { fail(t('trade.err.notOwner')); btn.disabled = false; return; }
+    // A transfer is always an on-chain tx. On zkEVM that means native IMX for gas — guide
+    // the user to top up rather than letting the send hit MetaMask's phantom shortfall.
+    // (LAND transfers settle on Ethereum and burn mainnet ETH; that's a separate path.)
+    if (coll === 'creatures') {
+      const imxBal = await readNative(account);
+      if (imxBal != null && imxBal < GAS_MIN_WEI) { showGasHelp('transfer'); btn.disabled = !transferSendAllowed(); return; }
+    }
     info(t('trade.status.confirm'));
     const hash = await sendTransfer(C().contract, tokenId, to);
     done(t('trade.status.sent'), hash);
@@ -2892,6 +3060,7 @@ function onClick(e) {
     case 'instant-sell':   return handleAcceptOffer(target.dataset.offer, sellSel);
     case 'cancel-offer':   return handleCancelOffer(target.dataset.offer);
     case 'bridge-now':     return handleBridgeNow();
+    case 'gas-bridge-now': return handleGasBridgeNow();
     case 'bridge-dismiss': return dismissBridge();
     case 'mmwarn-dismiss':
       try { localStorage.setItem('hcc-mmwarn-' + mmBuggyVersion, '1'); } catch { /* fine */ }
@@ -3040,6 +3209,7 @@ function resetSellerState() {
   myOffers = null; offerState = null; offerCtx = null; acceptState = null; acceptBusyId = null;
   sellPickOffers = null;
   transferSel = null; transferCheck = null; transferAck = false;
+  gasState = null; // an in-flight bridge keeps its own banner; this is just the help panel
   resetInvFilter(); openFacet = null; // inventory traits differ per collection
   clearTimeout(transferCheckTimer);
 }
