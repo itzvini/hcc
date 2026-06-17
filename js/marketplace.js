@@ -79,6 +79,7 @@ let listingsError = false;
 let ethUsd = null;
 let fxRates = { usd: 1 };   // USD-relative display rates from the listings API
 let currency = 'usd';       // active display currency for the fiat estimate ('eth' = none)
+let sellUnit = 'eth';       // unit the seller types a listing price in: 'eth' or a fiat code
 const CURRENCIES = ['usd', 'eth', 'eur', 'gbp', 'brl', 'rub', 'try', 'jpy', 'cad', 'aud'];
 
 // Explorer state (Creatures only — LAND keeps the plain cursor feed). Filters are
@@ -270,6 +271,75 @@ function fmtFiat(eth) {
   } catch {
     return `≈ ${Math.round(val).toLocaleString()} ${currency.toUpperCase()}`;
   }
+}
+
+// --- Sell-price units ---
+// A listing is always created in ETH on-chain, but the seller can type the price in
+// either ETH or a fiat currency and we auto-convert. These helpers turn one into the
+// other using the live ETH/USD rate plus the USD-relative fxRates from the listings API.
+function fiatPerEth(unit) {           // fiat-per-1-ETH for `unit`; null if no live rate
+  if (ethUsd == null) return null;
+  const fx = unit === 'usd' ? 1 : fxRates[unit];
+  return fx == null ? null : ethUsd * fx;
+}
+function toEthAmount(amount, unit) {  // `amount` in `unit` → ETH (Number), or null
+  if (unit === 'eth') return amount;
+  const r = fiatPerEth(unit);
+  return r ? amount / r : null;
+}
+function fromEthAmount(eth, unit) {   // ETH amount → value in `unit` (Number), or null
+  if (unit === 'eth') return eth;
+  const r = fiatPerEth(unit);
+  return r ? eth * r : null;
+}
+// Format an ETH amount directly into the fiat `unit` (ignores the global display
+// currency) — used for the sell form's live equivalence line.
+function fmtUnitFiat(eth, unit) {
+  const v = fromEthAmount(eth, unit);
+  if (v == null) return '';
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: unit.toUpperCase(), maximumFractionDigits: v >= 100 ? 0 : 2 }).format(v);
+  } catch {
+    return `${v.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${unit.toUpperCase()}`;
+  }
+}
+// Fiat entry is only possible once a live rate has loaded.
+function sellFiatReady() { return ethUsd != null; }
+// Drop a stale persisted fiat unit back to ETH if no rate is available.
+function normSellUnit() { if (!sellFiatReady() && sellUnit !== 'eth') sellUnit = 'eth'; return sellUnit; }
+// Normalize a typed sell price (in the active sellUnit) to an ETH string for the order.
+// Returns { ok:true, eth } or { ok:false, msg }.
+function sellPriceToEth(raw) {
+  const s = String(raw || '').trim().replace(',', '.');
+  const n = parseFloat(s);
+  if (!Number.isFinite(n) || n <= 0) return { ok: false, msg: t('trade.err.badPrice') };
+  if (sellUnit === 'eth') {
+    if (!/^\d{1,6}(\.\d{1,18})?$/.test(s)) return { ok: false, msg: t('trade.err.badPrice') };
+    return { ok: true, eth: s };
+  }
+  const eth = toEthAmount(n, sellUnit);
+  if (eth == null) return { ok: false, msg: t('trade.err.rateUnavail') };
+  const ethStr = String(Number(eth.toFixed(8))); // trim to a sane, server-valid precision
+  if (!/^\d{1,6}(\.\d{1,18})?$/.test(ethStr) || Number(ethStr) <= 0) return { ok: false, msg: t('trade.err.badPrice') };
+  return { ok: true, eth: ethStr };
+}
+// ETH value of the current input (string; '' if blank/invalid) — feeds the LAND net hint.
+function sellEthFromInput(raw) { const r = sellPriceToEth(raw); return r.ok ? r.eth : ''; }
+// The "≈ …" equivalence line shown under the price field: ETH→fiat or fiat→ETH.
+function sellConvHtml(raw) {
+  const n = parseFloat(String(raw || '').trim().replace(',', '.'));
+  if (!(n > 0)) return '';
+  if (sellUnit === 'eth') {
+    const fiat = fmtUnitFiat(n, currency === 'eth' ? 'usd' : currency);
+    return fiat ? `≈ ${fiat}` : '';
+  }
+  const eth = toEthAmount(n, sellUnit);
+  return eth != null ? `≈ ${fmtEth(eth)}` : '';
+}
+// Options for the price-unit selector: ETH always; fiats only when a rate is live.
+function sellUnitOptions() {
+  const units = sellFiatReady() ? ['eth', ...CURRENCIES.filter(u => u !== 'eth')] : ['eth'];
+  return units.map(u => `<option value="${u}" ${sellUnit === u ? 'selected' : ''}>${u === 'eth' ? 'ETH' : u.toUpperCase()}</option>`).join('');
 }
 
 // --- Known wallet bugs ---
@@ -2261,6 +2331,7 @@ function sellViewHtml() {
   if (!account || !onRightChain()) return walletGateHtml();
   const sellBusy = sellState && SELL_BUSY_PHASES.has(sellState.phase);
   const isLand = coll === 'land';
+  normSellUnit();
   invFacets = computeInvFacets();
   // Workbench split: picker browses wide on the left, the action card (price + list)
   // stays put on the right. The price/duration inputs must stay inside the form
@@ -2274,7 +2345,13 @@ function sellViewHtml() {
       <div class="trade-wb-side">
         <form class="trade-form" id="trade-sell-form" novalidate>
           <label class="trade-field"><span>${esc(t('trade.sell.price'))}</span>
-            <input id="trade-sell-price" type="text" inputmode="decimal" placeholder="${esc(t('trade.sell.price.ph'))}" autocomplete="off" /></label>
+            <div class="trade-price-row">
+              <input id="trade-sell-price" type="text" inputmode="decimal" placeholder="${esc(sellUnit === 'eth' ? t('trade.sell.price.ph') : t('trade.sell.price.phFiat'))}" autocomplete="off" />
+              <select id="trade-sell-unit" class="seg-select trade-price-unit" aria-label="${esc(t('trade.sell.unitAria'))}" ${sellFiatReady() ? '' : 'disabled'}>
+                ${sellUnitOptions()}
+              </select>
+            </div>
+            <span class="trade-price-conv" id="trade-price-conv">${esc(sellConvHtml(''))}</span></label>
           ${isLand ? landSellDurationHtml() : ''}
           ${isLand ? `<div class="trade-sell-net" id="trade-sell-net">${landSellNetHtml('')}</div>` : ''}
           <button class="trade-send" id="trade-sell-submit" type="submit" ${sellBusy || !sellSel ? 'disabled' : ''}>
@@ -2473,7 +2550,13 @@ function patchSellView() {
   const price = view.querySelector('#trade-sell-price')?.value;
   view.innerHTML = sellViewHtml();
   const input = view.querySelector('#trade-sell-price');
-  if (input && price) input.value = price;
+  if (input && price) {
+    input.value = price;
+    const convEl = view.querySelector('#trade-price-conv');
+    if (convEl) convEl.textContent = sellConvHtml(price);
+    const net = view.querySelector('#trade-sell-net');
+    if (net) net.innerHTML = landSellNetHtml(sellEthFromInput(price));
+  }
 }
 function patchSellStatus() {
   const st = root()?.querySelector('#trade-sell-status');
@@ -2501,17 +2584,16 @@ function sellServerError(code) {
 async function handleSell(form) {
   if (sellState && SELL_BUSY_PHASES.has(sellState.phase)) return;
   if (coll === 'land') return handleSellLand(form);
-  const priceRaw = (form.querySelector('#trade-sell-price').value || '').trim().replace(',', '.');
   if (!sellSel) return setSell('error', { msg: t('trade.err.noSel') });
-  if (!/^\d{1,6}(\.\d{1,18})?$/.test(priceRaw) || Number(priceRaw) <= 0) {
-    return setSell('error', { msg: t('trade.err.badPrice') });
-  }
+  const conv = sellPriceToEth(form.querySelector('#trade-sell-price').value);
+  if (!conv.ok) return setSell('error', { msg: conv.msg });
+  const priceEth = conv.eth;
 
   try {
     setSell('prepare');
     const res = await fetch('/api/market/creatures/sell/prepare', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ makerAddress: account, tokenId: sellSel, priceEth: priceRaw }),
+      body: JSON.stringify({ makerAddress: account, tokenId: sellSel, priceEth }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return setSell('error', { msg: sellServerError(data.error) });
@@ -2556,19 +2638,18 @@ async function handleSell(form) {
 // OpenSea. The server constructs the order (so fees/recipients can't be tampered with);
 // the wallet signs the EIP-712 order and, the first time only, a one-off conduit approval.
 async function handleSellLand(form) {
-  const priceRaw = (form.querySelector('#trade-sell-price').value || '').trim().replace(',', '.');
   const durationDays = Number(form.querySelector('#trade-sell-duration')?.value) || 7;
   if (!sellSel) return setSell('error', { msg: t(skey('trade.err.noSel')) });
-  if (!/^\d{1,6}(\.\d{1,18})?$/.test(priceRaw) || Number(priceRaw) <= 0) {
-    return setSell('error', { msg: t('trade.err.badPrice') });
-  }
+  const conv = sellPriceToEth(form.querySelector('#trade-sell-price').value);
+  if (!conv.ok) return setSell('error', { msg: conv.msg });
+  const priceEth = conv.eth;
 
   try {
     setSell('prepare');
     await switchToChain('0x1'); // sign + approve happen on mainnet (no-op if already there)
     const res = await fetch('/api/market/land/sell/prepare', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ makerAddress: account, tokenId: sellSel, priceEth: priceRaw, durationDays }),
+      body: JSON.stringify({ makerAddress: account, tokenId: sellSel, priceEth, durationDays }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return setSell('error', { msg: sellServerError(data.error) });
@@ -2905,6 +2986,26 @@ function onChange(e) {
     invFlt.sort = e.target.value;
     return patchInvFilter();
   }
+  if (e.target?.id === 'trade-sell-unit') {
+    const newUnit = e.target.value;
+    const input = root()?.querySelector('#trade-sell-price');
+    if (input) {
+      const n = parseFloat(String(input.value || '').trim().replace(',', '.'));
+      if (Number.isFinite(n) && n > 0) {                 // carry the typed amount across units
+        const eth = toEthAmount(n, sellUnit);
+        const next = eth != null ? fromEthAmount(eth, newUnit) : null;
+        if (next != null) input.value = String(Number(next.toFixed(newUnit === 'eth' ? 8 : 2)));
+      }
+      input.placeholder = newUnit === 'eth' ? t('trade.sell.price.ph') : t('trade.sell.price.phFiat');
+    }
+    sellUnit = newUnit;
+    try { localStorage.setItem('hcc-trade-sellunit', sellUnit); } catch { /* private mode — fine */ }
+    const convEl = root()?.querySelector('#trade-price-conv');
+    if (convEl) convEl.textContent = sellConvHtml(input?.value || '');
+    const net = root()?.querySelector('#trade-sell-net'); // LAND only
+    if (net) net.innerHTML = landSellNetHtml(sellEthFromInput(input?.value || ''));
+    return;
+  }
   if (e.target?.id !== 'trade-currency') return;
   currency = e.target.value;
   try { localStorage.setItem('hcc-trade-cur', currency); } catch { /* private mode — fine */ }
@@ -2918,8 +3019,10 @@ function onInput(e) {
     return patchInvFilter(); // patches facets/chips/picker, not the input — focus survives
   }
   if (e.target?.id === 'trade-sell-price') {
+    const convEl = root()?.querySelector('#trade-price-conv');
+    if (convEl) convEl.textContent = sellConvHtml(e.target.value);
     const net = root()?.querySelector('#trade-sell-net'); // LAND only — element absent for Creatures
-    if (net) net.innerHTML = landSellNetHtml(e.target.value);
+    if (net) net.innerHTML = landSellNetHtml(sellEthFromInput(e.target.value));
     return;
   }
   if (e.target?.id === 'flt-q') {
@@ -2988,6 +3091,7 @@ function wireProviderEvents() {
 export async function loadMarketplace() {
   loadedOnce = true;
   try { const c = localStorage.getItem('hcc-trade-cur'); if (c && CURRENCIES.includes(c)) currency = c; } catch { /* fine */ }
+  try { const u = localStorage.getItem('hcc-trade-sellunit'); if (u && CURRENCIES.includes(u)) sellUnit = u; } catch { /* fine */ }
   try { const k = localStorage.getItem('hcc-trade-coll'); if (k && COLLECTIONS[k]) coll = k; } catch { /* fine */ }
   flt.scope = browseDataset().defaultScope;
   // Deep link (/trade?coll=…&token=…): land straight on that token's detail modal.
