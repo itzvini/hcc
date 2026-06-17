@@ -408,6 +408,7 @@ getHolderStats().catch(err => console.error('Holder stats prefetch failed:', err
 const IMX_ZKEVM_CHAIN   = 'imtbl-zkevm-mainnet';
 const CREATURE_CONTRACT = '0xCf44b1cBC959295bbBb49935B1b339cC0AA77cdA';
 const IMX_ETH_TOKEN     = '0x52a6c53869ce09a731cd772f245b97a4401d3348'; // ETH on Immutable zkEVM (18 decimals)
+const IMX_L1_TOKEN      = '0xf57e7e7c23978c3caec3c3548e3d615c346e79ff'; // IMX (ERC-20) on Ethereum mainnet (18 decimals)
 const LAND_CONTRACT     = '0x8bf3a40ea2337e6e4f6e540680ea6390cb3b4e11'; // Highrise LAND on Ethereum
 const LAND_OS_SLUG      = 'highrise-land';
 const OPENSEA_API_KEY   = process.env.OPENSEA_API_KEY || '';
@@ -1615,10 +1616,22 @@ async function handleMarketplaceApi(request, response, url) {
   // caller's own address; the client can't read mainnet itself (CSP blocks external RPCs).
   const elsewhereMatch = pathname.match(/^\/api\/market\/creatures\/eth-elsewhere\/(0x[0-9a-fA-F]{40})$/);
   if (elsewhereMatch) {
-    let mainnetEthWei = null;
-    try { mainnetEthWei = await ethGetBalance(ETH_BALANCE_RPC, elsewhereMatch[1]); }
-    catch (err) { console.error('Mainnet ETH balance failed:', err.message); }
-    sendJson(response, 200, { mainnetEthWei }, { 'Cache-Control': 'no-store' });
+    const addr = elsewhereMatch[1];
+    // Both reads feed the funds/gas helpers: ETH (the price token to bridge) and IMX held
+    // on mainnet (the gas coin — bridging that straight over is cheaper than swapping ETH).
+    // Independent so one failing still yields the other.
+    const [ethRes, imxRes] = await Promise.allSettled([
+      ethGetBalance(ETH_BALANCE_RPC, addr),
+      ethCall(ETH_RPC_URL, IMX_L1_TOKEN, SEL_BALANCE_OF + padUint(BigInt(addr))),
+    ]);
+    if (ethRes.status === 'rejected') console.error('Mainnet ETH balance failed:', ethRes.reason?.message);
+    if (imxRes.status === 'rejected') console.error('Mainnet IMX balance failed:', imxRes.reason?.message);
+    const mainnetEthWei = ethRes.status === 'fulfilled' ? ethRes.value : null;
+    let mainnetImxWei = null;
+    if (imxRes.status === 'fulfilled' && imxRes.value) {
+      try { mainnetImxWei = BigInt(imxRes.value).toString(); } catch { /* leave null */ }
+    }
+    sendJson(response, 200, { mainnetEthWei, mainnetImxWei }, { 'Cache-Control': 'no-store' });
     return;
   }
 
@@ -1894,9 +1907,12 @@ async function handleMarketplaceApi(request, response, url) {
     if (!HEX_ADDRESS.test(addr)) { sendJson(response, 400, { error: 'bad_address' }); return; }
     // A gas top-up is a few IMX; cap it so a tampered request can't quote a huge bridge.
     if (wei == null || wei > 50n * 10n ** 18n) { sendJson(response, 400, { error: 'bad_price' }); return; }
+    // Source asset: 'imx' bridges the user's existing mainnet IMX straight over (cheapest —
+    // no swap); 'eth' (default) swaps a little mainnet ETH into IMX.
+    const fromToken = body.from === 'imx' ? squidBridge.IMX_L1 : undefined;
 
     try {
-      sendJson(response, 200, await squidBridge.quoteBridge(wei, addr, { toToken: squidBridge.ZK_IMX }));
+      sendJson(response, 200, await squidBridge.quoteBridge(wei, addr, { toToken: squidBridge.ZK_IMX, fromToken }));
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }

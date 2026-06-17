@@ -68,6 +68,11 @@ const BRIDGE_URL = `https://app.squidrouter.com/?chains=1,13371&tokens=${SQUID_N
 // for it. This deep-link bridges native ETH on Ethereum → native IMX on zkEVM (both the
 // Squid native placeholder, resolved per chain); the one-tap quote does the same exactly.
 const GAS_BRIDGE_URL = `https://app.squidrouter.com/?chains=1,13371&tokens=${SQUID_NATIVE},${SQUID_NATIVE}`;
+// IMX held on Ethereum mainnet is an ERC-20 — when the user already has some, bridging it
+// straight to native IMX on zkEVM is cheaper than swapping ETH (no DEX leg). This deep-link
+// is preset for exactly that; the one-tap quote takes the same source via {from:'imx'}.
+const IMX_L1_TOKEN = '0xf57e7e7c23978c3caec3c3548e3d615c346e79ff';
+const GAS_BRIDGE_URL_IMX = `https://app.squidrouter.com/?chains=1,13371&tokens=${IMX_L1_TOKEN},${SQUID_NATIVE}`;
 const GAS_MIN_WEI = 10n ** 15n;        // < 0.001 IMX on hand → surface the gas helper
 const GAS_OK_WEI  = 5n * 10n ** 15n;   // ≥ 0.005 IMX → "you're set for gas" (matches the buy panel)
 const GAS_TARGET_IMX = 5;              // one-tap top-up target, in IMX (tunable) — a lot of
@@ -1025,19 +1030,19 @@ function gasBridgeStatusHtml() {
   return bridgeStatusHtml();
 }
 
-// The panel itself. Mirrors fundsHelpHtml's bridge branch but for native IMX: one-tap
-// quoted top-up when the user holds mainnet ETH, a prefilled Squid deep-link otherwise.
+// The panel itself. Mirrors fundsHelpHtml's bridge branch but for native IMX. Source is
+// chosen in showGasHelp: 'imx' bridges the mainnet IMX the user already holds (cheapest),
+// 'eth' swaps a little mainnet ETH, null → no one-tap (prefilled Squid deep-link).
 function gasHelpHtml() {
   const g = gasState;
   if (!g) return '';
   const imx = fmtWeiEth(g.imxBal);
-  let hasMainnet = false;
-  try { hasMainnet = g.mainnetEthWei != null && BigInt(g.mainnetEthWei) > 0n; } catch { hasMainnet = false; }
+  const fromImx = g.from === 'imx'; // source asset for the one-tap (and the matching copy)
 
   let bridgeArea;
-  if (hasMainnet && g.quote === 'loading') {
+  if (g.from && g.quote === 'loading') {
     bridgeArea = `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.bridge.quote.loading'))}</div>`;
-  } else if (hasMainnet && g.quote && g.quote.tx) {
+  } else if (g.from && g.quote && g.quote.tx) {
     const q = g.quote;
     const mins = q.durationSeconds ? Math.max(1, Math.ceil(q.durationSeconds / 60)) : null;
     const meta = [
@@ -1046,18 +1051,26 @@ function gasHelpHtml() {
       t('trade.bridge.quote.by'),
     ].filter(Boolean).join(' · ');
     const busyBridge = bridgeJob && !BRIDGE_TERMINAL.has(bridgeJob.phase);
+    // The "from" side is whatever they're sending (IMX or ETH); the "to" side is always IMX.
+    const fromTxt = fromImx ? fmtImx(q.fromEth) : fmtEthFiat(q.fromEth);
     bridgeArea = `
       <div class="trade-bridge-quote">
-        <div class="trade-bridge-line">${esc(t('trade.gas.bridge.line').replace('{x}', fmtEthFiat(q.fromEth)).replace('{y}', fmtImx(q.toEth)))}</div>
+        <div class="trade-bridge-line">${esc(t('trade.gas.bridge.line').replace('{x}', fromTxt).replace('{y}', fmtImx(q.toEth)))}</div>
         <div class="trade-bridge-meta">${esc(meta)}</div>
         ${bridgeJob?.phase === 'done' ? '' : `<button class="trade-funds-btn" data-act="gas-bridge-now" type="button" ${busyBridge ? 'disabled' : ''}>${esc(t('trade.gas.bridge.now'))}</button>`}
         ${gasBridgeStatusHtml()}
       </div>`;
   } else {
-    bridgeArea = `<a class="trade-funds-btn" href="${GAS_BRIDGE_URL}" target="_blank" rel="noopener">${esc(t('trade.gas.getBtn'))} ↗</a>
+    // No one-tap source detected — deep-link, preset to IMX→IMX when they hold mainnet IMX.
+    let hasImxL1 = false;
+    try { hasImxL1 = g.mainnetImxWei != null && BigInt(g.mainnetImxWei) > 0n; } catch { hasImxL1 = false; }
+    bridgeArea = `<a class="trade-funds-btn" href="${hasImxL1 ? GAS_BRIDGE_URL_IMX : GAS_BRIDGE_URL}" target="_blank" rel="noopener">${esc(t('trade.gas.getBtn'))} ↗</a>
       <p class="trade-funds-foot">${esc(t('trade.gas.foot'))}</p>`;
   }
 
+  // The reassuring note names what's actually moving, so an IMX holder isn't told we'll
+  // "swap your ETH" when their IMX is right there on Ethereum.
+  const note = fromImx ? t('trade.gas.bridgeNote.imx') : g.from === 'eth' ? t('trade.gas.bridgeNote') : '';
   return `
     <div class="trade-funds trade-gas">
       <div class="trade-funds-h"><span aria-hidden="true">⛽</span> ${esc(t('trade.gas.h'))} ${tipHtml('trade.gas.p')}</div>
@@ -1067,16 +1080,17 @@ function gasHelpHtml() {
           <span>${esc(t('trade.funds.have'))} ${esc(imx)} IMX · ${esc(t('trade.funds.gasHint'))}</span>
         </div></li>
       </ul>
-      ${hasMainnet ? `<p class="trade-funds-net">${esc(t('trade.gas.bridgeNote'))}</p>` : ''}
+      ${note ? `<p class="trade-funds-net">${esc(note)}</p>` : ''}
       ${bridgeArea}
     </div>`;
 }
 
-// Read the IMX balance (+ mainnet ETH for the one-tap path), then, when there's ETH to
-// bridge, quote an exact-output top-up of GAS_TARGET_IMX. Renders into whichever surface
-// the calling flow lives in (Buy modal, or the inline Sell/Transfer status slot).
+// Read the zkEVM IMX balance + what the wallet holds on mainnet (IMX first, then ETH),
+// pick the cheapest one-tap source, and quote an exact-output top-up of GAS_TARGET_IMX.
+// Renders into whichever surface the calling flow lives in (Buy modal, or the inline
+// Sell/Transfer status slot).
 async function showGasHelp(ctx) {
-  gasState = { ctx, imxBal: null, mainnetEthWei: null, quote: 'loading' };
+  gasState = { ctx, imxBal: null, mainnetEthWei: null, mainnetImxWei: null, from: null, quote: 'loading' };
   patchGas();
   const [imxBal, elsewhere] = await Promise.all([
     readNative(account),
@@ -1084,16 +1098,21 @@ async function showGasHelp(ctx) {
   ]);
   if (gasState?.ctx !== ctx) return; // user moved on
   const mainnetEthWei = elsewhere?.mainnetEthWei ?? null;
-  gasState = { ctx, imxBal, mainnetEthWei, quote: 'loading' };
+  const mainnetImxWei = elsewhere?.mainnetImxWei ?? null;
+  // Prefer bridging IMX they already hold on mainnet (no swap, cheaper); else swap a little
+  // mainnet ETH; else there's nothing to one-tap — fall back to the deep-link.
+  let hasImxL1 = false, hasEth = false;
+  try { hasImxL1 = mainnetImxWei != null && BigInt(mainnetImxWei) > 0n; } catch { hasImxL1 = false; }
+  try { hasEth = mainnetEthWei != null && BigInt(mainnetEthWei) > 0n; } catch { hasEth = false; }
+  const from = hasImxL1 ? 'imx' : hasEth ? 'eth' : null;
+  gasState = { ctx, imxBal, mainnetEthWei, mainnetImxWei, from, quote: 'loading' };
   patchGas();
 
-  let hasMainnet = false;
-  try { hasMainnet = mainnetEthWei != null && BigInt(mainnetEthWei) > 0n; } catch { hasMainnet = false; }
-  if (!hasMainnet) { gasState.quote = null; patchGas(); return; }
+  if (!from) { gasState.quote = null; patchGas(); return; }
   try {
     const res = await fetch('/api/market/creatures/bridge/gas/quote', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ address: account, needImx: String(GAS_TARGET_IMX) }),
+      body: JSON.stringify({ address: account, needImx: String(GAS_TARGET_IMX), from }),
     });
     const q = res.ok ? await res.json() : null;
     if (gasState?.ctx === ctx) { gasState.quote = q; patchGas(); }

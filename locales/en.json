@@ -252,6 +252,7 @@
   "trade.gas.p": "Trades, listings and transfers all settle on Immutable zkEVM, where IMX is the coin that pays the tiny network fee. It's separate from the ETH that pays a price — and bridged ETH can't cover it — so a brand-new wallet often has none yet. A tiny amount lasts a long time.",
   "trade.gas.imxLine": "covers the network gas fee on Immutable zkEVM",
   "trade.gas.bridgeNote": "We'll swap a little of your Ethereum ETH into IMX on Immutable zkEVM — just enough for gas.",
+  "trade.gas.bridgeNote.imx": "You've already got IMX on Ethereum — we'll bridge a little of it over to Immutable zkEVM, no swap needed.",
   "trade.gas.bridge.line": "Send {x} from Ethereum → receive ~{y} on Immutable zkEVM",
   "trade.gas.bridge.now": "Get IMX gas with MetaMask",
   "trade.gas.bridge.done": "Your IMX gas landed on Immutable zkEVM — you're all set! 🎉",
