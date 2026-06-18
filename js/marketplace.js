@@ -363,18 +363,25 @@ function sellUnitOptions() {
 }
 
 // --- Known wallet bugs ---
-// MetaMask extension 13.33.0+ ships a regression that wrongly reports "not enough IMX
+// MetaMask extension 13.33.0 shipped a regression that wrongly reports "not enough IMX
 // to pay for network fees" on custom networks even when the balance is ample (confirmed
-// in the wild 2026-06-10; 13.32 and below behave). We read the wallet's version and
-// warn affected users BEFORE they hit the wall. Bounded to major 13 on the assumption
-// 14.x ships fixed — revisit/remove once MetaMask patches the regression.
+// in the wild 2026-06-10; 13.32 and below behave). MetaMask shipped the fix in 13.35.1,
+// so only the [13.33.0, 13.35.1) range is affected. We read the wallet's version and
+// warn users in that range BEFORE they hit the wall.
 let mmBuggyVersion = null;
 async function detectWalletBug() {
   if (!eth()) return;
   try {
     const v = String(await eth().request({ method: 'web3_clientVersion' }) || '');
     const m = v.match(/MetaMask\/v?(\d+)\.(\d+)\.(\d+)/i);
-    if (m && Number(m[1]) === 13 && Number(m[2]) >= 33) mmBuggyVersion = `${m[1]}.${m[2]}.${m[3]}`;
+    if (m) {
+      const ver = [Number(m[1]), Number(m[2]), Number(m[3])];
+      // True when ver >= the given [major, minor, patch], compared part-by-part.
+      const atLeast = t => ver[0] !== t[0] ? ver[0] > t[0]
+                         : ver[1] !== t[1] ? ver[1] > t[1]
+                         : ver[2] >= t[2];
+      if (atLeast([13, 33, 0]) && !atLeast([13, 35, 1])) mmBuggyVersion = ver.join('.');
+    }
   } catch { /* harmless — no warning then */ }
   patchWalletNotice();
 }
@@ -470,11 +477,11 @@ function safetyAcked() {
   try { return localStorage.getItem(SAFETY_ACK) === '1'; } catch { return true; }
 }
 
-// "60 seconds that protect your Creatures" — literally. The connect button unlocks
-// after a real 60s, anchored to the FIRST time the primer was seen (persisted, so a
+// "30 seconds that protect your Creatures" — literally. The connect button unlocks
+// after a real 30s, anchored to the FIRST time the primer was seen (persisted, so a
 // refresh doesn't restart it, and time spent reading the full guide counts).
 const SAFETY_T0 = 'hcc-safety-t0';
-const SAFETY_WAIT_MS = 60 * 1000; // tune here if 60s proves too much friction
+const SAFETY_WAIT_MS = 30 * 1000; // tune here if 30s proves too much friction
 let safetyT0Mem = null;
 let safetyTimer = null;
 function safetyT0() {
@@ -550,7 +557,9 @@ async function connect() {
     const accounts = await eth().request({ method: 'eth_requestAccounts' });
     account = (accounts[0] || '').toLowerCase() || null;
     chainId = await eth().request({ method: 'eth_chainId' });
-    if (account && !onZk()) await ensureNetwork();
+    // Land them on whatever chain the active collection needs (zkEVM for Creatures,
+    // Ethereum for LAND) — not always zkEVM, or connecting on the LAND tab misfires.
+    if (account && !onRightChain()) await switchToChain(C().chainHex);
   } catch (err) {
     console.error('Wallet connect failed:', err);
     pendingFlash = friendlyError(err);
@@ -571,6 +580,18 @@ async function switchNetwork(btn) {
   if (btn) { btn.disabled = true; btn.textContent = t('trade.net.switching'); }
   try { await switchToChain(C().chainHex); pendingFlash = null; }
   catch (err) { console.error('Network switch failed:', err); pendingFlash = friendlyError(err); }
+  finally { busy = false; render(); }
+}
+
+// Proactively move the wallet to the chain the active collection needs, at the moments
+// the user clearly wants it (connect, Creatures⟷LAND toggle). A decline is SILENT — the
+// "wrong network" pill stays as the manual fallback. We never trigger this passively
+// (page load, a switch the user made in MetaMask), so there's no surprise popup or loop.
+async function autoSwitchNetwork() {
+  if (!account || onRightChain() || busy) return;
+  busy = true;
+  try { await switchToChain(C().chainHex); }
+  catch (err) { console.error('Auto network switch declined:', err); /* pill remains */ }
   finally { busy = false; render(); }
 }
 
@@ -3059,6 +3080,9 @@ function onClick(e) {
       syncTradeUrl();
       resetSellerState();
       render();
+      // The new collection settles on a different chain — move the wallet there now,
+      // so the user doesn't land on a "wrong network" pill they have to tap themselves.
+      autoSwitchNetwork();
       loadListings(true);
       if (coll === 'creatures') loadCollOffers();
       maybeLoadSeller();

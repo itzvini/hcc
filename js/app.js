@@ -121,6 +121,54 @@ document.querySelectorAll('[data-subtab]').forEach(btn =>
 document.querySelectorAll('[data-subgoto]').forEach(el =>
   el.addEventListener('click', () => jumpSubTab(el, el.dataset.subgoto)));
 
+// Walkthrough stepper — Guides › Walkthroughs shows one guide at a time instead of
+// one long scroll: chip tabs jump to any step, prev/next walks the sequence.
+const wtNav = document.querySelector('.wt-nav');
+if (wtNav) {
+  const guidesPanel = wtNav.closest('.tab-panel');
+  const wtTabs   = [...wtNav.querySelectorAll('[data-wt]')];
+  const wtPanels = [...guidesPanel.querySelectorAll('[data-wt-panel]')];
+  const wtTotal  = wtPanels.length;
+  const wtPrev   = guidesPanel.querySelector('[data-wt-prev]');
+  const wtNext   = guidesPanel.querySelector('[data-wt-next]');
+  const wtCount  = guidesPanel.querySelector('[data-wt-count]');
+  let wtCurrent  = 1;
+
+  function showWalkthrough(n, { scroll = false, focusTab = false } = {}) {
+    n = Math.min(wtTotal, Math.max(1, n));
+    // Stop any video in the panel we're leaving so its audio doesn't linger.
+    if (n !== wtCurrent) {
+      const leaving = wtPanels.find(p => Number(p.dataset.wtPanel) === wtCurrent);
+      const frame = leaving && leaving.querySelector('iframe');
+      if (frame) frame.src = frame.src; // eslint-disable-line no-self-assign
+    }
+    wtCurrent = n;
+    wtTabs.forEach(t => {
+      const active = Number(t.dataset.wt) === n;
+      t.classList.toggle('is-active', active);
+      t.setAttribute('aria-selected', String(active));
+      t.tabIndex = active ? 0 : -1;
+    });
+    wtPanels.forEach(p => { p.hidden = Number(p.dataset.wtPanel) !== n; });
+    if (wtPrev)  wtPrev.disabled = n === 1;
+    if (wtNext)  wtNext.disabled = n === wtTotal;
+    if (wtCount) wtCount.textContent = `${n} / ${wtTotal}`;
+    if (scroll)   wtNav.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (focusTab) wtTabs.find(t => Number(t.dataset.wt) === n)?.focus();
+  }
+
+  wtTabs.forEach(t => t.addEventListener('click', () => showWalkthrough(Number(t.dataset.wt), { scroll: true })));
+  wtPrev?.addEventListener('click', () => showWalkthrough(wtCurrent - 1, { scroll: true }));
+  wtNext?.addEventListener('click', () => showWalkthrough(wtCurrent + 1, { scroll: true }));
+  wtNav.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    showWalkthrough(wtCurrent + (e.key === 'ArrowRight' ? 1 : -1), { focusTab: true });
+  });
+
+  showWalkthrough(1);
+}
+
 // Clean tab URLs — every tab (and sub-tab) is a real path the server also serves:
 // /council, /roadmap/gen2, … Tab clicks push the path; legacy #tab links and
 // in-page anchors (#terms, #council) still work and get normalized to paths.

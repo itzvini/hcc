@@ -343,6 +343,64 @@ h1 .pop { color: var(--hr-primary); }
 .perk h4 { font: 700 15px/1.3 var(--hr-sans); color: var(--hr-fg-0); margin-bottom: 4px; }
 .perk p  { font-size: 13px; color: var(--hr-fg-2); }
 
+/* ---------- TOPIC ICONS (branded line-art on an accent-tinted disc) ----------
+   Replaces emoji for the club's info topics. Each carrier sets --accent /
+   --accent-soft inline so the glow matches the icon's own colour. */
+.topic-ico {
+  --accent: var(--hr-primary);
+  --accent-soft: rgba(81,255,165,0.18);
+  width: 84px; height: 84px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--hr-radius-xl);
+  background:
+    radial-gradient(115% 115% at 28% 18%, var(--accent-soft), transparent 68%),
+    var(--hr-bg-3);
+  border: 1px solid var(--hr-line-strong);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06),
+              0 0 24px var(--accent-soft);
+}
+.topic-ico img { width: 70%; height: 70%; object-fit: contain; display: block;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4)); }
+.topic-ico.sm { width: 60px; height: 60px; border-radius: var(--hr-radius-lg); }
+
+/* icon + heading row for section intros */
+.section-head { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.section-head > .section-head-t { flex: 1 1 280px; min-width: 0; }
+
+/* ---------- INFO / KNOWLEDGE CARDS (embed-style explainers) ---------- */
+.info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; margin-top: 28px; }
+.info-card {
+  --accent: var(--hr-primary);
+  --accent-soft: rgba(81,255,165,0.18);
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; gap: 14px;
+  background: var(--hr-bg-2); border: 1px solid var(--hr-line);
+  border-radius: var(--hr-radius-2xl); padding: 26px 24px 24px;
+  box-shadow: var(--hr-shadow-1);
+  transition: transform .18s cubic-bezier(.2,0,0,1), box-shadow .18s, border-color .18s;
+}
+.info-card::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(85% 60% at 100% 0%, var(--accent-soft), transparent 58%);
+}
+.info-card > * { position: relative; }
+.info-card:hover { transform: translateY(-3px); box-shadow: var(--hr-shadow-2); border-color: var(--hr-line-strong); }
+.info-q {
+  font: 700 11px/1.3 var(--hr-sans);
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase;
+  color: var(--accent);
+}
+.info-card h3 { font: 900 20px/1.25 var(--hr-sans); color: var(--hr-fg-0); margin-top: -4px; }
+.info-card p { font-size: 14px; line-height: 1.6; color: var(--hr-fg-2); }
+.info-card p strong { color: var(--hr-fg-1); font-weight: 700; }
+.info-note {
+  margin-top: auto; padding: 12px 14px;
+  background: var(--accent-soft); border-radius: var(--hr-radius-md);
+  border: 1px solid var(--hr-line);
+  font-size: 13px; line-height: 1.5; color: var(--hr-fg-1);
+}
+.info-note strong { color: var(--hr-fg-0); }
+
 /* ---------- TIMELINE ---------- */
 .timeline { margin-top: 30px; position: relative; padding-left: 34px; }
 .timeline::before {
@@ -912,6 +970,71 @@ footer p  { color: var(--hr-fg-2); font-size: 14px; max-width: 420px; margin: 10
   border-radius: var(--hr-radius-sm);
   font-size: 13px; line-height: 1.5; color: var(--hr-fg-1);
 }
+
+/* animated walkthrough still (GIF) — its own ~5:4 frame, centred and contained */
+.guide-gif {
+  margin: 18px auto; width: 100%; max-width: 480px;
+  aspect-ratio: 452 / 368;
+  background: var(--hr-bg-0);
+  border: 1px solid var(--hr-line); border-radius: var(--hr-radius-lg);
+  overflow: hidden; box-shadow: var(--hr-shadow-1);
+}
+.guide-gif img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.guide-cap {
+  margin: -6px 0 4px; text-align: center;
+  font: 700 11px/1.3 var(--hr-sans);
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase;
+  color: var(--hr-fg-3);
+}
+
+/* ---------- WALKTHROUGH STEPPER (tabbed, one at a time) ----------
+   Chip tabs jump to any walkthrough; prev/next steps through the sequence.
+   Replaces the long single-scroll list. */
+.wt-nav {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  margin-top: 28px; scroll-margin-top: 130px;
+}
+.wt-tab {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 40px; padding: 7px 15px 7px 8px;
+  border: 1px solid var(--hr-line); border-radius: var(--hr-radius-pill);
+  background: var(--hr-bg-3); color: var(--hr-fg-2);
+  font: 700 13px/1 var(--hr-sans); cursor: pointer;
+  transition: transform .15s cubic-bezier(.2,0,0,1), background .12s, color .12s, border-color .12s;
+}
+.wt-tab-num {
+  flex: none; width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: var(--hr-bg-4); color: var(--hr-fg-1);
+  font: 900 12px/1 var(--hr-sans);
+  transition: background .12s, color .12s;
+}
+.wt-tab:hover { background: var(--hr-bg-4); color: var(--hr-fg-0); border-color: var(--hr-line-strong); }
+.wt-tab:active { transform: scale(.96); }
+.wt-tab.is-active { background: var(--hr-primary); color: var(--hr-on-primary); border-color: transparent; }
+.wt-tab.is-active .wt-tab-num { background: rgba(15,16,20,.2); color: var(--hr-on-primary); }
+
+.wt-panels { margin-top: 16px; }
+.wt-panel[hidden] { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .wt-panel:not([hidden]) { animation: apply-rise .45s cubic-bezier(.16,.84,.3,1) backwards; }
+}
+
+.wt-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; }
+.wt-foot button {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 44px; padding: 11px 20px;
+  border: 1px solid var(--hr-line-strong); border-radius: var(--hr-radius-pill);
+  background: var(--hr-bg-3); color: var(--hr-fg-0);
+  font: 700 14px/1 var(--hr-sans); cursor: pointer;
+  transition: transform .15s cubic-bezier(.2,0,0,1), background .12s, opacity .12s;
+}
+.wt-foot button:hover:not(:disabled) { background: var(--hr-bg-4); transform: translateY(-1px); }
+.wt-foot button:active:not(:disabled) { transform: scale(.98); }
+.wt-foot button:disabled { opacity: .4; cursor: default; }
+.wt-foot .wt-next { background: var(--hr-primary); color: var(--hr-on-primary); border-color: transparent; box-shadow: var(--hr-shadow-btn); }
+.wt-foot .wt-next:disabled { box-shadow: none; }
+.wt-count { font: 700 13px/1 var(--hr-sans); color: var(--hr-fg-3); letter-spacing: var(--hr-tracking-caps); white-space: nowrap; }
 
 /* anchors for smooth-scroll under the sticky (two-row) tab bar */
 #guides-top, #council-top, #roadmap-top { scroll-margin-top: 124px; }
