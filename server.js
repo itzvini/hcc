@@ -1929,7 +1929,7 @@ async function handleMarketplaceApi(request, response, url) {
   // straight in their wallet. The key lives server-side; absent → 503 not_configured and the
   // client just hides the card CTA. zkEVM (Creatures) does NOT come here — it links directly
   // to Immutable's own hosted on-ramp, which delivers to zkEVM and needs no key.
-  if (pathname === '/api/market/onramp' && request.method === 'GET') {
+  if (pathname === '/api/market/land/onramp' && request.method === 'GET') {
     const oWait = rateLimited(`mktonramp:${ip}`, 20, 60 * 1000);
     if (oWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(oWait) }); return; }
 

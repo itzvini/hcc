@@ -83,7 +83,7 @@ const GAS_TARGET_IMX = 5;              // one-tap top-up target, in IMX (tunable
 // under the hood) takes Card/Apple Pay/Google Pay and delivers ETH, IMX AND USDC straight
 // to Immutable zkEVM — so one stop covers both the price token and gas. No integrator key
 // needed (it's Immutable's page). LAND (Ethereum mainnet) uses a Transak deep-link built
-// server-side instead (see /api/market/onramp) since that needs our key.
+// server-side instead (see /api/market/land/onramp) since that needs our key.
 const ONRAMP_URL_ZKEVM = 'https://toolkit.immutable.com/onramp/';
 
 // Wallet state
@@ -1164,7 +1164,7 @@ async function showGasHelp(ctx) {
 // when no provider key is configured, so callers just omit the CTA.
 async function fetchOnrampUrl(chain) {
   try {
-    const r = await fetch(`/api/market/onramp?chain=${encodeURIComponent(chain)}&address=${account}`);
+    const r = await fetch(`/api/market/land/onramp?chain=${encodeURIComponent(chain)}&address=${account}`);
     if (!r.ok) return null;
     const j = await r.json();
     return j.url || null;
