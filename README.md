@@ -18,6 +18,7 @@ For local dev with live market data, put your key in `.env` and run `npm run dev
 ```
 OPENSEA_API_KEY=your_key_here
 SQUID_INTEGRATOR_ID=your_squid_integrator_id
+TRANSAK_API_KEY=your_transak_publishable_key
 ```
 
 `SQUID_INTEGRATOR_ID` (optional) powers the Trade tab's one-tap, exact-amount ETH
@@ -25,6 +26,13 @@ bridge quotes (Ethereum → Immutable zkEVM) via the [Squid Router API](https://
 Get one free from Squid's integrator portal. Without it, the funds helper falls back
 to a prefilled Squid deep-link — everything else works unchanged. Like all secrets it
 lives only in `.env` locally and in Railway **Variables** in production.
+
+`TRANSAK_API_KEY` (optional) powers the **LAND** "Buy ETH with card" on-ramp deep-link
+(card / Apple Pay / Google Pay → ETH on Ethereum mainnet) for an empty wallet. Get a free
+publishable key from [Transak](https://transak.com). Without it, the LAND card CTA is simply
+hidden. **Creatures** need no key here — they link to Immutable's own hosted on-ramp
+([toolkit.immutable.com/onramp](https://toolkit.immutable.com/onramp/)), which delivers ETH /
+IMX / USDC straight to Immutable zkEVM.
 
 ## Market data
 

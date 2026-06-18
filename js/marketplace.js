@@ -78,6 +78,13 @@ const GAS_OK_WEI  = 5n * 10n ** 15n;   // ≥ 0.005 IMX → "you're set for gas"
 const GAS_TARGET_IMX = 5;              // one-tap top-up target, in IMX (tunable) — a lot of
                                        // runway (gas is fractions of a cent/tx) while still
                                        // clearing typical bridge minimums; deep-link covers the rest
+// Fiat on-ramp ("top up with card") — for a wallet that holds nothing anywhere, so there's
+// nothing to bridge: they need to ACQUIRE crypto. Immutable's own hosted on-ramp (Transak
+// under the hood) takes Card/Apple Pay/Google Pay and delivers ETH, IMX AND USDC straight
+// to Immutable zkEVM — so one stop covers both the price token and gas. No integrator key
+// needed (it's Immutable's page). LAND (Ethereum mainnet) uses a Transak deep-link built
+// server-side instead (see /api/market/onramp) since that needs our key.
+const ONRAMP_URL_ZKEVM = 'https://toolkit.immutable.com/onramp/';
 
 // Wallet state
 let account = null;
@@ -914,7 +921,11 @@ function buyStatusHtml() {
       + `<a href="${esc(txExplorerUrl(buyState.hash))}" target="_blank" rel="noopener">${esc(t('trade.status.view'))}</a></span></div>`;
   }
   if (buyState.phase === 'error') {
-    return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(buyState.msg)}</span></div>`;
+    // A funds shortfall can carry a card on-ramp link (LAND/Ethereum) — surface it as a CTA.
+    const onramp = buyState.onrampUrl
+      ? `<a class="trade-funds-btn" href="${buyState.onrampUrl}" target="_blank" rel="noopener" style="margin-top:12px">${esc(t('trade.onramp.btn'))} ↗</a>`
+      : '';
+    return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(buyState.msg)}</span></div>${onramp}`;
   }
   if (buyState.phase === 'funds') return fundsHelpHtml();
   if (buyState.phase === 'gas') return gasHelpHtml();
@@ -978,7 +989,9 @@ function fundsHelpHtml() {
       </div>`;
   }
 
-  // No ETH detected anywhere — still gentle, just a "here's how to get set up".
+  // No ETH detected anywhere — nothing to bridge, so the answer is to ACQUIRE crypto.
+  // The card on-ramp lands ETH + IMX on Immutable zkEVM in one go; the bridge stays as a
+  // secondary route for anyone who actually does hold ETH on another wallet/exchange.
   return `
     <div class="trade-funds">
       <div class="trade-funds-h"><span aria-hidden="true">💡</span> ${esc(t('trade.funds.h'))} ${tipHtml('trade.funds.intro')}</div>
@@ -986,8 +999,9 @@ function fundsHelpHtml() {
         <li><span class="trade-funds-ic" aria-hidden="true">•</span><div><b>ETH</b> — ${esc(t('trade.funds.forPrice'))}<br><span>${esc(t('trade.funds.need'))} ≈ <b>${esc(need)}</b> · ${esc(t('trade.funds.have'))} ${esc(fmtEthFiat(weiToEth(f.ethBal)))}</span></div></li>
         ${imxRow}
       </ul>
-      <p class="trade-funds-net">${esc(t('trade.funds.net'))}</p>
-      <a class="trade-funds-btn" href="${BRIDGE_URL}" target="_blank" rel="noopener">${esc(t('trade.funds.bridge'))} ↗</a>
+      <p class="trade-funds-net">${esc(t('trade.onramp.net'))}</p>
+      <a class="trade-funds-btn" href="${ONRAMP_URL_ZKEVM}" target="_blank" rel="noopener">${esc(t('trade.onramp.btn'))} ↗</a>
+      <p class="trade-funds-foot">${esc(t('trade.onramp.fundsFoot'))} · <a href="${BRIDGE_URL}" target="_blank" rel="noopener">${esc(t('trade.onramp.orBridge'))} ↗</a></p>
     </div>`;
 }
 
@@ -1081,12 +1095,15 @@ function gasHelpHtml() {
         ${bridgeJob?.phase === 'done' ? '' : `<button class="trade-funds-btn" data-act="gas-bridge-now" type="button" ${busyBridge ? 'disabled' : ''}>${esc(t('trade.gas.bridge.now'))}</button>`}
         ${gasBridgeStatusHtml()}
       </div>`;
-  } else {
-    // No one-tap source detected — deep-link, preset to IMX→IMX when they hold mainnet IMX.
-    let hasImxL1 = false;
-    try { hasImxL1 = g.mainnetImxWei != null && BigInt(g.mainnetImxWei) > 0n; } catch { hasImxL1 = false; }
-    bridgeArea = `<a class="trade-funds-btn" href="${hasImxL1 ? GAS_BRIDGE_URL_IMX : GAS_BRIDGE_URL}" target="_blank" rel="noopener">${esc(t('trade.gas.getBtn'))} ↗</a>
+  } else if (g.from) {
+    // They DO hold something on mainnet (so g.from is set) but we couldn't auto-quote —
+    // offer the matching manual bridge deep-link (IMX→IMX if they hold L1 IMX, else ETH→IMX).
+    bridgeArea = `<a class="trade-funds-btn" href="${g.from === 'imx' ? GAS_BRIDGE_URL_IMX : GAS_BRIDGE_URL}" target="_blank" rel="noopener">${esc(t('trade.gas.getBtn'))} ↗</a>
       <p class="trade-funds-foot">${esc(t('trade.gas.foot'))}</p>`;
+  } else {
+    // Nothing on mainnet to bridge — they need to ACQUIRE IMX. Card on-ramp straight to zkEVM.
+    bridgeArea = `<a class="trade-funds-btn" href="${ONRAMP_URL_ZKEVM}" target="_blank" rel="noopener">${esc(t('trade.onramp.btn'))} ↗</a>
+      <p class="trade-funds-foot">${esc(t('trade.onramp.gasFoot'))}</p>`;
   }
 
   // The reassuring note names what's actually moving, so an IMX holder isn't told we'll
@@ -1140,6 +1157,18 @@ async function showGasHelp(ctx) {
   } catch {
     if (gasState?.ctx === ctx) { gasState.quote = null; patchGas(); }
   }
+}
+
+// Ask the server for a prefilled card on-ramp URL for the given chain (currently only
+// 'ethereum' / LAND — zkEVM links to Immutable's hosted on-ramp directly). Returns null
+// when no provider key is configured, so callers just omit the CTA.
+async function fetchOnrampUrl(chain) {
+  try {
+    const r = await fetch(`/api/market/onramp?chain=${encodeURIComponent(chain)}&address=${account}`);
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j.url || null;
+  } catch { return null; }
 }
 
 // Repaint the gas panel wherever it currently lives. Buy renders it inside the modal
@@ -1445,7 +1474,10 @@ async function handleBuyLand(it) {
     await switchToChain('0x1');
     const balWei = await readNative(account);
     if (balWei != null && balWei < needWei) {
-      setBuy('error', { msg: t('trade.err.landFunds').replace('{x}', fmtEth(Number(needWei) / 1e18)).replace('{y}', fmtEth(Number(balWei) / 1e18)) });
+      // Short on mainnet ETH — offer a card on-ramp that delivers ETH straight to Ethereum
+      // (Transak, if configured). Fetched before setBuy so the link is ready to open.
+      const onrampUrl = await fetchOnrampUrl('ethereum');
+      setBuy('error', { msg: t('trade.err.landFunds').replace('{x}', fmtEth(Number(needWei) / 1e18)).replace('{y}', fmtEth(Number(balWei) / 1e18)), onrampUrl });
       return;
     }
 

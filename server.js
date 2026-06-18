@@ -73,6 +73,11 @@ const ETH_RPC_URL             = process.env.ETH_RPC_URL || 'https://eth.blocksco
 // slow-changing) stay on ETH_RPC_URL to avoid hammering a public node.
 const ETH_BALANCE_RPC         = process.env.ETH_BALANCE_RPC || 'https://ethereum-rpc.publicnode.com';
 const ZK_RPC_URL              = process.env.ZK_RPC_URL || 'https://rpc.immutable.com'; // Immutable zkEVM (Creatures)
+// Transak publishable key, for the Ethereum-mainnet card on-ramp deep-link (LAND). It's a
+// public widget key (it rides in the URL), but kept in env so it isn't committed to the
+// public repo and the owner can rotate/region-restrict it. Absent → the card CTA is hidden
+// for LAND (zkEVM uses Immutable's own hosted on-ramp, which needs no key).
+const TRANSAK_API_KEY         = (process.env.TRANSAK_API_KEY || '').trim();
 // Read selectors for the authoritative per-wallet eligibility lookup (see getWalletHoldings).
 const SEL_BALANCE_OF          = '0x70a08231'; // balanceOf(address)
 const SEL_OWNER_TOKENS        = '0xbba7723e'; // ownerTokens(address) -> uint256[]
@@ -1916,6 +1921,33 @@ async function handleMarketplaceApi(request, response, url) {
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }
+    return;
+  }
+
+  // Fiat on-ramp deep-link for an empty wallet buying LAND (Ethereum mainnet). Builds a
+  // prefilled Transak widget URL (network + ETH + the buyer's locked address) so funds land
+  // straight in their wallet. The key lives server-side; absent → 503 not_configured and the
+  // client just hides the card CTA. zkEVM (Creatures) does NOT come here — it links directly
+  // to Immutable's own hosted on-ramp, which delivers to zkEVM and needs no key.
+  if (pathname === '/api/market/onramp' && request.method === 'GET') {
+    const oWait = rateLimited(`mktonramp:${ip}`, 20, 60 * 1000);
+    if (oWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(oWait) }); return; }
+
+    const chain = String(url.searchParams.get('chain') || '');
+    const addr = String(url.searchParams.get('address') || '').toLowerCase();
+    if (chain !== 'ethereum') { sendJson(response, 400, { error: 'bad_chain' }); return; }
+    if (!HEX_ADDRESS.test(addr)) { sendJson(response, 400, { error: 'bad_address' }); return; }
+    if (!TRANSAK_API_KEY) { sendJson(response, 503, { error: 'not_configured' }); return; }
+
+    const params = new URLSearchParams({
+      apiKey: TRANSAK_API_KEY,
+      productsAvailed: 'BUY',
+      network: 'ethereum',
+      cryptoCurrencyCode: 'ETH',
+      walletAddress: addr,
+      disableWalletAddressForm: 'true',
+    });
+    sendJson(response, 200, { url: `https://global.transak.com/?${params.toString()}` }, { 'Cache-Control': 'no-store' });
     return;
   }
 
