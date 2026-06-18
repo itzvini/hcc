@@ -1035,6 +1035,46 @@ footer p  { color: var(--hr-fg-2); font-size: 14px; max-width: 420px; margin: 10
 .wt-foot .wt-next:disabled { box-shadow: none; }
 .wt-count { font: 700 13px/1 var(--hr-sans); color: var(--hr-fg-3); letter-spacing: var(--hr-tracking-caps); white-space: nowrap; }
 
+/* In-walkthrough collection toggle (Creatures ⇄ LAND) for the marketplace guide */
+.wt-mkt-toggle { margin: 16px 0; }
+.wt-mkt-toggle .seg-btn { font: 700 13px/1 var(--hr-sans); padding: 9px 18px; }
+.wt-mkt[hidden] { display: none; }
+.wt-mkt-where {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; line-height: 1.5; color: var(--hr-fg-1);
+  background: var(--hr-bg-3); border: 1px solid var(--hr-line);
+  border-left: 3px solid var(--accent, var(--hr-primary));
+  border-radius: var(--hr-radius-sm); padding: 10px 14px; margin-bottom: 14px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .wt-mkt:not([hidden]) { animation: apply-rise .4s cubic-bezier(.16,.84,.3,1) backwards; }
+}
+
+/* media placeholder — a branded frame standing in for a screenshot/clip/video until
+   the real asset (named in data-media) is dropped in and swapped for an img/video. */
+.media-ph {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  aspect-ratio: 16 / 10; width: 100%; margin: 0 0 14px;
+  background:
+    radial-gradient(120% 120% at 50% 0%, var(--accent-soft, rgba(81,255,165,0.1)), transparent 70%),
+    var(--hr-bg-0);
+  border: 1px dashed var(--hr-line-strong); border-radius: var(--hr-radius-lg);
+}
+.media-ph-label {
+  display: inline-flex; align-items: center; gap: 9px;
+  font: 700 11px/1 var(--hr-sans);
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase;
+  color: var(--hr-fg-3);
+}
+.media-ph-label::before {
+  content: ""; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--accent, var(--hr-primary));
+  box-shadow: 0 0 10px var(--accent, var(--hr-primary));
+}
+@media (prefers-reduced-motion: no-preference) {
+  .media-ph-label::before { animation: pulse 1.8s infinite; }
+}
+
 /* anchors for smooth-scroll under the sticky (two-row) tab bar */
 #guides-top, #council-top, #roadmap-top { scroll-margin-top: 124px; }
 

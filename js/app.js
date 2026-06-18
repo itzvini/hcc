@@ -122,22 +122,24 @@ document.querySelectorAll('[data-subgoto]').forEach(el =>
   el.addEventListener('click', () => jumpSubTab(el, el.dataset.subgoto)));
 
 // Walkthrough steppers — show one guide at a time (chip tabs + prev/next) instead of
-// one long scroll. Used by Guides › Walkthroughs and the Contribute how-to. The Guides
-// walkthroughs stepper also syncs its active step into the URL
-// (/guides/walkthroughs/<slug>) so individual steps are shareable and survive refresh.
-let routeWalkthrough = null; // set by the URL-syncing stepper; driven by route()
+// one long scroll. Used by Guides › Walkthroughs, Guides › Marketplace, and the
+// Contribute how-to. Steppers that live in a Guides sub-panel sync their active step
+// into the URL (/guides/<subpanel>/<slug>) so individual steps are shareable and
+// survive refresh; the Contribute stepper (no sub-panel) stays local-only.
+const stepperRouters = {}; // { walkthroughs: fn, marketplace: fn } — driven by route()
 
 function initStepper(nav) {
-  const scope   = nav.closest('section');
-  const tabs    = [...nav.querySelectorAll('[data-wt]')];
-  const panels  = [...scope.querySelectorAll('[data-wt-panel]')];
-  const total   = panels.length;
+  const scope    = nav.closest('section');
+  const subpanel = nav.closest('[data-subpanel]');
+  const tabs     = [...nav.querySelectorAll('[data-wt]')];
+  const panels   = [...scope.querySelectorAll('[data-wt-panel]')];
+  const total    = panels.length;
   if (!total) return;
-  const prevBtn = scope.querySelector('[data-wt-prev]');
-  const nextBtn = scope.querySelector('[data-wt-next]');
-  const countEl = scope.querySelector('[data-wt-count]');
-  const syncUrl = nav.dataset.wtKey === 'walkthroughs';
-  let current   = 1;
+  const prevBtn  = scope.querySelector('[data-wt-prev]');
+  const nextBtn  = scope.querySelector('[data-wt-next]');
+  const countEl  = scope.querySelector('[data-wt-count]');
+  const syncKey  = subpanel ? subpanel.dataset.subpanel : null; // null → no URL sync
+  let current    = 1;
 
   const slugFor = n => tabs.find(t => Number(t.dataset.wt) === n)?.dataset.wtSlug || String(n);
 
@@ -160,7 +162,7 @@ function initStepper(nav) {
     if (prevBtn) prevBtn.disabled = n === 1;
     if (nextBtn) nextBtn.disabled = n === total;
     if (countEl) countEl.textContent = `${n} / ${total}`;
-    if (syncUrl && updateUrl) history.replaceState(null, '', `/guides/walkthroughs/${slugFor(n)}`);
+    if (syncKey && updateUrl) history.replaceState(null, '', `/guides/${syncKey}/${slugFor(n)}`);
     if (scroll)   nav.scrollIntoView({ behavior: 'smooth', block: 'start' });
     if (focusTab) tabs.find(t => Number(t.dataset.wt) === n)?.focus();
   }
@@ -174,8 +176,8 @@ function initStepper(nav) {
     show(current + (e.key === 'ArrowRight' ? 1 : -1), { focusTab: true, updateUrl: true });
   });
 
-  if (syncUrl) {
-    routeWalkthrough = slug => {
+  if (syncKey) {
+    stepperRouters[syncKey] = slug => {
       const match = tabs.find(t => t.dataset.wtSlug === slug || String(t.dataset.wt) === slug);
       show(match ? Number(match.dataset.wt) : 1);
     };
@@ -184,6 +186,25 @@ function initStepper(nav) {
 }
 
 document.querySelectorAll('.wt-nav').forEach(initStepper);
+
+// In-card collection toggle (the marketplace walkthrough's Creatures ⇄ LAND switch).
+// Scoped to its own card so it never clashes with the steppers or the live Trade panel.
+document.querySelectorAll('[data-mkt-toggle]').forEach(group => {
+  const scope  = group.closest('.wt-panel') || group.parentElement;
+  const btns   = [...group.querySelectorAll('[data-mkt-btn]')];
+  const blocks = [...scope.querySelectorAll('[data-mkt]')];
+  function showMkt(key) {
+    btns.forEach(b => {
+      const on = b.dataset.mktBtn === key;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-selected', String(on));
+      b.tabIndex = on ? 0 : -1;
+    });
+    blocks.forEach(bl => { bl.hidden = bl.dataset.mkt !== key; });
+  }
+  btns.forEach(b => b.addEventListener('click', () => showMkt(b.dataset.mktBtn)));
+  showMkt('creatures');
+});
 
 // Clean tab URLs — every tab (and sub-tab) is a real path the server also serves:
 // /council, /roadmap/gen2, … Tab clicks push the path; legacy #tab links and
@@ -202,9 +223,10 @@ function route(pathname) {
     const scope = document.getElementById(`panel-${tab}`);
     if (scope && scope.querySelector(`[data-subtab="${segs[1]}"]`)) selectSubTab(scope, segs[1]);
   }
-  // Deep link to a specific walkthrough, e.g. /guides/walkthroughs/funding
-  if (tab === 'guides' && segs[1] === 'walkthroughs' && segs[2] && routeWalkthrough) {
-    routeWalkthrough(segs[2]);
+  // Deep link to a specific step, e.g. /guides/walkthroughs/funding or
+  // /guides/marketplace/trading
+  if (tab === 'guides' && segs[1] && segs[2] && stepperRouters[segs[1]]) {
+    stepperRouters[segs[1]](segs[2]);
   }
 }
 
