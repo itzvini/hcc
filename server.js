@@ -3416,9 +3416,11 @@ function resolveFile(requestUrl) {
   // Reject traversal and any dotfile/dot-directory segment (.env, .git, .github…).
   if (segments.some(s => s === '..' || s.startsWith('.'))) return null;
 
-  // Clean tab routes: one or two short lowercase segments with no extension
-  // (e.g. /roadmap, /roadmap/gen2) serve the app shell.
-  if (segments.length <= 2 && TAB_ROUTES.has(segments[0]) &&
+  // Clean tab routes: up to three short lowercase segments with no extension
+  // (e.g. /roadmap, /roadmap/gen2, /guides/walkthroughs/funding) serve the app shell.
+  // This only ever returns index.html — it never reads an arbitrary path — so it
+  // can't leak files; the file allowlist below is unchanged.
+  if (segments.length <= 3 && TAB_ROUTES.has(segments[0]) &&
       !path.extname(normalized) && segments.every(s => /^[a-z0-9-]+$/.test(s))) {
     return path.join(root, 'index.html');
   }

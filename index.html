@@ -714,13 +714,13 @@
       </div>
     </div>
 
-    <div class="wt-nav" role="tablist" aria-label="Walkthroughs">
-      <button class="wt-tab is-active" id="wt-tab-1" type="button" role="tab" aria-selected="true" aria-controls="wt-panel-1" data-wt="1"><span class="wt-tab-num">1</span><span data-i18n="guide.g1.tag">Setup</span></button>
-      <button class="wt-tab" id="wt-tab-2" type="button" role="tab" aria-selected="false" aria-controls="wt-panel-2" data-wt="2" tabindex="-1"><span class="wt-tab-num">2</span><span data-i18n="guide.g2.tag">Funding</span></button>
-      <button class="wt-tab" id="wt-tab-3" type="button" role="tab" aria-selected="false" aria-controls="wt-panel-3" data-wt="3" tabindex="-1"><span class="wt-tab-num">3</span><span data-i18n="guide.g3.tag">Trading</span></button>
-      <button class="wt-tab" id="wt-tab-4" type="button" role="tab" aria-selected="false" aria-controls="wt-panel-4" data-wt="4" tabindex="-1"><span class="wt-tab-num">4</span><span data-i18n="guide.g4.tag">Moving</span></button>
-      <button class="wt-tab" id="wt-tab-5" type="button" role="tab" aria-selected="false" aria-controls="wt-panel-5" data-wt="5" tabindex="-1"><span class="wt-tab-num">5</span><span data-i18n="guide.g5.tag">In-game</span></button>
-      <button class="wt-tab" id="wt-tab-6" type="button" role="tab" aria-selected="false" aria-controls="wt-panel-6" data-wt="6" tabindex="-1"><span class="wt-tab-num">6</span><span data-i18n="guide.g6.tag">LAND</span></button>
+    <div class="wt-nav" role="tablist" aria-label="Walkthroughs" data-wt-key="walkthroughs">
+      <button class="wt-tab is-active" id="wt-tab-1" type="button" role="tab" aria-selected="true" aria-controls="wt-panel-1" data-wt="1" data-wt-slug="setup"><span class="wt-tab-num">1</span><span data-i18n="guide.g1.tag">Setup</span></button>
+      <button class="wt-tab" id="wt-tab-2" type="button" role="tab" aria-selected="false" aria-controls="wt-panel-2" data-wt="2" data-wt-slug="funding" tabindex="-1"><span class="wt-tab-num">2</span><span data-i18n="guide.g2.tag">Funding</span></button>
+      <button class="wt-tab" id="wt-tab-3" type="button" role="tab" aria-selected="false" aria-controls="wt-panel-3" data-wt="3" data-wt-slug="trading" tabindex="-1"><span class="wt-tab-num">3</span><span data-i18n="guide.g3.tag">Trading</span></button>
+      <button class="wt-tab" id="wt-tab-4" type="button" role="tab" aria-selected="false" aria-controls="wt-panel-4" data-wt="4" data-wt-slug="moving" tabindex="-1"><span class="wt-tab-num">4</span><span data-i18n="guide.g4.tag">Moving</span></button>
+      <button class="wt-tab" id="wt-tab-5" type="button" role="tab" aria-selected="false" aria-controls="wt-panel-5" data-wt="5" data-wt-slug="in-game" tabindex="-1"><span class="wt-tab-num">5</span><span data-i18n="guide.g5.tag">In-game</span></button>
+      <button class="wt-tab" id="wt-tab-6" type="button" role="tab" aria-selected="false" aria-controls="wt-panel-6" data-wt="6" data-wt-slug="land" tabindex="-1"><span class="wt-tab-num">6</span><span data-i18n="guide.g6.tag">LAND</span></button>
     </div>
 
     <div class="wt-panels">
@@ -1248,8 +1248,15 @@
     <h2 data-i18n="contrib.how.h2">How to submit a change</h2>
     <p class="lead" data-i18n="contrib.how.lead">Four steps from idea to pull request. There's no build step and no framework — just plain HTML, CSS, and vanilla JS.</p>
 
-    <div class="guide-track">
-      <article class="guide-card">
+    <div class="wt-nav" role="tablist" aria-label="How to submit a change" data-wt-key="contribute">
+      <button class="wt-tab is-active" id="ctb-tab-1" type="button" role="tab" aria-selected="true" aria-controls="ctb-panel-1" data-wt="1"><span class="wt-tab-num">1</span><span data-i18n="contrib.how.s1tag">Fork</span></button>
+      <button class="wt-tab" id="ctb-tab-2" type="button" role="tab" aria-selected="false" aria-controls="ctb-panel-2" data-wt="2" tabindex="-1"><span class="wt-tab-num">2</span><span data-i18n="contrib.how.s2tag">Run it</span></button>
+      <button class="wt-tab" id="ctb-tab-3" type="button" role="tab" aria-selected="false" aria-controls="ctb-panel-3" data-wt="3" tabindex="-1"><span class="wt-tab-num">3</span><span data-i18n="contrib.how.s3tag">Build it</span></button>
+      <button class="wt-tab" id="ctb-tab-4" type="button" role="tab" aria-selected="false" aria-controls="ctb-panel-4" data-wt="4" tabindex="-1"><span class="wt-tab-num">4</span><span data-i18n="contrib.how.s4tag">Ship it</span></button>
+    </div>
+
+    <div class="wt-panels">
+      <article class="guide-card wt-panel" id="ctb-panel-1" data-wt-panel="1" role="tabpanel" aria-labelledby="ctb-tab-1">
         <div class="guide-head">
           <span class="guide-num">1</span>
           <div>
@@ -1260,7 +1267,7 @@
         <p class="guide-intro" data-i18n="contrib.how.s1p">On GitHub, hit Fork to get your own copy of the project, then clone it to your machine.</p>
       </article>
 
-      <article class="guide-card">
+      <article class="guide-card wt-panel" id="ctb-panel-2" data-wt-panel="2" role="tabpanel" aria-labelledby="ctb-tab-2" hidden>
         <div class="guide-head">
           <span class="guide-num">2</span>
           <div>
@@ -1272,7 +1279,7 @@
         <pre class="contrib-code"><code>npm start  <span class="contrib-code-c"># → http://localhost:3000</span></code></pre>
       </article>
 
-      <article class="guide-card">
+      <article class="guide-card wt-panel" id="ctb-panel-3" data-wt-panel="3" role="tabpanel" aria-labelledby="ctb-tab-3" hidden>
         <div class="guide-head">
           <span class="guide-num">3</span>
           <div>
@@ -1283,7 +1290,7 @@
         <p class="guide-intro" data-i18n-html="contrib.how.s3p">Create a branch named for what you're doing — like <code>fix/mobile-layout</code> or <code>feat/faq-entry</code> — then make and test your edit. New copy goes through the i18n keys in <code>locales/en.json</code>.</p>
       </article>
 
-      <article class="guide-card">
+      <article class="guide-card wt-panel" id="ctb-panel-4" data-wt-panel="4" role="tabpanel" aria-labelledby="ctb-tab-4" hidden>
         <div class="guide-head">
           <span class="guide-num">4</span>
           <div>
@@ -1293,6 +1300,12 @@
         </div>
         <p class="guide-intro" data-i18n-html="contrib.how.s4p">Push your branch and open a pull request against <code>main</code>. We'll review it with you right there in the PR.</p>
       </article>
+    </div>
+
+    <div class="wt-foot">
+      <button class="wt-prev" type="button" data-wt-prev disabled><span aria-hidden="true">←</span> <span data-i18n="guide.wt.prev">Previous</span></button>
+      <span class="wt-count" data-wt-count aria-live="polite">1 / 4</span>
+      <button class="wt-next" type="button" data-wt-next><span data-i18n="guide.wt.next">Next</span> <span aria-hidden="true">→</span></button>
     </div>
 
     <p class="guide-note" data-i18n="contrib.how.note">Keep each pull request focused on one thing — a single fix or a single feature. It makes review faster and the history cleaner.</p>

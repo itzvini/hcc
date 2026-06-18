@@ -899,7 +899,6 @@ footer p  { color: var(--hr-fg-2); font-size: 14px; max-width: 420px; margin: 10
 }
 
 /* ---------- GUIDES ---------- */
-.guide-track { margin-top: 32px; display: grid; gap: 20px; }
 .guide-card {
   background: var(--hr-bg-2); border: 1px solid var(--hr-line);
   border-radius: var(--hr-radius-xl); padding: 24px 24px 22px;

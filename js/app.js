@@ -121,53 +121,69 @@ document.querySelectorAll('[data-subtab]').forEach(btn =>
 document.querySelectorAll('[data-subgoto]').forEach(el =>
   el.addEventListener('click', () => jumpSubTab(el, el.dataset.subgoto)));
 
-// Walkthrough stepper — Guides › Walkthroughs shows one guide at a time instead of
-// one long scroll: chip tabs jump to any step, prev/next walks the sequence.
-const wtNav = document.querySelector('.wt-nav');
-if (wtNav) {
-  const guidesPanel = wtNav.closest('.tab-panel');
-  const wtTabs   = [...wtNav.querySelectorAll('[data-wt]')];
-  const wtPanels = [...guidesPanel.querySelectorAll('[data-wt-panel]')];
-  const wtTotal  = wtPanels.length;
-  const wtPrev   = guidesPanel.querySelector('[data-wt-prev]');
-  const wtNext   = guidesPanel.querySelector('[data-wt-next]');
-  const wtCount  = guidesPanel.querySelector('[data-wt-count]');
-  let wtCurrent  = 1;
+// Walkthrough steppers — show one guide at a time (chip tabs + prev/next) instead of
+// one long scroll. Used by Guides › Walkthroughs and the Contribute how-to. The Guides
+// walkthroughs stepper also syncs its active step into the URL
+// (/guides/walkthroughs/<slug>) so individual steps are shareable and survive refresh.
+let routeWalkthrough = null; // set by the URL-syncing stepper; driven by route()
 
-  function showWalkthrough(n, { scroll = false, focusTab = false } = {}) {
-    n = Math.min(wtTotal, Math.max(1, n));
+function initStepper(nav) {
+  const scope   = nav.closest('section');
+  const tabs    = [...nav.querySelectorAll('[data-wt]')];
+  const panels  = [...scope.querySelectorAll('[data-wt-panel]')];
+  const total   = panels.length;
+  if (!total) return;
+  const prevBtn = scope.querySelector('[data-wt-prev]');
+  const nextBtn = scope.querySelector('[data-wt-next]');
+  const countEl = scope.querySelector('[data-wt-count]');
+  const syncUrl = nav.dataset.wtKey === 'walkthroughs';
+  let current   = 1;
+
+  const slugFor = n => tabs.find(t => Number(t.dataset.wt) === n)?.dataset.wtSlug || String(n);
+
+  function show(n, { scroll = false, focusTab = false, updateUrl = false } = {}) {
+    n = Math.min(total, Math.max(1, n));
     // Stop any video in the panel we're leaving so its audio doesn't linger.
-    if (n !== wtCurrent) {
-      const leaving = wtPanels.find(p => Number(p.dataset.wtPanel) === wtCurrent);
+    if (n !== current) {
+      const leaving = panels.find(p => Number(p.dataset.wtPanel) === current);
       const frame = leaving && leaving.querySelector('iframe');
       if (frame) frame.src = frame.src; // eslint-disable-line no-self-assign
     }
-    wtCurrent = n;
-    wtTabs.forEach(t => {
+    current = n;
+    tabs.forEach(t => {
       const active = Number(t.dataset.wt) === n;
       t.classList.toggle('is-active', active);
       t.setAttribute('aria-selected', String(active));
       t.tabIndex = active ? 0 : -1;
     });
-    wtPanels.forEach(p => { p.hidden = Number(p.dataset.wtPanel) !== n; });
-    if (wtPrev)  wtPrev.disabled = n === 1;
-    if (wtNext)  wtNext.disabled = n === wtTotal;
-    if (wtCount) wtCount.textContent = `${n} / ${wtTotal}`;
-    if (scroll)   wtNav.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    if (focusTab) wtTabs.find(t => Number(t.dataset.wt) === n)?.focus();
+    panels.forEach(p => { p.hidden = Number(p.dataset.wtPanel) !== n; });
+    if (prevBtn) prevBtn.disabled = n === 1;
+    if (nextBtn) nextBtn.disabled = n === total;
+    if (countEl) countEl.textContent = `${n} / ${total}`;
+    if (syncUrl && updateUrl) history.replaceState(null, '', `/guides/walkthroughs/${slugFor(n)}`);
+    if (scroll)   nav.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (focusTab) tabs.find(t => Number(t.dataset.wt) === n)?.focus();
   }
 
-  wtTabs.forEach(t => t.addEventListener('click', () => showWalkthrough(Number(t.dataset.wt), { scroll: true })));
-  wtPrev?.addEventListener('click', () => showWalkthrough(wtCurrent - 1, { scroll: true }));
-  wtNext?.addEventListener('click', () => showWalkthrough(wtCurrent + 1, { scroll: true }));
-  wtNav.addEventListener('keydown', e => {
+  tabs.forEach(t => t.addEventListener('click', () => show(Number(t.dataset.wt), { scroll: true, updateUrl: true })));
+  prevBtn?.addEventListener('click', () => show(current - 1, { scroll: true, updateUrl: true }));
+  nextBtn?.addEventListener('click', () => show(current + 1, { scroll: true, updateUrl: true }));
+  nav.addEventListener('keydown', e => {
     if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
     e.preventDefault();
-    showWalkthrough(wtCurrent + (e.key === 'ArrowRight' ? 1 : -1), { focusTab: true });
+    show(current + (e.key === 'ArrowRight' ? 1 : -1), { focusTab: true, updateUrl: true });
   });
 
-  showWalkthrough(1);
+  if (syncUrl) {
+    routeWalkthrough = slug => {
+      const match = tabs.find(t => t.dataset.wtSlug === slug || String(t.dataset.wt) === slug);
+      show(match ? Number(match.dataset.wt) : 1);
+    };
+  }
+  show(1);
 }
+
+document.querySelectorAll('.wt-nav').forEach(initStepper);
 
 // Clean tab URLs — every tab (and sub-tab) is a real path the server also serves:
 // /council, /roadmap/gen2, … Tab clicks push the path; legacy #tab links and
@@ -185,6 +201,10 @@ function route(pathname) {
   if (segs[1] && /^[a-z0-9-]+$/.test(segs[1])) {
     const scope = document.getElementById(`panel-${tab}`);
     if (scope && scope.querySelector(`[data-subtab="${segs[1]}"]`)) selectSubTab(scope, segs[1]);
+  }
+  // Deep link to a specific walkthrough, e.g. /guides/walkthroughs/funding
+  if (tab === 'guides' && segs[1] === 'walkthroughs' && segs[2] && routeWalkthrough) {
+    routeWalkthrough(segs[2]);
   }
 }
 
