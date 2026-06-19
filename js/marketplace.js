@@ -923,7 +923,7 @@ function buyStatusHtml() {
   if (buyState.phase === 'error') {
     // A funds shortfall can carry a card on-ramp link (LAND/Ethereum) — surface it as a CTA.
     const onramp = buyState.onrampUrl
-      ? `<a class="trade-funds-btn" href="${buyState.onrampUrl}" target="_blank" rel="noopener" style="margin-top:12px">${esc(t('trade.onramp.btn'))} ↗</a>`
+      ? `<a class="trade-funds-btn" href="${esc(buyState.onrampUrl)}" target="_blank" rel="noopener" style="margin-top:12px">${esc(t('trade.onramp.btn'))} ↗</a>`
       : '';
     return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(buyState.msg)}</span></div>${onramp}`;
   }
