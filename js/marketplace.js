@@ -223,6 +223,9 @@ let tradeTab = 'buy';
 // collection-wide ("floor") offers, best first; myOffers = the user's own active offers.
 let tokenOffers = null;    // null = loading/not loaded
 let collOffers = null;
+let collOffersError = false; // true = last load failed → empty strip means "couldn't load", not "none"
+let collOffersRetryTimer = null; // pending auto-retry after a failed load (self-heals the strip)
+let collOffersRetryAttempt = 0;  // backoff step for the auto-retry
 let myOffers = null;
 let offerState = null;     // staged make-offer: prepare|approve|approveWait|sign|create|done|error
 let offerCtx = null;       // where the make-offer flow is running: 'modal' | 'browse'
@@ -1610,12 +1613,37 @@ async function handleBuy(listingId) {
 // --- Offers (bids + collection "floor" offers) ---
 
 async function loadCollOffers() {
+  clearTimeout(collOffersRetryTimer); collOffersRetryTimer = null; // supersede any pending auto-retry
   try {
     const res = await fetch('/api/market/creatures/offers/collection', { headers: { Accept: 'application/json' } });
-    collOffers = res.ok ? ((await res.json()).offers || []) : [];
-  } catch { collOffers = []; }
+    if (!res.ok) throw new Error(`offers/collection HTTP ${res.status}`);
+    collOffers = (await res.json()).offers || [];
+    collOffersError = false;
+    collOffersRetryAttempt = 0; // healthy again — reset the backoff
+  } catch (err) {
+    // Don't blank a populated strip into a misleading "none right now" — keep the last
+    // good offers (stale-while-error) and flag the failure so an EMPTY strip can say so.
+    console.error('Load collection offers failed:', err.message);
+    collOffersError = true;
+    if (collOffers == null) collOffers = [];
+    scheduleCollOffersRetry(); // self-heal without the user tapping Refresh
+  }
   patchCollStrip();
   patchSellView();
+}
+
+// Auto-recover a failed offers load: re-fetch on a capped backoff (4s → 8s → 16s →
+// 30s…) until it succeeds. One timer at a time; a manual Refresh or any successful
+// load supersedes it and resets the backoff. The timer skips firing when the
+// Creatures strip isn't the active view, so we never poll needlessly in the background.
+function scheduleCollOffersRetry() {
+  if (collOffersRetryTimer) return;
+  const delay = Math.min(30000, 4000 * 2 ** collOffersRetryAttempt);
+  collOffersRetryAttempt++;
+  collOffersRetryTimer = setTimeout(() => {
+    collOffersRetryTimer = null;
+    if (coll === 'creatures' && root()) loadCollOffers();
+  }, delay);
 }
 async function loadMyOffers() {
   if (!account) { myOffers = null; return; }
@@ -1710,7 +1738,7 @@ function collStripHtml() {
       <div class="trade-colloffer-row">
         <div class="trade-colloffer-info">
           <span class="trade-colloffer-label">${esc(t('trade.coll.top'))} ${tipHtml('trade.coll.make.p')}</span>
-          <span class="trade-colloffer-price">${top ? esc(fmtEthFiat(top.priceEth)) : esc(t('trade.coll.none'))}</span>
+          <span class="trade-colloffer-price">${top ? esc(fmtEthFiat(top.priceEth)) : esc(t(collOffersError ? 'trade.coll.loadErr' : 'trade.coll.none'))}</span>
         </div>
         ${account && onZk() ? `
           <form class="trade-offer-form is-inline" id="trade-coll-offer-form" novalidate>
@@ -1790,7 +1818,7 @@ function acceptServerError(code) {
     own_listing: 'trade.err.ownOffer', not_found: 'trade.err.offerGone',
     not_active: 'trade.err.offerGone', bad_token: 'trade.err.notOwner',
   };
-  return t(KEY[code] || 'trade.err.unavailable');
+  return t(KEY[code] || 'trade.err.acceptUnavailable');
 }
 
 function setOffer(phase, extra) { offerState = { phase, ...extra }; patchModal(); patchCollStrip(); }
@@ -1865,6 +1893,7 @@ async function handleAcceptOffer(offerId, tokenId) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      console.error('Accept offer: prepare rejected', { offerId, status: res.status, code: data.error });
       setAccept('error', { msg: acceptServerError(data.error) });
       // A stale (unfunded/filled/cancelled/changed) offer should vanish from the UI promptly.
       if (['insufficient', 'not_found', 'not_active', 'taker_float'].includes(data.error)) {
@@ -1890,7 +1919,8 @@ async function handleAcceptOffer(offerId, tokenId) {
         return;
       }
     }
-    setAccept('error', { msg: t('trade.err.unavailable') });
+    console.error('Accept offer: prepare returned no transactions', { offerId, data });
+    setAccept('error', { msg: t('trade.err.acceptUnavailable') });
   } catch (err) {
     console.error('Accept offer failed:', err);
     setAccept('error', { msg: friendlyError(err) });
@@ -3180,7 +3210,7 @@ function onClick(e) {
     case 'switch':     return switchNetwork(target);
     case 'loadmore':   return loadListings(false);
     case 'retry':      return loadListings(true);
-    case 'refresh':    return loadListings(true);
+    case 'refresh':    loadListings(true); if (coll === 'creatures') loadCollOffers(); return;
     case 'seller-refresh': loadSellerData(); loadListings(true); return; // manual wallet refresh (Sell/Transfer)
     case 'flt-scope':
       if (flt.scope === target.dataset.scope) return;
