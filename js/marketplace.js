@@ -63,6 +63,8 @@ const IS_ADDR = /^0x[0-9a-f]{40}$/;
 const IMX_ETH_TOKEN = '0x52a6c53869ce09a731cd772f245b97a4401d3348';
 const SQUID_NATIVE = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'; // Squid's native-coin placeholder
 const BRIDGE_URL = `https://app.squidrouter.com/?chains=1,13371&tokens=${SQUID_NATIVE},${IMX_ETH_TOKEN}`;
+// The reverse, for sellers cashing out their proceeds: ETH-on-zkEVM → ETH-on-Ethereum.
+const CASHOUT_URL = `https://app.squidrouter.com/?chains=13371,1&tokens=${IMX_ETH_TOKEN},${SQUID_NATIVE}`;
 // IMX is the NATIVE gas token on Immutable zkEVM — every on-chain action (a buy, a sell's
 // one-time collection approval, a transfer) needs a little, and the ETH ERC-20 can't pay
 // for it. This deep-link bridges native ETH on Ethereum → native IMX on zkEVM (both the
@@ -231,6 +233,7 @@ let offerState = null;     // staged make-offer: prepare|approve|approveWait|sig
 let offerCtx = null;       // where the make-offer flow is running: 'modal' | 'browse'
 let acceptState = null;    // staged accept-offer: prepare|approve|approveWait|fulfill|fulfillWait|done|error
 let acceptBusyId = null;   // offerId being accepted (disables its button)
+let pendingAccept = null;  // { offerId, tokenId, netEth } awaiting the user's sale confirmation
 const OFFER_BUSY = new Set(['prepare', 'approve', 'approveWait', 'sign', 'create']);
 const ACCEPT_BUSY = new Set(['prepare', 'approve', 'approveWait', 'fulfill', 'fulfillWait']);
 
@@ -1687,11 +1690,71 @@ function acceptStatusHtml() {
     fulfill: 'trade.accept.confirm', fulfillWait: 'trade.accept.confirmWait',
   };
   if (acceptState.phase === 'done') {
-    const link = acceptState.hash ? ` <a href="${esc(EXPLORER)}/tx/${esc(acceptState.hash)}" target="_blank" rel="noopener">${esc(t('trade.status.view'))}</a>` : '';
-    return `<div class="trade-status is-ok"><span aria-hidden="true">✓</span><span>${esc(t('trade.accept.done'))}${link}</span></div>`;
+    // Proceeds land as the zkEVM ETH token — invisible in MetaMask until it's added, and on
+    // a different network than mainnet. Say where it is + offer to add it / bridge it out, so
+    // sellers don't go hunting (and accidentally move the wrong thing).
+    const amt = acceptState.netEth != null ? fmtEthFiat(acceptState.netEth) : null;
+    const explorer = acceptState.hash ? `<a class="trade-sold-btn" href="${esc(EXPLORER)}/tx/${esc(acceptState.hash)}" target="_blank" rel="noopener">${esc(t('trade.status.view'))} ↗</a>` : '';
+    return `<div class="trade-status is-ok trade-sold">
+        <div class="trade-sold-top"><span aria-hidden="true">✓</span><span>${esc(amt ? t('trade.accept.doneAmt').replace('{x}', amt) : t('trade.accept.done'))}</span></div>
+        <p class="trade-sold-where">${esc(t('trade.accept.doneWhere'))}</p>
+        <div class="trade-sold-actions">
+          <button class="trade-sold-btn" data-act="add-eth-token" type="button">${esc(t('trade.accept.addToken'))}</button>
+          <a class="trade-sold-btn" href="${CASHOUT_URL}" target="_blank" rel="noopener">${esc(t('trade.accept.cashout'))} ↗</a>
+          ${explorer}
+        </div>
+      </div>`;
   }
   if (acceptState.phase === 'error') return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(acceptState.msg)}</span></div>`;
   return `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t(STEP[acceptState.phase]))}</span></div>`;
+}
+
+// Sale confirmation gate. Instant-sell takes the BEST STANDING offer at click time, and
+// those move — so before any wallet popup we show the exact, current payout and make the
+// user confirm. (A holder once expected a price they'd seen earlier and was surprised by
+// the lower live one; this removes that surprise — the sale is final and can't be undone.)
+function askAccept(offerId, tokenId) {
+  if (acceptBusyId) return;
+  const offer = [...(collOffers || []), ...(tokenOffers || []), ...(myOffers || []), ...(sellPickOffers || [])].find(o => o.offerId === offerId);
+  if (!offer) { // it was taken/cancelled between render and click — refresh instead of confirming a ghost
+    loadCollOffers();
+    if (modalToken) loadTokenOffers(modalToken);
+    return;
+  }
+  pendingAccept = { offerId, tokenId: tokenId ?? null, netEth: offer.netEth };
+  patchConfirmAccept();
+}
+function confirmAcceptHtml() {
+  if (!pendingAccept) return '';
+  return `
+    <div class="trade-modal trade-confirm" role="dialog" aria-modal="true" aria-label="${esc(t('trade.confirm.aria'))}">
+      <div class="trade-modal-backdrop" data-act="accept-cancel"></div>
+      <div class="trade-confirm-card">
+        <span class="trade-confirm-ico" aria-hidden="true">⚡</span>
+        <h3 class="trade-confirm-h">${esc(t('trade.confirm.h'))}</h3>
+        <p class="trade-confirm-amt">${esc(fmtEthFiat(pendingAccept.netEth))}</p>
+        <p class="trade-confirm-sub">${esc(t('trade.confirm.sub'))}</p>
+        <p class="trade-confirm-note">${esc(t('trade.confirm.note'))}</p>
+        <div class="trade-confirm-actions">
+          <button class="apply-btn-ghost" data-act="accept-cancel" type="button">${esc(t('trade.confirm.cancel'))}</button>
+          <button class="trade-send" data-act="accept-confirm" type="button">${esc(t('trade.confirm.ok'))}</button>
+        </div>
+      </div>
+    </div>`;
+}
+function patchConfirmAccept() {
+  const slot = root()?.querySelector('#trade-confirm-slot');
+  if (slot) slot.innerHTML = confirmAcceptHtml();
+  document.body.classList.toggle('trade-modal-open', !!pendingAccept || !!modalToken);
+}
+
+// Add the zkEVM ETH token to MetaMask so a seller can actually SEE their proceeds (it's an
+// ERC-20, so it won't appear under the native balance). No-op if the user dismisses.
+async function addEthToken() {
+  if (!eth()) return;
+  try {
+    await eth().request({ method: 'wallet_watchAsset', params: { type: 'ERC20', options: { address: IMX_ETH_TOKEN, symbol: 'ETH', decimals: 18 } } });
+  } catch (err) { if (err?.code !== 4001) console.error('watchAsset failed:', err.message); }
 }
 
 // Offer rows for the token modal: list + accept (owner) or make-an-offer (everyone else).
@@ -1924,7 +1987,7 @@ async function handleAcceptOffer(offerId, tokenId) {
         const receipt = await waitForReceipt(hash);
         if (!receipt || receipt.status !== '0x1') { setAccept('error', { msg: t('trade.err.txFailed') }); return; }
         if (!isApproval) {
-          setAccept('done', { hash });
+          setAccept('done', { hash, netEth: offer?.netEth });
           sellSel = null;
           refreshAfterTx(); // sold a Creature into a bid — refresh holdings/balance, retry as Immutable indexes
           loadCollOffers();
@@ -3149,7 +3212,7 @@ function render() {
     <div class="trade-command">${collSwitcherHtml()}${tradeTabsHtml()}${walletBarHtml()}</div>
     <div id="trade-mmwarn-slot">${walletNoticeHtml()}</div>
     <div id="trade-bridgebar-slot">${bridgeBannerHtml()}</div>
-    ${viewHtml()}${modalHtml()}${safetyHtml()}`;
+    ${viewHtml()}${modalHtml()}${safetyHtml()}<div id="trade-confirm-slot">${confirmAcceptHtml()}</div>`;
   ensureDelegation();
   if (account && (coll === 'land' || onZk())) {
     refreshBalance();
@@ -3201,8 +3264,15 @@ function onClick(e) {
       transferSel = String(transferSel) === String(target.dataset.token) ? null : target.dataset.token;
       return patchTransferView();
     case 'cancel-listing': return handleCancelListing(target.dataset.listing);
-    case 'accept-offer':   return handleAcceptOffer(target.dataset.offer);
-    case 'instant-sell':   return handleAcceptOffer(target.dataset.offer, sellSel);
+    case 'accept-offer':   return askAccept(target.dataset.offer);
+    case 'instant-sell':   return askAccept(target.dataset.offer, sellSel);
+    case 'accept-confirm': {
+      const p = pendingAccept; pendingAccept = null; patchConfirmAccept();
+      if (p) handleAcceptOffer(p.offerId, p.tokenId ?? undefined);
+      return;
+    }
+    case 'accept-cancel':  pendingAccept = null; return patchConfirmAccept();
+    case 'add-eth-token':  return addEthToken();
     case 'cancel-offer':   return handleCancelOffer(target.dataset.offer);
     case 'bridge-now':     return handleBridgeNow();
     case 'gas-bridge-now': return handleGasBridgeNow();
@@ -3384,6 +3454,7 @@ function wireEsc() {
   if (escWired) return; escWired = true;
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
+    if (pendingAccept) { pendingAccept = null; patchConfirmAccept(); return; }
     if (openFacet) { openFacet = null; repaintFacetUI(); return; }
     if (fltOpenMobile) { setFltSheet(false); return; }
     if (safetyOpen) { safetyOpen = false; render(); return; }
