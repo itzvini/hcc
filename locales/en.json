@@ -96,6 +96,7 @@
   "trade.net.wrong.h": "Switch to Immutable zkEVM",
   "trade.net.wrong.p": "Your Creatures live on Immutable zkEVM. Switch networks to view and trade them — we'll add it to MetaMask for you.",
   "trade.net.switch": "Switch network",
+  "trade.switch.title": "Switch account",
   "trade.disconnect": "Disconnect",
   "trade.balance.label": "Your Creatures",
   "trade.transfer.h": "Send a Creature",

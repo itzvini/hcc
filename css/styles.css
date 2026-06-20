@@ -1691,6 +1691,8 @@ footer { margin-top: 28px; }
 
 @media (prefers-reduced-motion: reduce) {
   .trade-mm-btn:hover .trade-mm-logo, .trade-mini-spin { animation: none !important; }
+  .trade-switch { transition: none; }
+  .trade-switch:active { transform: none; }
 }
 
 /* ---- Beta tagging: experimental, at the user's own risk ---- */
@@ -1828,6 +1830,20 @@ footer { margin-top: 28px; }
   font-family: var(--hr-sans); font-size: 11.5px; padding: 6px 11px;
 }
 .trade-bar .apply-logout:hover { background: rgba(255,255,255,.05); }
+/* Switch-account chip — small ghost circle next to the address; re-opens MetaMask's
+   account picker (the only supported way to change wallets) */
+.trade-switch {
+  appearance: none; -webkit-appearance: none; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; flex: 0 0 auto; margin-left: -2px;
+  border-radius: 50%; border: 1px solid var(--hr-line);
+  background: rgba(255,255,255,.03); color: var(--hr-fg-2);
+  transition: color .15s ease, border-color .15s ease, background .15s ease, transform .12s ease;
+}
+.trade-switch svg { display: block; }
+.trade-switch:hover { color: var(--hr-primary); border-color: var(--hr-primary-25); background: var(--hr-primary-25); }
+.trade-switch:active { transform: scale(.9); }
+.trade-switch:disabled { opacity: .5; cursor: default; }
 /* The wrong-network pill doubles as the switch button */
 button.trade-net { cursor: pointer; font-family: var(--hr-sans); }
 button.trade-net:hover { box-shadow: 0 0 12px var(--hr-banana-25); }

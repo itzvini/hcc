@@ -573,6 +573,26 @@ async function connect() {
   } finally { busy = false; render(); }
 }
 
+// Re-open MetaMask's account picker so the user can switch to — or newly connect —
+// another of their accounts. MetaMask never lets a dapp enumerate every account or set
+// the active one directly; this permission prompt is the supported path. The user's pick
+// normally arrives via the `accountsChanged` handler, but some builds resolve the prompt
+// without firing it when the active account is unchanged, so we re-read to stay truthful.
+async function switchAccount() {
+  if (!eth() || busy) return;
+  if (!account) return connect();
+  busy = true; render();
+  try {
+    await eth().request({ method: 'wallet_requestPermissions', params: [{ eth_accounts: {} }] });
+    const accs = (await eth().request({ method: 'eth_accounts' })) || [];
+    const next = (accs[0] || '').toLowerCase() || null;
+    if (next && next !== account) { account = next; resetSellerState(); }
+  } catch (err) {
+    // 4001 = user dismissed the picker — a no-op, not something to surface.
+    if (err?.code !== 4001) { console.error('Account switch failed:', err); pendingFlash = friendlyError(err); }
+  } finally { busy = false; render(); }
+}
+
 // Switch to whatever chain the ACTIVE collection needs (zkEVM gets added if absent;
 // Ethereum mainnet always exists in the wallet).
 async function switchToChain(hex) {
@@ -1965,6 +1985,10 @@ function walletBarHtml() {
   return `<div class="trade-bar is-connected">
     <img class="trade-mm-dot" src="${METAMASK_IMG}" alt="" />
     <code class="trade-addr" title="${esc(account)}">${esc(shortWallet(account))}</code>
+    <button class="trade-switch" data-act="switch-account" type="button" ${busy ? 'disabled' : ''}
+      title="${esc(t('trade.switch.title'))}" aria-label="${esc(t('trade.switch.title'))}">
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M6.99 11 3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg>
+    </button>
     ${net}${bal ? `<span class="trade-bar-bals">${bal}</span>` : ''}
     <button class="apply-logout" data-act="disconnect" type="button">${esc(t('trade.disconnect'))}</button>
   </div>`;
@@ -3151,6 +3175,7 @@ function onClick(e) {
       return render();
     case 'safety-guide': return openSafetyGuide();
     case 'connect':    return connect();
+    case 'switch-account': return switchAccount();
     case 'disconnect': account = null; resetSellerState(); return render();
     case 'switch':     return switchNetwork(target);
     case 'loadmore':   return loadListings(false);
