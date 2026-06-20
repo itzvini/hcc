@@ -51,6 +51,7 @@ function txExplorerUrl(hash) {
 const SEL_SAFE_TRANSFER = '0x42842e0e'; // safeTransferFrom(address,address,uint256)
 const SEL_BALANCE_OF    = '0x70a08231'; // balanceOf(address)
 const SEL_OWNER_OF      = '0x6352211e'; // ownerOf(uint256)
+const SEL_WETH_WITHDRAW = '0x2e1a7d4d'; // withdraw(uint256) — unwrap WETH → native ETH (1:1)
 const ZERO = '0x0000000000000000000000000000000000000000';
 const METAMASK_IMG = '/img/brands/metamask.svg';
 // Crisp shield-check (currentColor) — emoji shields render as flat glyphs on Windows.
@@ -65,6 +66,9 @@ const SQUID_NATIVE = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'; // Squid's na
 const BRIDGE_URL = `https://app.squidrouter.com/?chains=1,13371&tokens=${SQUID_NATIVE},${IMX_ETH_TOKEN}`;
 // The reverse, for sellers cashing out their proceeds: ETH-on-zkEVM → ETH-on-Ethereum.
 const CASHOUT_URL = `https://app.squidrouter.com/?chains=13371,1&tokens=${IMX_ETH_TOKEN},${SQUID_NATIVE}`;
+// LAND offers settle in WETH on Ethereum mainnet — a seller's proceeds arrive as this ERC-20
+// (invisible in MetaMask until added). Canonical mainnet WETH.
+const WETH_TOKEN = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
 // IMX is the NATIVE gas token on Immutable zkEVM — every on-chain action (a buy, a sell's
 // one-time collection approval, a transfer) needs a little, and the ETH ERC-20 can't pay
 // for it. This deep-link bridges native ETH on Ethereum → native IMX on zkEVM (both the
@@ -228,13 +232,23 @@ let collOffers = null;
 let collOffersError = false; // true = last load failed → empty strip means "couldn't load", not "none"
 let collOffersRetryTimer = null; // pending auto-retry after a failed load (self-heals the strip)
 let collOffersRetryAttempt = 0;  // backoff step for the auto-retry
+// LAND standing offers (OpenSea collection bids, WETH) — separate from the Creature set.
+let landCollOffers = null;
+let landCollOffersError = false;
+let landCollOffersRetryTimer = null;
+let landCollOffersRetryAttempt = 0;
+let landMyOffers = null;   // the connected wallet's own active LAND offers (for cancel)
 let myOffers = null;
 let offerState = null;     // staged make-offer: prepare|approve|approveWait|sign|create|done|error
 let offerCtx = null;       // where the make-offer flow is running: 'modal' | 'browse'
+let landOfferState = null; // staged LAND make-offer (separate: mainnet + WETH wrap/approve)
 let acceptState = null;    // staged accept-offer: prepare|approve|approveWait|fulfill|fulfillWait|done|error
 let acceptBusyId = null;   // offerId being accepted (disables its button)
-let pendingAccept = null;  // { offerId, tokenId, netEth } awaiting the user's sale confirmation
-const OFFER_BUSY = new Set(['prepare', 'approve', 'approveWait', 'sign', 'create']);
+let pendingAccept = null;  // { kind, …params, netEth } awaiting the user's sale confirmation
+let landAcceptState = null; // staged LAND accept (separate flow: mainnet + WETH)
+let landAcceptBusy = false;
+let unwrapState = null;     // one-tap WETH → ETH unwrap after a LAND sale: send|wait|done|error
+const OFFER_BUSY = new Set(['prepare', 'wrap', 'wrapWait', 'approve', 'approveWait', 'sign', 'create']);
 const ACCEPT_BUSY = new Set(['prepare', 'approve', 'approveWait', 'fulfill', 'fulfillWait']);
 
 // Seller state: your Creatures (sell picker), your active listings, and the staged
@@ -1656,6 +1670,34 @@ function scheduleCollOffersRetry() {
     if (coll === 'creatures' && root()) loadCollOffers();
   }, delay);
 }
+
+// LAND standing offers (read-only for now) — same shape + self-healing as the Creature set.
+async function loadLandCollOffers() {
+  clearTimeout(landCollOffersRetryTimer); landCollOffersRetryTimer = null;
+  try {
+    const res = await fetch('/api/market/land/offers/collection', { headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error(`land offers/collection HTTP ${res.status}`);
+    landCollOffers = (await res.json()).offers || [];
+    landCollOffersError = false;
+    landCollOffersRetryAttempt = 0;
+  } catch (err) {
+    console.error('Load LAND collection offers failed:', err.message);
+    landCollOffersError = true;
+    if (landCollOffers == null) landCollOffers = [];
+    scheduleLandCollOffersRetry();
+  }
+  patchLandOfferStrip();
+  patchSellView(); // the LAND instant-sell card on the Sell tab reads these too
+}
+function scheduleLandCollOffersRetry() {
+  if (landCollOffersRetryTimer) return;
+  const delay = Math.min(30000, 4000 * 2 ** landCollOffersRetryAttempt);
+  landCollOffersRetryAttempt++;
+  landCollOffersRetryTimer = setTimeout(() => {
+    landCollOffersRetryTimer = null;
+    if (coll === 'land' && root()) loadLandCollOffers();
+  }, delay);
+}
 async function loadMyOffers() {
   if (!account) { myOffers = null; return; }
   try {
@@ -1663,6 +1705,14 @@ async function loadMyOffers() {
     myOffers = res.ok ? ((await res.json()).offers || []) : [];
   } catch { myOffers = []; }
   patchCollStrip();
+}
+async function loadLandMyOffers() {
+  if (!account) { landMyOffers = null; return; }
+  try {
+    const res = await fetch(`/api/market/land/offers/mine/${account}`, { headers: { Accept: 'application/json' } });
+    landMyOffers = res.ok ? ((await res.json()).offers || []) : [];
+  } catch { landMyOffers = []; }
+  patchLandOfferStrip();
 }
 async function loadTokenOffers(tokenId) {
   tokenOffers = null;
@@ -1721,7 +1771,7 @@ function askAccept(offerId, tokenId) {
     if (modalToken) loadTokenOffers(modalToken);
     return;
   }
-  pendingAccept = { offerId, tokenId: tokenId ?? null, netEth: offer.netEth };
+  pendingAccept = { kind: 'creature', offerId, tokenId: tokenId ?? null, netEth: offer.netEth };
   patchConfirmAccept();
 }
 function confirmAcceptHtml() {
@@ -1733,7 +1783,7 @@ function confirmAcceptHtml() {
         <span class="trade-confirm-ico" aria-hidden="true">⚡</span>
         <h3 class="trade-confirm-h">${esc(t('trade.confirm.h'))}</h3>
         <p class="trade-confirm-amt">${esc(fmtEthFiat(pendingAccept.netEth))}</p>
-        <p class="trade-confirm-sub">${esc(t('trade.confirm.sub'))}</p>
+        <p class="trade-confirm-sub">${esc(t(pendingAccept.kind === 'land' ? 'trade.confirm.sub.land' : 'trade.confirm.sub'))}</p>
         <p class="trade-confirm-note">${esc(t('trade.confirm.note'))}</p>
         <div class="trade-confirm-actions">
           <button class="apply-btn-ghost" data-act="accept-cancel" type="button">${esc(t('trade.confirm.cancel'))}</button>
@@ -1755,6 +1805,140 @@ async function addEthToken() {
   try {
     await eth().request({ method: 'wallet_watchAsset', params: { type: 'ERC20', options: { address: IMX_ETH_TOKEN, symbol: 'ETH', decimals: 18 } } });
   } catch (err) { if (err?.code !== 4001) console.error('watchAsset failed:', err.message); }
+}
+// WETH (a seller's LAND-offer proceeds) is an ERC-20 on mainnet — add it so they can see it.
+async function addWethToken() {
+  if (!eth()) return;
+  try {
+    await eth().request({ method: 'wallet_watchAsset', params: { type: 'ERC20', options: { address: WETH_TOKEN, symbol: 'WETH', decimals: 18 } } });
+  } catch (err) { if (err?.code !== 4001) console.error('watchAsset WETH failed:', err.message); }
+}
+// One-tap WETH → native ETH unwrap (withdraw): turns a seller's WETH proceeds into plain ETH,
+// 1:1, gas only — no DEX/swap. Unwraps the full WETH balance.
+function setUnwrap(phase, extra) { unwrapState = { phase, ...extra }; patchSellView(); }
+async function handleUnwrapWeth() {
+  if (unwrapState && (unwrapState.phase === 'send' || unwrapState.phase === 'wait')) return;
+  try {
+    await switchToChain('0x1'); // WETH is on Ethereum mainnet
+    const bal = await readErc20(WETH_TOKEN, account);
+    if (bal == null || bal <= 0n) { setUnwrap('error', { msg: t('trade.unwrap.none') }); return; }
+    setUnwrap('send', { amtEth: weiToEth(bal) });
+    const hash = await eth().request({ method: 'eth_sendTransaction', params: [{ from: account, to: WETH_TOKEN, data: SEL_WETH_WITHDRAW + word(bal) }] });
+    setUnwrap('wait', { hash, amtEth: weiToEth(bal) });
+    const receipt = await waitForReceipt(hash);
+    if (!receipt || receipt.status !== '0x1') { setUnwrap('error', { msg: t('trade.err.txFailed') }); return; }
+    setUnwrap('done', { hash, amtEth: weiToEth(bal) });
+    refreshBalance();
+  } catch (err) {
+    console.error('Unwrap WETH failed:', err);
+    setUnwrap('error', { msg: friendlyError(err) });
+  }
+}
+function unwrapStatusHtml() {
+  if (!unwrapState) return '';
+  if (unwrapState.phase === 'done') {
+    const amt = unwrapState.amtEth != null ? fmtEthFiat(unwrapState.amtEth) : null;
+    return `<div class="trade-status is-ok"><span aria-hidden="true">✓</span><span>${esc(amt ? t('trade.unwrap.doneAmt').replace('{x}', amt) : t('trade.unwrap.done'))}</span></div>`;
+  }
+  if (unwrapState.phase === 'error') return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(unwrapState.msg)}</span></div>`;
+  return `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t('trade.unwrap.busy'))}</span></div>`;
+}
+
+// --- LAND offer accept (sell a parcel into a standing bid; mainnet + WETH) ---
+// Separate from the Creature accept: different chain, different proceeds token, and OpenSea
+// hands us a ready fulfilment (no local gas estimation), so it's a straight approve→fulfil.
+function setLandAccept(phase, extra) { landAcceptState = { phase, ...extra }; patchSellView(); }
+function landAcceptServerError(code) {
+  const KEY = {
+    not_owner: 'trade.err.notOwner', not_found: 'trade.err.offerGone', not_active: 'trade.err.offerGone',
+    rate_limited: 'trade.err.rate', blocked_account: 'trade.err.osBlocked', disabled: 'trade.err.sellDisabled',
+  };
+  return t(KEY[code] || 'trade.err.acceptUnavailable');
+}
+function askAcceptLand(orderHash, protocolAddress, tokenId) {
+  if (landAcceptBusy) return;
+  const offer = (landCollOffers || []).find(o => o.offerId === orderHash) || landCollOffers?.[0];
+  if (!offer) { loadLandCollOffers(); return; } // vanished between render + click
+  pendingAccept = { kind: 'land', orderHash, protocolAddress: protocolAddress || offer.protocolAddress, tokenId, netEth: offer.netEth };
+  patchConfirmAccept();
+}
+function landAcceptStatusHtml() {
+  if (!landAcceptState) return '';
+  const STEP = {
+    prepare: 'trade.accept.preparing', approve: 'trade.accept.approve', approveWait: 'trade.accept.approveWait',
+    fulfill: 'trade.accept.confirm', fulfillWait: 'trade.accept.confirmWait',
+  };
+  if (landAcceptState.phase === 'done') {
+    const amt = landAcceptState.netEth != null ? fmtEthFiat(landAcceptState.netEth) : null;
+    const explorer = landAcceptState.hash ? `<a class="trade-sold-btn" href="https://etherscan.io/tx/${esc(landAcceptState.hash)}" target="_blank" rel="noopener">${esc(t('trade.status.view'))} ↗</a>` : '';
+    const unwrapBusy = unwrapState && (unwrapState.phase === 'send' || unwrapState.phase === 'wait');
+    return `<div class="trade-status is-ok trade-sold">
+        <div class="trade-sold-top"><span aria-hidden="true">✓</span><span>${esc(amt ? t('trade.accept.doneAmt').replace('{x}', amt) : t('trade.accept.done'))}</span></div>
+        <p class="trade-sold-where">${esc(t('trade.landaccept.doneWhere'))}</p>
+        <div class="trade-sold-actions">
+          <button class="trade-sold-btn" data-act="unwrap-weth" type="button" ${unwrapBusy ? 'disabled' : ''}>${esc(t('trade.landaccept.unwrap'))}</button>
+          <button class="trade-sold-btn" data-act="add-weth-token" type="button">${esc(t('trade.landaccept.addToken'))}</button>
+          ${explorer}
+        </div>
+        ${unwrapStatusHtml()}
+      </div>`;
+  }
+  if (landAcceptState.phase === 'error') return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(landAcceptState.msg)}</span></div>`;
+  return `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t(STEP[landAcceptState.phase]))}</span></div>`;
+}
+async function handleAcceptLandOffer(orderHash, protocolAddress, tokenId, netEth) {
+  if (landAcceptBusy) return;
+  landAcceptBusy = true;
+  unwrapState = null; // fresh sale — drop any prior unwrap result from the done panel
+  try {
+    await switchToChain('0x1'); // LAND settles on Ethereum mainnet
+    setLandAccept('prepare');
+    const res = await fetch('/api/market/land/offer/accept/prepare', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ orderHash, protocolAddress, tokenId, takerAddress: account }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error('Accept LAND offer: prepare rejected', { orderHash, status: res.status, code: data.error });
+      setLandAccept('error', { msg: landAcceptServerError(data.error) });
+      if (['not_active', 'not_found'].includes(data.error)) loadLandCollOffers();
+      return;
+    }
+    for (const tx of (data.transactions || [])) {
+      const isApproval = tx.purpose === 'APPROVAL';
+      setLandAccept(isApproval ? 'approve' : 'fulfill');
+      // Pre-flight the fulfilment (mainnet gas is real) — if the offer was just taken or
+      // became unfunded, estimateGas reverts and we bail with a clear message, no gas spent.
+      if (!isApproval) {
+        try {
+          await eth().request({ method: 'eth_estimateGas', params: [{ from: account, to: tx.to, data: tx.data, value: tx.value && tx.value !== '0x0' ? tx.value : '0x0' }] });
+        } catch (simErr) {
+          console.warn('LAND accept pre-flight reverted (offer likely gone):', simErr?.message);
+          setLandAccept('error', { msg: t('trade.err.offerGone') });
+          loadLandCollOffers();
+          return;
+        }
+      }
+      const hash = await eth().request({ method: 'eth_sendTransaction', params: [{ from: account, to: tx.to, data: tx.data, value: tx.value && tx.value !== '0x0' ? tx.value : undefined }] });
+      setLandAccept(isApproval ? 'approveWait' : 'fulfillWait', { hash });
+      const receipt = await waitForReceipt(hash);
+      if (!receipt || receipt.status !== '0x1') { setLandAccept('error', { msg: t('trade.err.txFailed') }); return; }
+      if (!isApproval) {
+        setLandAccept('done', { hash, netEth });
+        sellSel = null;
+        refreshAfterTx(); // sold a parcel — refresh holdings, retry as OpenSea indexes
+        loadLandCollOffers();
+        return;
+      }
+    }
+    setLandAccept('error', { msg: t('trade.err.acceptUnavailable') });
+  } catch (err) {
+    console.error('Accept LAND offer failed:', err);
+    setLandAccept('error', { msg: friendlyError(err) });
+  } finally {
+    landAcceptBusy = false;
+    patchSellView();
+  }
 }
 
 // Offer rows for the token modal: list + accept (owner) or make-an-offer (everyone else).
@@ -1826,6 +2010,45 @@ function patchCollStrip() {
   if (el) el.outerHTML = collStripHtml();
 }
 
+// LAND standing-offer strip (read-only, Phase 1): surfaces the top OpenSea collection bid
+// so holders can see real demand. Selling into / creating these comes in later phases.
+// Reuses the Creature strip's classes for a consistent look.
+function landOfferStripHtml() {
+  if (coll !== 'land') return '';
+  const top = landCollOffers?.[0];
+  const makeBusy = landOfferState && OFFER_BUSY.has(landOfferState.phase);
+  const mineRows = (landMyOffers && landMyOffers.length)
+    ? `<div class="trade-myoffers">
+        <span class="trade-myoffers-h">${esc(t('trade.coll.mine.h'))}</span>
+        ${landMyOffers.map(o => `
+          <span class="trade-myoffer-chip">
+            ${esc(t('trade.coll.chipAny'))} · ${esc(fmtEthFiat(o.priceEth))}
+            <button data-act="cancel-land-offer" data-offer="${esc(o.offerId)}" type="button" aria-label="${esc(t('trade.coll.cancel'))}" ${cancelBusy ? 'disabled' : ''}>×</button>
+          </span>`).join('')}
+      </div>`
+    : '';
+  return `
+    <div class="trade-colloffer" id="trade-landoffer">
+      <div class="trade-colloffer-row">
+        <div class="trade-colloffer-info">
+          <span class="trade-colloffer-label">${esc(t('trade.landoffer.top'))} ${tipHtml('trade.landoffer.tip')}</span>
+          <span class="trade-colloffer-price">${top ? esc(fmtEthFiat(top.priceEth)) : esc(t(landCollOffersError ? 'trade.coll.loadErr' : 'trade.coll.none'))}</span>
+        </div>
+        ${account ? `
+          <form class="trade-offer-form is-inline" id="trade-land-offer-form" novalidate>
+            <input id="trade-land-offer-price" type="text" inputmode="decimal" placeholder="${esc(t('trade.offers.make.ph'))}" autocomplete="off" />
+            <button class="trade-offer-btn" type="submit" ${makeBusy ? 'disabled' : ''}>${esc(t('trade.landoffer.make.btn'))}</button>
+          </form>` : `<span class="trade-colloffer-hint">${esc(t('trade.coll.connectHint'))}</span>`}
+      </div>
+      ${landOfferStatusHtml()}
+      ${mineRows}
+    </div>`;
+}
+function patchLandOfferStrip() {
+  const el = root()?.querySelector('#trade-landoffer');
+  if (el) el.outerHTML = landOfferStripHtml();
+}
+
 // Instant-sell card on the Sell tab. Targets the best SPECIFIC offer on the picked
 // Creature — collection-bid accepts are broken in the current Immutable SDK (criteria
 // resolution bug; reported), so the collection top is shown for context only.
@@ -1867,6 +2090,36 @@ function instantSellHtml() {
       </div>
       ${action}
       ${offerCtx !== 'modal' ? acceptStatusHtml() : ''}
+    </div>`;
+}
+
+// LAND instant-sell card (Sell tab): sell the picked parcel into the top standing offer.
+// Only a collection-wide offer exists for LAND (no per-token bids surfaced), so the top is
+// the target. The button carries the offer hash + protocol + picked tokenId for the accept.
+function landInstantSellHtml() {
+  const best = landCollOffers?.[0] || null;
+  if (!best) return '';
+  const busy = landAcceptBusy;
+  let action;
+  if (sellSel != null) {
+    action = `<button class="trade-send trade-instant-btn" data-act="land-instant-sell" data-offer="${esc(best.offerId)}" data-protocol="${esc(best.protocolAddress)}" data-token="${esc(sellSel)}" type="button" ${busy ? 'disabled' : ''}>
+      ${esc(t('trade.instant.btn').replace('{x}', fmtEthFiat(best.netEth)))}</button>`;
+  } else {
+    action = `<button class="trade-send trade-instant-btn" type="button" disabled>
+        ${esc(t('trade.instant.btn').replace('{x}', fmtEthFiat(best.netEth)))}</button>
+      <p class="trade-beta-micro">${esc(t('trade.landinstant.pick'))}</p>`;
+  }
+  return `
+    <div class="trade-instant">
+      <div class="trade-instant-head">
+        <span class="trade-instant-ico" aria-hidden="true">⚡</span>
+        <div>
+          <b>${esc(t('trade.instant.h'))} </b>${tipHtml('trade.landinstant.tip')}
+          <p>${esc(t('trade.landinstant.line').replace('{x}', fmtEthFiat(best.priceEth)).replace('{y}', fmtEthFiat(best.netEth)))}</p>
+        </div>
+      </div>
+      ${action}
+      ${landAcceptStatusHtml()}
     </div>`;
 }
 
@@ -1940,6 +2193,85 @@ async function handleMakeOffer(tokenId, priceRaw, ctx) {
   } catch (err) {
     console.error('Make offer failed:', err);
     setOffer('error', { msg: friendlyError(err) });
+  }
+}
+
+// --- LAND make-offer (create a collection bid; mainnet + WETH) ---
+// Like the Creature make-offer but settles in WETH: prepare may include a one-time wrap
+// (ETH→WETH for the shortfall) and a conduit approval before the gasless signature.
+function setLandOffer(phase, extra) { landOfferState = { phase, ...extra }; patchLandOfferStrip(); }
+function landOfferServerError(code) {
+  const KEY = {
+    bad_price: 'trade.err.badPrice', rate_limited: 'trade.err.rate',
+    blocked_account: 'trade.err.osBlocked', disabled: 'trade.err.offerDisabled',
+  };
+  return t(KEY[code] || 'trade.err.acceptUnavailable');
+}
+function landOfferStatusHtml() {
+  if (!landOfferState) return '';
+  const STEP = {
+    prepare: 'trade.offer.preparing', wrap: 'trade.landoffer.wrap', wrapWait: 'trade.landoffer.wrapWait',
+    approve: 'trade.landoffer.approve', approveWait: 'trade.offer.approveWait',
+    sign: 'trade.landoffer.sign', create: 'trade.offer.create',
+  };
+  if (landOfferState.phase === 'done')  return `<div class="trade-status is-ok"><span aria-hidden="true">✓</span><span>${esc(t('trade.landoffer.done'))}</span></div>`;
+  if (landOfferState.phase === 'error') return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(landOfferState.msg)}</span></div>`;
+  return `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t(STEP[landOfferState.phase] || 'trade.offer.preparing'))}</span></div>`;
+}
+async function handleMakeLandOffer(priceRaw) {
+  if (landOfferState && OFFER_BUSY.has(landOfferState.phase)) return;
+  if (!account) return setLandOffer('error', { msg: t('trade.coll.connectHint') });
+  const price = (priceRaw || '').trim().replace(',', '.');
+  if (!/^\d{1,6}(\.\d{1,18})?$/.test(price) || Number(price) <= 0) return setLandOffer('error', { msg: t('trade.err.badPrice') });
+  try {
+    await switchToChain('0x1'); // offers settle on Ethereum mainnet
+    setLandOffer('prepare');
+    const res = await fetch('/api/market/land/offer/prepare', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ makerAddress: account, priceEth: price }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return setLandOffer('error', { msg: landOfferServerError(data.error) });
+
+    let signature = null;
+    for (const action of (data.actions || [])) {
+      if (action.type === 'TRANSACTION') {
+        const isWrap = action.purpose === 'WRAP';
+        setLandOffer(isWrap ? 'wrap' : 'approve');
+        // Before the wrap, make sure they actually hold the native ETH to wrap — otherwise
+        // MetaMask throws a cryptic "insufficient funds"; this says exactly what's needed.
+        if (isWrap) {
+          const need = BigInt(action.value || '0x0');
+          const ethBal = await readNative(account);
+          if (ethBal != null && ethBal < need) {
+            return setLandOffer('error', { msg: t('trade.landoffer.needEth').replace('{x}', fmtEthFiat(weiToEth(need))) });
+          }
+        }
+        const hash = await eth().request({ method: 'eth_sendTransaction', params: [{ from: account, to: action.to, data: action.data, value: action.value && action.value !== '0x0' ? action.value : undefined }] });
+        setLandOffer(isWrap ? 'wrapWait' : 'approveWait');
+        const receipt = await waitForReceipt(hash);
+        if (!receipt || receipt.status !== '0x1') return setLandOffer('error', { msg: t('trade.err.txFailed') });
+      } else if (action.type === 'SIGNABLE') {
+        setLandOffer('sign');
+        signature = await signTypedData(action.typedData);
+      }
+    }
+    if (!signature) return setLandOffer('error', { msg: t('trade.err.acceptUnavailable') });
+
+    setLandOffer('create');
+    const createRes = await fetch('/api/market/land/offer/create', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ orderParameters: data.orderParameters, signature, criteria: data.criteria }),
+    });
+    const created = await createRes.json().catch(() => ({}));
+    if (!createRes.ok) return setLandOffer('error', { msg: landOfferServerError(created.error) });
+
+    setLandOffer('done');
+    loadLandCollOffers();
+    loadLandMyOffers(); // surface the offer you just placed in "your offers"
+  } catch (err) {
+    console.error('Make LAND offer failed:', err);
+    setLandOffer('error', { msg: friendlyError(err) });
   }
 }
 
@@ -2511,7 +2843,7 @@ function browseHtml() {
         </div>
       </div>
       ${browseToolbarHtml()}
-      ${coll === 'creatures' ? collStripHtml() : ''}
+      ${coll === 'creatures' ? collStripHtml() : landOfferStripHtml()}
       <div class="trade-grid" id="trade-grid">${gridInnerHtml()}</div>
       <div class="trade-loadmore" id="trade-loadmore">${loadMoreHtml()}</div>
     </div>
@@ -2718,7 +3050,7 @@ function sellViewHtml() {
             ${esc(t('trade.sell.btn'))} <span aria-hidden="true">→</span></button>
           <div id="trade-sell-status" role="status" aria-live="polite">${sellStatusHtml()}</div>
         </form>
-        ${isLand ? '' : instantSellHtml()}
+        ${isLand ? landInstantSellHtml() : instantSellHtml()}
       </div>
     </div>`;
   // Same left filter sidebar + toolbar as Buy, once there's an inventory worth filtering.
@@ -3124,6 +3456,39 @@ async function handleCancelLandListing(orderHash) {
   }
 }
 
+// Cancel one of your own LAND offers — same on-chain Seaport cancel as a listing (the
+// prepare endpoint resolves offer hashes too). Settles on mainnet; costs gas.
+async function handleCancelLandOffer(orderHash) {
+  if (cancelBusy) return;
+  cancelBusy = orderHash; patchLandOfferStrip();
+  try {
+    const prepRes = await fetch('/api/market/land/cancel/prepare', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ orderHash, accountAddress: account }),
+    });
+    const prep = await prepRes.json().catch(() => ({}));
+    if (!prepRes.ok) {
+      const CK = { not_found: 'trade.err.offerGone', not_active: 'trade.err.offerGone', rate_limited: 'trade.err.rate' };
+      throw Object.assign(new Error('prepare'), { friendly: t(CK[prep.error] || 'trade.err.generic') });
+    }
+
+    await switchToChain('0x1');
+    for (const tx of (prep.transactions || [])) {
+      const hash = await eth().request({ method: 'eth_sendTransaction', params: [{ from: account, to: tx.to, data: tx.data, value: tx.value && tx.value !== '0x0' ? tx.value : undefined }] });
+      const receipt = await waitForReceipt(hash);
+      if (!receipt || receipt.status !== '0x1') throw Object.assign(new Error('tx'), { friendly: t('trade.err.txFailed') });
+    }
+    landMyOffers = (landMyOffers || []).filter(o => o.offerId !== orderHash);
+    loadLandCollOffers();
+  } catch (err) {
+    console.error('LAND offer cancel failed:', err);
+    pendingFlash = err.friendly || friendlyError(err);
+  } finally {
+    cancelBusy = null;
+    if (pendingFlash) render(); else patchLandOfferStrip();
+  }
+}
+
 async function handleTransferSubmit(form) {
   const status = form.querySelector('#trade-status');
   const btn    = form.querySelector('#trade-send');
@@ -3218,6 +3583,7 @@ function render() {
     refreshBalance();
     maybeLoadSeller();
     if (coll === 'creatures' && myOffers === null) loadMyOffers();
+    else if (coll === 'land' && landMyOffers === null) loadLandMyOffers();
   }
 }
 
@@ -3249,7 +3615,7 @@ function onClick(e) {
       // so the user doesn't land on a "wrong network" pill they have to tap themselves.
       autoSwitchNetwork();
       loadListings(true);
-      if (coll === 'creatures') loadCollOffers();
+      if (coll === 'creatures') loadCollOffers(); else if (coll === 'land') loadLandCollOffers();
       maybeLoadSeller();
       return;
     }
@@ -3266,14 +3632,20 @@ function onClick(e) {
     case 'cancel-listing': return handleCancelListing(target.dataset.listing);
     case 'accept-offer':   return askAccept(target.dataset.offer);
     case 'instant-sell':   return askAccept(target.dataset.offer, sellSel);
+    case 'land-instant-sell': return askAcceptLand(target.dataset.offer, target.dataset.protocol, target.dataset.token);
     case 'accept-confirm': {
       const p = pendingAccept; pendingAccept = null; patchConfirmAccept();
-      if (p) handleAcceptOffer(p.offerId, p.tokenId ?? undefined);
+      if (!p) return;
+      if (p.kind === 'land') handleAcceptLandOffer(p.orderHash, p.protocolAddress, p.tokenId, p.netEth);
+      else handleAcceptOffer(p.offerId, p.tokenId ?? undefined);
       return;
     }
     case 'accept-cancel':  pendingAccept = null; return patchConfirmAccept();
     case 'add-eth-token':  return addEthToken();
+    case 'add-weth-token': return addWethToken();
+    case 'unwrap-weth':    return handleUnwrapWeth();
     case 'cancel-offer':   return handleCancelOffer(target.dataset.offer);
+    case 'cancel-land-offer': return handleCancelLandOffer(target.dataset.offer);
     case 'bridge-now':     return handleBridgeNow();
     case 'gas-bridge-now': return handleGasBridgeNow();
     case 'bridge-dismiss': return dismissBridge();
@@ -3296,7 +3668,7 @@ function onClick(e) {
     case 'switch':     return switchNetwork(target);
     case 'loadmore':   return loadListings(false);
     case 'retry':      return loadListings(true);
-    case 'refresh':    loadListings(true); if (coll === 'creatures') loadCollOffers(); return;
+    case 'refresh':    loadListings(true); if (coll === 'creatures') loadCollOffers(); else if (coll === 'land') loadLandCollOffers(); return;
     case 'seller-refresh': loadSellerData(); loadListings(true); return; // manual wallet refresh (Sell/Transfer)
     case 'flt-scope':
       if (flt.scope === target.dataset.scope) return;
@@ -3354,6 +3726,10 @@ function onSubmit(e) {
   if (e.target?.id === 'trade-coll-offer-form') {
     e.preventDefault();
     handleMakeOffer(null, e.target.querySelector('#trade-coll-offer-price')?.value, 'browse');
+  }
+  if (e.target?.id === 'trade-land-offer-form') {
+    e.preventDefault();
+    handleMakeLandOffer(e.target.querySelector('#trade-land-offer-price')?.value);
   }
 }
 function onChange(e) {
@@ -3423,6 +3799,7 @@ function onInput(e) {
 function resetSellerState() {
   owned = null; mine = null; sellSel = null; sellState = null; cancelBusy = null;
   myOffers = null; offerState = null; offerCtx = null; acceptState = null; acceptBusyId = null;
+  landMyOffers = null; landOfferState = null; landAcceptState = null; landAcceptBusy = false; unwrapState = null;
   sellPickOffers = null;
   transferSel = null; transferCheck = null; transferAck = false;
   gasState = null; // an in-flight bridge keeps its own banner; this is just the help panel
@@ -3513,7 +3890,7 @@ export async function loadMarketplace() {
   }
   render();
   loadListings(true);
-  if (coll === 'creatures') loadCollOffers();
+  if (coll === 'creatures') loadCollOffers(); else if (coll === 'land') loadLandCollOffers();
   if (deepToken) openDeepLink(deepToken);
 }
 

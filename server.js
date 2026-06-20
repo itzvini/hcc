@@ -2029,6 +2029,14 @@ async function handleMarketplaceApi(request, response, url) {
     sendJson(response, 200, { ...data, ethUsd: fx.ethUsd, fxRates: fx.fxRates }, { 'Cache-Control': 'public, max-age=30' });
     return;
   }
+  // Active collection-wide offers ("standing offers") on LAND, best first. Read-only:
+  // surfaces existing OpenSea demand so holders can see the floor bid. WETH-denominated.
+  if (pathname === '/api/market/land/offers/collection') {
+    if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    const data = await landMarket.listCollectionOffers();
+    sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=30' });
+    return;
+  }
   // Unified LAND browse: every parcel via its Slime — trait facets, rarity rank,
   // price when listed. (LAND and its Slime are one NFT — one browse, not two.)
   if (pathname === '/api/market/land/browse') {
@@ -2112,6 +2120,31 @@ async function handleMarketplaceApi(request, response, url) {
     return;
   }
 
+  // Prepare accepting a LAND collection offer (sell a parcel INTO a standing bid): the
+  // one-time conduit approval (if needed) + the Seaport fulfilment, both bound to the seller.
+  if (pathname === '/api/market/land/offer/accept/prepare' && request.method === 'POST') {
+    if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    const aWait = rateLimited(`mktbuy:${ip}`, 15, 60 * 1000);
+    if (aWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(aWait) }); return; }
+
+    const body = await readJsonBody(request, 4 * 1024);
+    const orderHash = String(body.orderHash || '').toLowerCase();
+    const protocolAddress = String(body.protocolAddress || '').toLowerCase();
+    const tokenId = String(body.tokenId || '');
+    const taker = String(body.takerAddress || '').toLowerCase();
+    if (!/^0x[0-9a-f]{64}$/.test(orderHash)) { sendJson(response, 400, { error: 'bad_listing' }); return; }
+    if (!HEX_ADDRESS.test(protocolAddress)) { sendJson(response, 400, { error: 'bad_listing' }); return; }
+    if (!/^\d{1,80}$/.test(tokenId)) { sendJson(response, 400, { error: 'bad_token' }); return; }
+    if (!HEX_ADDRESS.test(taker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
+
+    try {
+      sendJson(response, 200, await landMarket.prepareAcceptOffer({ orderHash, protocolAddress, tokenId, taker }));
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
   // Prepare a LAND listing: one-time conduit approval (if needed) + the Seaport order
   // typed-data the seller signs. Same trust model as the Creature sell flow; the order
   // is built server-side so the client can't smuggle a different collection or recipient.
@@ -2168,6 +2201,51 @@ async function handleMarketplaceApi(request, response, url) {
     return;
   }
 
+  // Prepare a LAND collection offer: WETH wrap/approval (if needed) + the Seaport order
+  // (orderType 3 + OpenSea zone) the maker signs. The order is built server-side so the
+  // client can't smuggle a different collection, recipient or fee.
+  if (pathname === '/api/market/land/offer/prepare' && request.method === 'POST') {
+    if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    if (!landMarket.offerEnabled()) { sendJson(response, 503, { error: 'disabled' }); return; }
+    const oWait = rateLimited(`mktsell:${ip}`, 15, 60 * 1000);
+    if (oWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(oWait) }); return; }
+
+    const body = await readJsonBody(request, 4 * 1024);
+    const maker = String(body.makerAddress || '').toLowerCase();
+    const wei = parseEthToWei(body.priceEth);
+    if (!HEX_ADDRESS.test(maker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
+    if (wei == null || wei <= 0n) { sendJson(response, 400, { error: 'bad_price' }); return; }
+
+    try {
+      sendJson(response, 200, await landMarket.prepareOffer({ makerAddress: maker, priceWei: wei.toString(), durationDays: body.durationDays }));
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // Create the LAND offer from the signed order (relayed to OpenSea). createOffer's scope
+  // guard keeps our API key from posting anything but a LAND collection offer.
+  if (pathname === '/api/market/land/offer/create' && request.method === 'POST') {
+    if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    if (!landMarket.offerEnabled()) { sendJson(response, 503, { error: 'disabled' }); return; }
+    const cWait = rateLimited(`mktsell:${ip}`, 15, 60 * 1000);
+    if (cWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(cWait) }); return; }
+
+    const body = await readJsonBody(request, 32 * 1024);
+    const { orderParameters, signature, criteria } = body || {};
+    if (!orderParameters || typeof orderParameters !== 'object'
+      || !/^0x[0-9a-f]{60,2600}$/i.test(String(signature || ''))) {
+      sendJson(response, 400, { error: 'bad_order' }); return;
+    }
+    try {
+      sendJson(response, 200, await landMarket.createOffer({ orderParameters, signature, criteria }));
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
   // The caller's own active LAND listings (for "my listings" + cancel). Public on-chain
   // data keyed to the connected wallet — no-store so it's never shared-cached.
   const landMineMatch = pathname.match(/^\/api\/market\/land\/mine\/(0x[0-9a-f]{40})$/);
@@ -2183,6 +2261,19 @@ async function handleMarketplaceApi(request, response, url) {
         if (s) { it.coords = s.coords; it.traits = s.traits; it.rank = s.rank ?? null; }
       }
       sendJson(response, 200, data, { 'Cache-Control': 'no-store' });
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // The caller's own active LAND offers (for "your offers" + cancel). Public on-chain data
+  // keyed to the connected wallet — no-store so it's never shared-cached.
+  const landOffersMineMatch = pathname.match(/^\/api\/market\/land\/offers\/mine\/(0x[0-9a-f]{40})$/);
+  if (landOffersMineMatch) {
+    if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    try {
+      sendJson(response, 200, await landMarket.myOffers(landOffersMineMatch[1]), { 'Cache-Control': 'no-store' });
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }
