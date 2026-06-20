@@ -1572,35 +1572,43 @@ async function handleBuy(listingId) {
     // top-up the Sell/Transfer flows now use, instead of a terse "add some IMX".
     if (imxBal != null && imxBal < GAS_MIN_WEI) { setBuy('gas'); showGasHelp('buy'); return; }
 
-    const res = await fetch('/api/market/creatures/buy/prepare', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ listingId, takerAddress: account }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      if (data.error === 'insufficient') { await showFundsHelp(it); return; }
-      setBuy('error', { msg: buyServerError(data.error) });
-      return;
-    }
-
-    for (const tx of (data.transactions || [])) {
-      const isApproval = tx.purpose === 'APPROVAL';
-      setBuy(isApproval ? 'approve' : 'fulfill');
-      const hash = await eth().request({
-        method: 'eth_sendTransaction',
-        params: [{ from: account, to: tx.to, data: tx.data, value: tx.value && tx.value !== '0x0' ? tx.value : undefined }],
+    // Up to a couple of passes: a first-time buyer's ERC-20 spend approval must be MINED
+    // before the fulfilment can be built (estimateGas needs the allowance in place), so
+    // the first prepare returns just the approval; we re-prepare once it confirms.
+    for (let pass = 0; pass < 3; pass++) {
+      setBuy('prepare');
+      const res = await fetch('/api/market/creatures/buy/prepare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ listingId, takerAddress: account }),
       });
-      setBuy(isApproval ? 'approveWait' : 'fulfillWait', { hash });
-      const receipt = await waitForReceipt(hash);
-      if (!receipt || receipt.status !== '0x1') { setBuy('error', { msg: t('trade.err.txFailed') }); return; }
-      if (!isApproval) {
-        setBuy('done', { hash });
-        listings = listings.filter(l => l.listingId !== listingId); // it's sold — drop from the grid
-        patchGrid();
-        refreshAfterTx(); // they gained a Creature (+ it left the market) — refresh, then retry as Immutable indexes
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (data.error === 'insufficient') { await showFundsHelp(it); return; }
+        setBuy('error', { msg: buyServerError(data.error) });
         return;
       }
+
+      for (const tx of (data.transactions || [])) {
+        const isApproval = tx.purpose === 'APPROVAL';
+        setBuy(isApproval ? 'approve' : 'fulfill');
+        const hash = await eth().request({
+          method: 'eth_sendTransaction',
+          params: [{ from: account, to: tx.to, data: tx.data, value: tx.value && tx.value !== '0x0' ? tx.value : undefined }],
+        });
+        setBuy(isApproval ? 'approveWait' : 'fulfillWait', { hash });
+        const receipt = await waitForReceipt(hash);
+        if (!receipt || receipt.status !== '0x1') { setBuy('error', { msg: t('trade.err.txFailed') }); return; }
+        if (!isApproval) {
+          setBuy('done', { hash });
+          listings = listings.filter(l => l.listingId !== listingId); // it's sold — drop from the grid
+          patchGrid();
+          refreshAfterTx(); // they gained a Creature (+ it left the market) — refresh, then retry as Immutable indexes
+          return;
+        }
+      }
+      // Only the spend approval this pass — re-prepare to fetch the now-buildable fulfilment.
+      if (!data.needsRefulfill) break;
     }
     // No FULFILL_ORDER transaction came back — treat as unavailable rather than charge nothing silently.
     setBuy('error', { msg: t('trade.err.unavailable') });
@@ -1882,44 +1890,52 @@ async function handleAcceptOffer(offerId, tokenId) {
   const fillToken = tokenId ?? (offer?.collection ? sellSel : null);
   const amountToFill = offer && offer.units > 1 ? '1' : null;
   try {
-    setAccept('prepare');
-    const res = await fetch('/api/market/creatures/offer/accept/prepare', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        offerId, takerAddress: account,
-        ...(fillToken != null ? { tokenId: fillToken } : {}),
-        ...(amountToFill != null ? { amountToFill } : {}),
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      console.error('Accept offer: prepare rejected', { offerId, status: res.status, code: data.error });
-      setAccept('error', { msg: acceptServerError(data.error) });
-      // A stale (unfunded/filled/cancelled/changed) offer should vanish from the UI promptly.
-      if (['insufficient', 'not_found', 'not_active', 'taker_float'].includes(data.error)) {
-        loadCollOffers();
-        if (modalToken) loadTokenOffers(modalToken);
-      }
-      return;
-    }
-
-    for (const tx of (data.transactions || [])) {
-      const isApproval = tx.purpose === 'APPROVAL';
-      setAccept(isApproval ? 'approve' : 'fulfill');
-      const hash = await eth().request({ method: 'eth_sendTransaction', params: [{ from: account, to: tx.to, data: tx.data, value: tx.value && tx.value !== '0x0' ? tx.value : undefined }] });
-      setAccept(isApproval ? 'approveWait' : 'fulfillWait', { hash });
-      const receipt = await waitForReceipt(hash);
-      if (!receipt || receipt.status !== '0x1') { setAccept('error', { msg: t('trade.err.txFailed') }); return; }
-      if (!isApproval) {
-        setAccept('done', { hash });
-        sellSel = null;
-        refreshAfterTx(); // sold a Creature into a bid — refresh holdings/balance, retry as Immutable indexes
-        loadCollOffers();
-        if (modalToken) loadTokenOffers(modalToken);
+    // Up to a couple of passes: the first prepare may return ERC-20 / NFT approvals that
+    // must be MINED before the fulfilment can be built — accepting a bid pulls the routed
+    // creator royalty from the seller's ERC-20, so a first-time seller has an approval
+    // pending. Once it confirms we re-prepare and the FULFILL_ORDER comes back buildable.
+    for (let pass = 0; pass < 3; pass++) {
+      setAccept('prepare');
+      const res = await fetch('/api/market/creatures/offer/accept/prepare', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          offerId, takerAddress: account,
+          ...(fillToken != null ? { tokenId: fillToken } : {}),
+          ...(amountToFill != null ? { amountToFill } : {}),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.error('Accept offer: prepare rejected', { offerId, status: res.status, code: data.error });
+        setAccept('error', { msg: acceptServerError(data.error) });
+        // A stale (unfunded/filled/cancelled/changed) offer should vanish from the UI promptly.
+        if (['insufficient', 'not_found', 'not_active', 'taker_float'].includes(data.error)) {
+          loadCollOffers();
+          if (modalToken) loadTokenOffers(modalToken);
+        }
         return;
       }
+
+      for (const tx of (data.transactions || [])) {
+        const isApproval = tx.purpose === 'APPROVAL';
+        setAccept(isApproval ? 'approve' : 'fulfill');
+        const hash = await eth().request({ method: 'eth_sendTransaction', params: [{ from: account, to: tx.to, data: tx.data, value: tx.value && tx.value !== '0x0' ? tx.value : undefined }] });
+        setAccept(isApproval ? 'approveWait' : 'fulfillWait', { hash });
+        const receipt = await waitForReceipt(hash);
+        if (!receipt || receipt.status !== '0x1') { setAccept('error', { msg: t('trade.err.txFailed') }); return; }
+        if (!isApproval) {
+          setAccept('done', { hash });
+          sellSel = null;
+          refreshAfterTx(); // sold a Creature into a bid — refresh holdings/balance, retry as Immutable indexes
+          loadCollOffers();
+          if (modalToken) loadTokenOffers(modalToken);
+          return;
+        }
+      }
+      // Only approvals this pass — re-prepare so the now-buildable fulfilment comes back.
+      if (!data.needsRefulfill) break;
     }
-    console.error('Accept offer: prepare returned no transactions', { offerId, data });
+    console.error('Accept offer: prepare returned no fulfilment transaction', { offerId });
     setAccept('error', { msg: t('trade.err.acceptUnavailable') });
   } catch (err) {
     console.error('Accept offer failed:', err);

@@ -321,7 +321,7 @@
   "trade.offer.done": "Offer placed! If it's accepted, the Creature lands in your wallet automatically. 🎉",
   "trade.accept.busy": "Selling…",
   "trade.accept.preparing": "Preparing the sale…",
-  "trade.accept.approve": "One-time setup — approve the collection in MetaMask…",
+  "trade.accept.approve": "One-time setup — approve in MetaMask so your sale can settle…",
   "trade.accept.approveWait": "Approval sent — waiting for it to confirm…",
   "trade.accept.confirm": "Confirm the sale in MetaMask…",
   "trade.accept.confirmWait": "Almost done — waiting for the sale to confirm…",
