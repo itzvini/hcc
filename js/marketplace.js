@@ -500,6 +500,8 @@ async function ensureNetwork() {
 // lives in Guides → Stay safe; the 🛡 pill by the tabs links there forever after.
 const SAFETY_ACK = 'hcc-safety-ack';
 let safetyOpen = false;
+let cashoutOpen = false;     // the cash-out guidance modal (Creature proceeds are zkEVM ETH)
+let cashoutStep = 'intent';  // 'intent' → 'guide'
 function safetyAcked() {
   try { return localStorage.getItem(SAFETY_ACK) === '1'; } catch { return true; }
 }
@@ -574,6 +576,76 @@ function openSafetyGuide() {
   // Static elements wired by app.js — programmatic clicks reuse its tab plumbing.
   document.getElementById('tab-guides')?.click();
   document.querySelector('[data-subtab="safety"]')?.click();
+}
+
+// Cash-out guidance: selling pays in a token novices misroute when "withdrawing".
+//  • Creatures: ETH on Immutable zkEVM — sent straight to an exchange it's LOST (exchanges
+//    credit only mainnet ETH). Safe path: bridge to Ethereum first, then send.
+//  • LAND: WETH on Ethereum — already the right network, but WETH ≠ ETH (many exchanges
+//    won't credit a WETH deposit). Safe path: unwrap to ETH first, then send.
+// An intent-first modal routes them to the right path for the active collection.
+function cashoutHtml() {
+  if (!cashoutOpen) return '';
+  const inner = cashoutStep === 'guide'
+    ? (coll === 'land' ? cashoutLandGuideInner() : cashoutGuideInner())
+    : cashoutIntentInner();
+  return `
+    <div class="trade-modal trade-cashout" role="dialog" aria-modal="true" aria-label="${esc(t('trade.cashout.aria'))}">
+      <div class="trade-modal-backdrop" data-act="cashout-close"></div>
+      <div class="trade-safety-card trade-cashout-card">${inner}</div>
+    </div>`;
+}
+function cashoutIntentInner() {
+  return `
+    <span class="apply-pill">${esc(t('trade.cashout.badge'))}</span>
+    <h3 class="trade-safety-h">${esc(t('trade.cashout.h'))}</h3>
+    <p class="trade-safety-p">${esc(t(coll === 'land' ? 'trade.cashout.p.land' : 'trade.cashout.p'))}</p>
+    <div class="trade-cashout-opts">
+      <button class="trade-cashout-opt" data-act="cashout-guide" type="button">
+        <span class="trade-cashout-opt-ico" aria-hidden="true">💸</span>
+        <span class="trade-cashout-opt-tx"><b>${esc(t('trade.cashout.opt.move.h'))}</b><span>${esc(t('trade.cashout.opt.move.p'))}</span></span>
+        <span class="trade-cashout-opt-arrow" aria-hidden="true">→</span>
+      </button>
+      <button class="trade-cashout-opt" data-act="cashout-close" type="button">
+        <span class="trade-cashout-opt-ico" aria-hidden="true">🛍️</span>
+        <span class="trade-cashout-opt-tx"><b>${esc(t('trade.cashout.opt.keep.h'))}</b><span>${esc(t('trade.cashout.opt.keep.p'))}</span></span>
+      </button>
+    </div>`;
+}
+function cashoutGuideInner() {
+  const steps = [1, 2, 3].map(i => `<li><span class="trade-cashout-num">${i}</span><span>${esc(t('trade.cashout.step' + i))}</span></li>`).join('');
+  return `
+    <span class="apply-pill">${esc(t('trade.cashout.badge'))}</span>
+    <h3 class="trade-safety-h">${esc(t('trade.cashout.guide.h'))}</h3>
+    <div class="trade-cashout-warn"><span aria-hidden="true">⚠️</span><p>${esc(t('trade.cashout.warn'))}</p></div>
+    <ol class="trade-cashout-steps">${steps}</ol>
+    <div class="trade-safety-actions">
+      <button class="apply-btn-ghost" data-act="cashout-back" type="button">${esc(t('trade.cashout.back'))}</button>
+      <a class="trade-send trade-safety-ok" href="${CASHOUT_URL}" target="_blank" rel="noopener">${esc(t('trade.cashout.bridge'))} ↗</a>
+    </div>
+    <p class="trade-safety-foot">${esc(t('trade.cashout.foot'))}</p>`;
+}
+// LAND variant: proceeds are WETH already on Ethereum — no bridge, just unwrap to plain ETH.
+// The unwrap runs in-place (its status shows here via patchCashout from setUnwrap).
+function cashoutLandGuideInner() {
+  const steps = [1, 2].map(i => `<li><span class="trade-cashout-num">${i}</span><span>${esc(t('trade.cashout.land.step' + i))}</span></li>`).join('');
+  const unwrapping = unwrapState && (unwrapState.phase === 'send' || unwrapState.phase === 'wait');
+  return `
+    <span class="apply-pill">${esc(t('trade.cashout.badge'))}</span>
+    <h3 class="trade-safety-h">${esc(t('trade.cashout.guide.h'))}</h3>
+    <div class="trade-cashout-warn"><span aria-hidden="true">⚠️</span><p>${esc(t('trade.cashout.land.warn'))}</p></div>
+    <ol class="trade-cashout-steps">${steps}</ol>
+    ${unwrapStatusHtml()}
+    <div class="trade-safety-actions">
+      <button class="apply-btn-ghost" data-act="cashout-back" type="button">${esc(t('trade.cashout.back'))}</button>
+      <button class="trade-send trade-safety-ok" data-act="unwrap-weth" type="button" ${unwrapping ? 'disabled' : ''}>${esc(t('trade.cashout.land.unwrapBtn'))}</button>
+    </div>
+    <p class="trade-safety-foot">${esc(t('trade.cashout.land.foot'))}</p>`;
+}
+function patchCashout() {
+  const slot = root()?.querySelector('#trade-cashout-slot');
+  if (slot) slot.innerHTML = cashoutHtml();
+  document.body.classList.toggle('trade-modal-open', cashoutOpen || !!modalToken || !!pendingAccept);
 }
 
 async function connect() {
@@ -1749,8 +1821,8 @@ function acceptStatusHtml() {
         <div class="trade-sold-top"><span aria-hidden="true">✓</span><span>${esc(amt ? t('trade.accept.doneAmt').replace('{x}', amt) : t('trade.accept.done'))}</span></div>
         <p class="trade-sold-where">${esc(t('trade.accept.doneWhere'))}</p>
         <div class="trade-sold-actions">
+          <button class="trade-sold-btn is-primary" data-act="cashout-open" type="button">${esc(t('trade.accept.cashout'))}</button>
           <button class="trade-sold-btn" data-act="add-eth-token" type="button">${esc(t('trade.accept.addToken'))}</button>
-          <a class="trade-sold-btn" href="${CASHOUT_URL}" target="_blank" rel="noopener">${esc(t('trade.accept.cashout'))} ↗</a>
           ${explorer}
         </div>
       </div>`;
@@ -1815,7 +1887,7 @@ async function addWethToken() {
 }
 // One-tap WETH → native ETH unwrap (withdraw): turns a seller's WETH proceeds into plain ETH,
 // 1:1, gas only — no DEX/swap. Unwraps the full WETH balance.
-function setUnwrap(phase, extra) { unwrapState = { phase, ...extra }; patchSellView(); }
+function setUnwrap(phase, extra) { unwrapState = { phase, ...extra }; patchSellView(); patchCashout(); }
 async function handleUnwrapWeth() {
   if (unwrapState && (unwrapState.phase === 'send' || unwrapState.phase === 'wait')) return;
   try {
@@ -2431,6 +2503,7 @@ function walletBarHtml() {
       <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M6.99 11 3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg>
     </button>
     ${net}${bal ? `<span class="trade-bar-bals">${bal}</span>` : ''}
+    ${(coll === 'creatures' && onZk()) || (coll === 'land' && onRightChain()) ? `<button class="trade-cashout-pill" data-act="cashout-open" type="button" title="${esc(t('trade.cashout.barTitle'))}"><span aria-hidden="true">💸</span> ${esc(t('trade.cashout.barBtn'))}</button>` : ''}
     <button class="apply-logout" data-act="disconnect" type="button">${esc(t('trade.disconnect'))}</button>
   </div>`;
 }
@@ -3577,7 +3650,7 @@ function render() {
     <div class="trade-command">${collSwitcherHtml()}${tradeTabsHtml()}${walletBarHtml()}</div>
     <div id="trade-mmwarn-slot">${walletNoticeHtml()}</div>
     <div id="trade-bridgebar-slot">${bridgeBannerHtml()}</div>
-    ${viewHtml()}${modalHtml()}${safetyHtml()}<div id="trade-confirm-slot">${confirmAcceptHtml()}</div>`;
+    ${viewHtml()}${modalHtml()}${safetyHtml()}<div id="trade-confirm-slot">${confirmAcceptHtml()}</div><div id="trade-cashout-slot">${cashoutHtml()}</div>`;
   ensureDelegation();
   if (account && (coll === 'land' || onZk())) {
     refreshBalance();
@@ -3644,6 +3717,10 @@ function onClick(e) {
     case 'add-eth-token':  return addEthToken();
     case 'add-weth-token': return addWethToken();
     case 'unwrap-weth':    return handleUnwrapWeth();
+    case 'cashout-open':   cashoutOpen = true; cashoutStep = 'intent'; return patchCashout();
+    case 'cashout-guide':  cashoutStep = 'guide'; return patchCashout();
+    case 'cashout-back':   cashoutStep = 'intent'; return patchCashout();
+    case 'cashout-close':  cashoutOpen = false; return patchCashout();
     case 'cancel-offer':   return handleCancelOffer(target.dataset.offer);
     case 'cancel-land-offer': return handleCancelLandOffer(target.dataset.offer);
     case 'bridge-now':     return handleBridgeNow();
@@ -3831,6 +3908,7 @@ function wireEsc() {
   if (escWired) return; escWired = true;
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
+    if (cashoutOpen) { cashoutOpen = false; patchCashout(); return; }
     if (pendingAccept) { pendingAccept = null; patchConfirmAccept(); return; }
     if (openFacet) { openFacet = null; repaintFacetUI(); return; }
     if (fltOpenMobile) { setFltSheet(false); return; }
