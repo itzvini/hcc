@@ -179,7 +179,7 @@ h1 .pop { color: var(--hr-primary); }
 .pet-wrap:nth-child(2){animation-delay:.3s}
 .pet-wrap:nth-child(3){animation-delay:.6s}
 .pet-wrap:nth-child(4){animation-delay:.9s}
-.pet-wrap object, .pet-wrap svg { width: 100%; height: 100%; display: block; pointer-events: none; }
+.pet-wrap img, .pet-wrap svg { width: 100%; height: 100%; display: block; pointer-events: none; }
 .pet-wrap.is-jumping{animation:pet-jump .55s cubic-bezier(.28,.84,.42,1) !important}
 @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
 @keyframes pet-jump{0%{transform:translateY(0)}20%{transform:translateY(-20px)}45%{transform:translateY(-24px)}68%{transform:translateY(3px)}82%{transform:translateY(-8px)}100%{transform:translateY(0)}}

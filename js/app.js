@@ -315,22 +315,24 @@ if (g2MotionOK && 'IntersectionObserver' in window && g2Reveals.length) {
 
 // Fetch and inline pet SVGs so internal <g transform> paths render in document context
 (async () => {
-  const pets = document.querySelectorAll('.pet-wrap object[data]');
-  await Promise.all([...pets].map(async obj => {
+  const pets = document.querySelectorAll('.pet-wrap img[src]');
+  await Promise.all([...pets].map(async img => {
     try {
-      const data = obj.getAttribute('data');
-      const base = data.replace(/[^/]+$/, '');
-      const res = await fetch(data);
+      const src = img.getAttribute('src');
+      const base = src.replace(/[^/]+$/, '');
+      const res = await fetch(src);
       const text = await res.text();
       const svg = new DOMParser().parseFromString(text, 'image/svg+xml').documentElement;
-      svg.querySelectorAll('image[href]').forEach(img => {
-        const href = img.getAttribute('href');
+      svg.querySelectorAll('image[href]').forEach(el => {
+        const href = el.getAttribute('href');
         if (href && !href.startsWith('/') && !href.startsWith('http')) {
-          img.setAttribute('href', base + href);
+          el.setAttribute('href', base + href);
         }
       });
+      svg.setAttribute('role', 'img');
+      svg.setAttribute('aria-label', img.getAttribute('alt') || '');
       svg.style.cssText = 'width:100%;height:100%;display:block;pointer-events:none';
-      obj.replaceWith(svg);
+      img.replaceWith(svg);
     } catch {}
   }));
 })();
