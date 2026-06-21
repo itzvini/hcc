@@ -1548,8 +1548,16 @@ async function getLandBrowse(searchParams) {
     if (lo === null || r.totalEth < lo) lo = r.totalEth;
     if (hi === null || r.totalEth > hi) hi = r.totalEth;
   }
+  // Attach a collection-wide rarity % to every trait value: the share of ALL catalogued
+  // slimes that carry it. It's a stable property of the collection, so it's read from the
+  // index's traitFreq (not the filtered pool) — `n` already tells "how many match now".
+  const facets = index ? computeBrowseFacets(pool, f) : [];
+  if (index && index.total) for (const facet of facets) for (const val of facet.values) {
+    const c = index.traitFreq.get(`${facet.type}:${val.v}`);
+    if (c != null) { val.total = c; val.pct = c / index.total; }
+  }
   return {
-    // traits stay on the row (only 4 small fields) so the modal needs no extra fetch.
+    // traits stay on the row (only a few small fields) so the modal needs no extra fetch.
     items: matched.slice(start, start + BROWSE_PAGE_SIZE).map(({ search, listedAt, ...pub }) => pub),
     total: matched.length,
     page: f.page,
@@ -1557,7 +1565,7 @@ async function getLandBrowse(searchParams) {
     scope: wantAll ? 'all' : 'listed',
     // 'all' needs the full catalogue; until it's built we can only show listed parcels.
     indexing: !index,
-    facets: index ? computeBrowseFacets(pool, f) : [],
+    facets,
     priceRange: lo === null ? null : { min: lo, max: hi },
     listedTotal: rows.reduce((n, r) => n + (r.listed ? 1 : 0), 0),
     collectionTotal: index ? index.total : null,

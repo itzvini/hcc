@@ -1971,6 +1971,9 @@ button.trade-net:hover { box-shadow: 0 0 12px var(--hr-banana-25); }
 .trade-flt-rchip[data-r="rare"]      { --tc: var(--hr-blueberry); }
 .trade-flt-rchip[data-r="uncommon"]  { --tc: var(--hr-primary); }
 .trade-flt-rchip[data-r="common"]    { --tc: var(--hr-salmon); }
+/* LAND plot tiers reuse the chip styling: Standard = mint, Premium = banana (the special one). */
+.trade-flt-rchip[data-tier="standard"] { --tc: var(--hr-primary); }
+.trade-flt-rchip[data-tier="premium"]  { --tc: var(--hr-banana); }
 .trade-flt-rdot {
   width: 8px; height: 8px; border-radius: 50%; background: var(--tc);
   box-shadow: 0 0 6px color-mix(in srgb, var(--tc) 70%, transparent);
@@ -2036,6 +2039,10 @@ button.trade-net:hover { box-shadow: 0 0 12px var(--hr-banana-25); }
 .trade-flt-optv { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .trade-flt-n { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--hr-fg-3); font-variant-numeric: tabular-nums; }
 .trade-flt-rchip .trade-flt-n { margin-left: 1px; }
+/* Collection-wide rarity % beside a trait value (rarer = the headline number, so it gets
+   the mint accent); the live match count keeps to the far right. */
+.trade-flt-pct { margin-left: auto; font-size: 11px; font-weight: 800; color: var(--hr-primary); font-variant-numeric: tabular-nums; opacity: .9; }
+.trade-flt-pct + .trade-flt-n { margin-left: 8px; }
 
 /* Active filters + result count */
 .trade-flt-active { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 0 10px; }
@@ -2374,6 +2381,8 @@ body.trade-modal-open { overflow: hidden; }
 .trade-trait { background: rgba(0,0,0,.28); border: 1px solid var(--hr-line); border-radius: var(--hr-radius-sm); padding: 8px 10px; min-width: 0; }
 .trade-trait-k { display: block; font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--hr-fg-3); }
 .trade-trait-v { display: block; font-size: 13px; font-weight: 700; color: var(--hr-fg-0); line-height: 1.3; }
+/* How rare this exact trait value is across the collection. */
+.trade-trait-pct { font-size: 11px; font-weight: 700; color: var(--hr-primary); font-variant-numeric: tabular-nums; }
 .trade-modal-explorer { display: inline-block; margin-top: 8px; font-size: 13px; font-weight: 700; color: var(--hr-primary); }
 .trade-modal-explorer:hover { text-decoration: underline; }
 

@@ -130,7 +130,11 @@ let openFacet = null;          // trait type whose value popover is open
 let fltOpenMobile = false;     // filter drawer expanded (mobile)
 let fltDebounce = null;
 let browseReqId = 0;           // drops stale responses when filters change mid-flight
+let browseIndexTimer = null;   // quiet re-poll while the server is still cataloguing
 const RARITY_TIERS = ['Legendary', 'Epic', 'Rare', 'Uncommon', 'Common'];
+// LAND plot tiers — a parcel attribute (the "Tier" facet), shown as their own always-
+// visible chip group rather than buried in the trait dropdowns. Ordered common → premium.
+const TIER_VALUES = ['Standard', 'Premium'];
 
 // Inventory filter (Sell & Transfer pickers) — the same faceted search as Browse, but
 // run CLIENT-SIDE over the owned set (which the server now enriches with traits/rank).
@@ -305,6 +309,20 @@ function word(v) {
 function fmtEth(eth) {
   const n = Number(eth);
   return Number.isFinite(n) ? `${n.toLocaleString(undefined, { maximumFractionDigits: 4 })} ETH` : '—';
+}
+// A trait's collection-wide rarity as a percentage, e.g. 0.032 → "3.2%". One decimal
+// under 10% (where it carries signal), whole numbers above. Returns '' for unknowns.
+function fmtTraitPct(p) {
+  if (p == null || !Number.isFinite(Number(p))) return '';
+  const v = Number(p) * 100;
+  if (v > 0 && v < 0.1) return '<0.1%';
+  return `${v < 10 ? v.toFixed(1) : Math.round(v)}%`;
+}
+// Look up a trait value's rarity % from the current browse facets (collection-wide,
+// scope-independent). Null when facets aren't loaded or the value isn't catalogued.
+function traitPctOf(type, value) {
+  const f = (browseFacets || []).find(x => x.type === type);
+  return f?.values.find(x => x.v === value)?.pct ?? null;
 }
 // The fiat estimate under an ETH price, in the user's chosen currency. Returns '' when
 // ETH-only is selected or no rate is available (so the caller renders nothing).
@@ -726,14 +744,18 @@ function loadListings(reset = true) { return loadBrowse(reset); }
 // Faceted explorer feed (Creatures and LAND): the server filters/sorts its full
 // snapshot, so a "page" is an offset into the current filtered set. A request id
 // guards against a slow stale response landing after the user already changed filters.
-async function loadBrowse(reset = true) {
+// `quiet` is a background re-poll (used while the server is still cataloguing): it refreshes
+// state without clearing the grid or flashing the loading skeleton, so filters fill in on
+// their own when the catalogue lands — no jank, no manual refresh.
+async function loadBrowse(reset = true, quiet = false) {
   if (!reset && (!browseHasMore || listingsLoading)) return;
   const page = reset ? 0 : browsePage + 1;
-  if (reset) { listings = []; browsePage = 0; browseHasMore = false; listingsError = false; }
+  if (reset && !quiet) { listings = []; browsePage = 0; browseHasMore = false; listingsError = false; }
   const rid = ++browseReqId;
+  clearTimeout(browseIndexTimer); // a fresh request supersedes any pending poll
   const hadFilters = fltActive(); // captured at request time, applied at response time
   const ds = browseDataset();
-  listingsLoading = true; patchGrid(); patchFilters();
+  if (!quiet) { listingsLoading = true; patchGrid(); patchFilters(); }
   try {
     const qs = browseQuery(page);
     const res = await fetch(`${ds.api}${qs ? '?' + qs : ''}`, { headers: { Accept: 'application/json' } });
@@ -756,9 +778,17 @@ async function loadBrowse(reset = true) {
   } catch (err) {
     if (rid !== browseReqId) return;
     console.error('Browse load failed:', err);
-    if (reset) listingsError = true;
+    if (reset && !quiet) listingsError = true;
   } finally {
-    if (rid === browseReqId) { listingsLoading = false; patchGrid(); patchFilters(); }
+    if (rid === browseReqId) {
+      listingsLoading = false; patchGrid(); patchFilters();
+      // Still cataloguing? The trait facets (and the full "All" set) aren't ready yet —
+      // poll quietly until they land so the UI completes itself. Scoped to this dataset
+      // so switching collections doesn't keep it alive.
+      if (browseIndexing) browseIndexTimer = setTimeout(() => {
+        if (browseDataset().api === ds.api) loadBrowse(true, true);
+      }, 5000);
+    }
   }
 }
 
@@ -986,8 +1016,10 @@ function modalCardHtml() {
   const traits = modalLoading
     ? `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.modal.loading'))}</div>`
     : (attrs && attrs.length
-        ? `<div class="trade-modal-traits">${attrs.map(a =>
-            `<div class="trade-trait"><span class="trade-trait-k">${esc(a.trait)}</span><span class="trade-trait-v">${esc(a.value)}</span></div>`).join('')}</div>`
+        ? `<div class="trade-modal-traits">${attrs.map(a => {
+            const pctStr = fmtTraitPct(traitPctOf(a.trait, a.value));
+            return `<div class="trade-trait"><span class="trade-trait-k">${esc(a.trait)}</span><span class="trade-trait-v">${esc(a.value)}${pctStr ? ` <span class="trade-trait-pct" title="${esc(t('trade.filter.rarityPct'))}">${esc(pctStr)}</span>` : ''}</span></div>`;
+          }).join('')}</div>`
         : '');
 
   const owner = meta.owner ? `<div class="trade-modal-meta-row">${esc(t('trade.modal.owner'))}: <code>${esc(shortWallet(meta.owner))}</code></div>` : '';
@@ -2541,14 +2573,35 @@ function rarityChipsHtml() {
   }).join('');
 }
 
+// LAND plot tier ("Tier" facet) as its own chip group — Standard / Premium, always
+// visible, each with its collection-wide rarity %. Same toggle mechanism as any trait
+// value (data-act="flt-val"), so it reuses the existing filter handler.
+function tierFacet() {
+  return (browseFacets || []).find(x => x.type === 'Tier') || null;
+}
+function tierChipsHtml() {
+  const vals = new Map((tierFacet()?.values || []).map(o => [o.v, o]));
+  return TIER_VALUES.map(name => {
+    const o = vals.get(name);
+    const sel = traitSelected('Tier', name);
+    const n = browseFacets ? (o?.n ?? 0) : null; // unknown before first response → enabled
+    const pctStr = o ? fmtTraitPct(o.pct) : '';
+    return `<button type="button" class="trade-flt-rchip ${sel ? 'is-on' : ''}" data-tier="${esc(name.toLowerCase())}"
+      data-act="flt-val" data-type="Tier" data-val="${esc(name)}" aria-pressed="${sel}" ${n === 0 && !sel ? 'disabled' : ''}>
+      <span class="trade-flt-rdot" aria-hidden="true"></span>${esc(name)}${pctStr ? `<span class="trade-flt-n">${esc(pctStr)}</span>` : ''}
+    </button>`;
+  }).join('');
+}
+
 function traitPopHtml(f) {
   return `<div class="trade-flt-pop" role="listbox" aria-label="${esc(f.type)}">
-    ${f.values.map(({ v, n }) => {
+    ${f.values.map(({ v, n, pct }) => {
       const sel = traitSelected(f.type, v);
+      const pctStr = fmtTraitPct(pct);
       return `<button type="button" class="trade-flt-opt ${sel ? 'is-on' : ''}" role="option" aria-selected="${sel}"
         data-act="flt-val" data-type="${esc(f.type)}" data-val="${esc(v)}" ${n === 0 && !sel ? 'disabled' : ''}>
         <span class="trade-flt-check" aria-hidden="true">${sel ? '✓' : ''}</span>
-        <span class="trade-flt-optv">${esc(v)}</span><span class="trade-flt-n">${n}</span>
+        <span class="trade-flt-optv">${esc(v)}</span>${pctStr ? `<span class="trade-flt-pct" title="${esc(t('trade.filter.rarityPct'))}">${esc(pctStr)}</span>` : ''}<span class="trade-flt-n">${n}</span>
       </button>`;
     }).join('')}
   </div>`;
@@ -2556,7 +2609,8 @@ function traitPopHtml(f) {
 
 function traitDropsHtml() {
   if (!browseFacets) return `<span class="trade-flt-loading">${esc(t('trade.filter.loading'))}</span>`;
-  return browseFacets.filter(f => !/rarity/i.test(f.type)).map(f => {
+  // 'Tier' is rendered as its own chip group (see tierChipsHtml), so keep it out here.
+  return browseFacets.filter(f => !/rarity/i.test(f.type) && f.type !== 'Tier').map(f => {
     const selCount = flt.traits.get(f.type)?.size || 0;
     const open = openFacet === f.type;
     return `
@@ -2627,6 +2681,10 @@ function filterSideHtml() {
         <h4 class="trade-side-h">${esc(t('trade.filter.rarityH'))}</h4>
         <div class="trade-flt-rar" id="flt-rar" role="group" aria-label="${esc(t('trade.filter.rarityAria'))}">${rarityChipsHtml()}</div>
       </div>` : ''}
+      ${coll === 'land' ? `<div class="trade-side-sec">
+        <h4 class="trade-side-h">${esc(t('trade.filter.tierH'))}</h4>
+        <div class="trade-flt-rar" id="flt-tier" role="group" aria-label="${esc(t('trade.filter.tierAria'))}">${tierChipsHtml()}</div>
+      </div>` : ''}
       <div class="trade-side-sec">
         <h4 class="trade-side-h">${esc(t('trade.filter.priceH'))}</h4>
         <div class="trade-flt-price" role="group" aria-label="${esc(t('trade.filter.priceAria'))}">
@@ -2673,6 +2731,7 @@ function patchFilters() {
   if (!r || !isBrowseView()) return;
   const sc  = r.querySelector('#flt-scope');   if (sc)  sc.innerHTML = scopeSegHtml();
   const rar = r.querySelector('#flt-rar');     if (rar) rar.innerHTML = rarityChipsHtml();
+  const tier = r.querySelector('#flt-tier');   if (tier) tier.innerHTML = tierChipsHtml();
   const tr  = r.querySelector('#flt-traits');  if (tr)  tr.innerHTML = traitDropsHtml();
   const act = r.querySelector('#flt-active');  if (act) act.innerHTML = activeChipsHtml();
   const tog = r.querySelector('.trade-flt-toggle');
