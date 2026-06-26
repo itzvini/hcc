@@ -73,11 +73,17 @@ const ETH_RPC_URL             = process.env.ETH_RPC_URL || 'https://eth.blocksco
 // slow-changing) stay on ETH_RPC_URL to avoid hammering a public node.
 const ETH_BALANCE_RPC         = process.env.ETH_BALANCE_RPC || 'https://ethereum-rpc.publicnode.com';
 const ZK_RPC_URL              = process.env.ZK_RPC_URL || 'https://rpc.immutable.com'; // Immutable zkEVM (Creatures)
-// Transak publishable key, for the Ethereum-mainnet card on-ramp deep-link (LAND). It's a
-// public widget key (it rides in the URL), but kept in env so it isn't committed to the
-// public repo and the owner can rotate/region-restrict it. Absent → the card CTA is hidden
-// for LAND (zkEVM uses Immutable's own hosted on-ramp, which needs no key).
+// Transak card on-ramp credentials. As of Transak's June 2026 migration, query-param widget
+// URLs are dead — the widget loads ONLY with a sessionId minted server-side from the API key
+// + SECRET (see the on-ramp helpers near handleMarketplaceApi). The secret must never reach a
+// browser, so both live in env. Absent → the card CTA falls back to Immutable's keyless hosted
+// page (zkEVM) / is hidden (LAND). TRANSAK_ENV picks the host set: a staging key only works on
+// the -stg hosts, a production key only on the prod hosts. TRANSAK_REFERRER_DOMAIN overrides the
+// referrer Transak validates against your whitelisted domains (defaults to the request host).
 const TRANSAK_API_KEY         = (process.env.TRANSAK_API_KEY || '').trim();
+const TRANSAK_API_SECRET      = (process.env.TRANSAK_API_SECRET || '').trim();
+const TRANSAK_ENV             = (process.env.TRANSAK_ENV || 'production').trim().toLowerCase();
+const TRANSAK_REFERRER_DOMAIN = (process.env.TRANSAK_REFERRER_DOMAIN || '').trim();
 // Read selectors for the authoritative per-wallet eligibility lookup (see getWalletHoldings).
 const SEL_BALANCE_OF          = '0x70a08231'; // balanceOf(address)
 const SEL_OWNER_TOKENS        = '0xbba7723e'; // ownerTokens(address) -> uint256[]
@@ -1687,6 +1693,86 @@ async function getLandBrowse(searchParams) {
 }
 
 // Public marketplace API — browse only (no auth, no wallet, nothing sensitive).
+// --- Transak card on-ramp (secure widget URL) ---------------------------------------------
+// Transak deprecated query-param widget URLs (June 2026 migration): every direct
+// global.transak.com/?apiKey=… link now fails with a generic error. The widget loads only
+// with a sessionId minted by a backend call. We run Transak's two-step flow — refresh-token →
+// create-session — entirely server-side (the secret never leaves here) and hand the client a
+// short-lived (5 min, single-use) widget URL. Staging keys work only on the -stg hosts.
+const TRANSAK_HOSTS = TRANSAK_ENV === 'staging'
+  ? { auth: 'https://api-stg.transak.com', gateway: 'https://api-gateway-stg.transak.com' }
+  : { auth: 'https://api.transak.com',     gateway: 'https://api-gateway.transak.com' };
+const transakOnrampConfigured = () => !!(TRANSAK_API_KEY && TRANSAK_API_SECRET);
+
+// Partner access token: valid ~7 days, but Transak honours only the LATEST issued token, so a
+// refresh elsewhere can invalidate ours before it expires. We cache one and, on a 401/403 from
+// the session call, bust + refresh once. The refresh call is the only one carrying the secret.
+let transakToken = { value: null, expiresAtMs: 0 };
+async function transakAccessToken(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && transakToken.value && now < transakToken.expiresAtMs - 60_000) return transakToken.value;
+  // Auth is the api-secret header + apiKey in the body (matches Transak's working partner
+  // integrations). A real User-Agent/Accept is essential: Node's native fetch sends a bot-like
+  // default UA that Transak's Cloudflare WAF 429s with an HTML challenge — the proven SDKs use
+  // an HTTP client that sets a normal UA, which is the actual difference, not any auth header.
+  const res = await fetch(`${TRANSAK_HOSTS.auth}/partners/api/v2/refresh-token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'User-Agent': 'HighriseCreatureClub/1.0 (+https://highrisecreatureclub.com)',
+      'api-secret': TRANSAK_API_SECRET,
+    },
+    body: JSON.stringify({ apiKey: TRANSAK_API_KEY }),
+  });
+  if (!res.ok) throw new Error(`transak refresh-token ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
+  const j = await res.json().catch(() => ({}));
+  const token = j?.data?.accessToken;
+  const expSec = Number(j?.data?.expiresAt); // unix seconds
+  console.log(`[transak] refresh ok: tokenLen=${token ? String(token).length : 0} keys=${Object.keys(j?.data || {}).join(',')} exp=${expSec}`); // TODO: drop after diagnosis
+  if (!token) throw new Error('transak refresh-token: missing accessToken');
+  transakToken = { value: token, expiresAtMs: Number.isFinite(expSec) ? expSec * 1000 : now + 6 * 86400 * 1000 };
+  return token;
+}
+
+// Mint one widget URL. `network` is pinned ('immutablezkevm' | 'ethereum') so funds land on the
+// right chain; cryptoCurrencyCode forces the token (and is required for defaultCryptoAmount to
+// apply); disableWalletAddressForm locks the destination to the buyer's wallet. The access
+// token is cached for its full ~7-day life — refresh-token is heavily rate-limited (429s on
+// abuse), so we never auto-refresh on a transient 401; the cache expiry drives refreshes.
+async function transakWidgetUrl(opts) {
+  const { network, token, address, amount, referrerDomain } = opts;
+  const accessToken = await transakAccessToken();
+  const widgetParams = {
+    apiKey: TRANSAK_API_KEY,
+    referrerDomain,
+    productsAvailed: 'BUY',
+    network,
+    cryptoCurrencyCode: token,
+    walletAddress: address,
+    disableWalletAddressForm: true,
+  };
+  if (Number.isFinite(amount) && amount > 0) widgetParams.defaultCryptoAmount = Number(amount.toFixed(6));
+  // The session call authenticates with the access-token header. (Earlier 401s "Invalid or
+  // missing access-token" were a side effect of the refresh call being WAF-blocked, not of the
+  // session headers.) Same UA/Accept as refresh so Cloudflare treats it as a real client.
+  const res = await fetch(`${TRANSAK_HOSTS.gateway}/api/v2/auth/session`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'User-Agent': 'HighriseCreatureClub/1.0 (+https://highrisecreatureclub.com)',
+      'access-token': accessToken,
+    },
+    body: JSON.stringify({ widgetParams }),
+  });
+  if (!res.ok) throw new Error(`transak session ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
+  const j = await res.json().catch(() => ({}));
+  const url = j?.data?.widgetUrl;
+  if (!url) throw new Error('transak session: missing widgetUrl');
+  return url;
+}
+
 async function handleMarketplaceApi(request, response, url) {
   const { pathname } = url;
 
@@ -2055,30 +2141,44 @@ async function handleMarketplaceApi(request, response, url) {
     return;
   }
 
-  // Fiat on-ramp deep-link for an empty wallet buying LAND (Ethereum mainnet). Builds a
-  // prefilled Transak widget URL (network + ETH + the buyer's locked address) so funds land
-  // straight in their wallet. The key lives server-side; absent → 503 not_configured and the
-  // client just hides the card CTA. zkEVM (Creatures) does NOT come here — it links directly
-  // to Immutable's own hosted on-ramp, which delivers to zkEVM and needs no key.
-  if (pathname === '/api/market/land/onramp' && request.method === 'GET') {
+  // Fiat on-ramp: mint a fresh, single-use Transak widget session so funds land on the RIGHT
+  // chain (network is pinned server-side; the old query-param URLs Transak deprecated would
+  // default to ETH-on-Ethereum and dump a Creature buyer's ETH on L1). Two chains:
+  //   chain=ethereum (LAND)      → network 'ethereum',       token ETH
+  //   chain=zkevm    (Creatures) → network 'immutablezkevm', token ETH (price) or IMX (gas)
+  // 'immutablezkevm' is Transak's slug for Immutable zkEVM (carries ETH, IMX, USDC); confirmed
+  // against Immutable's own SDK. Key+secret live server-side; unconfigured → 503 not_configured
+  // and the client falls back (zkEVM → Immutable's keyless hosted page; LAND → hides the CTA).
+  // The minted URL expires in ~5 min and is single-use, so the client mints on click, not ahead.
+  if (pathname === '/api/market/onramp' && request.method === 'GET') {
     const oWait = rateLimited(`mktonramp:${ip}`, 20, 60 * 1000);
     if (oWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(oWait) }); return; }
 
     const chain = String(url.searchParams.get('chain') || '');
     const addr = String(url.searchParams.get('address') || '').toLowerCase();
-    if (chain !== 'ethereum') { sendJson(response, 400, { error: 'bad_chain' }); return; }
+    // Token defaults to ETH; the gas helper asks for IMX. Only ETH is meaningful for LAND.
+    const reqToken = String(url.searchParams.get('token') || 'ETH').toUpperCase();
+    const ONRAMP_NETWORK = { ethereum: 'ethereum', zkevm: 'immutablezkevm' };
+    const network = ONRAMP_NETWORK[chain];
+    const token = chain === 'zkevm' && reqToken === 'IMX' ? 'IMX' : 'ETH';
+    // Optional prefilled buy amount, in `token` units (an editable default, not a lock).
+    const amount = Number(url.searchParams.get('amount'));
+    if (!network) { sendJson(response, 400, { error: 'bad_chain' }); return; }
     if (!HEX_ADDRESS.test(addr)) { sendJson(response, 400, { error: 'bad_address' }); return; }
-    if (!TRANSAK_API_KEY) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    if (!transakOnrampConfigured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
 
-    const params = new URLSearchParams({
-      apiKey: TRANSAK_API_KEY,
-      productsAvailed: 'BUY',
-      network: 'ethereum',
-      cryptoCurrencyCode: 'ETH',
-      walletAddress: addr,
-      disableWalletAddressForm: 'true',
-    });
-    sendJson(response, 200, { url: `https://global.transak.com/?${params.toString()}` }, { 'Cache-Control': 'no-store' });
+    // Transak validates referrerDomain against the account's whitelisted domains; default to
+    // the request host (strip port) unless an explicit domain is configured.
+    const referrerDomain = TRANSAK_REFERRER_DOMAIN
+      || String(request.headers.host || '').split(':')[0]
+      || 'localhost';
+    try {
+      const widgetUrl = await transakWidgetUrl({ network, token, address: addr, amount, referrerDomain, userIp: ip });
+      sendJson(response, 200, { url: widgetUrl }, { 'Cache-Control': 'no-store' });
+    } catch (err) {
+      console.error('Transak widget-url mint failed:', err.message);
+      sendJson(response, 502, { error: 'onramp_unavailable', detail: err.message }); // TODO: drop detail after diagnosis
+    }
     return;
   }
 
@@ -3802,7 +3902,8 @@ const server = http.createServer((request, response) => {
     return;
   }
 
-  if (request.url.startsWith('/api/market/creatures') || request.url.startsWith('/api/market/land')) {
+  if (request.url.startsWith('/api/market/creatures') || request.url.startsWith('/api/market/land')
+      || request.url.startsWith('/api/market/onramp')) {
     const url = parseRequestUrl(request);
     if (!url) { sendJson(response, 400, { error: 'bad_request' }); return; }
     handleMarketplaceApi(request, response, url).catch(err => {

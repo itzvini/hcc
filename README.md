@@ -27,12 +27,25 @@ Get one free from Squid's integrator portal. Without it, the funds helper falls 
 to a prefilled Squid deep-link — everything else works unchanged. Like all secrets it
 lives only in `.env` locally and in Railway **Variables** in production.
 
-`TRANSAK_API_KEY` (optional) powers the **LAND** "Buy ETH with card" on-ramp deep-link
-(card / Apple Pay / Google Pay → ETH on Ethereum mainnet) for an empty wallet. Get a free
-publishable key from [Transak](https://transak.com). Without it, the LAND card CTA is simply
-hidden. **Creatures** need no key here — they link to Immutable's own hosted on-ramp
-([toolkit.immutable.com/onramp](https://toolkit.immutable.com/onramp/)), which delivers ETH /
-IMX / USDC straight to Immutable zkEVM.
+`TRANSAK_API_KEY` + `TRANSAK_API_SECRET` power the "Buy with card" on-ramp (card / Apple Pay /
+Google Pay) for an empty wallet. Transak deprecated query-param widget URLs in mid-2026 — the
+widget now loads only with a **session URL minted server-side** from the key **and secret**
+(the secret never reaches the browser). The server (`/api/market/onramp`) runs Transak's
+two-step flow (refresh-token → create-session) to mint a short-lived, single-use URL with the
+destination **network pinned** and the buy **amount prefilled**, so funds land on the right
+chain: **LAND** → ETH on Ethereum mainnet; **Creatures** → ETH (price) or IMX (gas) on Immutable
+zkEVM (`network=immutablezkevm`, confirmed against Immutable's own SDK). Get a key + secret from
+the [Transak partner dashboard](https://dashboard.transak.com) (Developers → generate API
+Secret). Related env:
+- `TRANSAK_ENV` — `production` (default) or `staging`. Must match your key's environment: a
+  staging key works only on the `-stg` hosts, a production key only on the prod hosts.
+- `TRANSAK_REFERRER_DOMAIN` — overrides the referrer Transak validates against your account's
+  whitelisted domains (defaults to the request host). The on-ramp call may also require your
+  backend's IP to be whitelisted in the dashboard.
+
+Without key+secret, the **LAND** card CTA is hidden and **Creatures** fall back to Immutable's
+keyless hosted on-ramp ([toolkit.immutable.com/onramp](https://toolkit.immutable.com/onramp/)) —
+which can't pin the network, so the buyer must pick Immutable zkEVM themselves.
 
 ## Market data
 
