@@ -1548,6 +1548,8 @@ footer { margin-top: 28px; }
 .trade-net.is-ok::before  { background: var(--hr-online); box-shadow: 0 0 8px var(--hr-online); }
 .trade-net.is-bad { color: var(--hr-banana); background: var(--hr-banana-25); border: 1px solid rgba(255,249,95,.4); }
 .trade-net.is-bad::before { background: var(--hr-banana); box-shadow: 0 0 8px var(--hr-banana); }
+/* The chip shows its full network name by default; mobile swaps to the short one. */
+.trade-net-short { display: none; }
 .trade-id .apply-logout { margin-left: auto; }
 
 /* Balance tile (reuses .apply-stat visuals) */
@@ -1762,8 +1764,8 @@ footer { margin-top: 28px; }
 /* One-row command bar: collection ⟷ actions ⟷ wallet. */
 .trade-command {
   position: relative; z-index: 6; /* its ⓘ tips and net pill ride above the browse area */
-  display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap;
-  padding: 10px 14px;
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 12px 14px;
   border: 1px solid var(--hr-line-strong); border-radius: var(--hr-radius-xl);
   background:
     radial-gradient(420px 120px at 6% 0%, rgba(81,255,165,.06), transparent 70%),
@@ -1772,7 +1774,13 @@ footer { margin-top: 28px; }
   backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   box-shadow: var(--hr-shadow-2), inset 0 1px 0 rgba(255,255,255,.06);
 }
-.trade-command .trade-bar { margin-left: auto; }
+/* Top tier: collection switcher (left) ↔ wallet bar (right). Bottom tier: action tabs. */
+.trade-command-top, .trade-command-nav {
+  display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap;
+}
+.trade-command-top .trade-bar { margin-left: auto; }
+/* A hairline between the identity row and the action tabs, so the two tiers read as one bar. */
+.trade-command-nav { border-top: 1px solid var(--hr-line); padding-top: 12px; }
 
 /* Small BETA badge on the nav tab + landing hub card. Pseudo-elements stay out of
    textContent, so the i18n textContent swaps and the mobile nav-current mirror
@@ -2130,12 +2138,37 @@ body.trade-sheet-open { overflow: hidden; }
   .trade-flt-toggle { flex: 0 0 auto; padding: 9px 16px; font-size: 13px; }
   .trade-results-head { align-items: center; }
   .trade-browse-actions { width: 100%; justify-content: flex-end; }
-  /* wallet states stack inside the command bar instead of pushing past its edge */
-  .trade-command { padding: 10px 12px; }
-  .trade-command .trade-bar { margin-left: 0; width: 100%; }
+  /* --- Command bar on mobile: every cluster goes full-width so nothing pushes past the
+     screen edge (which used to clip Disconnect + the Safety pill). --- */
+  .trade-command { padding: 10px 12px; gap: 10px; }
+  /* Collection switcher: two equal, full-width tap targets instead of left-hugging pills.
+     Scoped to the command bar so it outranks the base `.trade-coll-switch { width: fit-content }`
+     (defined later in the file — a bare `.trade-coll-switch` here would lose on source order). */
+  .trade-command-top .trade-coll-switch { width: 100%; }
+  .trade-command-top .trade-coll-switch .seg-btn { flex: 1; min-width: 0; }
+  /* Wallet becomes a clean three-row card — every cluster on its own full-width line, so
+     nothing wraps awkwardly (the short "zkEVM" badge keeps row 1 from overflowing):
+       row 1  🦊 address ───────── ● zkEVM  ⇄
+       row 2  🐾 1     ETH 0.0012     IMX 9,286
+       row 3  [   💸 Cash out   ]   [ Disconnect ]  */
+  .trade-command-top .trade-bar { margin-left: 0; width: 100%; }
   .trade-bar-msg { flex: 1 1 100%; }
-  .trade-bar.is-connected { flex-wrap: wrap; border-radius: var(--hr-radius-lg); }
-  .trade-bar-bals { border: none; padding: 0; flex: 1 1 auto; }
+  .trade-bar.is-connected { flex-wrap: wrap; row-gap: 12px; border-radius: var(--hr-radius-lg); padding: 12px; }
+  /* Row 1: avatar + address + switch sit left (identity); the network badge is pushed to
+     the far right (status). The short "zkEVM" label keeps it from wrapping. */
+  .trade-bar.is-connected .trade-addr { min-width: 0; }
+  .trade-bar.is-connected .trade-net { margin-left: auto; }
+  .trade-net-full { display: none; }
+  .trade-net-short { display: inline; }
+  /* Row 2: balances span the full width, evenly spread, divided from row 1 by a hairline. */
+  .trade-bar-bals {
+    flex: 1 1 100%; justify-content: space-between;
+    padding: 12px 2px 0; border: none; border-top: 1px solid var(--hr-line);
+  }
+  .trade-bar-bal { font-size: 12.5px; }
+  /* Row 3: actions share the row — Cash out fills, Disconnect hugs the right. */
+  .trade-bar .trade-cashout-pill { flex: 1 1 auto; justify-content: center; }
+  .trade-bar .apply-logout { flex: 0 0 auto; margin-left: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

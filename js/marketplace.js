@@ -268,9 +268,11 @@ const ACCEPT_BUSY = new Set(['prepare', 'approve', 'approveWait', 'fulfill', 'fu
 let owned = null;          // null = not loaded; [] = loaded, none
 let mine = null;           // null = not loaded; [] = loaded, none
 let sellerLoading = false;
-// Listing history (Creatures-only "History" tab): past sold/cancelled/expired listings.
+// Activity history ("History" tab): past buys, sales, transfers (+ Creature listing events).
 // Loaded lazily on first visit, separately from the seller hub — it's read-only by address.
-let history = null;        // null = not loaded; [] = loaded, none
+// NB: named histItems, NOT `history` — that would shadow the global window.history that
+// syncTradeUrl() relies on (a null shadow there silently broke collection switching).
+let histItems = null;      // null = not loaded; [] = loaded, none
 let historyLoading = false;
 let historyError = false;
 let sellSel = null;        // tokenId picked for sale
@@ -2547,9 +2549,13 @@ function walletBarHtml() {
         <img class="trade-mm-logo" src="${METAMASK_IMG}" alt="" /><span>${esc(busy ? t('trade.connecting') : t('trade.connect.btn'))}</span></button>
     </div>`;
   }
-  // Wrong network is an action, not a status — the pill itself switches.
+  // Wrong network is an action, not a status — the pill itself switches. The chip carries
+  // both a full label (desktop) and a short one (mobile, where "Immutable zkEVM" beside the
+  // address would overflow the wallet row); CSS shows one or the other.
+  const netFull = coll === 'land' ? t('trade.net.eth') : t('trade.net.ok');
+  const netShort = coll === 'land' ? t('trade.net.eth.short') : t('trade.net.ok.short');
   const net = onRightChain()
-    ? `<span class="trade-net is-ok">${esc(coll === 'land' ? t('trade.net.eth') : t('trade.net.ok'))}</span>`
+    ? `<span class="trade-net is-ok"><span class="trade-net-full">${esc(netFull)}</span><span class="trade-net-short">${esc(netShort)}</span></span>`
     : `<button class="trade-net is-bad" data-act="switch" type="button" title="${esc(t('trade.net.switch'))}">${esc(t('trade.net.bad'))}</button>`;
   // Live on-chain balances straight from the RPC — the user's ground truth when a
   // wallet UI mis-reports (e.g. MetaMask's phantom "insufficient IMX" on custom nets).
@@ -3125,7 +3131,7 @@ async function loadHistory() {
       .then(res => res.ok ? res.json() : null).catch(() => null);
     if (coll !== startColl || !account) return; // user moved on while it was in flight
     historyError = !r;
-    history = r && Array.isArray(r.items) ? r.items : (history || []);
+    histItems = r && Array.isArray(r.items) ? r.items : (histItems || []);
   } finally {
     historyLoading = false;
     patchHistoryView();
@@ -3133,7 +3139,7 @@ async function loadHistory() {
 }
 
 function maybeLoadHistory() {
-  if (account && history === null && !historyLoading) loadHistory();
+  if (account && histItems === null && !historyLoading) loadHistory();
 }
 
 // "Jun 12, 2026" in the user's locale — when the listing reached its terminal state.
@@ -3202,12 +3208,12 @@ function historyViewHtml() {
       <h4 class="trade-form-h">${esc(t('trade.history.h'))}</h4>
       <button class="apply-btn-ghost trade-refresh" data-act="history-refresh" type="button" ${historyLoading ? 'disabled' : ''}>${esc(t('trade.refresh'))}</button>
     </div>`;
-  if (history === null) {
+  if (histItems === null) {
     return `<div class="trade-history">${head}
       <div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.history.loading'))}</div></div>`;
   }
-  const body = history.length
-    ? `<ol class="trade-timeline">${history.map((h, i) => historyCardHtml(h, i)).join('')}</ol>`
+  const body = histItems.length
+    ? `<ol class="trade-timeline">${histItems.map((h, i) => historyCardHtml(h, i)).join('')}</ol>`
     : `<p class="trade-form-p">${esc(t(historyError ? 'trade.history.error' : 'trade.history.none'))}</p>`;
   return `<div class="trade-history">${head}${body}</div>`;
 }
@@ -3852,10 +3858,15 @@ function render() {
   const el = root();
   if (!el) return;
   el.setAttribute('aria-busy', 'false');
-  // One command bar carries collection, action tabs and wallet — the old stack of
-  // full-width rows (wallet bar / switcher / tabs) cost three screens of chrome.
+  // Command bar, two deliberate tiers so it never wraps awkwardly: the top row pairs the
+  // collection switcher (left) with the wallet bar (right) — context + identity on opposite
+  // ends — and the action tabs (+ safety pill) sit on their own row below. One flat wrapping
+  // row used to suffice, but four action tabs pushed the wallet onto a stray second line.
   el.innerHTML = `${flashBanner()}
-    <div class="trade-command">${collSwitcherHtml()}${tradeTabsHtml()}${walletBarHtml()}</div>
+    <div class="trade-command">
+      <div class="trade-command-top">${collSwitcherHtml()}${walletBarHtml()}</div>
+      <div class="trade-command-nav">${tradeTabsHtml()}</div>
+    </div>
     <div id="trade-mmwarn-slot">${walletNoticeHtml()}</div>
     <div id="trade-bridgebar-slot">${bridgeBannerHtml()}</div>
     ${viewHtml()}${modalHtml()}${safetyHtml()}<div id="trade-confirm-slot">${confirmAcceptHtml()}</div><div id="trade-cashout-slot">${cashoutHtml()}</div>`;
@@ -3916,7 +3927,7 @@ function onClick(e) {
     case 'cancel-listing': return handleCancelListing(target.dataset.listing);
     case 'history-refresh':
       if (historyLoading) return;
-      history = null; historyError = false;
+      histItems = null; historyError = false;
       patchHistoryView();
       return loadHistory();
     case 'accept-offer':   return askAccept(target.dataset.offer);
@@ -4091,7 +4102,7 @@ function onInput(e) {
 }
 function resetSellerState() {
   owned = null; mine = null; sellSel = null; sellState = null; cancelBusy = null;
-  history = null; historyError = false; // per-collection (Creatures-only); reload on demand
+  histItems = null; historyError = false; // per-collection; reload on demand
   myOffers = null; offerState = null; offerCtx = null; acceptState = null; acceptBusyId = null;
   landMyOffers = null; landOfferState = null; landAcceptState = null; landAcceptBusy = false; unwrapState = null;
   sellPickOffers = null;
