@@ -3111,17 +3111,19 @@ function myListingsHtml() {
 // A read-only record of the wallet's past listings: sold (FILLED), cancelled, or expired.
 // No actions — just a log — fetched lazily by address the first time the tab is opened.
 
-// Load past listings once, by address. Read-only data, so it doesn't need the wallet on
-// zkEVM (unlike the seller hub) — just a connected account. Guards against a stale resolve
-// landing after a collection switch.
+// Load history once, by address, for the active collection (Creatures → Immutable, LAND →
+// OpenSea). Read-only data, so it doesn't need the wallet on the collection's chain (unlike
+// the seller hub) — just a connected account. Guards against a stale resolve landing after a
+// collection switch.
 async function loadHistory() {
-  if (!account || coll !== 'creatures' || historyLoading) return;
+  if (!account || historyLoading) return;
+  const startColl = coll;
   historyLoading = true;
   patchHistoryView();
   try {
-    const r = await fetch(`/api/market/creatures/history/${account}`, { headers: { Accept: 'application/json' } })
+    const r = await fetch(`${COLLECTIONS[startColl].api}/history/${account}`, { headers: { Accept: 'application/json' } })
       .then(res => res.ok ? res.json() : null).catch(() => null);
-    if (coll !== 'creatures' || !account) return; // user moved on while it was in flight
+    if (coll !== startColl || !account) return; // user moved on while it was in flight
     historyError = !r;
     history = r && Array.isArray(r.items) ? r.items : (history || []);
   } finally {
@@ -3131,7 +3133,7 @@ async function loadHistory() {
 }
 
 function maybeLoadHistory() {
-  if (account && coll === 'creatures' && history === null && !historyLoading) loadHistory();
+  if (account && history === null && !historyLoading) loadHistory();
 }
 
 // "Jun 12, 2026" in the user's locale — when the listing reached its terminal state.
@@ -3143,25 +3145,54 @@ function fmtHistoryDate(iso) {
   catch { return ''; }
 }
 
-const HISTORY_STATUS = {
-  FILLED:    { key: 'trade.history.status.filled',    cls: 'is-filled' },
-  CANCELLED: { key: 'trade.history.status.cancelled', cls: 'is-cancelled' },
-  EXPIRED:   { key: 'trade.history.status.expired',   cls: 'is-expired' },
+// Each history entry's `kind` drives its badge label + colour. Trades (bought/sold) and
+// transfers (received/sent/minted) come from the on-chain activity feed; cancelled/expired
+// are Creature listing-lifecycle events (LAND history is trades + transfers only). See
+// getMyListingHistory (server.js) and myHistory (lib/land-market.js).
+const HISTORY_KIND = {
+  bought:    { key: 'trade.history.kind.bought',    cls: 'is-bought' },
+  sold:      { key: 'trade.history.kind.sold',      cls: 'is-sold' },
+  received:  { key: 'trade.history.kind.received',  cls: 'is-received' },
+  sent:      { key: 'trade.history.kind.sent',      cls: 'is-sent' },
+  minted:    { key: 'trade.history.kind.minted',    cls: 'is-minted' },
+  cancelled: { key: 'trade.history.kind.cancelled', cls: 'is-cancelled' },
+  expired:   { key: 'trade.history.kind.expired',   cls: 'is-expired' },
 };
 
-function historyCardHtml(h) {
-  const s = HISTORY_STATUS[h.status] || { key: null, cls: '' };
-  const when = fmtHistoryDate(h.at);
+// One timeline entry: a kind-coloured node on the rail + the card row beside it. `i` drives
+// a staggered entrance reveal (capped so a long history doesn't crawl in).
+function historyCardHtml(h, i = 0) {
+  const k = HISTORY_KIND[h.kind] || { key: null, cls: '' };
+  // Secondary line: the trade price when there is one (bought/sold/listings), otherwise the
+  // counterparty for a plain transfer ("from 0x12…34" / "to 0x12…34").
+  let sub = '';
+  if (h.priceEth != null) {
+    sub = `<span class="trade-mine-price">${esc(fmtEthFiat(h.priceEth))}</span>`;
+  } else if (h.with) {
+    const lbl = t(h.kind === 'sent' ? 'trade.history.to' : 'trade.history.from');
+    sub = `<span class="trade-history-with">${esc(lbl)} <code>${esc(shortWallet(h.with))}</code></span>`;
+  }
+  const whenEsc = esc(fmtHistoryDate(h.at));
+  const txLink = h.tx
+    ? `<a href="${esc(txExplorerUrl(h.tx))}" target="_blank" rel="noopener" class="trade-history-tx">${esc(t('trade.history.tx'))} ↗</a>`
+    : '';
+  const metaLine = [whenEsc, txLink].filter(Boolean).join(' · ');
+  const delay = Math.min(i * 40, 400);
   return `
-    <div class="trade-mine-card trade-history-card">
-      ${h.image ? `<img src="${esc(h.image)}" alt="" loading="lazy" />` : '<div class="trade-tile-noimg">🐾</div>'}
-      <div class="trade-mine-info">
-        <span class="trade-mine-name">${esc(h.name)}</span>
-        <span class="trade-mine-price">${esc(fmtEthFiat(h.priceEth))}</span>
-        ${when ? `<span class="trade-history-when">${esc(when)}</span>` : ''}
+    <li class="trade-tl-item" style="animation-delay:${delay}ms">
+      <span class="trade-tl-dot ${k.cls}" aria-hidden="true"></span>
+      <div class="trade-mine-card trade-history-card">
+        ${coll === 'land' && petUrl(h)
+          ? `<img src="${esc(petUrl(h))}" ${h.image ? `data-fallback="${esc(h.image)}"` : ''} alt="" loading="lazy" />`
+          : (h.image ? `<img src="${esc(h.image)}" alt="" loading="lazy" />` : '<div class="trade-tile-noimg">🐾</div>')}
+        <div class="trade-mine-info">
+          <span class="trade-mine-name">${esc(h.name)}</span>
+          ${sub}
+          ${metaLine ? `<span class="trade-history-when">${metaLine}</span>` : ''}
+        </div>
+        <span class="trade-history-badge ${k.cls}">${esc(k.key ? t(k.key) : h.kind)}</span>
       </div>
-      <span class="trade-history-badge ${s.cls}">${esc(s.key ? t(s.key) : h.status)}</span>
-    </div>`;
+    </li>`;
 }
 
 function historyViewHtml() {
@@ -3176,7 +3207,7 @@ function historyViewHtml() {
       <div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.history.loading'))}</div></div>`;
   }
   const body = history.length
-    ? `<div class="trade-mine-row trade-history-list">${history.map(historyCardHtml).join('')}</div>`
+    ? `<ol class="trade-timeline">${history.map((h, i) => historyCardHtml(h, i)).join('')}</ol>`
     : `<p class="trade-form-p">${esc(t(historyError ? 'trade.history.error' : 'trade.history.none'))}</p>`;
   return `<div class="trade-history">${head}${body}</div>`;
 }
@@ -3221,10 +3252,10 @@ function maybeLoadSeller() {
 
 // Segmented Buy / Sell / Transfer control (reuses the Market panel's .seg pattern).
 function tradeTabsHtml() {
-  const TABS = [['buy', 'trade.tab.buy'], ['sell', 'trade.tab.sell'], ['transfer', 'trade.tab.transfer']];
-  // Listing history is Creatures-only — Immutable's orders API exposes terminal statuses;
-  // OpenSea's LAND feed returns only live orders, so there's no equivalent for LAND.
-  if (coll === 'creatures') TABS.push(['history', 'trade.tab.history']);
+  // Both collections have a History tab: Creatures via Immutable's activities + orders APIs,
+  // LAND via OpenSea's account events feed.
+  const TABS = [['buy', 'trade.tab.buy'], ['sell', 'trade.tab.sell'], ['transfer', 'trade.tab.transfer'],
+    ['history', 'trade.tab.history']];
   return `<div class="seg trade-tabs" role="tablist" aria-label="${esc(t('trade.tabs.aria'))}">
     ${TABS.map(([id, key]) => `
       <button type="button" role="tab" class="seg-btn ${tradeTab === id ? 'is-active' : ''}"
@@ -3480,7 +3511,7 @@ function queueTransferCheck(raw) {
 function viewHtml() {
   if (tradeTab === 'sell')     return `<section class="trade-actions" id="trade-view">${sellViewHtml()}</section>`;
   if (tradeTab === 'transfer') return `<section class="trade-actions" id="trade-view">${transferViewHtml()}</section>`;
-  if (tradeTab === 'history' && coll === 'creatures') return `<section class="trade-actions" id="trade-view">${historyViewHtml()}</section>`;
+  if (tradeTab === 'history') return `<section class="trade-actions" id="trade-view">${historyViewHtml()}</section>`;
   return `<div id="trade-view">${browseHtml()}</div>`;
 }
 
@@ -3835,8 +3866,8 @@ function render() {
     if (coll === 'creatures' && myOffers === null) loadMyOffers();
     else if (coll === 'land' && landMyOffers === null) loadLandMyOffers();
   }
-  // History is read-only by address — load it even when the wallet isn't on zkEVM yet.
-  if (account && tradeTab === 'history' && coll === 'creatures') maybeLoadHistory();
+  // History is read-only by address — load it even when the wallet isn't on the right chain.
+  if (account && tradeTab === 'history') maybeLoadHistory();
 }
 
 function onClick(e) {
@@ -3858,8 +3889,6 @@ function onClick(e) {
     case 'coll': {
       if (coll === target.dataset.coll || !COLLECTIONS[target.dataset.coll]) return;
       coll = target.dataset.coll;
-      // History is Creatures-only — switching to LAND drops that tab, so move off it.
-      if (tradeTab === 'history' && coll !== 'creatures') tradeTab = 'buy';
       try { localStorage.setItem('hcc-trade-coll', coll); } catch { /* fine */ }
       tokenOffers = null;
       resetBrowseForView(); // clears the grid/filters; scope defaults per the new view

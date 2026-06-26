@@ -1112,47 +1112,109 @@ async function getMyListings(address) {
   };
 }
 
-// A wallet's PAST Creature listings — the terminal order statuses (sold / cancelled /
-// expired). The ACTIVE set lives in getMyListings; history is everything else, merged
-// newest-first. Read-only by address (the wallet signs nothing). Immutable's orders API
-// exposes these statuses; LAND has no equivalent maker-scoped history feed (OpenSea
-// returns only live orders), which is why the History tab is Creatures-only.
-const LISTING_HISTORY_STATUSES = ['FILLED', 'CANCELLED', 'EXPIRED'];
+// A wallet's Creature HISTORY for the collection: trades (bought / sold), transfers
+// (received / sent / minted), and listing-lifecycle events that never transacted
+// (cancelled / expired). Read-only by address — the wallet signs nothing. Two sources,
+// merged newest-first:
+//   • the activities feed (account-filtered) → on-chain buys, sales and transfers;
+//   • the orders API → the wallet's CANCELLED / EXPIRED listings (a FILLED listing is the
+//     same event as its 'sold' sale, so it's excluded here to avoid a duplicate row).
+// LAND has no equivalent maker-scoped feed (OpenSea returns only live orders), so the
+// History tab — and this function — are Creatures-only.
+const ACTIVITY_PAGES_MAX = 2; // newest ~200 activities — far more than the rendered cap
+const HISTORY_ITEMS_MAX = 80;
+
 async function getMyListingHistory(address) {
-  // One status per request (the API's status filter takes a single value); in parallel,
-  // and each is independent so one failing still yields the others.
+  const addr = address.toLowerCase();
+
+  // 1) On-chain activity — one chronological (newest-first) feed, account-filtered.
+  // A marketplace sale emits BOTH a 'sale' and a paired 'transfer' (same tx hash); we keep
+  // the 'sale' (it carries price + direction) and drop that transfer leg, so the NFT-moving
+  // side of a trade isn't shown twice. Collect every sale's tx first, then categorize.
+  const acts = [];
+  const saleTxs = new Set();
+  let activityFailed = false;
+  try {
+    let cursor = null, pages = 0;
+    do {
+      const url = new URL(`https://api.immutable.com/v1/chains/${IMX_ZKEVM_CHAIN}/activities`);
+      url.searchParams.set('contract_address', CREATURE_CONTRACT);
+      url.searchParams.set('account_address', addr);
+      url.searchParams.set('page_size', '100');
+      if (cursor) url.searchParams.set('page_cursor', cursor);
+      const body = await imxFetch(url.toString());
+      for (const a of (body.result ?? [])) {
+        if (a.type === 'sale') { const tx = a.blockchain_metadata?.transaction_hash; if (tx) saleTxs.add(tx); }
+        acts.push(a);
+      }
+      cursor = body.page?.next_cursor ?? null;
+    } while (cursor && ++pages < ACTIVITY_PAGES_MAX);
+  } catch (err) { activityFailed = true; console.error('Creature activity feed failed:', err.message); }
+
+  const entries = [];
+  for (const a of acts) {
+    const d = a.details || {};
+    const at = a.updated_at || a.indexed_at || null;
+    const tx = a.blockchain_metadata?.transaction_hash || null;
+    if (a.type === 'sale') {
+      const asset = Array.isArray(d.asset) ? d.asset[0] : d.asset; // sale.asset is an array
+      const tokenId = asset?.token_id;
+      if (!tokenId) continue;
+      const isBuyer = (d.to || '').toLowerCase() === addr;
+      const payToken = (d.payment?.token?.contract_address || '').toLowerCase();
+      const priceWei = d.payment?.price_including_fees; // headline all-in trade price
+      const priceEth = payToken === IMX_ETH_TOKEN && priceWei ? round4(Number(BigInt(priceWei)) / 1e18) : null;
+      entries.push({ kind: isBuyer ? 'bought' : 'sold', tokenId, priceEth, at, tx,
+        with: ((isBuyer ? d.from : d.to) || '').toLowerCase() || null });
+    } else if (a.type === 'transfer') {
+      if (tx && saleTxs.has(tx)) continue; // NFT leg of a sale — already shown as bought/sold
+      const tokenId = d.asset?.token_id;
+      if (!tokenId) continue;
+      const from = (d.from || '').toLowerCase();
+      const isReceiver = (d.to || '').toLowerCase() === addr;
+      const kind = from === ZERO_ADDRESS ? 'minted' : isReceiver ? 'received' : 'sent';
+      entries.push({ kind, tokenId, priceEth: null, at, tx,
+        with: kind === 'minted' ? null : ((isReceiver ? d.from : d.to) || '').toLowerCase() || null });
+    }
+  }
+
+  // 2) Listing-lifecycle events that never transacted (cancelled / expired). One status per
+  // request (the API's status filter takes a single value), in parallel; one failing still
+  // yields the other.
+  const LISTING_KIND = { CANCELLED: 'cancelled', EXPIRED: 'expired' };
   const fetchStatus = async status => {
     const url = new URL(`https://api.immutable.com/v1/chains/${IMX_ZKEVM_CHAIN}/orders/listings`);
     url.searchParams.set('sell_item_contract_address', CREATURE_CONTRACT);
-    url.searchParams.set('account_address', address);
+    url.searchParams.set('account_address', addr);
     url.searchParams.set('status', status);
-    url.searchParams.set('page_size', '30'); // newest tens per status — plenty for a record
+    url.searchParams.set('page_size', '30');
     const body = await imxFetch(url.toString());
     return (body.result ?? []).map(o => ({ o, status }));
   };
-  const settled = await Promise.allSettled(LISTING_HISTORY_STATUSES.map(fetchStatus));
-  settled.forEach((s, i) => { if (s.status === 'rejected') console.error(`Listing history [${LISTING_HISTORY_STATUSES[i]}] failed:`, s.reason?.message); });
-
-  // De-dupe by order id (an order sits in one status, but guard anyway), shape, sort newest
-  // first by the timestamp the order reached its terminal state, and cap the rendered set.
-  const byId = new Map();
+  const settled = await Promise.allSettled(Object.keys(LISTING_KIND).map(fetchStatus));
+  settled.forEach((s, i) => { if (s.status === 'rejected') console.error(`Listing history [${Object.keys(LISTING_KIND)[i]}] failed:`, s.reason?.message); });
+  // Every upstream source failed — surface it as an error so the client shows "couldn't
+  // load" rather than a misleading "no activity yet".
+  if (activityFailed && settled.every(s => s.status === 'rejected')) {
+    throw Object.assign(new Error('unavailable'), { code: 'unavailable', statusCode: 503 });
+  }
   for (const { o, status } of settled.flatMap(s => s.status === 'fulfilled' ? s.value : [])) {
     const tokenId = o.sell?.[0]?.token_id;
     const amount = o.buy?.[0]?.amount;
-    if (!o.id || !tokenId || !amount || byId.has(o.id)) continue;
-    byId.set(o.id, {
-      listingId: o.id,
-      tokenId,
-      status,                                   // FILLED | CANCELLED | EXPIRED
+    if (!tokenId || !amount) continue;
+    entries.push({
+      kind: LISTING_KIND[status], tokenId,
       priceEth: round4(Number(BigInt(amount)) / 1e18),
-      at: o.updated_at || o.created_at || null, // ISO — when it reached this status
+      at: o.updated_at || o.created_at || null, tx: null, with: null,
     });
   }
-  const items = [...byId.values()]
-    .sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0))
-    .slice(0, 60);
 
-  const metaById = await fetchCreatureMetaBatch(items.map(i => i.tokenId));
+  // Merge, newest-first, cap, then join token metadata in one batch.
+  const items = entries
+    .filter(e => e.at)
+    .sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0))
+    .slice(0, HISTORY_ITEMS_MAX);
+  const metaById = await fetchCreatureMetaBatch([...new Set(items.map(i => String(i.tokenId)))]);
   for (const it of items) {
     const meta = metaById.get(String(it.tokenId)) || {};
     it.name = meta.name || `Highrise Creature #${it.tokenId}`;
@@ -2330,6 +2392,22 @@ async function handleMarketplaceApi(request, response, url) {
         if (s) { it.coords = s.coords; it.traits = s.traits; it.rank = s.rank ?? null; }
       }
       sendJson(response, 200, data, { 'Cache-Control': 'no-store' });
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // The "History" tab for LAND: the wallet's past buys, sales and transfers, from OpenSea's
+  // account events feed. Heavier than mine/owned (a bounded multi-page scan), so it carries
+  // its own modest per-IP limit. Wallet-keyed — never shared-cache.
+  const landHistoryMatch = pathname.match(/^\/api\/market\/land\/history\/(0x[0-9a-f]{40})$/);
+  if (landHistoryMatch) {
+    if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    const hWait = rateLimited(`mkthist:${ip}`, 15, 60 * 1000);
+    if (hWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(hWait) }); return; }
+    try {
+      sendJson(response, 200, await landMarket.myHistory(landHistoryMatch[1]), { 'Cache-Control': 'no-store' });
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }

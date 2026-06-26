@@ -2322,24 +2322,51 @@ body.trade-sheet-open { overflow: hidden; }
 .trade-mine-cancel:hover { background: var(--hr-alert-15); }
 .trade-mine-cancel[disabled] { opacity: .55; cursor: not-allowed; }
 
-/* Listing history (Creatures-only "History" tab) — a read-only log of past listings.
-   Reuses the .trade-mine card shell; the cards wrap into a grid rather than scroll, and
-   a status badge replaces the cancel button. */
+/* Activity history (Creatures-only "History" tab) — a read-only, newest-first VERTICAL
+   TIMELINE of buys, sales, transfers and past listings. Shares the roadmap timeline's rail
+   geometry (left rail + node per entry); each row reuses the .trade-mine card shell, with a
+   kind-coloured node + badge in place of the cancel button. */
 .trade-history-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .trade-history-head .trade-form-h { margin: 0; }
-.trade-history-list { flex-wrap: wrap; overflow: visible; }
-.trade-history-card { min-width: 250px; }
+.trade-timeline { list-style: none; position: relative; padding-left: 34px; margin: 4px 0 0; }
+.trade-timeline::before {
+  content: ""; position: absolute; left: 9px; top: 10px; bottom: 10px; width: 3px;
+  background: linear-gradient(var(--hr-bg-4), rgba(255,255,255,.03)); border-radius: 4px;
+}
+.trade-tl-item { position: relative; margin-bottom: 14px; animation: tlReveal .4s ease both; }
+.trade-tl-item:last-child { margin-bottom: 0; }
+/* The node — a kind-coloured dot sitting on the rail, vertically centred on its card. */
+.trade-tl-dot {
+  position: absolute; left: -34px; top: 50%; transform: translateY(-50%);
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--hr-bg-4); border: 3px solid var(--hr-bg-3); z-index: 1;
+}
+.trade-tl-dot.is-sold     { background: var(--hr-primary);   border-color: var(--hr-primary-25); }
+.trade-tl-dot.is-bought   { background: var(--hr-secondary); border-color: rgba(133,97,255,.35); }
+.trade-tl-dot.is-minted   { background: var(--hr-accent);    border-color: rgba(255,249,95,.35); }
+.trade-tl-dot.is-cancelled { background: var(--hr-alert);    border-color: rgba(255,91,149,.35); }
+.trade-tl-item .trade-mine-card { width: 100%; min-width: 0; }
+@keyframes tlReveal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .trade-tl-item { animation: none; } }
 .trade-history-card img[data-fallback] { object-fit: cover; padding: 0; }
 .trade-history-when { font-size: 11px; font-weight: 600; color: var(--hr-fg-2); margin-top: 2px; }
+.trade-history-with { font-size: 11.5px; font-weight: 600; color: var(--hr-fg-2); }
+.trade-history-with code { color: var(--hr-fg-1); font-size: 11px; }
+.trade-history-tx { color: var(--hr-secondary); font-weight: 700; text-decoration: none; }
+.trade-history-tx:hover { text-decoration: underline; }
 .trade-history-badge {
   margin-left: auto; flex: 0 0 auto; align-self: flex-start;
   padding: 4px 10px; border-radius: var(--hr-radius-pill);
   font-size: 11px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase;
-  border: 1px solid transparent;
+  border: 1px solid transparent; white-space: nowrap;
 }
-.trade-history-badge.is-filled    { color: var(--hr-primary); background: rgba(81,255,165,.12); border-color: rgba(81,255,165,.4); }
-.trade-history-badge.is-cancelled { color: var(--hr-alert);   background: var(--hr-alert-15);    border-color: rgba(255,91,149,.4); }
-.trade-history-badge.is-expired   { color: var(--hr-fg-2);    background: rgba(255,255,255,.06); border-color: var(--hr-line); }
+.trade-history-badge.is-sold     { color: var(--hr-primary);   background: rgba(81,255,165,.12);  border-color: rgba(81,255,165,.4); }
+.trade-history-badge.is-bought   { color: var(--hr-secondary); background: rgba(133,97,255,.14);  border-color: rgba(133,97,255,.45); }
+.trade-history-badge.is-minted   { color: var(--hr-accent);    background: rgba(255,249,95,.12);  border-color: rgba(255,249,95,.4); }
+.trade-history-badge.is-received,
+.trade-history-badge.is-sent     { color: var(--hr-fg-1);      background: rgba(255,255,255,.06); border-color: var(--hr-line); }
+.trade-history-badge.is-cancelled { color: var(--hr-alert);    background: var(--hr-alert-15);     border-color: rgba(255,91,149,.4); }
+.trade-history-badge.is-expired   { color: var(--hr-fg-2);     background: rgba(255,255,255,.05);  border-color: var(--hr-line); }
 
 /* Token detail modal */
 body.trade-modal-open { overflow: hidden; }
