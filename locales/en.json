@@ -224,6 +224,7 @@
   "trade.funds.ethTitle": "needs to be on Immutable zkEVM",
   "trade.funds.youHaveOnEth": "You have {x} on Ethereum",
   "trade.funds.bridgeNeed": "bridge about {x} over",
+  "trade.funds.notEnoughToBridge": "Your ETH on Ethereum ({x}) isn't quite enough to cover this once bridge gas is added — top up the difference with card below (it's the quickest way), or add more ETH on Ethereum first and then bridge.",
   "trade.funds.imxGood": "IMX — you're already set for the gas fee",
   "trade.funds.imxNeed": "IMX — a tiny bit covers the network gas fee",
   "trade.funds.bridgeBtn": "Bridge ETH to Immutable zkEVM",

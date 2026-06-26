@@ -91,6 +91,14 @@ const GAS_TARGET_IMX = 5;              // one-tap top-up target, in IMX (tunable
 // needed (it's Immutable's page). LAND (Ethereum mainnet) uses a Transak deep-link built
 // server-side instead (see /api/market/land/onramp) since that needs our key.
 const ONRAMP_URL_ZKEVM = 'https://toolkit.immutable.com/onramp/';
+// A bridge is signed on Ethereum MAINNET, so the wallet must hold the bridge INPUT *plus*
+// enough ETH left over to pay that tx's L1 gas. Squid's quoted `feeUsd` covers the bridge
+// + destination gas, NOT the source-chain execution gas the wallet itself pays — so we keep
+// a separate headroom. When mainnet ETH can't cover input + this reserve, offering a bridge
+// just produces an unfundable tx (the MetaMask "Review alert" → "something went wrong" a
+// short wallet hits); we route to the card top-off instead. ~$5 of mainnet gas at typical
+// fees — generous enough to clear gas spikes, small enough not to block real bridges.
+const BRIDGE_GAS_RESERVE_ETH = 0.0015;
 
 // Wallet state
 let account = null;
@@ -1085,7 +1093,10 @@ function fundsHelpHtml() {
   const imx = fmtWeiEth(f.imxBal);
   let mainnetEth = 0;
   try { mainnetEth = f.mainnetEthWei != null ? Number(BigInt(f.mainnetEthWei)) / 1e18 : 0; } catch { mainnetEth = 0; }
-  const hasMainnet = mainnetEth > 0;
+  // Only offer the bridge when mainnet ETH can actually fund it (input + L1 gas) — set in
+  // showFundsHelp. A wallet that holds *some* mainnet ETH but not enough is routed to the
+  // card top-off below, not asked to bridge an amount it can't send.
+  const canBridge = f.canBridge === true;
   const hasGas = f.imxBal != null && Number(f.imxBal) / 1e18 >= 0.005;
 
   // IMX (gas) row — celebrate when they're already covered, gently note it when not.
@@ -1093,8 +1104,8 @@ function fundsHelpHtml() {
     ? `<li class="is-ok"><span class="trade-funds-ic" aria-hidden="true">✓</span><div>${esc(t('trade.funds.imxGood'))}<br><span>${esc(t('trade.funds.have'))} ${esc(imx)} IMX</span></div></li>`
     : `<li><span class="trade-funds-ic" aria-hidden="true">•</span><div>${esc(t('trade.funds.imxNeed'))}<br><span>${esc(t('trade.funds.have'))} ${esc(imx)} IMX · ${esc(t('trade.funds.gasHint'))}</span></div></li>`;
 
-  // The common, reassuring case: they have ETH on mainnet — it just needs to bridge over.
-  if (hasMainnet) {
+  // The common, reassuring case: they have enough ETH on mainnet — it just needs to bridge over.
+  if (canBridge) {
     // Quoted one-tap bridge (exact amount, in-panel) when available; deep-link fallback.
     let bridgeArea;
     if (f.quote === 'loading') {
@@ -1133,9 +1144,14 @@ function fundsHelpHtml() {
       </div>`;
   }
 
-  // No ETH detected anywhere — nothing to bridge, so the answer is to ACQUIRE crypto.
-  // The card on-ramp lands ETH + IMX on Immutable zkEVM in one go; the bridge stays as a
-  // secondary route for anyone who actually does hold ETH on another wallet/exchange.
+  // Either no ETH anywhere, or some on mainnet but not enough to bridge (input + gas) — so
+  // the answer is to ACQUIRE the difference. The card on-ramp lands ETH + IMX on Immutable
+  // zkEVM in one go; the bridge stays as a secondary route for anyone who holds enough ETH
+  // on another wallet/exchange. When they DO hold a little mainnet ETH, say so plainly so
+  // the switch from "bridge" to "top up" doesn't read as the site losing track of it.
+  const shortNote = mainnetEth > 0
+    ? `<p class="trade-funds-net">${esc(t('trade.funds.notEnoughToBridge').replace('{x}', fmtEthFiat(mainnetEth)))}</p>`
+    : '';
   return `
     <div class="trade-funds">
       <div class="trade-funds-h"><span aria-hidden="true">💡</span> ${esc(t('trade.funds.h'))} ${tipHtml('trade.funds.intro')}</div>
@@ -1143,6 +1159,7 @@ function fundsHelpHtml() {
         <li><span class="trade-funds-ic" aria-hidden="true">•</span><div><b>ETH</b> — ${esc(t('trade.funds.forPrice'))}<br><span>${esc(t('trade.funds.need'))} ≈ <b>${esc(need)}</b> · ${esc(t('trade.funds.have'))} ${esc(fmtEthFiat(weiToEth(f.ethBal)))}</span></div></li>
         ${imxRow}
       </ul>
+      ${shortNote}
       <p class="trade-funds-net">${esc(t('trade.onramp.net'))}</p>
       <a class="trade-funds-btn" href="${ONRAMP_URL_ZKEVM}" target="_blank" rel="noopener">${esc(t('trade.onramp.btn'))} ↗</a>
       <p class="trade-funds-foot">${esc(t('trade.onramp.fundsFoot'))} · <a href="${BRIDGE_URL}" target="_blank" rel="noopener">${esc(t('trade.onramp.orBridge'))} ↗</a></p>
@@ -1163,24 +1180,36 @@ async function showFundsHelp(it) {
   ]);
   if (buyState?.phase !== 'funds') return;
   const mainnetEthWei = elsewhere?.mainnetEthWei ?? null;
-  buyState = { phase: 'funds', need, ethBal, imxBal, mainnetEthWei, quote: 'loading' };
-  patchModal();
+  let mainnetEth = 0;
+  try { mainnetEth = mainnetEthWei != null ? Number(BigInt(mainnetEthWei)) / 1e18 : 0; } catch { mainnetEth = 0; }
 
-  // Shortfall on zkEVM (in ETH); only quote when they hold mainnet ETH to bridge.
+  // Shortfall on zkEVM (in ETH).
   const haveZk = ethBal != null ? Number(ethBal) / 1e18 : 0;
   const shortfall = Math.max(0, need - haveZk);
-  let hasMainnet = false;
-  try { hasMainnet = mainnetEthWei != null && BigInt(mainnetEthWei) > 0n; } catch { hasMainnet = false; }
-  if (!hasMainnet || shortfall <= 0) {
-    buyState.quote = null; patchModal(); return;
-  }
+  // Can their mainnet ETH actually fund a bridge of the shortfall? They need the bridge
+  // INPUT plus L1 gas headroom. ETH→ETH bridges ~1:1, so a quote's `fromEth` is the
+  // shortfall plus Squid's fee — never less; if mainnet can't even cover shortfall + gas
+  // reserve, no quote can be funded either, so don't suggest bridging an amount they don't
+  // hold. Below this bar the panel shows the card top-off instead (acquire the difference).
+  const canBridge = shortfall > 0 && mainnetEth >= shortfall + BRIDGE_GAS_RESERVE_ETH;
+  buyState = { phase: 'funds', need, ethBal, imxBal, mainnetEthWei, mainnetEth, canBridge, quote: canBridge ? 'loading' : null };
+  patchModal();
+  if (!canBridge) return;
+
   try {
     const res = await fetch('/api/market/creatures/bridge/quote', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ address: account, needEth: shortfall.toFixed(18).replace(/0+$/, '').replace(/\.$/, '') }),
     });
     const q = res.ok ? await res.json() : null;
-    if (buyState?.phase === 'funds') { buyState.quote = q; patchModal(); }
+    if (buyState?.phase !== 'funds') return;
+    // Re-check against the precise quote: the bridge input (fromEth, includes Squid's fee)
+    // plus L1 gas must still fit within mainnet ETH. If fees push it over the edge, fall
+    // back to the top-off rather than a one-tap bridge the wallet can't sign.
+    if (q && q.tx && mainnetEth < (Number(q.fromEth) || Infinity) + BRIDGE_GAS_RESERVE_ETH) {
+      buyState.canBridge = false; buyState.quote = null; patchModal(); return;
+    }
+    buyState.quote = q; patchModal();
   } catch {
     if (buyState?.phase === 'funds') { buyState.quote = null; patchModal(); }
   }
