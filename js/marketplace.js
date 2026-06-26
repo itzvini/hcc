@@ -268,6 +268,11 @@ const ACCEPT_BUSY = new Set(['prepare', 'approve', 'approveWait', 'fulfill', 'fu
 let owned = null;          // null = not loaded; [] = loaded, none
 let mine = null;           // null = not loaded; [] = loaded, none
 let sellerLoading = false;
+// Listing history (Creatures-only "History" tab): past sold/cancelled/expired listings.
+// Loaded lazily on first visit, separately from the seller hub — it's read-only by address.
+let history = null;        // null = not loaded; [] = loaded, none
+let historyLoading = false;
+let historyError = false;
 let sellSel = null;        // tokenId picked for sale
 let sellPickOffers = null; // specific offers on the picked token (instant-sell target)
 
@@ -3102,6 +3107,86 @@ function myListingsHtml() {
     </div>`;
 }
 
+// --- Listing history (Creatures-only) -------------------------------------------------
+// A read-only record of the wallet's past listings: sold (FILLED), cancelled, or expired.
+// No actions — just a log — fetched lazily by address the first time the tab is opened.
+
+// Load past listings once, by address. Read-only data, so it doesn't need the wallet on
+// zkEVM (unlike the seller hub) — just a connected account. Guards against a stale resolve
+// landing after a collection switch.
+async function loadHistory() {
+  if (!account || coll !== 'creatures' || historyLoading) return;
+  historyLoading = true;
+  patchHistoryView();
+  try {
+    const r = await fetch(`/api/market/creatures/history/${account}`, { headers: { Accept: 'application/json' } })
+      .then(res => res.ok ? res.json() : null).catch(() => null);
+    if (coll !== 'creatures' || !account) return; // user moved on while it was in flight
+    historyError = !r;
+    history = r && Array.isArray(r.items) ? r.items : (history || []);
+  } finally {
+    historyLoading = false;
+    patchHistoryView();
+  }
+}
+
+function maybeLoadHistory() {
+  if (account && coll === 'creatures' && history === null && !historyLoading) loadHistory();
+}
+
+// "Jun 12, 2026" in the user's locale — when the listing reached its terminal state.
+function fmtHistoryDate(iso) {
+  if (!iso) return '';
+  const ts = Date.parse(iso);
+  if (!Number.isFinite(ts)) return '';
+  try { return new Date(ts).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }); }
+  catch { return ''; }
+}
+
+const HISTORY_STATUS = {
+  FILLED:    { key: 'trade.history.status.filled',    cls: 'is-filled' },
+  CANCELLED: { key: 'trade.history.status.cancelled', cls: 'is-cancelled' },
+  EXPIRED:   { key: 'trade.history.status.expired',   cls: 'is-expired' },
+};
+
+function historyCardHtml(h) {
+  const s = HISTORY_STATUS[h.status] || { key: null, cls: '' };
+  const when = fmtHistoryDate(h.at);
+  return `
+    <div class="trade-mine-card trade-history-card">
+      ${h.image ? `<img src="${esc(h.image)}" alt="" loading="lazy" />` : '<div class="trade-tile-noimg">🐾</div>'}
+      <div class="trade-mine-info">
+        <span class="trade-mine-name">${esc(h.name)}</span>
+        <span class="trade-mine-price">${esc(fmtEthFiat(h.priceEth))}</span>
+        ${when ? `<span class="trade-history-when">${esc(when)}</span>` : ''}
+      </div>
+      <span class="trade-history-badge ${s.cls}">${esc(s.key ? t(s.key) : h.status)}</span>
+    </div>`;
+}
+
+function historyViewHtml() {
+  // Read-only by address, so the wallet need not be on zkEVM — only connected.
+  if (!eth() || !account) return walletGateHtml();
+  const head = `<div class="trade-history-head">
+      <h4 class="trade-form-h">${esc(t('trade.history.h'))}</h4>
+      <button class="apply-btn-ghost trade-refresh" data-act="history-refresh" type="button" ${historyLoading ? 'disabled' : ''}>${esc(t('trade.refresh'))}</button>
+    </div>`;
+  if (history === null) {
+    return `<div class="trade-history">${head}
+      <div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.history.loading'))}</div></div>`;
+  }
+  const body = history.length
+    ? `<div class="trade-mine-row trade-history-list">${history.map(historyCardHtml).join('')}</div>`
+    : `<p class="trade-form-p">${esc(t(historyError ? 'trade.history.error' : 'trade.history.none'))}</p>`;
+  return `<div class="trade-history">${head}${body}</div>`;
+}
+
+function patchHistoryView() {
+  const view = root()?.querySelector('#trade-view');
+  if (!view || tradeTab !== 'history') return;
+  view.innerHTML = historyViewHtml();
+}
+
 function sellPickerHtml() {
   if (owned === null) return `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t(skey('trade.sell.loadingOwned')))}</div>`;
   if (!invBase().length) return `<p class="trade-form-p">${esc(t(skey('trade.sell.none')))}</p>`;
@@ -3137,6 +3222,9 @@ function maybeLoadSeller() {
 // Segmented Buy / Sell / Transfer control (reuses the Market panel's .seg pattern).
 function tradeTabsHtml() {
   const TABS = [['buy', 'trade.tab.buy'], ['sell', 'trade.tab.sell'], ['transfer', 'trade.tab.transfer']];
+  // Listing history is Creatures-only — Immutable's orders API exposes terminal statuses;
+  // OpenSea's LAND feed returns only live orders, so there's no equivalent for LAND.
+  if (coll === 'creatures') TABS.push(['history', 'trade.tab.history']);
   return `<div class="seg trade-tabs" role="tablist" aria-label="${esc(t('trade.tabs.aria'))}">
     ${TABS.map(([id, key]) => `
       <button type="button" role="tab" class="seg-btn ${tradeTab === id ? 'is-active' : ''}"
@@ -3392,6 +3480,7 @@ function queueTransferCheck(raw) {
 function viewHtml() {
   if (tradeTab === 'sell')     return `<section class="trade-actions" id="trade-view">${sellViewHtml()}</section>`;
   if (tradeTab === 'transfer') return `<section class="trade-actions" id="trade-view">${transferViewHtml()}</section>`;
+  if (tradeTab === 'history' && coll === 'creatures') return `<section class="trade-actions" id="trade-view">${historyViewHtml()}</section>`;
   return `<div id="trade-view">${browseHtml()}</div>`;
 }
 
@@ -3746,6 +3835,8 @@ function render() {
     if (coll === 'creatures' && myOffers === null) loadMyOffers();
     else if (coll === 'land' && landMyOffers === null) loadLandMyOffers();
   }
+  // History is read-only by address — load it even when the wallet isn't on zkEVM yet.
+  if (account && tradeTab === 'history' && coll === 'creatures') maybeLoadHistory();
 }
 
 function onClick(e) {
@@ -3762,10 +3853,13 @@ function onClick(e) {
       openFacet = null; // browse + inventory share the popover state; don't carry it across
       render();
       if (tradeTab === 'sell' || tradeTab === 'transfer') maybeLoadSeller();
+      if (tradeTab === 'history') maybeLoadHistory();
       return;
     case 'coll': {
       if (coll === target.dataset.coll || !COLLECTIONS[target.dataset.coll]) return;
       coll = target.dataset.coll;
+      // History is Creatures-only — switching to LAND drops that tab, so move off it.
+      if (tradeTab === 'history' && coll !== 'creatures') tradeTab = 'buy';
       try { localStorage.setItem('hcc-trade-coll', coll); } catch { /* fine */ }
       tokenOffers = null;
       resetBrowseForView(); // clears the grid/filters; scope defaults per the new view
@@ -3791,6 +3885,11 @@ function onClick(e) {
       transferSel = String(transferSel) === String(target.dataset.token) ? null : target.dataset.token;
       return patchTransferView();
     case 'cancel-listing': return handleCancelListing(target.dataset.listing);
+    case 'history-refresh':
+      if (historyLoading) return;
+      history = null; historyError = false;
+      patchHistoryView();
+      return loadHistory();
     case 'accept-offer':   return askAccept(target.dataset.offer);
     case 'instant-sell':   return askAccept(target.dataset.offer, sellSel);
     case 'land-instant-sell': return askAcceptLand(target.dataset.offer, target.dataset.protocol, target.dataset.token);
@@ -3963,6 +4062,7 @@ function onInput(e) {
 }
 function resetSellerState() {
   owned = null; mine = null; sellSel = null; sellState = null; cancelBusy = null;
+  history = null; historyError = false; // per-collection (Creatures-only); reload on demand
   myOffers = null; offerState = null; offerCtx = null; acceptState = null; acceptBusyId = null;
   landMyOffers = null; landOfferState = null; landAcceptState = null; landAcceptBusy = false; unwrapState = null;
   sellPickOffers = null;

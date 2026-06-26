@@ -1112,6 +1112,55 @@ async function getMyListings(address) {
   };
 }
 
+// A wallet's PAST Creature listings — the terminal order statuses (sold / cancelled /
+// expired). The ACTIVE set lives in getMyListings; history is everything else, merged
+// newest-first. Read-only by address (the wallet signs nothing). Immutable's orders API
+// exposes these statuses; LAND has no equivalent maker-scoped history feed (OpenSea
+// returns only live orders), which is why the History tab is Creatures-only.
+const LISTING_HISTORY_STATUSES = ['FILLED', 'CANCELLED', 'EXPIRED'];
+async function getMyListingHistory(address) {
+  // One status per request (the API's status filter takes a single value); in parallel,
+  // and each is independent so one failing still yields the others.
+  const fetchStatus = async status => {
+    const url = new URL(`https://api.immutable.com/v1/chains/${IMX_ZKEVM_CHAIN}/orders/listings`);
+    url.searchParams.set('sell_item_contract_address', CREATURE_CONTRACT);
+    url.searchParams.set('account_address', address);
+    url.searchParams.set('status', status);
+    url.searchParams.set('page_size', '30'); // newest tens per status — plenty for a record
+    const body = await imxFetch(url.toString());
+    return (body.result ?? []).map(o => ({ o, status }));
+  };
+  const settled = await Promise.allSettled(LISTING_HISTORY_STATUSES.map(fetchStatus));
+  settled.forEach((s, i) => { if (s.status === 'rejected') console.error(`Listing history [${LISTING_HISTORY_STATUSES[i]}] failed:`, s.reason?.message); });
+
+  // De-dupe by order id (an order sits in one status, but guard anyway), shape, sort newest
+  // first by the timestamp the order reached its terminal state, and cap the rendered set.
+  const byId = new Map();
+  for (const { o, status } of settled.flatMap(s => s.status === 'fulfilled' ? s.value : [])) {
+    const tokenId = o.sell?.[0]?.token_id;
+    const amount = o.buy?.[0]?.amount;
+    if (!o.id || !tokenId || !amount || byId.has(o.id)) continue;
+    byId.set(o.id, {
+      listingId: o.id,
+      tokenId,
+      status,                                   // FILLED | CANCELLED | EXPIRED
+      priceEth: round4(Number(BigInt(amount)) / 1e18),
+      at: o.updated_at || o.created_at || null, // ISO — when it reached this status
+    });
+  }
+  const items = [...byId.values()]
+    .sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0))
+    .slice(0, 60);
+
+  const metaById = await fetchCreatureMetaBatch(items.map(i => i.tokenId));
+  for (const it of items) {
+    const meta = metaById.get(String(it.tokenId)) || {};
+    it.name = meta.name || `Highrise Creature #${it.tokenId}`;
+    it.image = meta.image || null;
+  }
+  return { items };
+}
+
 // ETH→USD plus USD-relative rates for every display currency, in ONE CoinGecko call.
 // Independent of the heavy market-stats cache (which can be cold on a fresh boot, so
 // listings used to render with no fiat). Own short cache — FX barely moves minute to
@@ -1686,6 +1735,18 @@ async function handleMarketplaceApi(request, response, url) {
       ? await getOwnedCreatures(ownedMatch[2])
       : await getMyListings(ownedMatch[2]);
     sendJson(response, 200, data, { 'Cache-Control': 'no-store' }); // wallet-keyed — never shared-cache it
+    return;
+  }
+
+  // The "History" tab: a wallet's past (sold / cancelled / expired) Creature listings.
+  // Heavier than owned/mine (several upstream queries + a meta batch), so it carries its
+  // own modest per-IP limit on top of the shared budget. Wallet-keyed — never shared-cache.
+  const historyMatch = pathname.match(/^\/api\/market\/creatures\/history\/(0x[0-9a-f]{40})$/);
+  if (historyMatch) {
+    const hWait = rateLimited(`mkthist:${ip}`, 15, 60 * 1000);
+    if (hWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(hWait) }); return; }
+    const data = await getMyListingHistory(historyMatch[1]);
+    sendJson(response, 200, data, { 'Cache-Control': 'no-store' });
     return;
   }
 

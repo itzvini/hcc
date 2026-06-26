@@ -2322,6 +2322,25 @@ body.trade-sheet-open { overflow: hidden; }
 .trade-mine-cancel:hover { background: var(--hr-alert-15); }
 .trade-mine-cancel[disabled] { opacity: .55; cursor: not-allowed; }
 
+/* Listing history (Creatures-only "History" tab) — a read-only log of past listings.
+   Reuses the .trade-mine card shell; the cards wrap into a grid rather than scroll, and
+   a status badge replaces the cancel button. */
+.trade-history-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.trade-history-head .trade-form-h { margin: 0; }
+.trade-history-list { flex-wrap: wrap; overflow: visible; }
+.trade-history-card { min-width: 250px; }
+.trade-history-card img[data-fallback] { object-fit: cover; padding: 0; }
+.trade-history-when { font-size: 11px; font-weight: 600; color: var(--hr-fg-2); margin-top: 2px; }
+.trade-history-badge {
+  margin-left: auto; flex: 0 0 auto; align-self: flex-start;
+  padding: 4px 10px; border-radius: var(--hr-radius-pill);
+  font-size: 11px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase;
+  border: 1px solid transparent;
+}
+.trade-history-badge.is-filled    { color: var(--hr-primary); background: rgba(81,255,165,.12); border-color: rgba(81,255,165,.4); }
+.trade-history-badge.is-cancelled { color: var(--hr-alert);   background: var(--hr-alert-15);    border-color: rgba(255,91,149,.4); }
+.trade-history-badge.is-expired   { color: var(--hr-fg-2);    background: rgba(255,255,255,.06); border-color: var(--hr-line); }
+
 /* Token detail modal */
 body.trade-modal-open { overflow: hidden; }
 .trade-modal { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 20px; }
