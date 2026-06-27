@@ -340,6 +340,20 @@ function traitPctOf(type, value) {
   const f = (browseFacets || []).find(x => x.type === type);
   return f?.values.find(x => x.v === value)?.pct ?? null;
 }
+// USD to prefill the card on-ramp so the buyer RECEIVES enough crypto. Transak's fee (~3.5–5.5%)
+// plus price drift between prefill and purchase mean the delivered crypto is a few % under what
+// the fiat buys at spot — so a raw price-in-USD prefill leaves them short (e.g. $199 → only
+// 0.1197 ETH for a 0.1278 ETH Creature). ~12% headroom covers the max fee + drift; the field
+// stays editable and any surplus just lands in their wallet. Returns 0 when no rate is known.
+const ONRAMP_FEE_MARKUP = 1.12;
+function onrampFiatUsd(eth) {
+  return (ethUsd && eth > 0) ? Math.ceil(eth * ethUsd * ONRAMP_FEE_MARKUP) : 0;
+}
+// Extra ETH to buy on Ethereum when the funds will then be BRIDGED to zkEVM (Creature price):
+// covers the bridge fee + the L1 gas to sign the bridge tx. LAND is bought directly on Ethereum,
+// so it needs no such buffer.
+const ONRAMP_BRIDGE_BUFFER_ETH = 0.004;
+
 // The fiat estimate under an ETH price, in the user's chosen currency. Returns '' when
 // ETH-only is selected or no rate is available (so the caller renders nothing).
 function fmtFiat(eth) {
@@ -1083,7 +1097,7 @@ function buyStatusHtml() {
   if (buyState.phase === 'error') {
     // A funds shortfall can carry a card on-ramp CTA (LAND/Ethereum) — mint it on click.
     const onramp = buyState.onramp
-      ? `<button class="trade-funds-btn" data-act="onramp" data-chain="${esc(buyState.onramp.chain)}" data-token="${esc(buyState.onramp.token)}" data-amount="${esc(String(buyState.onramp.amount || ''))}" type="button" style="margin-top:12px">${esc(t('trade.onramp.btn'))} ↗</button>`
+      ? `<button class="trade-funds-btn" data-act="onramp" data-chain="${esc(buyState.onramp.chain)}" data-token="${esc(buyState.onramp.token)}" data-fiat="${esc(String(buyState.onramp.fiat || ''))}" type="button" style="margin-top:12px">${esc(t('trade.onramp.btn'))} ↗</button>`
       : '';
     return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(buyState.msg)}</span></div>${onramp}`;
   }
@@ -1157,19 +1171,26 @@ function fundsHelpHtml() {
   // zkEVM in one go; the bridge stays as a secondary route for anyone who holds enough ETH
   // on another wallet/exchange. When they DO hold a little mainnet ETH, say so plainly so
   // the switch from "bridge" to "top up" doesn't read as the site losing track of it.
+  // Acknowledge what they already hold on Ethereum and prompt them to top up ONLY the
+  // complement (we've pre-set the card to exactly that), then bridge it all over.
   const shortNote = mainnetEth > 0
-    ? `<p class="trade-funds-net">${esc(t('trade.funds.notEnoughToBridge').replace('{x}', fmtEthFiat(mainnetEth)))}</p>`
+    ? `<p class="trade-funds-net">${esc(t('trade.funds.notEnoughToBridge').replace('{x}', fmtEthFiat(mainnetEth)).replace('{y}', fmtEthFiat(f.cardTopUpEth)))}</p>`
+    : '';
+  // The ETH row spells out the whole picture: what's needed, what's already on zkEVM, and what's
+  // on Ethereum (so the "top up the difference" guidance has visible context).
+  const ethElsewhere = mainnetEth > 0
+    ? ` · ${esc(t('trade.funds.plusOnEth').replace('{x}', fmtEthFiat(mainnetEth)))}`
     : '';
   return `
     <div class="trade-funds">
       <div class="trade-funds-h"><span aria-hidden="true">💡</span> ${esc(t('trade.funds.h'))} ${tipHtml('trade.funds.intro')}</div>
       <ul class="trade-funds-list">
-        <li><span class="trade-funds-ic" aria-hidden="true">•</span><div><b>ETH</b> — ${esc(t('trade.funds.forPrice'))}<br><span>${esc(t('trade.funds.need'))} ≈ <b>${esc(need)}</b> · ${esc(t('trade.funds.have'))} ${esc(fmtEthFiat(weiToEth(f.ethBal)))}</span></div></li>
+        <li><span class="trade-funds-ic" aria-hidden="true">•</span><div><b>ETH</b> — ${esc(t('trade.funds.forPrice'))}<br><span>${esc(t('trade.funds.need'))} ≈ <b>${esc(need)}</b> · ${esc(t('trade.funds.have'))} ${esc(fmtEthFiat(weiToEth(f.ethBal)))} ${esc(t('trade.funds.onZk'))}${ethElsewhere}</span></div></li>
         ${imxRow}
       </ul>
       ${shortNote}
       <p class="trade-funds-net">${esc(t('trade.onramp.net'))}</p>
-      <button class="trade-funds-btn" data-act="onramp" data-chain="zkevm" data-token="ETH" data-amount="${esc(String(f.onrampAmount || ''))}" type="button">${esc(t('trade.onramp.btn'))} ↗</button>
+      <button class="trade-funds-btn" data-act="onramp" data-chain="ethereum" data-token="ETH" data-fiat="${esc(String(f.onrampFiat || ''))}" type="button">${esc(t('trade.onramp.btn'))} ↗</button>
       <p class="trade-funds-foot">${esc(t('trade.onramp.fundsFoot'))} · <a href="${BRIDGE_URL}" target="_blank" rel="noopener">${esc(t('trade.onramp.orBridge'))} ↗</a></p>
     </div>`;
 }
@@ -1179,7 +1200,7 @@ function fundsHelpHtml() {
 // the panel can offer one-tap bridging of precisely the shortfall.
 async function showFundsHelp(it) {
   const need = it.totalEth ?? it.priceEth;
-  buyState = { phase: 'funds', need, ethBal: null, imxBal: null, mainnetEthWei: null, quote: 'loading', onrampAmount: need };
+  buyState = { phase: 'funds', need, ethBal: null, imxBal: null, mainnetEthWei: null, quote: 'loading', onrampFiat: onrampFiatUsd(need + ONRAMP_BRIDGE_BUFFER_ETH) };
   patchModal();
   const [ethBal, imxBal, elsewhere] = await Promise.all([
     readErc20(IMX_ETH_TOKEN, account),
@@ -1200,10 +1221,12 @@ async function showFundsHelp(it) {
   // reserve, no quote can be funded either, so don't suggest bridging an amount they don't
   // hold. Below this bar the panel shows the card top-off instead (acquire the difference).
   const canBridge = shortfall > 0 && mainnetEth >= shortfall + BRIDGE_GAS_RESERVE_ETH;
-  // The card CTA lands the price token (ETH) on zkEVM, prefilled with exactly the shortfall (or
-  // the full price if their zkEVM ETH is zero). The widget URL is minted on click (single-use,
-  // 5-min expiry), so we just stash the amount here for the button to carry.
-  buyState = { phase: 'funds', need, ethBal, imxBal, mainnetEthWei, mainnetEth, canBridge, quote: canBridge ? 'loading' : null, onrampAmount: shortfall || need };
+  // The card CTA buys ETH on Ethereum to then bridge. They need enough on Ethereum to bridge the
+  // zkEVM shortfall PLUS the bridge fee + L1 gas (ONRAMP_BRIDGE_BUFFER_ETH) — but they may ALREADY
+  // hold some mainnet ETH, so we only top up the difference (never below 0). This keeps them from
+  // re-buying ETH they already have. The widget URL is minted on click; we stash the fiat here.
+  const cardTopUpEth = Math.max(0, (shortfall || need) + ONRAMP_BRIDGE_BUFFER_ETH - mainnetEth);
+  buyState = { phase: 'funds', need, ethBal, imxBal, mainnetEthWei, mainnetEth, canBridge, quote: canBridge ? 'loading' : null, cardTopUpEth, onrampFiat: onrampFiatUsd(cardTopUpEth) };
   patchModal();
   if (!canBridge) return;
 
@@ -1286,7 +1309,7 @@ function gasHelpHtml() {
       <p class="trade-funds-foot">${esc(t('trade.gas.foot'))}</p>`;
   } else {
     // Nothing on mainnet to bridge — they need to ACQUIRE IMX. Card on-ramp straight to zkEVM.
-    bridgeArea = `<button class="trade-funds-btn" data-act="onramp" data-chain="zkevm" data-token="IMX" data-amount="${GAS_TARGET_IMX}" type="button">${esc(t('trade.onramp.btn'))} ↗</button>
+    bridgeArea = `<button class="trade-funds-btn" data-act="onramp" data-chain="zkevm" data-token="IMX" type="button">${esc(t('trade.onramp.btn'))} ↗</button>
       <p class="trade-funds-foot">${esc(t('trade.onramp.gasFoot'))}</p>`;
   }
 
@@ -1350,26 +1373,26 @@ async function showGasHelp(ctx) {
 // ONRAMP_URL_ZKEVM, LAND omits the CTA. `amount` (in `token` units) prefills the widget's buy
 // amount as an editable default. The URL is single-use and expires in ~5 min, so callers mint
 // it on click (see openOnramp), never ahead of time.
-async function fetchOnrampUrl(chain, token = 'ETH', amount = 0) {
+async function fetchOnrampUrl(chain, token = 'ETH', fiat = 0) {
   try {
-    const amt = Number(amount) > 0 ? `&amount=${encodeURIComponent(Number(amount))}` : '';
-    const r = await fetch(`/api/market/onramp?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}&address=${account}${amt}`);
+    const f = Number(fiat) > 0 ? `&fiat=${encodeURIComponent(Math.round(Number(fiat)))}` : '';
+    const r = await fetch(`/api/market/onramp?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}&address=${account}${f}`);
     if (!r.ok) return null;
     const j = await r.json();
     return j.url || null;
   } catch { return null; }
 }
 
-// Open the card on-ramp in a new tab. Transak sessions are single-use and expire in ~5 min, so
-// we mint ON CLICK, not ahead. The blank tab is opened synchronously first so it still counts as
-// a user gesture (popup blockers would kill a window.open that comes after the await). zkEVM
-// falls back to Immutable's keyless hosted page if minting isn't configured/available; LAND has
-// no keyless fallback, so the tab just closes.
-async function openOnramp(chain, token, amount) {
+// Open the card on-ramp in a new tab. Sessions are single-use and expire in ~5 min, so we mint
+// ON CLICK, not ahead. The blank tab is opened synchronously first so it still counts as a user
+// gesture (popup blockers would kill a window.open that comes after the await). `fiat` (USD)
+// prefills the amount. zkEVM falls back to Immutable's keyless hosted page if minting fails;
+// LAND has no keyless fallback, so the tab just closes.
+async function openOnramp(chain, token, fiat) {
   const tab = window.open('', '_blank');
   if (tab) tab.opener = null;
   let url = null;
-  try { url = await fetchOnrampUrl(chain, token, amount); } catch { url = null; }
+  try { url = await fetchOnrampUrl(chain, token, fiat); } catch { url = null; }
   if (!url && chain === 'zkevm') url = ONRAMP_URL_ZKEVM;
   if (url) {
     if (tab) tab.location = url; else window.open(url, '_blank', 'noopener');
@@ -1682,9 +1705,9 @@ async function handleBuyLand(it) {
     const balWei = await readNative(account);
     if (balWei != null && balWei < needWei) {
       // Short on mainnet ETH — offer a card on-ramp that delivers ETH straight to Ethereum
-      // (Transak, if configured). Minted on click; stash the shortfall to prefill the amount.
+      // (Transak, if configured). Minted on click; stash the shortfall (in USD) to prefill.
       const shortEth = Number(needWei - balWei) / 1e18;
-      setBuy('error', { msg: t('trade.err.landFunds').replace('{x}', fmtEth(Number(needWei) / 1e18)).replace('{y}', fmtEth(Number(balWei) / 1e18)), onramp: { chain: 'ethereum', token: 'ETH', amount: shortEth } });
+      setBuy('error', { msg: t('trade.err.landFunds').replace('{x}', fmtEth(Number(needWei) / 1e18)).replace('{y}', fmtEth(Number(balWei) / 1e18)), onramp: { chain: 'ethereum', token: 'ETH', fiat: onrampFiatUsd(shortEth) } });
       return;
     }
 
@@ -2114,10 +2137,12 @@ function modalOffersHtml(meta) {
   const rows = tokenOffers === null
     ? `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.offers.loading'))}</div>`
     : (tokenOffers.length
-        ? `<ul class="trade-offer-list">${tokenOffers.slice(0, 3).map(o => `
-            <li>
-              <span class="trade-offer-price">${esc(fmtEthFiat(o.priceEth))}</span>
-              <span class="trade-offer-meta">${esc(t('trade.offers.net').replace('{x}', fmtEthFiat(o.netEth)))} · ${esc(t('trade.offers.from'))} <code>${esc(shortWallet(o.from))}</code></span>
+        ? `<ul class="trade-offer-list">${tokenOffers.slice(0, 3).map((o, i) => `
+            <li${i === 0 ? ' class="is-top"' : ''}>
+              <div class="trade-offer-main">
+                <span class="trade-offer-price">${esc(fmtEthFiat(o.priceEth))}</span>
+                <span class="trade-offer-meta">${esc(t('trade.offers.net').replace('{x}', fmtEthFiat(o.netEth)))} · ${esc(t('trade.offers.from'))} <code>${esc(shortWallet(o.from))}</code></span>
+              </div>
               ${isOwner ? `<button class="trade-offer-accept" data-act="accept-offer" data-offer="${esc(o.offerId)}" type="button" ${acceptBusyId ? 'disabled' : ''}>${esc(acceptBusyId === o.offerId ? t('trade.accept.busy') : t('trade.offers.accept'))}</button>` : ''}
             </li>`).join('')}</ul>`
         : `<p class="trade-offers-none">${esc(t('trade.offers.none'))}</p>`);
@@ -3979,7 +4004,7 @@ function onClick(e) {
     case 'cancel-land-offer': return handleCancelLandOffer(target.dataset.offer);
     case 'bridge-now':     return handleBridgeNow();
     case 'gas-bridge-now': return handleGasBridgeNow();
-    case 'onramp':         return openOnramp(target.dataset.chain, target.dataset.token, Number(target.dataset.amount) || 0);
+    case 'onramp':         return openOnramp(target.dataset.chain, target.dataset.token, Number(target.dataset.fiat) || 0);
     case 'bridge-dismiss': return dismissBridge();
     case 'mmwarn-dismiss':
       try { localStorage.setItem('hcc-mmwarn-' + mmBuggyVersion, '1'); } catch { /* fine */ }

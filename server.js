@@ -1693,7 +1693,13 @@ async function getLandBrowse(searchParams) {
 }
 
 // Public marketplace API — browse only (no auth, no wallet, nothing sensitive).
-// --- Transak card on-ramp (secure widget URL) ---------------------------------------------
+// --- Transak card on-ramp (secure widget URL) — CURRENTLY INACTIVE ------------------------
+// This is the "mint through OUR OWN Transak partner account" path. It's NOT wired into the
+// on-ramp handler: that routes through Immutable's hosted checkout instead (immutableOnrampUrl
+// below), which rides Immutable's account and needs no creds of ours. Our account's session API
+// returns 401 errorCode 1002 pending Transak activation / backend-IP allowlisting. Kept for a
+// possible future switch to our own account (fee capture); see the on-ramp note in README.md.
+//
 // Transak deprecated query-param widget URLs (June 2026 migration): every direct
 // global.transak.com/?apiKey=… link now fails with a generic error. The widget loads only
 // with a sessionId minted by a backend call. We run Transak's two-step flow — refresh-token →
@@ -1741,7 +1747,7 @@ async function transakAccessToken(forceRefresh = false) {
 // token is cached for its full ~7-day life — refresh-token is heavily rate-limited (429s on
 // abuse), so we never auto-refresh on a transient 401; the cache expiry drives refreshes.
 async function transakWidgetUrl(opts) {
-  const { network, token, address, amount, referrerDomain } = opts;
+  const { network, token, address, fiatUsd, referrerDomain } = opts;
   const accessToken = await transakAccessToken();
   const widgetParams = {
     apiKey: TRANSAK_API_KEY,
@@ -1752,10 +1758,12 @@ async function transakWidgetUrl(opts) {
     walletAddress: address,
     disableWalletAddressForm: true,
   };
-  if (Number.isFinite(amount) && amount > 0) widgetParams.defaultCryptoAmount = Number(amount.toFixed(6));
-  // The session call authenticates with the access-token header. (Earlier 401s "Invalid or
-  // missing access-token" were a side effect of the refresh call being WAF-blocked, not of the
-  // session headers.) Same UA/Accept as refresh so Cloudflare treats it as a real client.
+  // Prefill in fiat (the buyer pays in fiat anyway, and the crypto-amount field is integer-only).
+  if (Number.isFinite(fiatUsd) && fiatUsd > 0) {
+    widgetParams.defaultFiatAmount = Math.round(fiatUsd);
+    widgetParams.defaultFiatCurrency = 'USD';
+  }
+  // The session call authenticates with the access-token header; same UA/Accept as refresh.
   const res = await fetch(`${TRANSAK_HOSTS.gateway}/api/v2/auth/session`, {
     method: 'POST',
     headers: {
@@ -1771,6 +1779,66 @@ async function transakWidgetUrl(opts) {
   const url = j?.data?.widgetUrl;
   if (!url) throw new Error('transak session: missing widgetUrl');
   return url;
+}
+
+// --- Immutable-hosted on-ramp (zkEVM) -----------------------------------------------------
+// This is the exact call Immutable's toolkit on-ramp page makes: it mints a Transak widget
+// session through Immutable's OWN (zkEVM-enabled) Transak account, so it works without our
+// partner account being provisioned — and still pins network + token + amount. We use it for
+// zkEVM (Creatures); LAND stays on our own Transak account (Ethereum isn't offered here).
+const IMMUTABLE_CHECKOUT_CONFIG_URL = 'https://checkout-api.immutable.com/v1/config';
+const IMMUTABLE_CHECKOUT_WIDGET_URL = 'https://api.immutable.com/checkout/v1/widget-url';
+const ONRAMP_UA = 'HighriseCreatureClub/1.0 (+https://hcc.highrise.game)';
+
+// Immutable's public Transak key lives in their checkout config (keyed by provider id). Fetched
+// + cached (6h) rather than hardcoded, so a rotation on their side doesn't break us.
+let imxOnrampKey = { value: null, fetchedAtMs: 0 };
+async function immutableOnrampKey() {
+  const now = Date.now();
+  if (imxOnrampKey.value && now < imxOnrampKey.fetchedAtMs + 6 * 3600 * 1000) return imxOnrampKey.value;
+  const res = await fetch(IMMUTABLE_CHECKOUT_CONFIG_URL, { headers: { Accept: 'application/json', 'User-Agent': ONRAMP_UA } });
+  if (!res.ok) throw new Error(`immutable config ${res.status}`);
+  const j = await res.json().catch(() => ({}));
+  const key = Object.values(j?.onramp || {}).map(v => v?.publishableApiKey).find(Boolean);
+  if (!key) throw new Error('immutable config: no onramp publishableApiKey');
+  imxOnrampKey = { value: key, fetchedAtMs: now };
+  return key;
+}
+
+// Mint a card on-ramp URL via Immutable's hosted checkout (rides Immutable's Transak account, so
+// no creds of ours). It serves BOTH networks:
+//   network 'immutablezkevm' → IMX (gas), delivered natively to zkEVM.
+//   network 'ethereum'       → ETH (Creature/LAND price), delivered to Ethereum — Transak has no
+//                              fiat→zkEVM-ETH product (confirmed by a live order: ETH lands on L1),
+//                              so the buyer then bridges to zkEVM via the in-panel bridge.
+// fiatUsd prefills the buy amount (integer USD). The returned global.transak.com?sessionId=… URL
+// is short-lived + single-use, so we mint on click.
+async function immutableOnrampUrl({ network, token, address, fiatUsd, referrerDomain }) {
+  const apiKey = await immutableOnrampKey();
+  const body = {
+    api_key: apiKey,
+    network,
+    products_availed: 'buy',
+    default_payment_method: 'credit_debit_card',
+    default_crypto_currency: token,
+    crypto_currency_code: token, // lock the token so funds can't land as the wrong asset
+    hide_menu: true,
+    wallet_address: address,
+    referrer_domain: referrerDomain,
+  };
+  if (Number.isFinite(fiatUsd) && fiatUsd > 0) {
+    body.default_fiat_amount = Math.round(fiatUsd);
+    body.default_fiat_currency = 'USD';
+  }
+  const res = await fetch(IMMUTABLE_CHECKOUT_WIDGET_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': ONRAMP_UA },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`immutable widget-url ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
+  const j = await res.json().catch(() => ({}));
+  if (!j.url) throw new Error('immutable widget-url: missing url');
+  return j.url;
 }
 
 async function handleMarketplaceApi(request, response, url) {
@@ -2141,43 +2209,41 @@ async function handleMarketplaceApi(request, response, url) {
     return;
   }
 
-  // Fiat on-ramp: mint a fresh, single-use Transak widget session so funds land on the RIGHT
-  // chain (network is pinned server-side; the old query-param URLs Transak deprecated would
-  // default to ETH-on-Ethereum and dump a Creature buyer's ETH on L1). Two chains:
-  //   chain=ethereum (LAND)      → network 'ethereum',       token ETH
-  //   chain=zkevm    (Creatures) → network 'immutablezkevm', token ETH (price) or IMX (gas)
-  // 'immutablezkevm' is Transak's slug for Immutable zkEVM (carries ETH, IMX, USDC); confirmed
-  // against Immutable's own SDK. Key+secret live server-side; unconfigured → 503 not_configured
-  // and the client falls back (zkEVM → Immutable's keyless hosted page; LAND → hides the CTA).
-  // The minted URL expires in ~5 min and is single-use, so the client mints on click, not ahead.
+  // Fiat on-ramp: mint a fresh, single-use card-on-ramp session via Immutable's hosted checkout
+  // (rides Immutable's Transak account — no creds of ours, no dependency on our account being
+  // provisioned). Transak has no fiat→zkEVM-ETH product (a live test order delivered ETH to L1),
+  // so routing is by what each network can actually deliver:
+  //   chain=zkevm    → network 'immutablezkevm', IMX (gas) — native to zkEVM.
+  //   chain=ethereum → network 'ethereum', ETH (Creature/LAND price) — lands on Ethereum, then
+  //                    the buyer bridges to zkEVM via the in-panel bridge.
+  // `fiat` prefills the buy amount in USD (editable). The minted URL is single-use + expires in
+  // ~5 min, so the client mints on click. On failure the client falls back (zkEVM → Immutable's
+  // keyless hosted page; ethereum → hides the CTA).
   if (pathname === '/api/market/onramp' && request.method === 'GET') {
     const oWait = rateLimited(`mktonramp:${ip}`, 20, 60 * 1000);
     if (oWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(oWait) }); return; }
 
     const chain = String(url.searchParams.get('chain') || '');
     const addr = String(url.searchParams.get('address') || '').toLowerCase();
-    // Token defaults to ETH; the gas helper asks for IMX. Only ETH is meaningful for LAND.
     const reqToken = String(url.searchParams.get('token') || 'ETH').toUpperCase();
-    const ONRAMP_NETWORK = { ethereum: 'ethereum', zkevm: 'immutablezkevm' };
-    const network = ONRAMP_NETWORK[chain];
-    const token = chain === 'zkevm' && reqToken === 'IMX' ? 'IMX' : 'ETH';
-    // Optional prefilled buy amount, in `token` units (an editable default, not a lock).
-    const amount = Number(url.searchParams.get('amount'));
+    const fiatUsd = Number(url.searchParams.get('fiat'));
+    // zkEVM only delivers IMX here (gas); Ethereum delivers ETH (price). Pin accordingly.
+    const network = chain === 'zkevm' ? 'immutablezkevm' : chain === 'ethereum' ? 'ethereum' : null;
+    const token = chain === 'zkevm' ? 'IMX' : 'ETH';
     if (!network) { sendJson(response, 400, { error: 'bad_chain' }); return; }
     if (!HEX_ADDRESS.test(addr)) { sendJson(response, 400, { error: 'bad_address' }); return; }
-    if (!transakOnrampConfigured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    if (reqToken !== token) { sendJson(response, 400, { error: 'bad_token' }); return; }
 
-    // Transak validates referrerDomain against the account's whitelisted domains; default to
-    // the request host (strip port) unless an explicit domain is configured.
+    // referrerDomain: the request host (strip port) unless explicitly overridden.
     const referrerDomain = TRANSAK_REFERRER_DOMAIN
       || String(request.headers.host || '').split(':')[0]
       || 'localhost';
     try {
-      const widgetUrl = await transakWidgetUrl({ network, token, address: addr, amount, referrerDomain, userIp: ip });
+      const widgetUrl = await immutableOnrampUrl({ network, token, address: addr, fiatUsd, referrerDomain });
       sendJson(response, 200, { url: widgetUrl }, { 'Cache-Control': 'no-store' });
     } catch (err) {
-      console.error('Transak widget-url mint failed:', err.message);
-      sendJson(response, 502, { error: 'onramp_unavailable', detail: err.message }); // TODO: drop detail after diagnosis
+      console.error('On-ramp mint failed:', err.message);
+      sendJson(response, 502, { error: 'onramp_unavailable' });
     }
     return;
   }

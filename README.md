@@ -27,21 +27,30 @@ Get one free from Squid's integrator portal. Without it, the funds helper falls 
 to a prefilled Squid deep-link — everything else works unchanged. Like all secrets it
 lives only in `.env` locally and in Railway **Variables** in production.
 
-`TRANSAK_API_KEY` + `TRANSAK_API_SECRET` power the "Buy with card" on-ramp (card / Apple Pay /
-Google Pay) for an empty wallet. Transak deprecated query-param widget URLs in mid-2026 — the
-widget now loads only with a **session URL minted server-side** from the key **and secret**
-(the secret never reaches the browser). The server (`/api/market/onramp`) runs Transak's
-two-step flow (refresh-token → create-session) to mint a short-lived, single-use URL with the
-destination **network pinned** and the buy **amount prefilled**, so funds land on the right
-chain: **LAND** → ETH on Ethereum mainnet; **Creatures** → ETH (price) or IMX (gas) on Immutable
-zkEVM (`network=immutablezkevm`, confirmed against Immutable's own SDK). Get a key + secret from
-the [Transak partner dashboard](https://dashboard.transak.com) (Developers → generate API
-Secret). Related env:
-- `TRANSAK_ENV` — `production` (default) or `staging`. Must match your key's environment: a
-  staging key works only on the `-stg` hosts, a production key only on the prod hosts.
-- `TRANSAK_REFERRER_DOMAIN` — overrides the referrer Transak validates against your account's
-  whitelisted domains (defaults to the request host). The on-ramp call may also require your
-  backend's IP to be whitelisted in the dashboard.
+The "Buy with card" on-ramp (card / Apple Pay / Google Pay) mints a **session URL server-side**
+at `/api/market/onramp` — Transak deprecated query-param widget URLs in mid-2026, so the widget
+loads only with a session minted via a backend call. We mint through **Immutable's hosted
+checkout** (`api.immutable.com/checkout/v1/widget-url`, the same call Immutable's toolkit on-ramp
+makes), which rides **Immutable's own Transak account** (public key fetched from
+`checkout-api.immutable.com/v1/config`) — so it needs **no Transak credentials of ours**. The URL
+is single-use, expires in ~5 min, minted **on click**, with the **network + token pinned** and the
+buy **amount prefilled** in USD (grossed up for Transak's ~3.5–5.5% fee). Routing reflects what
+each network can actually deliver:
+
+- **Gas (IMX)** → network `immutablezkevm`, delivered **natively to Immutable zkEVM**.
+- **Price (ETH)** → network `ethereum`, delivered to **Ethereum**. Transak has **no fiat→zkEVM-ETH
+  product** (a live $20 test order delivered ETH to L1), so for **Creatures** the buyer then
+  **bridges** the ETH to zkEVM via the in-panel bridge (the prefill includes a bridge/L1-gas
+  buffer); **LAND** is bought directly on Ethereum, no bridge.
+
+If a mint fails, the client falls back: zkEVM/IMX → Immutable's keyless hosted page
+([toolkit.immutable.com/onramp](https://toolkit.immutable.com/onramp/)); Ethereum/ETH → CTA hidden.
+
+> **Note:** the `TRANSAK_*` env vars and the `transak*` helpers in `server.js` are an inactive
+> alternate path (minting through *our own* Transak partner account instead of Immutable's). It's
+> not used — our account's session API returns `401 errorCode 1002` pending Transak's activation /
+> backend-IP allowlisting (on Railway that needs a static egress IP). Kept for if we later want our
+> own account for fee capture; ignore for normal operation.
 
 Without key+secret, the **LAND** card CTA is hidden and **Creatures** fall back to Immutable's
 keyless hosted on-ramp ([toolkit.immutable.com/onramp](https://toolkit.immutable.com/onramp/)) —

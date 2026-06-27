@@ -2479,20 +2479,34 @@ a.trade-buy-btn { display: inline-flex; }
 
 /* ---- Offers (bids + standing collection offers) ---- */
 .trade-offers { margin: 2px 0 14px; padding: 12px 14px; border-radius: var(--hr-radius-lg); background: rgba(0,0,0,.24); border: 1px solid var(--hr-line); }
-.trade-offers-h { font-family: var(--hr-sans); font-weight: 800; font-size: 13px; color: var(--hr-fg-0); margin: 0 0 2px; text-transform: uppercase; letter-spacing: .04em; }
-.trade-offer-list { list-style: none; margin: 0; padding: 3px; display: flex; flex-direction: column; gap: 0px; }
-.trade-offer-list li { display: flex; align-items: center; gap: 0px; flex-wrap: wrap; font-size: 12.5px; }
-.trade-offer-price { font-family: var(--hr-sans); font-weight: 900; font-size: 14px; color: var(--hr-secondary); flex: 0 0 auto; }
-.trade-offer-meta { color: var(--hr-fg-2); min-width: 0; }
+.trade-offers-h { font-family: var(--hr-sans); font-weight: 800; font-size: 13px; color: var(--hr-fg-0); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em; }
+.trade-offer-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+/* Each offer is its own row-card: price stacked over the "you'd receive · from" meta on the
+   left, the Accept action pinned right — so the amount and detail never run together. */
+.trade-offer-list li {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 11px; border-radius: var(--hr-radius-md);
+  background: rgba(255,255,255,.035); border: 1px solid var(--hr-line);
+}
+/* The best (first) offer gets a subtle lavender accent bar + tint. */
+.trade-offer-list li.is-top { border-color: var(--hr-secondary-25); box-shadow: inset 2px 0 0 var(--hr-secondary); }
+.trade-offer-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.trade-offer-price { font-family: var(--hr-sans); font-weight: 900; font-size: 14px; line-height: 1.15; color: var(--hr-secondary); }
+.trade-offer-meta { font-size: 11.5px; color: var(--hr-fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .trade-offer-meta code { font-family: ui-monospace, Menlo, monospace; color: var(--hr-fg-1); }
 .trade-offer-accept {
-  margin-left: auto; cursor: pointer; flex: 0 0 auto;
-  padding: 6px 14px; border-radius: var(--hr-radius-pill); border: none;
+  cursor: pointer; flex: 0 0 auto;
+  padding: 7px 16px; border-radius: var(--hr-radius-pill); border: none;
   background: var(--hr-primary); color: var(--hr-on-primary);
   font-family: var(--hr-sans); font-weight: 800; font-size: 12px;
+  transition: background .15s ease, transform .15s ease;
 }
-.trade-offer-accept:hover { background: var(--hr-primary-press); }
-.trade-offer-accept[disabled] { opacity: .55; cursor: not-allowed; }
+.trade-offer-accept:hover { background: var(--hr-primary-press); transform: translateY(-1px); }
+.trade-offer-accept[disabled] { opacity: .55; cursor: not-allowed; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .trade-offer-accept { transition: none; }
+  .trade-offer-accept:hover { transform: none; }
+}
 .trade-offers-none { font-size: 12.5px; color: var(--hr-fg-3); margin: 0; }
 .trade-offer-form { display: flex; gap: 8px; margin-top: 10px; }
 .trade-offer-form input {
