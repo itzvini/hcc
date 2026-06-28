@@ -1109,8 +1109,13 @@ function buyStatusHtml() {
 // A warm, concrete "let's get your ETH ready" panel. The #1 confusion: the user HAS ETH,
 // just on Ethereum mainnet, while trades settle on Immutable zkEVM. We acknowledge that
 // kindly and show exactly what to do — never a blunt "0 ETH / wrong".
-function fundsHelpHtml() {
-  const f = buyState;
+function fundsHelpHtml(f = buyState) {
+  // Shared by the Buy flow and the make-offer flow (`f.intent === 'offer'`): getting ETH
+  // onto Immutable zkEVM is identical either way — only a few buy-specific lines swap.
+  const offering = f.intent === 'offer';
+  const headKey = offering ? 'trade.funds.hOffer' : 'trade.funds.h';
+  const forKey  = offering ? 'trade.funds.forOffer' : 'trade.funds.forPrice';
+  const footKey = offering ? 'trade.funds.bridgeFootOffer' : 'trade.funds.bridgeFoot';
   const need = fmtEthFiat(f.need);
   const imx = fmtWeiEth(f.imxBal);
   let mainnetEth = 0;
@@ -1150,7 +1155,7 @@ function fundsHelpHtml() {
         </div>`;
     } else {
       bridgeArea = `<a class="trade-funds-btn" href="${BRIDGE_URL}" target="_blank" rel="noopener">${esc(t('trade.funds.bridgeBtn'))} ↗</a>
-        <p class="trade-funds-foot">${esc(t('trade.funds.bridgeFoot'))}</p>`;
+        <p class="trade-funds-foot">${esc(t(footKey))}</p>`;
     }
     return `
       <div class="trade-funds">
@@ -1183,9 +1188,9 @@ function fundsHelpHtml() {
     : '';
   return `
     <div class="trade-funds">
-      <div class="trade-funds-h"><span aria-hidden="true">💡</span> ${esc(t('trade.funds.h'))} ${tipHtml('trade.funds.intro')}</div>
+      <div class="trade-funds-h"><span aria-hidden="true">💡</span> ${esc(t(headKey))} ${tipHtml('trade.funds.intro')}</div>
       <ul class="trade-funds-list">
-        <li><span class="trade-funds-ic" aria-hidden="true">•</span><div><b>ETH</b> — ${esc(t('trade.funds.forPrice'))}<br><span>${esc(t('trade.funds.need'))} ≈ <b>${esc(need)}</b> · ${esc(t('trade.funds.have'))} ${esc(fmtEthFiat(weiToEth(f.ethBal)))} ${esc(t('trade.funds.onZk'))}${ethElsewhere}</span></div></li>
+        <li><span class="trade-funds-ic" aria-hidden="true">•</span><div><b>ETH</b> — ${esc(t(forKey))}<br><span>${esc(t('trade.funds.need'))} ≈ <b>${esc(need)}</b> · ${esc(t('trade.funds.have'))} ${esc(fmtEthFiat(weiToEth(f.ethBal)))} ${esc(t('trade.funds.onZk'))}${ethElsewhere}</span></div></li>
         ${imxRow}
       </ul>
       ${shortNote}
@@ -1198,16 +1203,18 @@ function fundsHelpHtml() {
 // Read balances (zkEVM ETH + IMX, and mainnet ETH via the server), then show the panel.
 // When the user has mainnet ETH, also ask the server for an exact-output Squid quote so
 // the panel can offer one-tap bridging of precisely the shortfall.
-async function showFundsHelp(it) {
-  const need = it.totalEth ?? it.priceEth;
-  buyState = { phase: 'funds', need, ethBal: null, imxBal: null, mainnetEthWei: null, quote: 'loading', onrampFiat: onrampFiatUsd(need + ONRAMP_BRIDGE_BUFFER_ETH) };
-  patchModal();
+//
+// Shared by Buy (funds shortfall to PAY) and make-offer (funds shortfall to BACK a bid):
+// `apply(fields)` merges into the owning state (buyState / offerState) and re-renders;
+// `alive()` reports whether that state is still on the funds panel (user hasn't moved on).
+async function gatherFundsHelp({ need, intent, apply, alive }) {
+  apply({ phase: 'funds', intent, need, ethBal: null, imxBal: null, mainnetEthWei: null, quote: 'loading', onrampFiat: onrampFiatUsd(need + ONRAMP_BRIDGE_BUFFER_ETH) });
   const [ethBal, imxBal, elsewhere] = await Promise.all([
     readErc20(IMX_ETH_TOKEN, account),
     readNative(account),
     fetch(`/api/market/creatures/eth-elsewhere/${account}`).then(r => r.ok ? r.json() : null).catch(() => null),
   ]);
-  if (buyState?.phase !== 'funds') return;
+  if (!alive()) return;
   const mainnetEthWei = elsewhere?.mainnetEthWei ?? null;
   let mainnetEth = 0;
   try { mainnetEth = mainnetEthWei != null ? Number(BigInt(mainnetEthWei)) / 1e18 : 0; } catch { mainnetEth = 0; }
@@ -1226,8 +1233,7 @@ async function showFundsHelp(it) {
   // hold some mainnet ETH, so we only top up the difference (never below 0). This keeps them from
   // re-buying ETH they already have. The widget URL is minted on click; we stash the fiat here.
   const cardTopUpEth = Math.max(0, (shortfall || need) + ONRAMP_BRIDGE_BUFFER_ETH - mainnetEth);
-  buyState = { phase: 'funds', need, ethBal, imxBal, mainnetEthWei, mainnetEth, canBridge, quote: canBridge ? 'loading' : null, cardTopUpEth, onrampFiat: onrampFiatUsd(cardTopUpEth) };
-  patchModal();
+  apply({ phase: 'funds', intent, need, ethBal, imxBal, mainnetEthWei, mainnetEth, canBridge, quote: canBridge ? 'loading' : null, cardTopUpEth, onrampFiat: onrampFiatUsd(cardTopUpEth) });
   if (!canBridge) return;
 
   try {
@@ -1236,17 +1242,38 @@ async function showFundsHelp(it) {
       body: JSON.stringify({ address: account, needEth: shortfall.toFixed(18).replace(/0+$/, '').replace(/\.$/, '') }),
     });
     const q = res.ok ? await res.json() : null;
-    if (buyState?.phase !== 'funds') return;
+    if (!alive()) return;
     // Re-check against the precise quote: the bridge input (fromEth, includes Squid's fee)
     // plus L1 gas must still fit within mainnet ETH. If fees push it over the edge, fall
     // back to the top-off rather than a one-tap bridge the wallet can't sign.
     if (q && q.tx && mainnetEth < (Number(q.fromEth) || Infinity) + BRIDGE_GAS_RESERVE_ETH) {
-      buyState.canBridge = false; buyState.quote = null; patchModal(); return;
+      apply({ canBridge: false, quote: null }); return;
     }
-    buyState.quote = q; patchModal();
+    apply({ quote: q });
   } catch {
-    if (buyState?.phase === 'funds') { buyState.quote = null; patchModal(); }
+    if (alive()) apply({ quote: null });
   }
+}
+
+function showFundsHelp(it) {
+  const need = it.totalEth ?? it.priceEth;
+  return gatherFundsHelp({
+    need, intent: 'buy',
+    apply: fields => { buyState = { ...buyState, ...fields }; patchModal(); },
+    alive: () => buyState?.phase === 'funds',
+  });
+}
+
+// Make-offer equivalent: the bid amount is what must be backed on zkEVM. Renders through
+// offerStatusHtml (modal for a token offer, the collection strip in browse), so it patches
+// both via setOffer's targets.
+function showOfferFundsHelp(need, ctx) {
+  offerCtx = ctx;
+  return gatherFundsHelp({
+    need, intent: 'offer',
+    apply: fields => { offerState = { ...offerState, ...fields }; patchModal(); patchCollStrip(); },
+    alive: () => offerState?.phase === 'funds',
+  });
 }
 
 // --- Gas (IMX) help — shared by Buy, Sell and Transfer ---------------------------------
@@ -1620,8 +1647,10 @@ async function runBridge(q, { kind, needWei }) {
 }
 
 function handleBridgeNow() {
-  const f = buyState;
-  const needWei = BigInt(Math.round((f?.need ?? 0) * 1e6)) * 10n ** 12n; // arrive when the ETH price is covered
+  // The funds panel is shared: it's driven by buyState during a Buy and offerState during a
+  // make-offer. Bridge whichever one is currently showing it.
+  const f = offerState?.phase === 'funds' ? offerState : buyState;
+  const needWei = BigInt(Math.round((f?.need ?? 0) * 1e6)) * 10n ** 12n; // arrive when the ETH amount is covered
   return runBridge(f?.quote, { kind: 'eth', needWei });
 }
 
@@ -1920,6 +1949,9 @@ function offerStatusHtml() {
     sign: 'trade.offer.sign', create: 'trade.offer.create',
   };
   if (offerState.phase === 'done')  return `<div class="trade-status is-ok"><span aria-hidden="true">✓</span><span>${esc(t('trade.offer.done'))}</span></div>`;
+  // Offer is short on zkEVM ETH — reuse the Buy flow's warm funds panel (balances +
+  // one-tap bridge / card top-off), themed for the offer intent.
+  if (offerState.phase === 'funds') return fundsHelpHtml(offerState);
   if (offerState.phase === 'error') return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(offerState.msg)}</span></div>`;
   return `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t(STEP[offerState.phase]))}</span></div>`;
 }
@@ -2349,12 +2381,27 @@ async function handleMakeOffer(tokenId, priceRaw, ctx) {
 
   try {
     setOffer('prepare');
+
+    // Pre-flight FIRST: an offer must be BACKED by zkEVM ETH (the SDK refuses to create a bid
+    // the maker can't currently cover — that rejection was surfacing as a misleading "Buying
+    // is temporarily unavailable"). Check the balance ourselves and, on a shortfall, go
+    // straight to the warm funds panel (balances + one-tap bridge / card top-off) instead of
+    // a dead-end error — they may well hold the ETH on Ethereum mainnet.
+    const zkEthBal = await readErc20(IMX_ETH_TOKEN, account);
+    const needWei = BigInt(Math.round(Number(price) * 1e6)) * 10n ** 12n;
+    if (zkEthBal != null && zkEthBal < needWei) return showOfferFundsHelp(Number(price), ctx);
+
     const res = await fetch('/api/market/creatures/offer/prepare', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ makerAddress: account, priceEth: price, ...(tokenId != null ? { tokenId } : {}) }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return setOffer('error', { msg: offerServerError(data.error) });
+    // Server-confirmed shortfall (e.g. balance moved between the check above and prepare) —
+    // route to the same funds panel rather than the bare insufficient-funds text.
+    if (!res.ok) {
+      if (data.error === 'insufficient') return showOfferFundsHelp(Number(price), ctx);
+      return setOffer('error', { msg: offerServerError(data.error) });
+    }
 
     let signature = null;
     for (const action of (data.actions || [])) {
@@ -2377,7 +2424,10 @@ async function handleMakeOffer(tokenId, priceRaw, ctx) {
       body: JSON.stringify({ orderComponents: data.orderComponents, orderHash: data.orderHash, signature, collection: tokenId == null }),
     });
     const created = await createRes.json().catch(() => ({}));
-    if (!createRes.ok) return setOffer('error', { msg: offerServerError(created.error) });
+    if (!createRes.ok) {
+      if (created.error === 'insufficient') return showOfferFundsHelp(Number(price), ctx);
+      return setOffer('error', { msg: offerServerError(created.error) });
+    }
 
     setOffer('done');
     loadMyOffers();
