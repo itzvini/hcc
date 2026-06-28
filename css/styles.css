@@ -2508,7 +2508,7 @@ a.trade-buy-btn { display: inline-flex; }
   .trade-offer-accept:hover { transform: none; }
 }
 .trade-offers-none { font-size: 12.5px; color: var(--hr-fg-3); margin: 0; }
-.trade-offer-form { display: flex; gap: 8px; margin-top: 10px; }
+.trade-offer-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: stretch; }
 .trade-offer-form input {
   flex: 1; min-width: 0; box-sizing: border-box;
   background: var(--hr-bg-2); border: 1px solid var(--hr-line-strong);
@@ -2516,6 +2516,16 @@ a.trade-buy-btn { display: inline-flex; }
   font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: var(--hr-fg-0);
 }
 .trade-offer-form input:focus { outline: none; border-color: var(--hr-secondary); box-shadow: 0 0 0 3px var(--hr-secondary-25); }
+/* Price-unit chip (ETH / fiat) — pill matched to the offer input's height. */
+.trade-offer-unit { flex: 0 0 auto; align-self: stretch; font-size: 12px; font-weight: 800; padding: 9px 30px 9px 13px; background-color: var(--hr-bg-2); border-color: var(--hr-line-strong); }
+.trade-offer-unit:disabled { opacity: .55; cursor: default; }
+/* Live ETH⇄fiat equivalence line — wraps onto its own row under the input. */
+.trade-offer-conv {
+  flex-basis: 100%; min-height: 15px; margin: -1px 0 1px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px;
+  font-weight: 600; color: var(--hr-fg-3);
+}
+.trade-offer-conv:empty { display: none; }
 .trade-offer-btn {
   flex: 0 0 auto; cursor: pointer; padding: 9px 16px; border: none; border-radius: var(--hr-radius-pill);
   background: var(--hr-secondary); color: #fff;
@@ -2535,7 +2545,7 @@ a.trade-buy-btn { display: inline-flex; }
 .trade-colloffer-info { display: flex; flex-direction: row; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
 .trade-colloffer-label { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--hr-fg-2); }
 .trade-colloffer-price { font-family: var(--hr-sans); font-weight: 900; font-size: 15px; color: var(--hr-secondary); }
-.trade-colloffer .trade-offer-form.is-inline { margin: 0 0 0 auto; max-width: 340px; }
+.trade-colloffer .trade-offer-form.is-inline { margin: 0 0 0 auto; max-width: 400px; }
 .trade-colloffer-hint { margin-left: auto; font-size: 12.5px; color: var(--hr-fg-3); }
 .trade-colloffer-p { font-size: 12px; color: var(--hr-fg-3); margin: 8px 0 0; }
 .trade-colloffer .trade-status { margin-top: 10px; }

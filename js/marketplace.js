@@ -117,6 +117,7 @@ let ethUsd = null;
 let fxRates = { usd: 1 };   // USD-relative display rates from the listings API
 let currency = 'usd';       // active display currency for the fiat estimate ('eth' = none)
 let sellUnit = 'eth';       // unit the seller types a listing price in: 'eth' or a fiat code
+let offerUnit = 'eth';      // unit the buyer types an offer/bid in: 'eth' or a fiat code
 const CURRENCIES = ['usd', 'eth', 'eur', 'gbp', 'brl', 'rub', 'try', 'jpy', 'cad', 'aud'];
 
 // Explorer state (Creatures only — LAND keeps the plain cursor feed). Filters are
@@ -400,42 +401,57 @@ function fmtUnitFiat(eth, unit) {
 }
 // Fiat entry is only possible once a live rate has loaded.
 function sellFiatReady() { return ethUsd != null; }
-// Drop a stale persisted fiat unit back to ETH if no rate is available.
-function normSellUnit() { if (!sellFiatReady() && sellUnit !== 'eth') sellUnit = 'eth'; return sellUnit; }
-// Normalize a typed sell price (in the active sellUnit) to an ETH string for the order.
-// Returns { ok:true, eth } or { ok:false, msg }.
-function sellPriceToEth(raw) {
+const fiatReady = sellFiatReady; // unit-neutral alias (shared by Sell + make-offer)
+
+// --- Generic price-unit helpers (shared by the Sell form and the make-offer forms) ---
+// A price/offer is always created in ETH on-chain; the user may type it in ETH or a fiat
+// currency and we convert with the live rate. Parameterized by `unit` so both flows reuse
+// one set of rules; the Sell-specific wrappers below pin `unit = sellUnit`.
+
+// Normalize a typed price (in `unit`) to a server-valid ETH string. { ok:true, eth } | { ok:false, msg }.
+function unitPriceToEth(raw, unit) {
   const s = String(raw || '').trim().replace(',', '.');
   const n = parseFloat(s);
   if (!Number.isFinite(n) || n <= 0) return { ok: false, msg: t('trade.err.badPrice') };
-  if (sellUnit === 'eth') {
+  if (unit === 'eth') {
     if (!/^\d{1,6}(\.\d{1,18})?$/.test(s)) return { ok: false, msg: t('trade.err.badPrice') };
     return { ok: true, eth: s };
   }
-  const eth = toEthAmount(n, sellUnit);
+  const eth = toEthAmount(n, unit);
   if (eth == null) return { ok: false, msg: t('trade.err.rateUnavail') };
   const ethStr = String(Number(eth.toFixed(8))); // trim to a sane, server-valid precision
   if (!/^\d{1,6}(\.\d{1,18})?$/.test(ethStr) || Number(ethStr) <= 0) return { ok: false, msg: t('trade.err.badPrice') };
   return { ok: true, eth: ethStr };
 }
-// ETH value of the current input (string; '' if blank/invalid) — feeds the LAND net hint.
-function sellEthFromInput(raw) { const r = sellPriceToEth(raw); return r.ok ? r.eth : ''; }
-// The "≈ …" equivalence line shown under the price field: ETH→fiat or fiat→ETH.
-function sellConvHtml(raw) {
+// The "≈ …" equivalence line shown under a price field: ETH→fiat or fiat→ETH.
+function unitConvHtml(raw, unit) {
   const n = parseFloat(String(raw || '').trim().replace(',', '.'));
   if (!(n > 0)) return '';
-  if (sellUnit === 'eth') {
+  if (unit === 'eth') {
     const fiat = fmtUnitFiat(n, currency === 'eth' ? 'usd' : currency);
     return fiat ? `≈ ${fiat}` : '';
   }
-  const eth = toEthAmount(n, sellUnit);
+  const eth = toEthAmount(n, unit);
   return eth != null ? `≈ ${fmtEth(eth)}` : '';
 }
-// Options for the price-unit selector: ETH always; fiats only when a rate is live.
-function sellUnitOptions() {
-  const units = sellFiatReady() ? ['eth', ...CURRENCIES.filter(u => u !== 'eth')] : ['eth'];
-  return units.map(u => `<option value="${u}" ${sellUnit === u ? 'selected' : ''}>${u === 'eth' ? 'ETH' : u.toUpperCase()}</option>`).join('');
+// Options for a price-unit selector: ETH always; fiats only when a rate is live.
+function unitOptions(unit) {
+  const units = fiatReady() ? ['eth', ...CURRENCIES.filter(u => u !== 'eth')] : ['eth'];
+  return units.map(u => `<option value="${u}" ${unit === u ? 'selected' : ''}>${u === 'eth' ? 'ETH' : u.toUpperCase()}</option>`).join('');
 }
+
+// Drop a stale persisted fiat unit back to ETH if no rate is available.
+function normSellUnit() { if (!fiatReady() && sellUnit !== 'eth') sellUnit = 'eth'; return sellUnit; }
+function sellPriceToEth(raw) { return unitPriceToEth(raw, sellUnit); }
+// ETH value of the current input (string; '' if blank/invalid) — feeds the LAND net hint.
+function sellEthFromInput(raw) { const r = sellPriceToEth(raw); return r.ok ? r.eth : ''; }
+function sellConvHtml(raw) { return unitConvHtml(raw, sellUnit); }
+function sellUnitOptions() { return unitOptions(sellUnit); }
+
+// Make-offer wrappers (mirror the Sell ones, pinned to offerUnit).
+function normOfferUnit() { if (!fiatReady() && offerUnit !== 'eth') offerUnit = 'eth'; return offerUnit; }
+function offerConvHtml(raw) { return unitConvHtml(raw, offerUnit); }
+function offerUnitOptions() { return unitOptions(offerUnit); }
 
 // --- Known wallet bugs ---
 // MetaMask extension 13.33.0 shipped a regression that wrongly reports "not enough IMX
@@ -2180,10 +2196,14 @@ function modalOffersHtml(meta) {
         : `<p class="trade-offers-none">${esc(t('trade.offers.none'))}</p>`);
 
   const makeBusy = offerState && OFFER_BUSY.has(offerState.phase);
+  normOfferUnit();
+  const offerPh = offerUnit === 'eth' ? t('trade.offers.make.ph') : t('trade.offers.make.phFiat');
   const makeForm = !isOwner && account && onZk()
     ? `<form class="trade-offer-form" id="trade-offer-form" data-token="${esc(modalToken)}" novalidate>
-        <input id="trade-offer-price" type="text" inputmode="decimal" placeholder="${esc(t('trade.offers.make.ph'))}" autocomplete="off" />
+        <input id="trade-offer-price" type="text" inputmode="decimal" placeholder="${esc(offerPh)}" autocomplete="off" />
+        <select id="trade-offer-unit" class="seg-select trade-offer-unit" aria-label="${esc(t('trade.sell.unitAria'))}" ${fiatReady() ? '' : 'disabled'}>${offerUnitOptions()}</select>
         <button class="trade-offer-btn" type="submit" ${makeBusy ? 'disabled' : ''}>${esc(t('trade.offers.make.btn'))}</button>
+        <span class="trade-offer-conv" id="trade-offer-conv">${esc(offerConvHtml(''))}</span>
       </form>`
     : '';
 
@@ -2201,6 +2221,7 @@ function modalOffersHtml(meta) {
 function collStripHtml() {
   const top = collOffers?.[0];
   const makeBusy = offerState && OFFER_BUSY.has(offerState.phase);
+  normOfferUnit();
   const mineRows = (myOffers && myOffers.length)
     ? `<div class="trade-myoffers">
         <span class="trade-myoffers-h">${esc(t('trade.coll.mine.h'))}</span>
@@ -2221,8 +2242,10 @@ function collStripHtml() {
         </div>
         ${account && onZk() ? `
           <form class="trade-offer-form is-inline" id="trade-coll-offer-form" novalidate>
-            <input id="trade-coll-offer-price" type="text" inputmode="decimal" placeholder="${esc(t('trade.offers.make.ph'))}" autocomplete="off" />
+            <input id="trade-coll-offer-price" type="text" inputmode="decimal" placeholder="${esc(offerUnit === 'eth' ? t('trade.offers.make.ph') : t('trade.offers.make.phFiat'))}" autocomplete="off" />
+            <select id="trade-coll-offer-unit" class="seg-select trade-offer-unit" aria-label="${esc(t('trade.sell.unitAria'))}" ${fiatReady() ? '' : 'disabled'}>${offerUnitOptions()}</select>
             <button class="trade-offer-btn" type="submit" ${makeBusy ? 'disabled' : ''}>${esc(t('trade.coll.make.btn'))}</button>
+            <span class="trade-offer-conv" id="trade-coll-offer-conv">${esc(offerConvHtml(''))}</span>
           </form>` : `<span class="trade-colloffer-hint">${esc(t('trade.coll.connectHint'))}</span>`}
       </div>
       ${offerCtx === 'browse' ? offerStatusHtml() : ''}
@@ -2376,8 +2399,11 @@ function setAccept(phase, extra) { acceptState = { phase, ...extra }; patchModal
 async function handleMakeOffer(tokenId, priceRaw, ctx) {
   if (offerState && OFFER_BUSY.has(offerState.phase)) return;
   offerCtx = ctx;
-  const price = (priceRaw || '').trim().replace(',', '.');
-  if (!/^\d{1,6}(\.\d{1,18})?$/.test(price) || Number(price) <= 0) return setOffer('error', { msg: t('trade.err.badPrice') });
+  // The user may type the offer in ETH or a fiat currency — normalize to an ETH string
+  // (the order is always created in ETH on-chain) using the live rate.
+  const conv = unitPriceToEth(priceRaw, offerUnit);
+  if (!conv.ok) return setOffer('error', { msg: conv.msg });
+  const price = conv.eth;
 
   try {
     setOffer('prepare');
@@ -4174,6 +4200,27 @@ function onChange(e) {
     if (net) net.innerHTML = landSellNetHtml(sellEthFromInput(input?.value || ''));
     return;
   }
+  // Make-offer unit selector (token offer in the modal, or the collection-bid strip). Same
+  // amount-carry behaviour as the Sell unit, against the shared offerUnit.
+  if (e.target?.id === 'trade-offer-unit' || e.target?.id === 'trade-coll-offer-unit') {
+    const isColl = e.target.id === 'trade-coll-offer-unit';
+    const input = root()?.querySelector(isColl ? '#trade-coll-offer-price' : '#trade-offer-price');
+    const newUnit = e.target.value;
+    if (input) {
+      const n = parseFloat(String(input.value || '').trim().replace(',', '.'));
+      if (Number.isFinite(n) && n > 0) {
+        const eth = toEthAmount(n, offerUnit);
+        const next = eth != null ? fromEthAmount(eth, newUnit) : null;
+        if (next != null) input.value = String(Number(next.toFixed(newUnit === 'eth' ? 8 : 2)));
+      }
+      input.placeholder = newUnit === 'eth' ? t('trade.offers.make.ph') : t('trade.offers.make.phFiat');
+    }
+    offerUnit = newUnit;
+    try { localStorage.setItem('hcc-trade-offerunit', offerUnit); } catch { /* private mode — fine */ }
+    const convEl = root()?.querySelector(isColl ? '#trade-coll-offer-conv' : '#trade-offer-conv');
+    if (convEl) convEl.textContent = offerConvHtml(input?.value || '');
+    return;
+  }
   if (e.target?.id !== 'trade-currency') return;
   currency = e.target.value;
   try { localStorage.setItem('hcc-trade-cur', currency); } catch { /* private mode — fine */ }
@@ -4191,6 +4238,12 @@ function onInput(e) {
     if (convEl) convEl.textContent = sellConvHtml(e.target.value);
     const net = root()?.querySelector('#trade-sell-net'); // LAND only — element absent for Creatures
     if (net) net.innerHTML = landSellNetHtml(sellEthFromInput(e.target.value));
+    return;
+  }
+  if (e.target?.id === 'trade-offer-price' || e.target?.id === 'trade-coll-offer-price') {
+    const convId = e.target.id === 'trade-coll-offer-price' ? '#trade-coll-offer-conv' : '#trade-offer-conv';
+    const convEl = root()?.querySelector(convId);
+    if (convEl) convEl.textContent = offerConvHtml(e.target.value);
     return;
   }
   if (e.target?.id === 'flt-q') {
@@ -4265,6 +4318,7 @@ export async function loadMarketplace() {
   loadedOnce = true;
   try { const c = localStorage.getItem('hcc-trade-cur'); if (c && CURRENCIES.includes(c)) currency = c; } catch { /* fine */ }
   try { const u = localStorage.getItem('hcc-trade-sellunit'); if (u && CURRENCIES.includes(u)) sellUnit = u; } catch { /* fine */ }
+  try { const u = localStorage.getItem('hcc-trade-offerunit'); if (u && CURRENCIES.includes(u)) offerUnit = u; } catch { /* fine */ }
   try { const k = localStorage.getItem('hcc-trade-coll'); if (k && COLLECTIONS[k]) coll = k; } catch { /* fine */ }
   flt.scope = browseDataset().defaultScope;
   // Deep link (/trade?coll=…&token=…): land straight on that token's detail modal.

@@ -338,6 +338,7 @@
   "trade.offers.from": "from",
   "trade.offers.accept": "Accept",
   "trade.offers.make.ph": "Your offer in ETH",
+  "trade.offers.make.phFiat": "Your offer, e.g. 250",
   "trade.offers.make.btn": "Place offer",
   "trade.offer.preparing": "Preparing your offer…",
   "trade.offer.approve": "One-time setup — approve ETH for offers in MetaMask…",
