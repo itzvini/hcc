@@ -1126,6 +1126,9 @@ function buyStatusHtml() {
 // just on Ethereum mainnet, while trades settle on Immutable zkEVM. We acknowledge that
 // kindly and show exactly what to do — never a blunt "0 ETH / wrong".
 function fundsHelpHtml(f = buyState) {
+  // A price bridge is underway/finished — the tracker card takes over the panel (no duplicate
+  // header/quote above it, and no double frame).
+  if (bridgeJob && !isGasBridge(bridgeJob) && CARD_PHASES.has(bridgeJob.phase)) return bridgeCardHtml(bridgeJob);
   // Shared by the Buy flow and the make-offer flow (`f.intent === 'offer'`): getting ETH
   // onto Immutable zkEVM is identical either way — only a few buy-specific lines swap.
   const offering = f.intent === 'offer';
@@ -1319,6 +1322,9 @@ function gasBridgeStatusHtml() {
 // chosen in showGasHelp: 'imx' bridges the mainnet IMX the user already holds (cheapest),
 // 'eth' swaps a little mainnet ETH, null → no one-tap (prefilled Squid deep-link).
 function gasHelpHtml() {
+  // A gas bridge is underway/finished — the tracker card IS the panel now (no duplicate
+  // "Almost there" header or quote line above it, and no double frame).
+  if (isGasBridge(bridgeJob) && CARD_PHASES.has(bridgeJob.phase)) return bridgeCardHtml(bridgeJob);
   const g = gasState;
   if (!g) return '';
   const imx = fmtWeiEth(g.imxBal);
@@ -1478,6 +1484,9 @@ function patchGas() {
 let bridgeJob = null; // {phase, hash, mins, startedAt, stage, axelarUrl, msg, needWei, quoteId, requestId, account}
 const BRIDGE_STORE = 'hcc-bridge';
 const BRIDGE_TERMINAL = new Set(['done', 'slow', 'error']);
+// Phases where the tracker CARD takes over the panel (replacing its quote/CTA chrome). The
+// transient switch/confirm/back phases stay as a small inline status line instead.
+const CARD_PHASES = new Set(['waiting', 'slow', 'done', 'error']);
 
 function saveBridge() {
   try {
@@ -1523,24 +1532,93 @@ function bridgeLinksHtml(b) {
     · <a href="${esc(axelar)}" target="_blank" rel="noopener">${esc(t('trade.bridge.axelar'))}</a>`;
 }
 
-// Full tracker (modal funds panel): stage stepper + elapsed clock + ETA bar + links.
-function bridgeTrackerHtml(b) {
+// --- Bridge tracker card (Squid-inspired, Highrise-branded) --------------------------------
+// A self-contained card that becomes the focal element of the funds/gas panel while a bridge
+// is underway — the panel drops its own quote/CTA chrome for it (see gasHelpHtml/fundsHelpHtml).
+// Covers every card phase: waiting/slow (live stepper) and done/error (hero result).
+const ETA_MINS = b => (b.mins ? `~${b.mins} ${t('trade.bridge.min')}` : t('trade.bridge.mins.few'));
+
+// Amount in its own units — "0.0004 ETH" / "5.05 IMX".
+function fmtBridgeAmt(v, sym) {
+  if (v == null) return '—';
+  return sym === 'IMX' ? fmtImx(v) : fmtEth(v);
+}
+// One token avatar (real brand mark); `gas` adds the ⛽ spark on the destination coin.
+function bridgeCoinHtml(sym, gas) {
+  const imx = sym === 'IMX';
+  return `<span class="trade-bcoin trade-bcoin-${imx ? 'imx' : 'eth'}">
+    <img src="${imx ? '/img/brands/imx.png' : '/img/brands/eth.png'}" alt="" width="30" height="30">
+    ${gas ? '<span class="trade-bcoin-spark" aria-hidden="true">⛽</span>' : ''}
+  </span>`;
+}
+// Source → destination token pair for the card header.
+function bridgePairHtml(b) {
+  const gas = isGasBridge(b);
+  return `<div class="trade-bpair" aria-hidden="true">
+    ${bridgeCoinHtml(b.fromSym || 'ETH')}
+    <span class="trade-bpair-arrow">→</span>
+    ${bridgeCoinHtml(b.toSym || (gas ? 'IMX' : 'ETH'), gas)}
+  </div>`;
+}
+// The Squid-style from→to detail rows (Send/receive · Route · Time), or the summary on done.
+function bridgeRowsHtml(b, done) {
+  const gas = isGasBridge(b);
+  const fromSym = b.fromSym || 'ETH', toSym = b.toSym || (gas ? 'IMX' : 'ETH');
+  const chip = (img, name) => `<span class="trade-bchip"><img src="${img}" alt="" width="14" height="14">${esc(name)}</span>`;
+  const eth = chip('/img/brands/eth.png', 'Ethereum'), imm = chip('/img/brands/immutable.png', 'Immutable');
+  const row = (ic, lbl, val) => `<div class="trade-brow"><span class="trade-brow-ic" aria-hidden="true">${ic}</span><span class="trade-brow-lbl">${esc(lbl)}</span><span class="trade-brow-val">${val}</span></div>`;
+  const clock = `<b data-bridge-elapsed>${esc(fmtElapsed(Date.now() - b.startedAt))}</b>`;
+  const rows = [];
+  if (done) {
+    rows.push(row('✓', t('trade.bridge.row.received'), `<span class="trade-brow-to">${esc(fmtBridgeAmt(b.toEth, toSym))}</span>`));
+    rows.push(row('⛓', t('trade.bridge.row.on'), imm));
+    rows.push(row('◷', t('trade.bridge.row.took'), clock));
+  } else {
+    if (b.fromEth != null) rows.push(row('↔', t('trade.bridge.row.sendrecv'), `${esc(fmtBridgeAmt(b.fromEth, fromSym))} <span class="trade-brow-sep">→</span> <span class="trade-brow-to">~${esc(fmtBridgeAmt(b.toEth, toSym))}</span>`));
+    rows.push(row('⛓', t('trade.bridge.row.route'), `${eth}<span class="trade-brow-sep">→</span>${imm}`));
+    rows.push(row('◷', t('trade.bridge.row.time'), `${clock} ${esc(t('trade.bridge.elapsed'))} <span class="trade-brow-sep">→</span> <span class="trade-brow-to">${esc(ETA_MINS(b))}</span>`));
+  }
+  return `<div class="trade-brows">${rows.join('')}</div>`;
+}
+function bridgeCardHtml(b) {
+  const gas = isGasBridge(b);
+  if (b.phase === 'done') {
+    return `<div class="trade-bcard is-ok" role="status" aria-live="polite">
+      <div class="trade-bcard-hd"><div class="trade-bcard-badge" aria-hidden="true">✓</div>
+        <h4>${esc(t(gas ? 'trade.gas.bridge.done' : 'trade.bridge.done'))}</h4></div>
+      <div class="trade-bcard-body">${bridgeRowsHtml(b, true)}
+        <button class="trade-bcard-btn" data-act="bridge-dismiss" type="button">${esc(t('trade.bridge.card.done'))}</button>
+        <div class="trade-bcard-links">${bridgeLinksHtml(b)}</div></div></div>`;
+  }
+  if (b.phase === 'error') {
+    return `<div class="trade-bcard is-bad" role="alert">
+      <div class="trade-bcard-hd"><div class="trade-bcard-badge" aria-hidden="true">!</div>
+        <h4>${esc(t('trade.bridge.card.failedH'))}</h4>
+        <p>${esc(b.msg || t('trade.bridge.failed'))}</p></div>
+      <div class="trade-bcard-body">
+        <button class="trade-bcard-btn is-retry" data-act="bridge-dismiss" type="button">${esc(t('trade.bridge.card.retry'))}</button>
+        <div class="trade-bcard-links">${bridgeLinksHtml(b)}</div></div></div>`;
+  }
+  // Live — waiting / slow.
   const idx = { submitted: 0, src_confirmed: 1, bridging: 1, arrived: 2 }[b.stage] ?? 0;
+  const fill = idx * (100 / 3); // node centres sit at 1/6, 3/6, 5/6 — fill runs centre-to-centre
   const steps = ['trade.bridge.step1', 'trade.bridge.step2', 'trade.bridge.step3'].map((k, i) => {
-    const state = i < idx ? 'is-done' : i === idx ? 'is-active' : '';
-    const ico = i < idx ? '✓' : (i === idx ? '<span class="trade-mini-spin" aria-hidden="true"></span>' : '·');
-    return `<li class="${state}"><span class="trade-track-ic">${ico}</span><span>${esc(t(k))}</span></li>`;
+    const cls = i < idx ? 'is-done' : i === idx ? 'is-active' : '';
+    const ic = i < idx ? '✓' : i === idx ? '<span class="trade-mini-spin" aria-hidden="true"></span>' : '·';
+    return `<div class="trade-bstep ${cls}"><span class="trade-bstep-dot">${ic}</span><span class="trade-bstep-lbl">${esc(t(k))}</span></div>`;
   }).join('');
-  const minsText = b.mins ? `~${b.mins} min` : t('trade.bridge.mins.few');
-  return `
-    <div class="trade-track" role="status" aria-live="polite">
-      <ul class="trade-track-steps">${steps}</ul>
-      <div class="trade-track-bar" aria-hidden="true"><div class="trade-track-barfill" data-bridge-bar></div></div>
-      <div class="trade-track-meta">
-        <span><b data-bridge-elapsed>${esc(fmtElapsed(Date.now() - b.startedAt))}</b> ${esc(t('trade.bridge.elapsed'))} · ${esc(t('trade.bridge.eta'))} ${esc(minsText)}</span>
-        <span>${bridgeLinksHtml(b)}</span>
-      </div>
-    </div>`;
+  return `<div class="trade-bcard" role="status" aria-live="polite">
+    <div class="trade-bcard-hd">
+      ${bridgePairHtml(b)}
+      <h4>${esc(t(gas ? 'trade.gas.bridgebar.bridging' : 'trade.bridgebar.bridging'))}</h4>
+      <p>${esc(t(gas ? 'trade.gas.card.sub' : 'trade.bridge.card.sub'))}</p>
+      ${b.phase === 'slow' ? `<span class="trade-bcard-slow">${esc(t('trade.bridgebar.slowTag'))}</span>` : ''}
+    </div>
+    <div class="trade-bcard-body">
+      <div class="trade-bsteps"><span class="trade-bsteps-fill" style="width:${fill}%"></span>${steps}</div>
+      ${bridgeRowsHtml(b, false)}
+      <div class="trade-bcard-links">${bridgeLinksHtml(b)}</div>
+    </div></div>`;
 }
 
 // Slim always-visible banner (under the wallet bar) so the bridge stays in view —
@@ -1558,10 +1636,16 @@ function bridgeBannerHtml() {
     return `<div class="trade-bridgebar is-bad"><span aria-hidden="true">⚠</span><span>${esc(b.msg || t('trade.bridge.failed'))}</span><span class="trade-bridgebar-links">${bridgeLinksHtml(b)}</span>${dismiss}</div>`;
   }
   const slow = b.phase === 'slow' ? ` ${esc(t('trade.bridgebar.slowTag'))}` : '';
+  const coin = sym => sym === 'IMX' ? '/img/brands/imx.png' : '/img/brands/eth.png';
   return `
     <div class="trade-bridgebar" role="status" aria-live="polite">
-      <span class="trade-mini-spin" aria-hidden="true"></span>
-      <span>${esc(t(isGasBridge(b) ? 'trade.gas.bridgebar.bridging' : 'trade.bridgebar.bridging'))} — ${esc(t(stageKey))}${slow} · <b data-bridge-elapsed>${esc(fmtElapsed(Date.now() - b.startedAt))}</b>${b.mins ? ` / ~${esc(String(b.mins))} min` : ''}</span>
+      <span class="trade-bbar-pair" aria-hidden="true">
+        <img src="${coin(b.fromSym || 'ETH')}" alt="" width="20" height="20">
+        <img src="${coin(b.toSym || (isGasBridge(b) ? 'IMX' : 'ETH'))}" alt="" width="20" height="20">
+      </span>
+      <span class="trade-bbar-txt">${esc(t(isGasBridge(b) ? 'trade.gas.bridgebar.bridging' : 'trade.bridgebar.bridging'))} — ${esc(t(stageKey))}${slow}</span>
+      <span class="trade-bbar-bar" aria-hidden="true"><i data-bridge-bar></i></span>
+      <span class="trade-bbar-time"><b data-bridge-elapsed>${esc(fmtElapsed(Date.now() - b.startedAt))}</b>${b.mins ? ` / ~${esc(String(b.mins))} min` : ''}</span>
       <span class="trade-bridgebar-links">${bridgeLinksHtml(b)}</span>
       ${dismiss}
     </div>`;
@@ -1590,15 +1674,10 @@ function startBridgeTicker() {
 function bridgeStatusHtml() {
   const b = bridgeJob;
   if (!b) return '';
+  // waiting/slow/done/error render as the full card; the brief switch/confirm/back phases
+  // (before a tx hash exists) stay a small inline status line under the quote.
+  if (CARD_PHASES.has(b.phase)) return bridgeCardHtml(b);
   const STEP = { switch: 'trade.bridge.switch', confirm: 'trade.bridge.confirm', back: 'trade.bridge.back' };
-  if (b.phase === 'waiting') return bridgeTrackerHtml(b);
-  if (b.phase === 'done')  return `<div class="trade-status is-ok"><span aria-hidden="true">✓</span><span>${esc(t(isGasBridge(b) ? 'trade.gas.bridge.done' : 'trade.bridge.done'))}</span></div>`;
-  if (b.phase === 'slow') {
-    return `${bridgeTrackerHtml(b)}<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t('trade.bridge.slow'))}</span></div>`;
-  }
-  if (b.phase === 'error') {
-    return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(b.msg)} ${bridgeLinksHtml(b)}</span></div>`;
-  }
   return `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t(STEP[b.phase]))}</span></div>`;
 }
 
@@ -1705,11 +1784,11 @@ async function trackBridge() {
 // Send the prepared Squid bridge tx, then hand off to the resumable tracker. Shared by
 // the ETH price bridge (Buy) and the IMX gas top-up (Buy/Sell/Transfer); `kind` and the
 // arrival target `needWei` are all that differ.
-async function runBridge(q, { kind, needWei }) {
+async function runBridge(q, { kind, needWei, fromSym = 'ETH', toSym = 'ETH' }) {
   if (!q || q === 'loading' || !q.tx) return;
   if (bridgeJob && !BRIDGE_TERMINAL.has(bridgeJob.phase)) return; // one bridge at a time
   try {
-    bridgeJob = { phase: 'switch', account, mins: null, startedAt: Date.now(), kind };
+    bridgeJob = { phase: 'switch', account, mins: null, startedAt: Date.now(), kind, fromSym, toSym, fromEth: q.fromEth, toEth: q.toEth };
     patchModal();
     patchGas();
     await eth().request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1' }] });
@@ -1724,6 +1803,7 @@ async function runBridge(q, { kind, needWei }) {
     setBridgeJob({
       phase: 'waiting', hash, mins, startedAt: Date.now(), stage: 'submitted', kind,
       axelarUrl: null, needWei: needWei.toString(), quoteId: q.quoteId || '', requestId: q.requestId || '', account,
+      fromSym, toSym, fromEth: q.fromEth, toEth: q.toEth,
     });
     trackBridge();
   } catch (err) {
@@ -1743,7 +1823,7 @@ function handleBridgeNow() {
 function handleGasBridgeNow() {
   // Arrive when the top-up target's worth of native IMX has landed.
   const needWei = BigInt(Math.round(GAS_TARGET_IMX * 1e6)) * 10n ** 12n;
-  return runBridge(gasState?.quote, { kind: 'gas', needWei });
+  return runBridge(gasState?.quote, { kind: 'gas', needWei, fromSym: gasState?.from === 'imx' ? 'IMX' : 'ETH', toSym: 'IMX' });
 }
 
 function buyAreaHtml(it) {
