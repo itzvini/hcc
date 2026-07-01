@@ -1627,41 +1627,76 @@ function refreshAfterBridge() {
 // and gets its own copy. kind defaults to 'eth' for older persisted jobs.
 const isGasBridge = b => (b || bridgeJob)?.kind === 'gas';
 
+// One server-side status read for a job (fresh Squid signal, not the wallet's cached balance).
+// Timed out so it can't hang the caller; returns the parsed payload or null.
+async function fetchBridgeStatus(job) {
+  try {
+    const r = await fetch(`/api/market/creatures/bridge/status?tx=${job.hash}&quoteId=${encodeURIComponent(job.quoteId || '')}&requestId=${encodeURIComponent(job.requestId || '')}`, { signal: AbortSignal.timeout(9000) });
+    return r.ok ? await r.json() : null;
+  } catch { return null; }
+}
+// Apply a status payload to the active job. Returns true when the bridge is resolved (done /
+// error) or the job is no longer active — i.e. the tracking loop should stop.
+function applyBridgeStatus(job, s) {
+  if (bridgeJob !== job || job.phase !== 'waiting') return true; // superseded — stop tracking
+  if (s.stage === 'failed' || s.stage === 'failed_src') { setBridgeJob({ phase: 'error', msg: t('trade.bridge.failed'), axelarUrl: s.axelarUrl || job.axelarUrl }); return true; }
+  if (s.stage === 'needs_gas') { setBridgeJob({ phase: 'error', msg: t('trade.bridge.needsGas'), axelarUrl: s.axelarUrl || job.axelarUrl }); return true; }
+  // Squid reports the funds have landed on zkEVM — complete NOW rather than waiting on the
+  // wallet balance read, which the injected provider can serve stale after the chain switch
+  // (the old bug: tracker never flipped to done until a reload).
+  if (s.stage === 'arrived') { setBridgeJob({ phase: 'done', stage: 'arrived', axelarUrl: s.axelarUrl || job.axelarUrl }); return true; }
+  if (s.stage !== job.stage || (s.axelarUrl && s.axelarUrl !== job.axelarUrl)) setBridgeJob({ stage: s.stage, axelarUrl: s.axelarUrl || job.axelarUrl });
+  return false;
+}
+
+// Background tabs get their timers throttled to ~once a minute, so while the user watches the
+// bridge on Axelarscan the poll loop below is asleep. Kick one immediate status check the
+// moment they return, so the tracker resolves on focus instead of up to a minute later.
+let bridgeVisibilityWired = false;
+function wireBridgeVisibility() {
+  if (bridgeVisibilityWired || typeof document === 'undefined') return;
+  bridgeVisibilityWired = true;
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible') return;
+    const job = bridgeJob;
+    if (!job?.hash || job.phase !== 'waiting') return;
+    const s = await fetchBridgeStatus(job);
+    if (s) applyBridgeStatus(job, s);
+  });
+}
+
 // The tracking loop — independent of any screen. Resumable: runs off bridgeJob alone,
 // so it works identically right after sending and after a page reload mid-bridge.
 async function trackBridge() {
   const job = bridgeJob;
   if (!job?.hash) return;
   startBridgeTicker();
+  wireBridgeVisibility();
   const needWei = BigInt(job.needWei);
   // Wait ≥25 min (or 2× ETA) from when the bridge STARTED, with a 10-min floor from
   // now so a just-resumed old job still gets a fair polling window.
   const deadline = Math.max(job.startedAt + Math.max(25 * 60 * 1000, (job.mins || 0) * 120000), Date.now() + 10 * 60 * 1000);
   let tick = 0;
+  // A read through the wallet provider can HANG indefinitely (zkEVM RPC slow/unresponsive, or
+  // the tab backgrounded) — that must never stall the loop, or the reliable server-side status
+  // poll never runs and the tracker sticks until a reload (the reported bug). So cap every
+  // wallet read, and poll status FIRST.
+  const readWithTimeout = (p, ms) => Promise.race([Promise.resolve(p).catch(() => null), new Promise(res => setTimeout(() => res(null), ms))]);
   while (Date.now() < deadline) {
     if (bridgeJob !== job || job.phase !== 'waiting') return;
-    // Watch the asset the bridge actually delivers: native IMX for a gas top-up, the
-    // ETH ERC-20 for a price bridge.
-    const bal = isGasBridge(job) ? await readNative(job.account) : await readErc20(IMX_ETH_TOKEN, job.account);
-    if (bal != null && bal >= needWei) return setBridgeJob({ phase: 'done', stage: 'arrived' });
-    if (tick++ % 2 === 0) { // status every ~20s — visible movement without rate pressure
-      try {
-        const r = await fetch(`/api/market/creatures/bridge/status?tx=${job.hash}&quoteId=${encodeURIComponent(job.quoteId || '')}&requestId=${encodeURIComponent(job.requestId || '')}`);
-        if (r.ok) {
-          const s = await r.json();
-          if (bridgeJob !== job || job.phase !== 'waiting') return;
-          if (s.stage === 'failed' || s.stage === 'failed_src') return setBridgeJob({ phase: 'error', msg: t('trade.bridge.failed'), axelarUrl: s.axelarUrl || job.axelarUrl });
-          if (s.stage === 'needs_gas') return setBridgeJob({ phase: 'error', msg: t('trade.bridge.needsGas'), axelarUrl: s.axelarUrl || job.axelarUrl });
-          // Squid reports the funds have landed on zkEVM — complete NOW rather than waiting on
-          // the wallet balance read, which the injected provider can serve stale after the
-          // chain switch (the old bug: tracker never flipped to done until a reload).
-          if (s.stage === 'arrived') return setBridgeJob({ phase: 'done', stage: 'arrived', axelarUrl: s.axelarUrl || job.axelarUrl });
-          if (s.stage !== job.stage || (s.axelarUrl && s.axelarUrl !== job.axelarUrl)) {
-            setBridgeJob({ stage: s.stage, axelarUrl: s.axelarUrl || job.axelarUrl });
-          }
-        }
-      } catch { /* transient — keep tracking */ }
+    // PRIMARY signal — server-side Squid status. Every ~20s, and BEFORE the wallet read so a
+    // slow read can't keep it from ever running.
+    if (tick % 2 === 0) {
+      const s = await fetchBridgeStatus(job);
+      if (s && applyBridgeStatus(job, s)) return;
+      if (bridgeJob !== job || job.phase !== 'waiting') return;
     }
+    // SECONDARY signal — the balance actually crediting (covers the rare case Squid's status
+    // lags the chain). Capped so a hung provider read can't freeze the loop.
+    const read = isGasBridge(job) ? readNative(job.account) : readErc20(IMX_ETH_TOKEN, job.account);
+    const bal = await readWithTimeout(read, 9000);
+    if (bal != null && bal >= needWei) return setBridgeJob({ phase: 'done', stage: 'arrived' });
+    tick++;
     await new Promise(r => setTimeout(r, 10000));
   }
   if (bridgeJob === job && job.phase === 'waiting') setBridgeJob({ phase: 'slow' });
