@@ -1166,7 +1166,7 @@ function fundsHelpHtml(f = buyState) {
         <div class="trade-bridge-quote">
           <div class="trade-bridge-line">${esc(t('trade.bridge.quote.line').replace('{x}', fmtEthFiat(q.fromEth)).replace('{y}', fmtEthFiat(q.toEth)))}</div>
           <div class="trade-bridge-meta">${esc(meta)}</div>
-          ${bridgeJob?.phase === 'done' ? '' : `<button class="trade-funds-btn" data-act="bridge-now" type="button" ${busy ? 'disabled' : ''}>${esc(t('trade.bridge.now'))}</button>`}
+          ${bridgeJob && !isGasBridge(bridgeJob) && bridgeJob.phase === 'done' ? '' : `<button class="trade-funds-btn" data-act="bridge-now" type="button" ${busy ? 'disabled' : ''}>${esc(t('trade.bridge.now'))}</button>`}
           ${bridgeStatusHtml()}
         </div>`;
     } else {
@@ -1342,7 +1342,7 @@ function gasHelpHtml() {
       <div class="trade-bridge-quote">
         <div class="trade-bridge-line">${esc(t('trade.gas.bridge.line').replace('{x}', fromTxt).replace('{y}', fmtImx(q.toEth)))}</div>
         <div class="trade-bridge-meta">${esc(meta)}</div>
-        ${bridgeJob?.phase === 'done' ? '' : `<button class="trade-funds-btn" data-act="gas-bridge-now" type="button" ${busyBridge ? 'disabled' : ''}>${esc(t('trade.gas.bridge.now'))}</button>`}
+        ${isGasBridge(bridgeJob) && bridgeJob.phase === 'done' ? '' : `<button class="trade-funds-btn" data-act="gas-bridge-now" type="button" ${busyBridge ? 'disabled' : ''}>${esc(t('trade.gas.bridge.now'))}</button>`}
         ${gasBridgeStatusHtml()}
       </div>`;
   } else if (g.from) {
@@ -1491,6 +1491,13 @@ function loadSavedBridge() {
     if (!raw) return null;
     const j = JSON.parse(raw);
     if (!j?.hash || !j.startedAt || Date.now() - j.startedAt > 24 * 60 * 60 * 1000) {
+      localStorage.removeItem(BRIDGE_STORE);
+      return null;
+    }
+    // Only resume a bridge that's still in flight (waiting/slow). A finished job (done/error)
+    // has no live purpose across a reload — restoring it just leaves a stale global that
+    // suppresses the next top-up's action button and shows a day-old banner.
+    if (j.phase === 'done' || j.phase === 'error') {
       localStorage.removeItem(BRIDGE_STORE);
       return null;
     }
