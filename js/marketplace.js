@@ -1397,16 +1397,27 @@ async function showGasHelp(ctx) {
   patchGas();
 
   if (!from) { gasState.quote = null; patchGas(); return; }
+  // The server already retries Squid's 429s (the shared integrator id rate-limits easily), but
+  // give it a second window here too: a null quote is what drops the user to the empty Squid
+  // deep-link, so that fallback should mean "genuinely unavailable", not "one rate-limit blip".
+  let q = await fetchGasQuote(from);
+  if (q == null && gasState?.ctx === ctx) {
+    await new Promise(r => setTimeout(r, 1200));
+    if (gasState?.ctx === ctx) q = await fetchGasQuote(from);
+  }
+  if (gasState?.ctx === ctx) { gasState.quote = q; patchGas(); }
+}
+
+// One gas-quote request; null on any non-OK / error (caller decides whether to retry or fall
+// back to the deep-link).
+async function fetchGasQuote(from) {
   try {
     const res = await fetch('/api/market/creatures/bridge/gas/quote', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ address: account, needImx: String(GAS_TARGET_IMX), from }),
     });
-    const q = res.ok ? await res.json() : null;
-    if (gasState?.ctx === ctx) { gasState.quote = q; patchGas(); }
-  } catch {
-    if (gasState?.ctx === ctx) { gasState.quote = null; patchGas(); }
-  }
+    return res.ok ? await res.json() : null;
+  } catch { return null; }
 }
 
 // Ask the server to mint a card on-ramp session URL that lands on the right chain (network is
@@ -1590,6 +1601,19 @@ function setBridgeJob(patchFields) {
   patchModal();
   patchBridgeBanner();
   patchGas(); // keep the inline Sell/Transfer gas panels in step with the bridge
+  if (patchFields.phase === 'done') refreshAfterBridge();
+}
+
+// A bridge just landed funds on zkEVM (the ETH ERC-20 for a price bridge, native IMX for a
+// gas top-up). Refresh the wallet-bar balances so the new funds show WITHOUT a reload — the
+// old code only repainted the tracker, leaving the balances stale until the next full render.
+// Staggered because the injected wallet provider can serve a cached balance for a beat after
+// the mainnet→zkEVM switch dance, until it sees a fresh block.
+let bridgeRefreshTimers = [];
+function refreshAfterBridge() {
+  bridgeRefreshTimers.forEach(clearTimeout);
+  refreshBalance();
+  bridgeRefreshTimers = [4000, 10000, 20000].map(ms => setTimeout(() => { if (account) refreshBalance(); }, ms));
 }
 
 // A gas bridge moves native IMX (not the ETH ERC-20), so it lands in a different balance
@@ -1621,6 +1645,10 @@ async function trackBridge() {
           if (bridgeJob !== job || job.phase !== 'waiting') return;
           if (s.stage === 'failed' || s.stage === 'failed_src') return setBridgeJob({ phase: 'error', msg: t('trade.bridge.failed'), axelarUrl: s.axelarUrl || job.axelarUrl });
           if (s.stage === 'needs_gas') return setBridgeJob({ phase: 'error', msg: t('trade.bridge.needsGas'), axelarUrl: s.axelarUrl || job.axelarUrl });
+          // Squid reports the funds have landed on zkEVM — complete NOW rather than waiting on
+          // the wallet balance read, which the injected provider can serve stale after the
+          // chain switch (the old bug: tracker never flipped to done until a reload).
+          if (s.stage === 'arrived') return setBridgeJob({ phase: 'done', stage: 'arrived', axelarUrl: s.axelarUrl || job.axelarUrl });
           if (s.stage !== job.stage || (s.axelarUrl && s.axelarUrl !== job.axelarUrl)) {
             setBridgeJob({ stage: s.stage, axelarUrl: s.axelarUrl || job.axelarUrl });
           }

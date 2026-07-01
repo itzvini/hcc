@@ -271,7 +271,7 @@
   "trade.gas.bridge.now": "Get IMX gas with MetaMask",
   "trade.gas.bridge.done": "Your IMX gas landed on Immutable zkEVM — you're all set! 🎉",
   "trade.gas.getBtn": "Get IMX on Immutable zkEVM",
-  "trade.gas.foot": "Bridge or swap a little ETH into IMX on Immutable zkEVM. It only takes a few minutes and it's a one-time move — come back once it lands.",
+  "trade.gas.foot": "Bridge or swap a couple of dollars of ETH into IMX on Immutable zkEVM — that's plenty of gas for hundreds of trades. It only takes a few minutes and it's a one-time move; come back once it lands.",
   "trade.gas.bridgebar.bridging": "Topping up your IMX gas",
   "trade.gas.bridgebar.done": "Your IMX landed on Immutable zkEVM — gas is covered!",
   "trade.onramp.btn": "Buy crypto with card",
