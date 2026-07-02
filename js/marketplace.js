@@ -1455,7 +1455,10 @@ async function openOnramp(chain, token, fiat) {
   try { url = await fetchOnrampUrl(chain, token, fiat); } catch { url = null; }
   if (!url && chain === 'zkevm') url = ONRAMP_URL_ZKEVM;
   if (url) {
-    if (tab) tab.location = url; else window.open(url, '_blank', 'noopener');
+    // noreferrer matters: Transak 403s the widget (T-INF-201) if a Referer outside the
+    // partner account's whitelist reaches it. The server also sends Referrer-Policy:
+    // same-origin site-wide; this is belt-and-braces for the popup fallback path.
+    if (tab) tab.location = url; else window.open(url, '_blank', 'noopener,noreferrer');
   } else if (tab) {
     tab.close();
   }

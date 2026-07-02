@@ -94,6 +94,9 @@
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body {
+  /* Cancels the pre-CSS `opacity: 0` guard in index.html's inline <style> the
+     moment this sheet applies — keep in sync with that block. */
+  opacity: 1;
   font-family: var(--hr-body);
   font-weight: 500;
   font-size: 15px;

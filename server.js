@@ -2,6 +2,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const zlib = require('node:zlib');
 
 // Load .env into process.env if present, so the OpenSea key works no matter how the
 // server is launched (node server.js, npm start, IDE). No-op in production, where
@@ -3825,6 +3826,10 @@ const contentTypes = {
 // guard against leaking secrets or source on an open-source, self-hostable repo.
 const PUBLIC_DIRS  = new Set(['css', 'js', 'img', 'assets', 'fonts', 'locales']);
 const PUBLIC_FILES = new Set(['index.html', 'changelog.json', 'gen2-progress.json', 'favicon.ico', 'robots.txt']);
+// Gzip candidates: text formats plus raw OpenType/TrueType fonts (~45% smaller).
+// WOFF/WOFF2 and images are already compressed — recompressing wastes CPU for ~0%.
+const COMPRESSIBLE_EXT = new Set(['.html', '.css', '.js', '.json', '.svg', '.otf', '.ttf']);
+const gzipCache = new Map(); // filePath → { etag, body } — one gzipped copy per content version
 // Clean tab URLs (/council, /roadmap/gen2, …) all serve the app shell; the client
 // router in js/app.js opens the matching tab from location.pathname.
 const TAB_ROUTES = new Set(['club', 'council', 'apply', 'roadmap', 'guides', 'perks',
@@ -3855,10 +3860,15 @@ const CSP = [
 
 // Security headers. CSP + framing protection only matter for the HTML document;
 // nosniff/referrer apply to everything.
+// Referrer-Policy is `same-origin` (not the `strict-origin-when-cross-origin` default): the
+// card on-ramp rides Immutable's Transak account, and Transak's edge 403s the widget
+// ("Access Denied. T-INF-201") when the request carries a Referer outside that account's
+// whitelisted domains — which our origin is. No outbound link here needs a referrer, so we
+// send none cross-origin (also nice privacy-wise); full referrers stay for same-origin use.
 function securityHeaders(extension) {
   const h = {
     'X-Content-Type-Options': 'nosniff',
-    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Referrer-Policy': 'same-origin',
   };
   if (extension === '.html') {
     h['Content-Security-Policy'] = CSP;
@@ -4063,20 +4073,57 @@ const server = http.createServer((request, response) => {
 
     const secHeaders = securityHeaders(extension);
 
+    // Text (and OTF/TTF font) responses gzip well and this app ships big ones —
+    // ~200KB CSS and ~140KB HTML, both `no-cache`. Served raw, a slow connection
+    // paints the HTML before the stylesheet lands (flash of unstyled content), so
+    // compression is a rendering fix, not just bandwidth. Vary only on responses
+    // that can differ per encoding, to keep shared caches from fragmenting media.
+    const compressible = COMPRESSIBLE_EXT.has(extension);
+    const vary = compressible ? { Vary: 'Accept-Encoding' } : {};
+
     // Honour conditional requests — cheap 304 when the browser already has this content.
+    // The ETag is weak (content-derived, encoding-agnostic), so it validates both the
+    // gzipped and identity variants.
     if (request.headers['if-none-match'] === etag) {
-      response.writeHead(304, { ETag: etag, 'Cache-Control': cacheControl, ...secHeaders });
+      response.writeHead(304, { ETag: etag, 'Cache-Control': cacheControl, ...vary, ...secHeaders });
       response.end();
       return;
     }
 
-    response.writeHead(200, {
+    const baseHeaders = {
       'Content-Type': contentTypes[extension] || 'application/octet-stream',
       'Cache-Control': cacheControl,
       ETag: etag,
+      ...vary,
       ...secHeaders,
+    };
+
+    const acceptsGzip = String(request.headers['accept-encoding'] || '').includes('gzip');
+    if (!compressible || !acceptsGzip) {
+      response.writeHead(200, baseHeaders);
+      response.end(data);
+      return;
+    }
+
+    // Compress once per content version, then serve from memory. The cache is bounded
+    // by the allowlisted static text files, and a stale entry self-evicts when the
+    // file's ETag moves on.
+    const cached = gzipCache.get(filePath);
+    if (cached && cached.etag === etag) {
+      response.writeHead(200, { ...baseHeaders, 'Content-Encoding': 'gzip' });
+      response.end(cached.body);
+      return;
+    }
+    zlib.gzip(data, (gzipError, gzipped) => {
+      if (gzipError || gzipped.length >= data.length) {
+        response.writeHead(200, baseHeaders);
+        response.end(data);
+        return;
+      }
+      gzipCache.set(filePath, { etag, body: gzipped });
+      response.writeHead(200, { ...baseHeaders, 'Content-Encoding': 'gzip' });
+      response.end(gzipped);
     });
-    response.end(data);
   });
 });
 

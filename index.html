@@ -6,6 +6,19 @@
 <title>Highrise Creature Club</title>
 <link rel="icon" type="image/png" href="/img/brands/icon_hcc.png">
 <link rel="apple-touch-icon" href="/img/brands/icon_hcc.png">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#141317">
+<style>
+/* Pre-CSS shell — no FOUC. If the browser paints before /css/styles.css arrives
+   (slow link, cold cache), it paints a dark on-brand screen with the content held
+   invisible, not white unstyled HTML. styles.css sets `body { opacity: 1 }`, so the
+   page reveals the instant real styles apply; the zero-duration delayed keyframe is
+   the failsafe that shows content anyway if the sheet is very slow or fails to load.
+   (0s duration = a timer, not motion — nothing to gate behind prefers-reduced-motion.) */
+html { background: #141317; color-scheme: dark; }
+body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: boot-reveal 0s linear 1.6s forwards; }
+@keyframes boot-reveal { to { opacity: 1; } }
+</style>
 <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
