@@ -1943,6 +1943,7 @@ async function handleBuyLand(it) {
       setBuy('done', { hash });
       listings = listings.filter(l => l.listingId !== it.listingId);
       patchGrid();
+      notePendingOwned(it); // show it in Sell/Transfer NOW — OpenSea's owner index lags a buy by minutes
       refreshAfterTx(); // they gained a LAND (+ it left the market) — refresh, then retry as OpenSea indexes
       return;
     }
@@ -2005,6 +2006,7 @@ async function handleBuy(listingId) {
           setBuy('done', { hash });
           listings = listings.filter(l => l.listingId !== listingId); // it's sold — drop from the grid
           patchGrid();
+          notePendingOwned(it); // show it in Sell/Transfer NOW — the owner index lags a buy
           refreshAfterTx(); // they gained a Creature (+ it left the market) — refresh, then retry as Immutable indexes
           return;
         }
@@ -2314,6 +2316,7 @@ async function handleAcceptLandOffer(orderHash, protocolAddress, tokenId, netEth
       if (!isApproval) {
         setLandAccept('done', { hash, netEth });
         sellSel = null;
+        dropPendingOwned(tokenId); // if it was a fresh buy, don't let the optimistic copy resurrect it
         refreshAfterTx(); // sold a parcel — refresh holdings, retry as OpenSea indexes
         loadLandCollOffers();
         return;
@@ -2739,6 +2742,7 @@ async function handleAcceptOffer(offerId, tokenId) {
         if (!isApproval) {
           setAccept('done', { hash, netEth: offer?.netEth });
           sellSel = null;
+          if (fillToken != null) dropPendingOwned(fillToken); // fresh buy sold straight into a bid — don't resurrect it
           refreshAfterTx(); // sold a Creature into a bid — refresh holdings/balance, retry as Immutable indexes
           loadCollOffers();
           if (modalToken) loadTokenOffers(modalToken);
@@ -3302,6 +3306,36 @@ function browseHtml() {
 
 // --- Seller hub (my listings + sell + transfer) ---
 
+// --- Optimistic ownership: a just-bought item, before the indexer knows -------------------
+// The Sell/Transfer pickers are fed by the external indexers (OpenSea for LAND, Immutable
+// for Creatures), whose OWNER index can lag a mined buy by minutes — well past the
+// refreshAfterTx retry window. History showed the buy while Sell/Transfer stayed empty.
+// So on buy success we remember what was bought and merge it into `owned` until the
+// indexer reports it (or a TTL expires). Scoped per wallet + collection.
+let pendingOwned = [];
+const PENDING_OWNED_TTL_MS = 10 * 60 * 1000;
+function notePendingOwned(it) {
+  pendingOwned = pendingOwned.filter(p => !(p.coll === coll && String(p.tokenId) === String(it.tokenId)));
+  pendingOwned.push({
+    coll, account, at: Date.now(),
+    item: { tokenId: String(it.tokenId), name: it.name || `#${it.tokenId}`, image: it.image || null,
+            coords: it.coords || null, traits: it.traits || {}, rank: it.rank ?? null },
+  });
+}
+function dropPendingOwned(tokenId) {
+  pendingOwned = pendingOwned.filter(p => String(p.item.tokenId) !== String(tokenId));
+}
+function mergePendingOwned(items) {
+  const now = Date.now();
+  const have = new Set(items.map(i => String(i.tokenId)));
+  // Expired, indexed (server now reports it), or foreign entries don't merge; indexed ones
+  // are dropped for good — the optimistic copy has served its purpose.
+  pendingOwned = pendingOwned.filter(p => now - p.at < PENDING_OWNED_TTL_MS
+    && !(p.coll === coll && p.account === account && have.has(String(p.item.tokenId))));
+  const extra = pendingOwned.filter(p => p.coll === coll && p.account === account).map(p => p.item);
+  return extra.length ? [...extra, ...items] : items;
+}
+
 async function loadSellerData() {
   if (!account || sellerLoading) return;
   if (coll === 'creatures' && !onZk()) return; // creature data needs the wallet usable on zkEVM
@@ -3313,14 +3347,14 @@ async function loadSellerData() {
         fetch(`/api/market/land/owned/${account}`).then(r => r.ok ? r.json() : { items: [] }),
         fetch(`/api/market/land/mine/${account}`).then(r => r.ok ? r.json() : { items: [] }),
       ]);
-      owned = o.items || [];
+      owned = mergePendingOwned(o.items || []);
       mine = m.items || [];
     } else {
       const [o, m] = await Promise.all([
         fetch(`/api/market/creatures/owned/${account}`).then(r => r.ok ? r.json() : { items: [] }),
         fetch(`/api/market/creatures/mine/${account}`).then(r => r.ok ? r.json() : { items: [] }),
       ]);
-      owned = o.items || [];
+      owned = mergePendingOwned(o.items || []);
       mine = m.items || [];
     }
   } catch (err) {
@@ -3643,15 +3677,15 @@ function landSellNetHtml(priceStr) {
 // Picker of transferable Creatures (owned minus actively listed — transferring a
 // listed Creature would leave a phantom listing behind).
 function transferPickerHtml() {
-  if (owned === null) return `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.sell.loadingOwned'))}</div>`;
+  if (owned === null) return `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t(skey('trade.sell.loadingOwned')))}</div>`;
   const base = invBase();
   const hiddenNote = owned.length > base.length
-    ? `<p class="trade-form-p">${esc(t('trade.transfer.listedNote'))}</p>` : '';
-  if (!base.length) return `<p class="trade-form-p">${esc(t('trade.transfer.none'))}</p>${hiddenNote}`;
+    ? `<p class="trade-form-p">${esc(t(skey('trade.transfer.listedNote')))}</p>` : '';
+  if (!base.length) return `<p class="trade-form-p">${esc(t(skey('trade.transfer.none')))}</p>${hiddenNote}`;
   const transferable = invFilteredItems();
   if (!transferable.length) return `<p class="trade-form-p">${esc(t('trade.filter.invNone'))} <button type="button" class="trade-flt-clearall" data-act="inv-clear">${esc(t('trade.filter.clear'))}</button></p>${hiddenNote}`;
   return `
-    <div class="trade-pick" role="listbox" aria-label="${esc(t('trade.transfer.pick'))}">
+    <div class="trade-pick" role="listbox" aria-label="${esc(t(skey('trade.transfer.pick')))}">
       ${transferable.map(o => `
         <button class="trade-pick-tile ${String(transferSel) === String(o.tokenId) ? 'is-sel' : ''}" type="button"
           role="option" aria-selected="${String(transferSel) === String(o.tokenId)}"
@@ -3669,10 +3703,10 @@ function transferPickerHtml() {
 function transferCheckHtml() {
   const c = transferCheck;
   if (!c) return '';
-  if (c === 'loading') return `<div class="trade-check-row is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t('trade.check.checking'))}</span></div>`;
+  if (c === 'loading') return `<div class="trade-check-row is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t(skey('trade.check.checking')))}</span></div>`;
   if (!c.valid) {
     const KEY = { checksum: 'trade.check.checksumBad', protocol: 'trade.check.protocol', format: 'trade.err.badAddr' };
-    return `<div class="trade-check-row is-err"><span aria-hidden="true">⛔</span><span>${esc(t(KEY[c.reason] || 'trade.err.badAddr'))}</span></div>`;
+    return `<div class="trade-check-row is-err"><span aria-hidden="true">⛔</span><span>${esc(t(skey(KEY[c.reason] || 'trade.err.badAddr')))}</span></div>`;
   }
   // Best case: it's another of the user's own connected accounts — proven by the
   // wallet itself, no warning needed at all.
@@ -3682,13 +3716,13 @@ function transferCheckHtml() {
   const rows = [];
   if (c.checksum === 'ok') rows.push(`<div class="trade-check-row is-ok"><span aria-hidden="true">✓</span><span>${esc(t('trade.check.checksumOk'))}</span></div>`);
   if (c.active) {
-    rows.push(`<div class="trade-check-row is-ok"><span aria-hidden="true">✓</span><span>${esc(t('trade.check.active'))}</span></div>`);
-    if (c.creatures > 0) rows.push(`<div class="trade-check-row is-ok"><span aria-hidden="true">✓</span><span>${esc(t('trade.check.holds').replace('{n}', String(c.creatures)))}</span></div>`);
+    rows.push(`<div class="trade-check-row is-ok"><span aria-hidden="true">✓</span><span>${esc(t(skey('trade.check.active')))}</span></div>`);
+    if (c.creatures > 0) rows.push(`<div class="trade-check-row is-ok"><span aria-hidden="true">✓</span><span>${esc(t(skey('trade.check.holds')).replace('{n}', String(c.creatures)))}</span></div>`);
     if (c.contract) rows.push(`<div class="trade-check-row is-warn"><span aria-hidden="true">⚠</span><span>${esc(t('trade.check.contract'))}</span></div>`);
   } else {
     // Calm info tone, not an alarm — a fresh wallet is normal; the diligence is the
     // ten-second visual match. The hard "why" lives behind the ⓘ for the curious.
-    rows.push(`<div class="trade-check-row is-info"><span aria-hidden="true">🔍</span><span>${esc(t(c.activityKnown ? 'trade.check.fresh' : 'trade.check.unknown'))} ${tipHtml('trade.check.fresh.tip')}</span></div>`);
+    rows.push(`<div class="trade-check-row is-info"><span aria-hidden="true">🔍</span><span>${esc(t(skey(c.activityKnown ? 'trade.check.fresh' : 'trade.check.unknown')))} ${tipHtml('trade.check.fresh.tip')}</span></div>`);
     // Spaced-out copy of the typed address so the visual match is actually
     // humanly doable against what the recipient's wallet shows.
     const chunked = c.addr ? `${c.addr.slice(0, 2)} ${c.addr.slice(2).match(/.{1,4}/g).join(' ')}` : '';
@@ -3719,16 +3753,16 @@ function transferViewHtml() {
   const wb = `
     <div class="trade-workbench">
       <div class="trade-wb-main">
-        <h4 class="trade-form-h">${esc(t('trade.transfer.h'))} ${tipHtml('trade.transfer.p')}</h4>
-        <span class="trade-field-label">${esc(t('trade.transfer.pick'))}</span>
+        <h4 class="trade-form-h">${esc(t(skey('trade.transfer.h')))} ${tipHtml(skey('trade.transfer.p'))}</h4>
+        <span class="trade-field-label">${esc(t(skey('trade.transfer.pick')))}</span>
         <div id="trade-pick-wrap">${transferPickerHtml()}</div>
       </div>
       <div class="trade-wb-side">
         <form class="trade-form" id="trade-transfer-form" novalidate>
-          <label class="trade-field"><span>${esc(t('trade.field.recipient'))}</span>
+          <label class="trade-field"><span>${esc(t(skey('trade.field.recipient')))}</span>
             <input id="trade-to" type="text" placeholder="0x…" autocomplete="off" spellcheck="false" /></label>
           <div id="trade-to-check" aria-live="polite">${transferCheckHtml()}</div>
-          <button class="trade-send" id="trade-send" type="submit" ${transferSendAllowed() ? '' : 'disabled'}>${esc(t('trade.transfer.btn'))} <span aria-hidden="true">→</span></button>
+          <button class="trade-send" id="trade-send" type="submit" ${transferSendAllowed() ? '' : 'disabled'}>${esc(t(skey('trade.transfer.btn')))} <span aria-hidden="true">→</span></button>
           <div class="trade-status" id="trade-status" role="status" aria-live="polite"></div>
         </form>
       </div>
@@ -4068,7 +4102,7 @@ async function handleTransferSubmit(form) {
   const tokenId = transferSel;
   const to = (form.querySelector('#trade-to').value || '').trim().toLowerCase();
   // Belt and braces — the button is disabled unless these hold, but state can race.
-  if (tokenId == null)         return fail(t('trade.err.noTransferSel'));
+  if (tokenId == null)         return fail(t(skey('trade.err.noTransferSel')));
   if (!IS_ADDR.test(to))       return fail(t('trade.err.badAddr'));
   if (to === account)          return fail(t('trade.err.self'));
   if (to === ZERO)             return fail(t('trade.err.zero'));
@@ -4096,6 +4130,7 @@ async function handleTransferSubmit(form) {
     done(t('trade.status.sent'), hash);
     transferSel = null; transferCheck = null; transferAck = false;
     form.querySelector('#trade-to').value = '';
+    dropPendingOwned(tokenId); // if it was a fresh buy, don't let the optimistic copy resurrect it
     refreshAfterTx(); // the item left this wallet — refresh holdings/balance, retry as the indexer catches up
   } catch (err) {
     console.error('Transfer failed:', err);

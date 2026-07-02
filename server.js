@@ -366,6 +366,26 @@ async function estateLandOwnedBy(address) {
   return parcels;
 }
 
+// Every LAND parcel tokenId a wallet holds, straight from the contract — ownerTokens(address)
+// returns the full uint256[] in ONE eth_call (the LAND contract shares the estate contract's
+// custom enumerator, and is ERC721Enumerable besides; both verified on-chain). This is what
+// feeds the Sell/Transfer pickers: authoritative and current the block after a buy, unlike
+// OpenSea's owner index, which lags a mined buy by minutes. Estate-locked parcels are owned
+// by the estate contract on-chain, so they're naturally absent — right for trading surfaces.
+async function landOwnedOnChain(address) {
+  const raw = await ethCall(ETH_RPC_URL, LAND_CONTRACT, SEL_OWNER_TOKENS + padUint(BigInt(address)));
+  if (!raw || raw.length < 2 + 128) return [];
+  const hex = raw.slice(2);
+  const word = i => hex.slice(i * 64, i * 64 + 64);   // [0]=offset, [1]=length, [2..]=ids
+  const len = parseInt(word(1), 16) || 0;
+  return Array.from({ length: len }, (_, k) => {
+    const tokenId = BigInt('0x' + word(2 + k)).toString();
+    // Placeholder name/image — the slime-index join downstream adds coords (→ the "(x, y)"
+    // name and the pet render the pickers actually use).
+    return { tokenId, name: `Highrise LAND #${tokenId}`, image: null, coords: null };
+  });
+}
+
 // A single wallet's HCC holdings (Creature + LAND, including estate-locked LAND), read
 // AUTHORITATIVELY from the contracts via balanceOf / ownerTokens — NOT the bulk /holders
 // snapshot, which can omit a legitimate holder (Blockscout indexing gaps) and wrongly
@@ -2350,15 +2370,27 @@ async function handleMarketplaceApi(request, response, url) {
   }
   const landOwnedMatch = pathname.match(/^\/api\/market\/land\/owned\/(0x[0-9a-f]{40})$/);
   if (landOwnedMatch) {
-    if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
-    const data = await landMarket.ownedLand(landOwnedMatch[1]);
-    // Attach slime traits + rank from the background sweep so the Sell/Transfer pickers
-    // filter like Browse. Sync peek (no build) — empty traits until the parcel is swept.
+    // Token ids come straight from the LAND contract (see landOwnedOnChain) — zero indexer
+    // lag, no 200-parcel page cap. OpenSea remains only as the fallback for an RPC hiccup.
+    let data;
+    try {
+      data = { items: await landOwnedOnChain(landOwnedMatch[1]), truncated: false };
+    } catch (err) {
+      console.error('Chain read of owned LAND failed, falling back to OpenSea:', err.message);
+      if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+      data = await landMarket.ownedLand(landOwnedMatch[1]);
+    }
+    // Attach coords + slime traits + rank from the background sweep so the Sell/Transfer
+    // pickers show the parcel's slime pet and filter like Browse. Sync peek (no build) —
+    // sparse until the parcel is swept.
     const sidx = slimeIndex.getSlimeIndex();
     if (sidx) for (const it of (data.items || [])) {
       const s = sidx.byToken.get(String(it.tokenId));
       it.traits = s?.traits || {};
       it.rank = s?.rank ?? null;
+      if (!it.coords && s?.coords) it.coords = s.coords;
+      // Chain items carry a placeholder "#id" name — swap in the familiar "(x, y)" one.
+      if (s?.coords && /#\d+$/.test(it.name || '')) it.name = `Highrise LAND (${s.coords.x}, ${s.coords.y})`;
     }
     sendJson(response, 200, data, { 'Cache-Control': 'no-store' });
     return;
