@@ -1,6 +1,158 @@
 {
   "club": [
     {
+      "date": "June 20, 2026",
+      "title": "Pride Month drop",
+      "body": "To celebrate Pride Month, HCC dropped a set of items for holders — three items plus a sweater to keep and a second sweater to gift a friend.",
+      "tag": "announcement",
+      "i18n": {
+        "pt": {
+          "date": "20 de jun. de 2026",
+          "title": "Drop do Mês do Orgulho",
+          "body": "Para celebrar o Mês do Orgulho, o HCC lançou um conjunto de itens para holders — três itens mais um suéter para você guardar e um segundo suéter para presentear um amigo."
+        },
+        "es": {
+          "date": "20 jun. 2026",
+          "title": "Drop del Mes del Orgullo",
+          "body": "Para celebrar el Mes del Orgullo, HCC lanzó un conjunto de artículos para holders — tres artículos más un suéter para ti y un segundo suéter para regalar a un amigo."
+        },
+        "fr": {
+          "date": "20 juin 2026",
+          "title": "Drop du Mois des Fiertés",
+          "body": "Pour célébrer le Mois des Fiertés, HCC a lancé un ensemble d'objets pour les holders — trois objets plus un pull à garder et un second pull à offrir à un ami."
+        },
+        "de": {
+          "date": "20. Juni 2026",
+          "title": "Pride-Month-Drop",
+          "body": "Zur Feier des Pride Month hat HCC ein Set an Items für Holder gedroppt — drei Items plus einen Pullover zum Behalten und einen zweiten Pullover, um ihn einem Freund zu schenken."
+        },
+        "ru": {
+          "date": "20 июня 2026",
+          "title": "Дроп к Месяцу гордости",
+          "body": "В честь Месяца гордости HCC выпустил набор предметов для холдеров — три предмета плюс свитер для себя и второй свитер, чтобы подарить другу."
+        },
+        "tr": {
+          "date": "20 Haziran 2026",
+          "title": "Onur Ayı drop'u",
+          "body": "Onur Ayı'nı kutlamak için HCC, holderlar için bir eşya seti düşürdü — üç eşya, ayrıca senin için bir kazak ve bir arkadaşına hediye etmen için ikinci bir kazak."
+        }
+      }
+    },
+    {
+      "date": "June 17, 2026",
+      "title": "Your first Player Council is elected",
+      "body": "The first HCC Player Council election is complete. After the vote — and a runoff to settle one Member seat — all four elected seats are filled: two Member, one Patron, and one Icon, alongside the three appointed seats. Ballots were secret and final, and full per-seat tallies with verification receipts are on the results board.",
+      "tag": "council",
+      "i18n": {
+        "pt": {
+          "date": "17 de jun. de 2026",
+          "title": "Seu primeiro Player Council foi eleito",
+          "body": "A primeira eleição do HCC Player Council está concluída. Após a votação — e um segundo turno para decidir uma cadeira de Member — todas as quatro cadeiras eleitas estão preenchidas: duas Member, uma Patron e uma Icon, além das três cadeiras designadas. Os votos foram secretos e finais, e as apurações completas por cadeira, com recibos de verificação, estão no painel de resultados."
+        },
+        "es": {
+          "date": "17 jun. 2026",
+          "title": "Tu primer Player Council ha sido elegido",
+          "body": "La primera elección del HCC Player Council ha concluido. Tras la votación — y una segunda vuelta para decidir un asiento Member — los cuatro asientos elegidos están ocupados: dos Member, uno Patron y uno Icon, junto a los tres asientos designados. Los votos fueron secretos y definitivos, y los recuentos completos por asiento, con recibos de verificación, están en el panel de resultados."
+        },
+        "fr": {
+          "date": "17 juin 2026",
+          "title": "Ton premier Player Council est élu",
+          "body": "La première élection du HCC Player Council est terminée. Après le vote — et un second tour pour départager un siège Member — les quatre sièges élus sont pourvus : deux Member, un Patron et un Icon, aux côtés des trois sièges désignés. Les votes étaient secrets et définitifs, et les décomptes complets par siège, avec reçus de vérification, sont sur le tableau des résultats."
+        },
+        "de": {
+          "date": "17. Juni 2026",
+          "title": "Dein erster Spielerrat ist gewählt",
+          "body": "Die erste Wahl des HCC Player Council ist abgeschlossen. Nach der Abstimmung — und einer Stichwahl um einen Member-Sitz — sind alle vier gewählten Sitze besetzt: zwei Member, ein Patron und ein Icon, neben den drei ernannten Sitzen. Die Stimmen waren geheim und endgültig, und die vollständigen Auszählungen pro Sitz mit Verifizierungs-Belegen stehen auf dem Ergebnis-Board."
+        },
+        "ru": {
+          "date": "17 июня 2026",
+          "title": "Ваш первый Совет Игроков избран",
+          "body": "Первые выборы HCC Player Council завершены. После голосования — и второго тура за одно место Member — все четыре выборных места заполнены: два Member, одно Patron и одно Icon, вместе с тремя назначенными местами. Голоса были тайными и окончательными, а полные подсчёты по каждому месту с чеками для проверки опубликованы на доске результатов."
+        },
+        "tr": {
+          "date": "17 Haziran 2026",
+          "title": "İlk Player Council'ınız seçildi",
+          "body": "İlk HCC Player Council seçimi tamamlandı. Oylamanın — ve bir Member koltuğunu belirlemek için yapılan ikinci turun — ardından seçilen dört koltuğun tamamı dolduruldu: iki Member, bir Patron ve bir Icon; ayrıca üç atanmış koltuk. Oylar gizli ve kesindi ve koltuk başına tam sayımlar, doğrulama makbuzlarıyla birlikte sonuç panosunda yayınlandı."
+        }
+      }
+    },
+    {
+      "date": "June 13, 2026",
+      "title": "Voting is open",
+      "body": "Voting for the first Player Council opened to the frozen holder snapshot — 6,155 eligible wallets. You vote in all three races no matter your holdings, every full candidate profile is public, and each ballot returns a private receipt so you can verify it counted. The lone Icon candidate runs as a confirmation vote: seat them, or reopen nominations.",
+      "tag": "council",
+      "i18n": {
+        "pt": {
+          "date": "13 de jun. de 2026",
+          "title": "A votação está aberta",
+          "body": "A votação do primeiro Player Council abriu para o snapshot congelado de holders — 6.155 carteiras elegíveis. Você vota nas três disputas independentemente de quanto possui, cada perfil completo de candidato é público e cada voto retorna um recibo privado para você verificar que foi contado. O único candidato à cadeira Icon concorre como voto de confirmação: dar-lhe a cadeira ou reabrir as candidaturas."
+        },
+        "es": {
+          "date": "13 jun. 2026",
+          "title": "La votación está abierta",
+          "body": "La votación del primer Player Council abrió para el snapshot congelado de holders — 6.155 carteras elegibles. Votas en las tres contiendas sin importar cuánto tengas, cada perfil completo de candidato es público y cada voto devuelve un recibo privado para que verifiques que se contó. El único candidato al asiento Icon se presenta como voto de confirmación: darle el asiento o reabrir las candidaturas."
+        },
+        "fr": {
+          "date": "13 juin 2026",
+          "title": "Le vote est ouvert",
+          "body": "Le vote pour le premier Player Council a ouvert pour le snapshot gelé des holders — 6 155 portefeuilles éligibles. Tu votes dans les trois courses quelle que soit la taille de tes avoirs, chaque profil complet de candidat est public, et chaque bulletin renvoie un reçu privé pour vérifier qu'il a été compté. L'unique candidat au siège Icon se présente comme un vote de confirmation : lui attribuer le siège ou rouvrir les candidatures."
+        },
+        "de": {
+          "date": "13. Juni 2026",
+          "title": "Die Abstimmung ist offen",
+          "body": "Die Abstimmung für den ersten Player Council wurde für den eingefrorenen Holder-Snapshot geöffnet — 6.155 stimmberechtigte Wallets. Du stimmst in allen drei Rennen ab, egal wie viel du hältst, jedes vollständige Kandidatenprofil ist öffentlich, und jeder Stimmzettel gibt einen privaten Beleg zurück, mit dem du prüfen kannst, dass er gezählt wurde. Der einzige Icon-Kandidat tritt als Bestätigungsabstimmung an: ihn einsetzen oder die Nominierungen wieder öffnen."
+        },
+        "ru": {
+          "date": "13 июня 2026",
+          "title": "Голосование открыто",
+          "body": "Голосование за первый Player Council открылось для замороженного снапшота холдеров — 6 155 подходящих кошельков. Вы голосуете во всех трёх гонках независимо от размера холдинга, каждый полный профиль кандидата публичен, а каждый бюллетень возвращает приватный чек, чтобы вы могли убедиться, что он учтён. Единственный кандидат на место Icon участвует как подтверждающее голосование: утвердить его или заново открыть выдвижение."
+        },
+        "tr": {
+          "date": "13 Haziran 2026",
+          "title": "Oylama açık",
+          "body": "İlk Player Council için oylama, dondurulmuş holder anlık görüntüsüne açıldı — 6.155 uygun cüzdan. Ne kadar tuttuğun fark etmeksizin üç yarışta da oy verirsin, her adayın tam profili herkese açıktır ve her oy pusulası, sayıldığını doğrulayabilmen için özel bir makbuz döndürür. Tek Icon adayı bir onay oyu olarak yarışır: koltuğa oturt ya da adaylıkları yeniden aç."
+        }
+      }
+    },
+    {
+      "date": "June 12, 2026",
+      "title": "Gen 2 production begins — bi-weekly updates",
+      "body": "Work on Gen 2 is underway, starting with the Yogurt Zombies set, and the first full look is done. From here you'll get a progress update every two weeks — finished art, work in progress, and what's next — so the work gets seen and you can hold us to it. Everything shown is work in progress and can still change before it ships.",
+      "tag": "announcement",
+      "i18n": {
+        "pt": {
+          "date": "12 de jun. de 2026",
+          "title": "A produção do Gen 2 começou — atualizações quinzenais",
+          "body": "O trabalho no Gen 2 está em andamento, começando pelo conjunto Yogurt Zombies, e o primeiro look completo está pronto. A partir de agora você recebe uma atualização de progresso a cada duas semanas — arte finalizada, trabalho em andamento e o que vem a seguir — para que o trabalho seja visto e você possa nos cobrar. Tudo que é mostrado é trabalho em andamento e ainda pode mudar antes de ser lançado."
+        },
+        "es": {
+          "date": "12 jun. 2026",
+          "title": "Comienza la producción de Gen 2 — actualizaciones quincenales",
+          "body": "El trabajo en Gen 2 está en marcha, empezando por el conjunto Yogurt Zombies, y el primer look completo está listo. A partir de ahora recibirás una actualización de progreso cada dos semanas — arte terminado, trabajo en curso y lo que viene — para que el trabajo se vea y puedas exigirnos. Todo lo que se muestra es trabajo en curso y aún puede cambiar antes de lanzarse."
+        },
+        "fr": {
+          "date": "12 juin 2026",
+          "title": "La production de Gen 2 commence — mises à jour bimensuelles",
+          "body": "Le travail sur Gen 2 est en cours, à commencer par l'ensemble Yogurt Zombies, et le premier look complet est terminé. Désormais, tu recevras une mise à jour d'avancement toutes les deux semaines — art fini, travail en cours et la suite — pour que le travail soit visible et que tu puisses nous tenir responsables. Tout ce qui est montré est en cours de réalisation et peut encore changer avant sa sortie."
+        },
+        "de": {
+          "date": "12. Juni 2026",
+          "title": "Gen-2-Produktion beginnt — zweiwöchentliche Updates",
+          "body": "Die Arbeit an Gen 2 läuft, beginnend mit dem Yogurt-Zombies-Set, und der erste vollständige Look ist fertig. Ab jetzt bekommst du alle zwei Wochen ein Fortschritts-Update — fertige Artworks, laufende Arbeit und was als Nächstes kommt — damit die Arbeit sichtbar wird und du uns beim Wort nehmen kannst. Alles Gezeigte ist in Arbeit und kann sich vor dem Release noch ändern."
+        },
+        "ru": {
+          "date": "12 июня 2026",
+          "title": "Начинается производство Gen 2 — обновления раз в две недели",
+          "body": "Работа над Gen 2 идёт, начиная с набора Yogurt Zombies, и первый полный образ готов. Теперь вы будете получать обновление о прогрессе каждые две недели — готовый арт, работа в процессе и что дальше — чтобы работа была на виду и вы могли спрашивать с нас. Всё показанное — работа в процессе и ещё может измениться до выхода."
+        },
+        "tr": {
+          "date": "12 Haziran 2026",
+          "title": "Gen 2 üretimi başlıyor — iki haftada bir güncelleme",
+          "body": "Gen 2 üzerindeki çalışma, Yogurt Zombies setiyle başlayarak sürüyor ve ilk tam görünüm hazır. Bundan böyle iki haftada bir ilerleme güncellemesi alacaksın — biten çalışmalar, devam eden işler ve sırada ne var — böylece iş görünür olur ve bizi sözümüzde tutabilirsin. Gösterilen her şey devam eden çalışmadır ve yayınlanmadan önce hâlâ değişebilir."
+        }
+      }
+    },
+    {
       "date": "June 9, 2026",
       "title": "The First Election begins",
       "body": "We've hit the First Election milestone on the roadmap. Sign in to check your eligibility, then — if you've held an HCC NFT continuously for the last 3 months — self-nominate for a seat in your holdings bracket: 1–4, 5–14, or 15+ assets. Through the candidacy phase candidate names stay anonymous and you can already explore your matches; when voting opens, every full profile goes public and votes are cast.",
@@ -35,6 +187,44 @@
           "date": "9 Haziran 2026",
           "title": "İlk Seçim başlıyor",
           "body": "Yol haritasında İlk Seçim kilometre taşına ulaştık. Uygunluğunu kontrol etmek için giriş yap ve ardından — son 3 ay boyunca kesintisiz bir HCC NFT'si tuttuysan — varlık kademende bir koltuk için kendi adaylığını koy: 1–4, 5–14 veya 15+ varlık. Adaylık aşamasında aday isimleri anonim kalır ve eşleşmelerini şimdiden inceleyebilirsin; oylama açıldığında her tam profil herkese açık olur ve oylar kullanılır."
+        }
+      }
+    },
+    {
+      "date": "June 8, 2026",
+      "title": "Appointed seats named, election dates set",
+      "body": "The three appointed Council seats are confirmed: a lead concept artist directing Gen 2, a senior producer on Gen 2, and a long-standing holder appointee. The official election calendar is locked too — candidate applications, then the voting window — with the candidate application form open for feedback before the questions lock.",
+      "tag": "council",
+      "i18n": {
+        "pt": {
+          "date": "8 de jun. de 2026",
+          "title": "Cadeiras designadas anunciadas, datas da eleição definidas",
+          "body": "As três cadeiras designadas do Conselho estão confirmadas: um lead concept artist dirigindo o Gen 2, um produtor sênior do Gen 2 e um holder de longa data como designado. O calendário oficial da eleição também está fechado — candidaturas e depois a janela de votação — com o formulário de candidatura aberto a feedback antes de as perguntas serem travadas."
+        },
+        "es": {
+          "date": "8 jun. 2026",
+          "title": "Asientos designados anunciados, fechas de la elección fijadas",
+          "body": "Los tres asientos designados del Consejo están confirmados: un lead concept artist que dirige Gen 2, un productor sénior de Gen 2 y un holder veterano como designado. El calendario oficial de la elección también está cerrado — las candidaturas y luego la ventana de votación — con el formulario de candidatura abierto a comentarios antes de que las preguntas se bloqueen."
+        },
+        "fr": {
+          "date": "8 juin 2026",
+          "title": "Sièges désignés annoncés, dates de l'élection fixées",
+          "body": "Les trois sièges désignés du Conseil sont confirmés : un lead concept artist dirigeant Gen 2, un producteur senior sur Gen 2 et un holder de longue date comme désigné. Le calendrier officiel de l'élection est aussi verrouillé — les candidatures, puis la fenêtre de vote — avec le formulaire de candidature ouvert aux retours avant que les questions ne soient figées."
+        },
+        "de": {
+          "date": "8. Juni 2026",
+          "title": "Ernannte Sitze benannt, Wahltermine stehen fest",
+          "body": "Die drei ernannten Ratssitze sind bestätigt: ein Lead Concept Artist, der Gen 2 leitet, ein Senior Producer für Gen 2 und ein langjähriger Holder als Ernannter. Der offizielle Wahlkalender steht ebenfalls fest — Kandidatur-Bewerbungen, dann das Abstimmungsfenster — wobei das Bewerbungsformular vor dem Sperren der Fragen für Feedback offen ist."
+        },
+        "ru": {
+          "date": "8 июня 2026",
+          "title": "Назначенные места объявлены, даты выборов установлены",
+          "body": "Три назначенных места Совета подтверждены: ведущий концепт-художник, курирующий Gen 2, старший продюсер Gen 2 и давний холдер в качестве назначенца. Официальный календарь выборов тоже зафиксирован — приём кандидатур, затем окно голосования — а форма заявки кандидата открыта для обратной связи до того, как вопросы будут заблокированы."
+        },
+        "tr": {
+          "date": "8 Haziran 2026",
+          "title": "Atanmış koltuklar açıklandı, seçim tarihleri belirlendi",
+          "body": "Konseyin üç atanmış koltuğu onaylandı: Gen 2'yi yöneten bir lead concept artist, Gen 2'de kıdemli bir yapımcı ve uzun süredir topluluğun içinde olan bir holder atanmış üye. Resmi seçim takvimi de kesinleşti — aday başvuruları, ardından oylama penceresi — ve aday başvuru formu, sorular kilitlenmeden önce geri bildirime açık."
         }
       }
     },
@@ -230,6 +420,120 @@
     }
   ],
   "site": [
+    {
+      "date": "June 21, 2026",
+      "title": "Creature & LAND marketplace is live",
+      "body": "A non-custodial marketplace with a 0% marketplace fee is now live at /trade. Browse, list, buy, sell, and cancel Creatures and LAND — filter LAND by slime traits and rarity rank — make collection offers or instantly sell a parcel, and toggle any price between ETH and your currency. New to crypto? A built-in card on-ramp (Transak) lets you buy without already holding ETH, with wallet-safety checks along the way.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "21 de jun. de 2026",
+          "title": "O marketplace de Creatures e LAND está no ar",
+          "body": "Um marketplace não custodial com 0% de taxa está agora no ar em /trade. Navegue, liste, compre, venda e cancele Creatures e LAND — filtre LAND por traços de slime e rank de raridade — faça ofertas por coleção ou venda um lote instantaneamente, e alterne qualquer preço entre ETH e sua moeda. Novo em cripto? Um card on-ramp integrado (Transak) permite comprar sem já ter ETH, com verificações de segurança da carteira pelo caminho."
+        },
+        "es": {
+          "date": "21 jun. 2026",
+          "title": "El marketplace de Creatures y LAND está activo",
+          "body": "Un marketplace no custodial con 0% de comisión ya está activo en /trade. Explora, lista, compra, vende y cancela Creatures y LAND — filtra LAND por rasgos de slime y rango de rareza — haz ofertas por colección o vende una parcela al instante, y alterna cualquier precio entre ETH y tu moneda. ¿Nuevo en cripto? Un card on-ramp integrado (Transak) te permite comprar sin tener ya ETH, con comprobaciones de seguridad de la billetera por el camino."
+        },
+        "fr": {
+          "date": "21 juin 2026",
+          "title": "La marketplace Creatures et LAND est en ligne",
+          "body": "Une marketplace non-custodiale avec 0 % de frais est désormais en ligne sur /trade. Parcours, liste, achète, vends et annule des Creatures et du LAND — filtre le LAND par traits de slime et rang de rareté — fais des offres sur une collection ou vends une parcelle instantanément, et bascule n'importe quel prix entre l'ETH et ta devise. Nouveau dans la crypto ? Un card on-ramp intégré (Transak) te permet d'acheter sans détenir déjà d'ETH, avec des vérifications de sécurité du portefeuille en chemin."
+        },
+        "de": {
+          "date": "21. Juni 2026",
+          "title": "Marktplatz für Creatures & LAND ist live",
+          "body": "Ein nicht-verwahrender Marktplatz mit 0 % Marktplatzgebühr ist jetzt unter /trade live. Durchsuche, liste, kaufe, verkaufe und storniere Creatures und LAND — filtere LAND nach Slime-Traits und Seltenheitsrang — mache Sammlungsangebote oder verkaufe eine Parzelle sofort, und schalte jeden Preis zwischen ETH und deiner Währung um. Neu bei Krypto? Ein integrierter Card-On-Ramp (Transak) lässt dich kaufen, ohne schon ETH zu besitzen, mit Wallet-Sicherheitsprüfungen unterwegs."
+        },
+        "ru": {
+          "date": "21 июня 2026",
+          "title": "Маркетплейс Creatures и LAND запущен",
+          "body": "Некастодиальный маркетплейс с комиссией 0% теперь доступен по адресу /trade. Просматривайте, выставляйте, покупайте, продавайте и отменяйте Creatures и LAND — фильтруйте LAND по трейтам слайма и рангу редкости — делайте предложения по коллекции или мгновенно продавайте участок, и переключайте любую цену между ETH и вашей валютой. Новичок в крипте? Встроенный card on-ramp (Transak) позволяет купить, не имея ETH, с проверками безопасности кошелька по пути."
+        },
+        "tr": {
+          "date": "21 Haziran 2026",
+          "title": "Creatures ve LAND pazarı yayında",
+          "body": "%0 pazar ücretli, saklamasız bir pazar artık /trade adresinde yayında. Creatures ve LAND'i gözat, listele, satın al, sat ve iptal et — LAND'i slime özelliklerine ve nadirlik sırasına göre filtrele — koleksiyon teklifleri yap ya da bir parseli anında sat ve herhangi bir fiyatı ETH ile kendi para birimin arasında değiştir. Kriptoda yeni misin? Yerleşik bir card on-ramp (Transak), yol boyunca cüzdan güvenliği kontrolleriyle, elinde ETH olmadan satın almanı sağlar."
+        }
+      }
+    },
+    {
+      "date": "June 21, 2026",
+      "title": "Now in Highrise's Explore bar",
+      "body": "The HCC site is now indexed in Highrise's website navigation, so members can reach it straight from the Explore bar. There's also a new HCC Feedback role you can claim to get pinged on HCC discussions.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "21 de jun. de 2026",
+          "title": "Agora na barra Explore da Highrise",
+          "body": "O site do HCC agora está indexado na navegação do site da Highrise, então os membros podem acessá-lo direto pela barra Explore. Também há um novo cargo HCC Feedback que você pode pegar para ser marcado nas discussões sobre o HCC."
+        },
+        "es": {
+          "date": "21 jun. 2026",
+          "title": "Ahora en la barra Explore de Highrise",
+          "body": "El sitio de HCC ahora está indexado en la navegación del sitio de Highrise, así que los miembros pueden llegar directamente desde la barra Explore. También hay un nuevo rol HCC Feedback que puedes obtener para que te mencionen en las discusiones sobre HCC."
+        },
+        "fr": {
+          "date": "21 juin 2026",
+          "title": "Maintenant dans la barre Explore de Highrise",
+          "body": "Le site HCC est désormais indexé dans la navigation du site de Highrise, si bien que les membres peuvent y accéder directement depuis la barre Explore. Il y a aussi un nouveau rôle HCC Feedback que tu peux obtenir pour être mentionné dans les discussions sur HCC."
+        },
+        "de": {
+          "date": "21. Juni 2026",
+          "title": "Jetzt in der Explore-Leiste von Highrise",
+          "body": "Die HCC-Website ist jetzt in der Navigation der Highrise-Website indexiert, sodass Mitglieder sie direkt über die Explore-Leiste erreichen. Außerdem gibt es eine neue HCC-Feedback-Rolle, die du dir holen kannst, um bei HCC-Diskussionen gepingt zu werden."
+        },
+        "ru": {
+          "date": "21 июня 2026",
+          "title": "Теперь в панели Explore на Highrise",
+          "body": "Сайт HCC теперь проиндексирован в навигации сайта Highrise, так что участники могут попасть на него прямо из панели Explore. Также появилась новая роль HCC Feedback, которую можно получить, чтобы вас упоминали в обсуждениях HCC."
+        },
+        "tr": {
+          "date": "21 Haziran 2026",
+          "title": "Artık Highrise'ın Explore çubuğunda",
+          "body": "HCC sitesi artık Highrise'ın web sitesi navigasyonunda dizinlendi, böylece üyeler ona doğrudan Explore çubuğundan ulaşabilir. Ayrıca HCC tartışmalarında etiketlenmek için alabileceğin yeni bir HCC Feedback rolü var."
+        }
+      }
+    },
+    {
+      "date": "June 12, 2026",
+      "title": "Gen 2 roadmap page",
+      "body": "A dedicated Gen 2 roadmap is now live at /roadmap/gen2. All six sets sit on one road, and each stop shows exactly which phase that set is in — it stays up to date as work ships.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "12 de jun. de 2026",
+          "title": "Página do roadmap do Gen 2",
+          "body": "Um roadmap dedicado ao Gen 2 está agora no ar em /roadmap/gen2. Os seis conjuntos ficam em uma única estrada, e cada parada mostra exatamente em qual fase aquele conjunto está — e se mantém atualizado conforme o trabalho é entregue."
+        },
+        "es": {
+          "date": "12 jun. 2026",
+          "title": "Página del roadmap de Gen 2",
+          "body": "Un roadmap dedicado a Gen 2 ya está activo en /roadmap/gen2. Los seis conjuntos están en un solo camino, y cada parada muestra exactamente en qué fase está ese conjunto — se mantiene actualizado a medida que el trabajo se entrega."
+        },
+        "fr": {
+          "date": "12 juin 2026",
+          "title": "Page roadmap de Gen 2",
+          "body": "Un roadmap dédié à Gen 2 est maintenant en ligne sur /roadmap/gen2. Les six ensembles sont sur une même route, et chaque étape montre exactement dans quelle phase se trouve cet ensemble — il reste à jour au fur et à mesure des livraisons."
+        },
+        "de": {
+          "date": "12. Juni 2026",
+          "title": "Gen-2-Roadmap-Seite",
+          "body": "Eine eigene Gen-2-Roadmap ist jetzt unter /roadmap/gen2 live. Alle sechs Sets liegen auf einer Straße, und jede Station zeigt genau, in welcher Phase das Set steckt — sie bleibt aktuell, während die Arbeit ausgeliefert wird."
+        },
+        "ru": {
+          "date": "12 июня 2026",
+          "title": "Страница роадмапа Gen 2",
+          "body": "Отдельный роадмап Gen 2 теперь доступен по адресу /roadmap/gen2. Все шесть наборов расположены на одной дороге, и каждая остановка показывает, в какой именно фазе находится набор — он обновляется по мере выхода работ."
+        },
+        "tr": {
+          "date": "12 Haziran 2026",
+          "title": "Gen 2 yol haritası sayfası",
+          "body": "Gen 2'ye özel bir yol haritası artık /roadmap/gen2 adresinde yayında. Altı setin tamamı tek bir yolda yer alır ve her durak, o setin tam olarak hangi aşamada olduğunu gösterir — işler yayınlandıkça güncel kalır."
+        }
+      }
+    },
     {
       "date": "June 9, 2026",
       "title": "Run for a seat — self-nomination is live",
