@@ -916,22 +916,12 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         </div>
         <div class="wt-mkt" id="gm-setup-cr-p" data-mkt="creatures" role="tabpanel" aria-labelledby="gm-setup-cr" style="--accent:#51FFA5;--accent-soft:rgba(81,255,165,0.12)">
           <p class="wt-mkt-where" data-i18n="gm.setup.cr.where">Creatures live on Immutable zkEVM.</p>
-          <figure class="media-ph" data-media="assets/market/setup-creatures.png"><figcaption class="media-ph-label" data-i18n="gm.media.shot">Screenshot coming soon</figcaption></figure>
-          <ol class="guide-steps">
-            <li data-i18n="gm.setup.cr.s1">Open the Trade tab and keep the collection on Creatures. Tap Connect MetaMask — read and accept the quick safety reminder first.</li>
-            <li data-i18n="gm.setup.cr.s2">Approve the connection in MetaMask. If you're on the wrong network, tap Switch network — the site adds Immutable zkEVM for you.</li>
-            <li data-i18n="gm.setup.cr.s3">Once connected, the top bar shows your wallet, your ETH and IMX balances, and "Your Creatures".</li>
-          </ol>
+          <div class="gdemo" data-gdemo="setup-creatures"></div>
           <p class="guide-note" data-i18n="gm.setup.cr.note">Only self-custody wallets like MetaMask can trade here. If your Creatures are in Immutable Passport, withdraw them to MetaMask first.</p>
         </div>
         <div class="wt-mkt" id="gm-setup-la-p" data-mkt="land" role="tabpanel" aria-labelledby="gm-setup-la" style="--accent:#0DA6FC;--accent-soft:rgba(13,166,252,0.12)" hidden>
           <p class="wt-mkt-where" data-i18n="gm.setup.la.where">LAND lives on Ethereum mainnet.</p>
-          <figure class="media-ph" data-media="assets/market/setup-land.png"><figcaption class="media-ph-label" data-i18n="gm.media.shot">Screenshot coming soon</figcaption></figure>
-          <ol class="guide-steps">
-            <li data-i18n="gm.setup.la.s1">Open the Trade tab and switch the collection to LAND. Tap Connect MetaMask and accept the safety reminder.</li>
-            <li data-i18n="gm.setup.la.s2">When prompted, switch MetaMask to Ethereum mainnet — that's where LAND parcels live.</li>
-            <li data-i18n="gm.setup.la.s3">Connected, the top bar shows your wallet, your mainnet ETH, and "Your LAND".</li>
-          </ol>
+          <div class="gdemo" data-gdemo="setup-land"></div>
           <p class="guide-note" data-i18n="gm.setup.la.note">LAND trades settle on Ethereum mainnet — there's no network to add, just switch MetaMask to Ethereum.</p>
         </div>
       </article>
@@ -944,7 +934,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
             <h3 class="guide-title" data-i18n="gm.fund.h">Get funds on the right network</h3>
           </div>
         </div>
-        <p class="guide-intro" data-i18n="gm.fund.p">Make sure the coins you'll spend sit on the same network as the asset — the panel guides you if you're short.</p>
+        <p class="guide-intro" data-i18n="gm.fund.p">Money is the hardest part the first time — so pick the situation that matches yours and watch exactly what happens, click by click. No crypto knowledge needed: getting coins, moving them between networks, gas fees and cashing out are all covered.</p>
         <div class="wt-mkt-toggle">
           <div class="seg" role="tablist" data-mkt-toggle aria-label="Choose a collection">
             <button class="seg-btn is-active" id="gm-fund-cr" type="button" role="tab" aria-selected="true" aria-controls="gm-fund-cr-p" data-mkt-btn="creatures" data-i18n="trade.coll.creatures">Creatures</button>
@@ -953,21 +943,12 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         </div>
         <div class="wt-mkt" id="gm-fund-cr-p" data-mkt="creatures" role="tabpanel" aria-labelledby="gm-fund-cr" style="--accent:#51FFA5;--accent-soft:rgba(81,255,165,0.12)">
           <p class="wt-mkt-where" data-i18n="gm.fund.cr.where">Creatures need ETH for the price and a little IMX for gas — both on Immutable zkEVM.</p>
-          <figure class="media-ph" data-media="assets/market/funding-creatures.gif"><figcaption class="media-ph-label" data-i18n="gm.media.clip">Walkthrough clip coming soon</figcaption></figure>
-          <ol class="guide-steps">
-            <li data-i18n="gm.fund.cr.s1">Tap Buy on any Creature. If your ETH is on Ethereum mainnet, the panel offers to bridge it to Immutable zkEVM (powered by Squid) — confirm the two MetaMask pop-ups.</li>
-            <li data-i18n="gm.fund.cr.s2">No IMX for gas yet? The same panel swaps a tiny bit of ETH into IMX on Immutable zkEVM — a little lasts a long time.</li>
-            <li data-i18n="gm.fund.cr.s3">Bridges take a few minutes; a progress bar tracks it. When your ETH and IMX land, come back and tap Buy.</li>
-          </ol>
+          <div class="gdemo" data-gdemo="funding-creatures"></div>
           <p class="guide-note" data-i18n="gm.fund.cr.note">ETH pays the price, IMX pays the gas — and both must be on Immutable zkEVM, not Ethereum mainnet.</p>
         </div>
         <div class="wt-mkt" id="gm-fund-la-p" data-mkt="land" role="tabpanel" aria-labelledby="gm-fund-la" style="--accent:#0DA6FC;--accent-soft:rgba(13,166,252,0.12)" hidden>
           <p class="wt-mkt-where" data-i18n="gm.fund.la.where">LAND is bought with plain ETH on Ethereum mainnet — no bridging, no IMX.</p>
-          <figure class="media-ph" data-media="assets/market/funding-land.png"><figcaption class="media-ph-label" data-i18n="gm.media.shot">Screenshot coming soon</figcaption></figure>
-          <ol class="guide-steps">
-            <li data-i18n="gm.fund.la.s1">Hold enough ETH on Ethereum mainnet to cover the parcel's price plus mainnet gas.</li>
-            <li data-i18n="gm.fund.la.s2">Short on mainnet ETH? Top up your wallet first — MetaMask's Buy feature or a withdrawal from an exchange both work.</li>
-          </ol>
+          <div class="gdemo" data-gdemo="funding-land"></div>
           <p class="guide-note" data-i18n="gm.fund.la.note">LAND uses mainnet ETH for both the price and gas — there's nothing to bridge and no IMX needed.</p>
         </div>
       </article>
@@ -989,23 +970,12 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         </div>
         <div class="wt-mkt" id="gm-trade-cr-p" data-mkt="creatures" role="tabpanel" aria-labelledby="gm-trade-cr" style="--accent:#51FFA5;--accent-soft:rgba(81,255,165,0.12)">
           <p class="wt-mkt-where" data-i18n="gm.trade.cr.where">Creatures: Immutable zkEVM, with offers and instant-sell.</p>
-          <figure class="media-ph" data-media="assets/market/trading-creatures.mp4"><figcaption class="media-ph-label" data-i18n="gm.media.video">Video walkthrough coming soon</figcaption></figure>
-          <ol class="guide-steps">
-            <li data-i18n="gm.trade.cr.s1">Browse "On sale now". Filter by rarity, traits and price, search by name or number, and sort by price, rarity or newest. Flip to "All Creatures" for the whole collection.</li>
-            <li data-i18n="gm.trade.cr.s2">Buy: open a Creature, check the all-in price (price + royalty + gas, 0% fee), tap Buy now — approve ETH once, then confirm.</li>
-            <li data-i18n="gm.trade.cr.s3">Offer: place an offer in ETH on any Creature, or a collection-wide "offer to buy any". Sign once (free, no gas); if a holder accepts, it arrives automatically.</li>
-            <li data-i18n="gm.trade.cr.s4">Sell: Sell tab → pick a Creature → set a price in ETH or your currency → approve the collection once, then sign (free). Manage under "Your listings", or instantly sell into the top offer.</li>
-          </ol>
+          <div class="gdemo" data-gdemo="trading-creatures"></div>
           <p class="guide-note" data-i18n="gm.trade.cr.note">0% marketplace fee. Buyers pay the 5% creator royalty, and listings and offers are free to create — just a signature.</p>
         </div>
         <div class="wt-mkt" id="gm-trade-la-p" data-mkt="land" role="tabpanel" aria-labelledby="gm-trade-la" style="--accent:#0DA6FC;--accent-soft:rgba(13,166,252,0.12)" hidden>
           <p class="wt-mkt-where" data-i18n="gm.trade.la.where">LAND: Ethereum mainnet via OpenSea. No offers yet.</p>
-          <figure class="media-ph" data-media="assets/market/trading-land.gif"><figcaption class="media-ph-label" data-i18n="gm.media.clip">Walkthrough clip coming soon</figcaption></figure>
-          <ol class="guide-steps">
-            <li data-i18n="gm.trade.la.s1">Browse parcels by their Slime pet — filter and rank by the Slime's traits and rarity, since the plots look alike. On-sale parcels show all-in ETH prices from OpenSea.</li>
-            <li data-i18n="gm.trade.la.s2">Buy: open a listed parcel, review the all-in ETH price (0% fee from us), tap Buy now and confirm in MetaMask. Ethereum mainnet gas applies.</li>
-            <li data-i18n="gm.trade.la.s3">Sell: Sell tab → pick a parcel → set price and a listing length → approve OpenSea once, then sign (free). It lists on OpenSea and shows here.</li>
-          </ol>
+          <div class="gdemo" data-gdemo="trading-land"></div>
           <p class="guide-note" data-i18n="gm.trade.la.note">A LAND sale costs 1% OpenSea + 5% creator royalty. Offers aren't available for LAND yet.</p>
         </div>
       </article>
@@ -1027,22 +997,12 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         </div>
         <div class="wt-mkt" id="gm-move-cr-p" data-mkt="creatures" role="tabpanel" aria-labelledby="gm-move-cr" style="--accent:#51FFA5;--accent-soft:rgba(81,255,165,0.12)">
           <p class="wt-mkt-where" data-i18n="gm.move.cr.where">Send Creatures on Immutable zkEVM.</p>
-          <figure class="media-ph" data-media="assets/market/moving-creatures.gif"><figcaption class="media-ph-label" data-i18n="gm.media.clip">Walkthrough clip coming soon</figcaption></figure>
-          <ol class="guide-steps">
-            <li data-i18n="gm.move.cr.s1">Open the Transfer tab and pick the Creature to send. Listed Creatures are hidden — cancel the listing first.</li>
-            <li data-i18n="gm.move.cr.s2">Paste the recipient's Immutable zkEVM address. We run live safety checks — checksum, contract detection, brand-new-wallet warnings — and flag anything risky.</li>
-            <li data-i18n="gm.move.cr.s3">Review, tap Send Creature, then confirm in MetaMask. Follow it on the explorer link.</li>
-          </ol>
+          <div class="gdemo" data-gdemo="moving-creatures"></div>
           <p class="guide-note" data-i18n="gm.move.cr.note">Transfers are permanent — a little IMX covers gas, and no one can reverse a send to the wrong wallet, so double-check the address.</p>
         </div>
         <div class="wt-mkt" id="gm-move-la-p" data-mkt="land" role="tabpanel" aria-labelledby="gm-move-la" style="--accent:#0DA6FC;--accent-soft:rgba(13,166,252,0.12)" hidden>
           <p class="wt-mkt-where" data-i18n="gm.move.la.where">Send LAND on Ethereum mainnet.</p>
-          <figure class="media-ph" data-media="assets/market/moving-land.png"><figcaption class="media-ph-label" data-i18n="gm.media.shot">Screenshot coming soon</figcaption></figure>
-          <ol class="guide-steps">
-            <li data-i18n="gm.move.la.s1">Open the Transfer tab with LAND selected and pick the parcel to send.</li>
-            <li data-i18n="gm.move.la.s2">Paste the recipient's Ethereum address and re-read it carefully — transfers can't be undone.</li>
-            <li data-i18n="gm.move.la.s3">Confirm in MetaMask. Mainnet gas applies; track the transaction on Etherscan.</li>
-          </ol>
+          <div class="gdemo" data-gdemo="moving-land"></div>
           <p class="guide-note" data-i18n="gm.move.la.note">LAND transfers settle on Ethereum mainnet and pay mainnet gas.</p>
         </div>
       </article>
@@ -1064,22 +1024,12 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         </div>
         <div class="wt-mkt" id="gm-game-cr-p" data-mkt="creatures" role="tabpanel" aria-labelledby="gm-game-cr" style="--accent:#51FFA5;--accent-soft:rgba(81,255,165,0.12)">
           <p class="wt-mkt-where" data-i18n="gm.game.cr.where">Creatures appear in your Highrise clothing inventory.</p>
-          <figure class="media-ph" data-media="assets/market/ingame-creatures.png"><figcaption class="media-ph-label" data-i18n="gm.media.shot">Screenshot coming soon</figcaption></figure>
-          <ol class="guide-steps">
-            <li data-i18n="gm.game.cr.s1">On highrise.game, open Settings → Connect MetaMask Wallet and link the wallet holding your Creature.</li>
-            <li data-i18n="gm.game.cr.s2">Sign the request. Within an hour your Creature outfit appears on the second tab of your Highrise clothing inventory, and your Discord roles update.</li>
-            <li data-i18n="gm.game.cr.s3">Wear the items, earn daily Creature Coins, and join the members-only spaces.</li>
-          </ol>
+          <div class="gdemo" data-gdemo="ingame-creatures"></div>
           <p class="guide-note" data-i18n="gm.game.cr.note">Linking is read-only — it just lets Highrise see your wallet. Your keys never leave MetaMask.</p>
         </div>
         <div class="wt-mkt" id="gm-game-la-p" data-mkt="land" role="tabpanel" aria-labelledby="gm-game-la" style="--accent:#0DA6FC;--accent-soft:rgba(13,166,252,0.12)" hidden>
           <p class="wt-mkt-where" data-i18n="gm.game.la.where">LAND brings its Slime pet and perks into Highrise.</p>
-          <figure class="media-ph" data-media="assets/market/ingame-land.png"><figcaption class="media-ph-label" data-i18n="gm.media.shot">Screenshot coming soon</figcaption></figure>
-          <ol class="guide-steps">
-            <li data-i18n="gm.game.la.s1">Link the wallet holding your parcel to your Highrise account in Settings, the same way.</li>
-            <li data-i18n="gm.game.la.s2">Your parcel and its Slime pet show up in your account, with room-capacity boosts and daily Creature Coins (Premium plots at 3×).</li>
-            <li data-i18n="gm.game.la.s3">Check the Slime Pet Map under Guides → Links to see which Slime belongs to your plot.</li>
-          </ol>
+          <div class="gdemo" data-gdemo="ingame-land"></div>
           <p class="guide-note" data-i18n="gm.game.la.note">LAND owners are full Creature Club members — the same drops, giveaways and Coins as Creature holders.</p>
         </div>
       </article>
