@@ -634,6 +634,35 @@ footer p  { color: var(--hr-fg-2); font-size: 14px; max-width: 420px; margin: 10
 }
 .market-reset:hover { color: var(--hr-fg-0); border-color: var(--hr-primary); }
 
+/* "Total in view" strip — live sum of the summable metrics (volume / sales)
+   across whatever window is on screen. Recomputes on zoom, pan, range change. */
+.market-total {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 10px 18px; margin-top: 14px;
+  padding: 11px 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
+  border: 1px solid var(--hr-line); border-radius: var(--hr-radius-md);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+  animation: market-total-in .35s ease both;
+}
+@keyframes market-total-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.market-total-label {
+  font: 800 9.5px/1.2 var(--hr-sans); color: var(--hr-fg-2);
+  text-transform: uppercase; letter-spacing: .07em;
+}
+.market-total-span { color: var(--hr-fg-3); font-weight: 700; letter-spacing: .04em; }
+.market-total-chips { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.market-total-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 13px; border-radius: var(--hr-radius-pill);
+  background: var(--hr-bg-3); border: 1px solid var(--hr-line);
+}
+.market-total-chip .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; box-shadow: 0 0 8px -1px currentColor; }
+.market-total-chip .ttl-name { font: 700 11px/1 var(--hr-sans); color: var(--hr-fg-2); }
+.market-total-chip .ttl-val  { font: 800 13px/1 var(--hr-sans); color: var(--hr-fg-0); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .market-total { animation: none; } }
+
 .market-chart-box { position: relative; height: 340px; margin-top: 10px; }
 @media(max-width:640px){ .market-chart-box { height: 280px; } }
 .market-zoom-hint {

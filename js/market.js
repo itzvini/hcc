@@ -16,6 +16,12 @@ let fxRates  = { usd: 1 }; // USD-relative display rates from the API
 let chart    = null;
 let wired    = false;
 
+// The series currently plotted, kept in module scope so the "total for the
+// period in view" readout can re-sum them on zoom/pan without re-bucketing.
+let plotDates = [];
+let plotC = [];
+let plotL = [];
+
 // Format a number in the active currency. ETH is native; fiats use the locale's
 // own currency formatting (symbol, grouping) via Intl.
 function fmtMoney(v) {
@@ -142,6 +148,7 @@ function renderChart() {
   const showPoints = dates.length > 0 && dates.length <= 60;
   const cData = dates.map(d => (cBuckets.has(d) ? cBuckets.get(d) : null));
   const lData = dates.map(d => (lBuckets.has(d) ? lBuckets.get(d) : null));
+  plotDates = dates; plotC = cData; plotL = lData;
 
   const datasets = [];
   if (cData.some(v => v != null)) datasets.push(lineDataset(t('market.chart.creatures'), cData, '#51FFA5', 'rgba(81,255,165,0.10)', showPoints));
@@ -179,12 +186,12 @@ function renderChart() {
         // inert unless chartjs-plugin-zoom registered (it self-registers via its
         // CDN UMD build), so this degrades cleanly if the plugin fails to load.
         zoom: {
-          pan: { enabled: true, mode: 'x', onPanComplete: updateResetBtn },
+          pan: { enabled: true, mode: 'x', onPanComplete: onViewChange },
           zoom: {
             wheel: { enabled: true, speed: 0.08 },
             pinch: { enabled: true },
             mode: 'x',
-            onZoomComplete: updateResetBtn,
+            onZoomComplete: onViewChange,
           },
           limits: { x: { min: 'original', max: 'original' } },
         },
@@ -204,6 +211,69 @@ function renderChart() {
     },
   });
   updateResetBtn(); // a fresh chart starts unzoomed — keep the reset button in sync
+  renderTotal();
+}
+
+// Zoom/pan changed the visible window — keep the reset pill and the "period in
+// view" total both in sync with what's actually on screen.
+function onViewChange() {
+  updateResetBtn();
+  renderTotal();
+}
+
+// Indices of the buckets currently visible on the x-axis. Chart.js reports the
+// category scale's min/max as (possibly fractional) data indices; when unzoomed
+// they span the whole series. Round inward so a bucket counts once its label is
+// on screen. Returns null when there's nothing plotted.
+function visibleRange() {
+  const n = plotDates.length;
+  if (!n) return null;
+  const xs = chart && chart.scales && chart.scales.x;
+  let lo = 0, hi = n - 1;
+  if (xs && isFinite(xs.min) && isFinite(xs.max)) {
+    lo = Math.max(0, Math.round(xs.min));
+    hi = Math.min(n - 1, Math.round(xs.max));
+  }
+  return lo > hi ? null : { lo, hi };
+}
+
+// Sum a plotted series across the visible index window, skipping empty buckets.
+// Returns null when no bucket in the window carries a value for that series.
+function sumVisible(series, lo, hi) {
+  let sum = 0, seen = false;
+  for (let i = lo; i <= hi; i++) {
+    const v = series[i];
+    if (v == null) continue;
+    sum += v; seen = true;
+  }
+  return seen ? sum : null;
+}
+
+// The "total for the period in view" readout. Only meaningful for the summable
+// metrics (volume, sales count) — for average metrics (floor/low/high) a total
+// is nonsense, so the strip is hidden. Recomputed on every view change.
+function renderTotal() {
+  const el = document.getElementById('market-total');
+  if (!el) return;
+  const rng = SUM_METRICS.has(metric) ? visibleRange() : null;
+  if (!rng) { el.hidden = true; el.innerHTML = ''; return; }
+
+  const { lo, hi } = rng;
+  const cTot = sumVisible(plotC, lo, hi);
+  const lTot = sumVisible(plotL, lo, hi);
+  if (cTot == null && lTot == null) { el.hidden = true; el.innerHTML = ''; return; }
+
+  const label = metric === 'count' ? t('market.total.sales') : t('market.total.volume');
+  const span  = `${fmtDate(plotDates[lo])} – ${fmtDate(plotDates[hi])}`;
+  const chip = (name, color, total) => total == null ? '' :
+    `<span class="market-total-chip"><span class="dot" style="background:${color};color:${color}"></span>` +
+    `<span class="ttl-name">${name}</span><span class="ttl-val">${fmtMetric(total)}</span></span>`;
+
+  el.innerHTML =
+    `<span class="market-total-label">${label} <span class="market-total-span">· ${span}</span></span>` +
+    `<span class="market-total-chips">${chip(t('market.chart.creatures'), '#51FFA5', cTot)}` +
+    `${chip(t('market.chart.land'), '#FFF95F', lTot)}</span>`;
+  el.hidden = false;
 }
 
 // Show the "Reset zoom" pill only while the view is zoomed/panned away from the
@@ -314,7 +384,7 @@ function wireControls() {
 
   document.getElementById('market-reset-zoom')?.addEventListener('click', () => {
     chart?.resetZoom?.();
-    updateResetBtn();
+    onViewChange();
   });
 }
 

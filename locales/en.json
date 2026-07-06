@@ -37,6 +37,8 @@
   "market.range.all": "All",
   "market.range.from": "From",
   "market.range.to": "To",
+  "market.total.volume": "Total volume in view",
+  "market.total.sales": "Total sales in view",
   "market.zoom.reset": "Reset zoom",
   "market.zoom.hint": "Scroll or pinch to zoom · drag to pan",
   "market.land.note": "🗺️ LAND price history is on the way. For now, here's LAND's current floor from OpenSea — its full sale history will light up here soon.",
