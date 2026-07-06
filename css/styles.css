@@ -1539,7 +1539,7 @@ footer p  { color: var(--hr-fg-2); font-size: 14px; max-width: 420px; margin: 10
 }
 
 /* anchors for smooth-scroll under the sticky (two-row) tab bar */
-#guides-top, #council-top, #roadmap-top { scroll-margin-top: 124px; }
+#guides-top, #council-top, #roadmap-top, #perks-top, #coins-top { scroll-margin-top: 124px; }
 
 /* ---------- LANDING HUB ---------- */
 .hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-top: 22px; }
@@ -4171,4 +4171,337 @@ textarea.appf-input { resize: vertical; min-height: 92px; line-height: 1.5; }
 @media (max-width: 560px) {
   .contrib-actions { flex-direction: column; }
   .contrib-gh-btn, .contrib-ghost-btn { width: 100%; justify-content: center; }
+}
+
+/* ==========================================================================
+   PERKS TAB — premium member-perks showcase (perx-*)
+   Glass bento cards themed per perk via --accent, the Highrise+ rules as a
+   3-step rail, live coin-rate tiles, and the interactive yield calculator
+   (js/perks.js). Entrances reuse .g2-reveal / [data-countup] from app.js;
+   auroras and sparkles reuse the Apply panel's pieces.
+   ========================================================================== */
+
+/* Per-element accent theming (any perx element can carry data-accent) */
+#panel-perks [data-accent="mint"]      { --accent: var(--hr-primary);   --accent-soft: var(--hr-primary-25); }
+#panel-perks [data-accent="lavender"]  { --accent: var(--hr-secondary); --accent-soft: var(--hr-secondary-25); }
+#panel-perks [data-accent="banana"]    { --accent: var(--hr-banana);    --accent-soft: var(--hr-banana-25); }
+#panel-perks [data-accent="blurple"]   { --accent: #5865F2;             --accent-soft: rgba(88,101,242,.3); }
+#panel-perks [data-accent="tangerine"] { --accent: var(--hr-tangerine); --accent-soft: rgba(255,153,0,.25); }
+#panel-perks [data-accent="blueberry"] { --accent: var(--hr-blueberry); --accent-soft: rgba(13,166,252,.25); }
+
+/* ---- Hero ---- */
+.perx-hero {
+  position: relative; overflow: hidden; isolation: isolate;
+  text-align: center; padding: 58px 30px 54px;
+  border-radius: var(--hr-radius-2xl);
+  border: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(40,39,45,.72), rgba(20,19,23,.82));
+  backdrop-filter: blur(10px);
+  box-shadow: var(--hr-shadow-3), inset 0 1px 0 rgba(255,255,255,.06);
+}
+.perx-hero > * { position: relative; z-index: 1; }
+.perx-hero .apply-aurora, .perx-hero .apply-sparkles { z-index: 0; }
+.perx-hero-h {
+  font-family: var(--hr-sans); font-weight: 900; letter-spacing: var(--hr-tracking-tight);
+  font-size: clamp(27px, 4.4vw, 40px); line-height: 1.06; color: var(--hr-fg-0);
+  margin: 18px auto 12px; max-width: 560px;
+}
+.perx-hero-p { color: var(--hr-fg-1); max-width: 520px; margin: 0 auto; font-size: 15.5px; }
+.perx-float {
+  position: absolute; z-index: 1; pointer-events: none; height: auto;
+  filter: drop-shadow(0 10px 24px rgba(0,0,0,.45));
+  animation: bob 4s ease-in-out infinite;
+}
+.perx-float-coin  { top: 22px; right: 34px; width: clamp(60px, 10vw, 110px); animation-delay: .2s; }
+.perx-float-shirt { bottom: 24px; left: 30px; width: clamp(46px, 8vw, 86px); animation-duration: 4.6s; }
+.perx-float-gift  { top: 30px; left: 48px; width: clamp(38px, 6.5vw, 68px); animation-duration: 5.2s; animation-delay: .6s; }
+
+/* ---- Bento grid ---- */
+.perx-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.perx-card {
+  --accent: var(--hr-primary); --accent-soft: var(--hr-primary-25);
+  position: relative; overflow: hidden; isolation: isolate;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 22px;
+  border-radius: var(--hr-radius-xl);
+  border: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(40,39,45,.66), rgba(20,19,23,.85));
+  backdrop-filter: blur(10px);
+  box-shadow: var(--hr-shadow-2), inset 0 1px 0 rgba(255,255,255,.05);
+  transition: transform .25s cubic-bezier(.2,.7,.2,1), border-color .25s, box-shadow .25s;
+}
+.perx-card:hover {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: var(--hr-shadow-3), 0 0 34px var(--accent-soft), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.perx-card > * { position: relative; z-index: 1; }
+.perx-card .perx-card-glow {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(120% 90% at 85% -10%, var(--accent-soft), transparent 60%);
+  opacity: .45; transition: opacity .3s;
+}
+.perx-card:hover .perx-card-glow { opacity: .85; }
+.perx-card-wide { grid-column: span 2; }
+.perx-card h3 { font: 800 17px/1.25 var(--hr-sans); color: var(--hr-fg-0); }
+.perx-card p  { font-size: 13.5px; color: var(--hr-fg-2); line-height: 1.5; }
+
+/* One-shot shine sweep on hover */
+@media (prefers-reduced-motion: no-preference) {
+  .perx-card::after {
+    content: ""; position: absolute; top: -60%; left: -85%; width: 50%; height: 220%;
+    z-index: 0; pointer-events: none; opacity: 0;
+    background: linear-gradient(100deg, transparent, rgba(255,255,255,.09), transparent);
+    transform: rotate(8deg);
+  }
+  .perx-card:hover::after { animation: perx-sweep 1s ease .08s both; }
+}
+@keyframes perx-sweep { 0% { left: -85%; opacity: 1; } 100% { left: 170%; opacity: 1; } }
+
+/* Icon on an accent-lit disc */
+.perx-ico {
+  width: 58px; height: 58px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--hr-radius-lg); margin-bottom: 4px;
+  background: radial-gradient(120% 120% at 30% 20%, var(--accent-soft), transparent 70%), rgba(0,0,0,.3);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  box-shadow: 0 0 22px var(--accent-soft), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.perx-ico img { width: 38px; height: 38px; object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0,0,0,.4)); }
+
+/* Rate / brand chips inside cards */
+.perx-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 8px; }
+.perx-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border-radius: var(--hr-radius-pill);
+  background: rgba(0,0,0,.32); border: 1px solid var(--hr-line);
+  font: 700 12px/1 var(--hr-sans); color: var(--hr-fg-1);
+}
+.perx-chip b { font-weight: 900; color: var(--accent); font-size: 14px; }
+.perx-chip i { font-style: normal; font-size: 9.5px; color: var(--hr-fg-3); text-transform: uppercase; letter-spacing: .04em; margin-right: 2px; }
+.perx-chip img { width: 16px; height: 16px; object-fit: contain; }
+/* discord.svg renders black as an <img> (currentColor → canvastext); invert to
+   white for legible contrast on the dark chip. */
+.perx-chip-discord img { width: 15px; filter: invert(1); }
+
+/* Chips that are links (Club Room / Discord) get an interactive lift */
+a.perx-chip { transition: transform .2s, border-color .2s, background .2s; }
+a.perx-chip:hover {
+  color: var(--hr-fg-0); transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: rgba(0,0,0,.42);
+}
+
+/* Mint CTA pill (jumps to the calculator) */
+.perx-cta {
+  display: inline-flex; align-items: center; gap: 8px; align-self: flex-start;
+  margin-top: 8px; padding: 11px 20px; border-radius: var(--hr-radius-pill);
+  background: var(--hr-primary); color: var(--hr-on-primary);
+  font: 800 13px/1 var(--hr-sans);
+  box-shadow: 0 6px 20px var(--hr-primary-25), var(--hr-shadow-btn);
+  transition: transform .2s, box-shadow .2s;
+}
+.perx-cta::after { content: "→"; font-weight: 900; }
+.perx-cta:hover {
+  transform: translateY(-2px); color: var(--hr-on-primary);
+  box-shadow: 0 10px 26px rgba(81,255,165,.4), var(--hr-shadow-btn);
+}
+.perx-cta:active { transform: translateY(0); }
+
+/* LAND card — bobbing Slime pet (inlined + jump-wired by app.js) */
+.perx-land-pet.pet-wrap { width: 62px; height: 74px; margin-bottom: 2px; }
+.perx-land-g2 {
+  margin-top: auto; padding-top: 10px;
+  border-top: 1px dashed var(--hr-line);
+  font-size: 12px; color: var(--hr-fg-3);
+}
+
+/* ---- Highrise+ card (full width, banana-lit, 3-step rail) ---- */
+.perx-plus {
+  position: relative; overflow: hidden; isolation: isolate;
+  margin-top: 14px; padding: 28px 26px;
+  border-radius: var(--hr-radius-2xl);
+  border: 1px solid rgba(255,249,95,.28);
+  background: linear-gradient(180deg, rgba(40,39,45,.72), rgba(20,19,23,.86));
+  backdrop-filter: blur(10px);
+  box-shadow: var(--hr-shadow-3), 0 0 44px rgba(255,249,95,.08), inset 0 1px 0 rgba(255,255,255,.06);
+}
+.perx-plus > * { position: relative; z-index: 1; }
+.perx-plus .apply-aurora { z-index: 0; opacity: .35; }
+.perx-plus-head { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.perx-plus-head > div { flex: 1 1 280px; min-width: 0; }
+.perx-plus-head .eyebrow { color: var(--hr-banana); }
+.perx-plus-head h3 { font: 800 20px/1.2 var(--hr-sans); color: var(--hr-fg-0); margin: 3px 0 6px; }
+.perx-plus-head p { font-size: 14px; color: var(--hr-fg-2); max-width: 640px; }
+.perx-rail { list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 22px; }
+.perx-step {
+  position: relative; padding: 18px 16px 16px;
+  border-radius: var(--hr-radius-lg);
+  background: rgba(0,0,0,.28); border: 1px solid var(--hr-line);
+}
+.perx-step + .perx-step::before {
+  content: "➜"; position: absolute; top: 50%; left: -7px; z-index: 2;
+  transform: translate(-50%, -50%);
+  font-size: 13px; color: var(--hr-banana); text-shadow: 0 0 12px var(--hr-banana-25);
+}
+.perx-step-n {
+  display: inline-grid; place-items: center;
+  min-width: 46px; height: 46px; padding: 0 8px; margin-bottom: 10px;
+  border-radius: var(--hr-radius-md);
+  font: 900 22px/1 var(--hr-sans); color: var(--hr-banana);
+  background: rgba(255,249,95,.08); border: 1px solid rgba(255,249,95,.3);
+  text-shadow: 0 0 18px rgba(255,249,95,.45);
+}
+.perx-step h4 { font: 800 14.5px/1.3 var(--hr-sans); color: var(--hr-fg-0); margin-bottom: 4px; }
+.perx-step p  { font-size: 12.5px; color: var(--hr-fg-2); line-height: 1.5; }
+
+/* ---- Coin rate tiles ---- */
+.perx-rates { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 26px; }
+.perx-rate {
+  --accent: var(--hr-primary); --accent-soft: var(--hr-primary-25);
+  position: relative; overflow: hidden; text-align: center;
+  padding: 20px 12px 16px;
+  border-radius: var(--hr-radius-xl); border: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(40,39,45,.6), rgba(20,19,23,.82));
+  backdrop-filter: blur(8px);
+  transition: transform .25s, border-color .25s, box-shadow .25s;
+}
+.perx-rate:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: 0 0 26px var(--accent-soft);
+}
+.perx-rate-coin {
+  width: 40px; height: 40px; object-fit: contain; margin-bottom: 8px;
+  filter: drop-shadow(0 0 14px var(--accent-soft));
+  animation: bob 4.4s ease-in-out infinite;
+}
+.perx-rate:nth-child(2) .perx-rate-coin { animation-delay: .3s; }
+.perx-rate:nth-child(3) .perx-rate-coin { animation-delay: .6s; }
+.perx-rate:nth-child(4) .perx-rate-coin { animation-delay: .9s; }
+.perx-rate-n { font: 900 30px/1 var(--hr-sans); color: var(--accent); text-shadow: 0 0 22px var(--accent-soft); }
+.perx-rate-n i { font-style: normal; font: 800 11px/1 var(--hr-sans); color: var(--hr-fg-3); margin-left: 3px; letter-spacing: .03em; }
+.perx-rate-l { margin-top: 7px; font: 700 11.5px/1.3 var(--hr-sans); text-transform: uppercase; letter-spacing: .05em; color: var(--hr-fg-2); }
+.perx-mult {
+  position: absolute; top: 10px; right: 10px;
+  font: 900 10px/1 var(--hr-sans); letter-spacing: .04em;
+  color: var(--hr-on-primary); background: var(--accent);
+  padding: 4px 8px; border-radius: var(--hr-radius-pill);
+  box-shadow: 0 0 14px var(--accent-soft);
+}
+
+/* ---- Yield calculator ---- */
+.perx-calc {
+  position: relative; overflow: hidden; isolation: isolate;
+  margin-top: 18px;
+  border-radius: var(--hr-radius-2xl); border: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(40,39,45,.72), rgba(20,19,23,.88));
+  backdrop-filter: blur(10px);
+  box-shadow: var(--hr-shadow-3), inset 0 1px 0 rgba(255,255,255,.06);
+}
+.perx-calc .apply-aurora { opacity: .3; }
+.perx-calc-inner { position: relative; z-index: 1; display: grid; grid-template-columns: 1.15fr .85fr; }
+.perx-calc-left { padding: 26px 26px 24px; }
+.perx-calc-left h3 { font: 800 20px/1.2 var(--hr-sans); color: var(--hr-fg-0); margin: 4px 0; }
+.perx-calc-left > p { font-size: 13.5px; color: var(--hr-fg-2); }
+.perx-calc-rows { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+.perx-crow {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 12px 10px 14px;
+  border-radius: var(--hr-radius-lg);
+  background: rgba(0,0,0,.28); border: 1px solid var(--hr-line);
+  transition: border-color .2s;
+}
+.perx-crow:focus-within { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.perx-crow-l { display: block; font: 700 13.5px/1.2 var(--hr-sans); color: var(--hr-fg-0); }
+.perx-crow-rate { display: block; margin-top: 4px; font: 700 10.5px/1 var(--hr-sans); color: var(--hr-fg-3); letter-spacing: .04em; text-transform: uppercase; }
+.perx-crow-rate b { color: var(--accent); }
+.perx-stepper { display: inline-flex; align-items: center; gap: 6px; }
+.perx-stepbtn {
+  width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
+  display: inline-grid; place-items: center;
+  background: rgba(255,255,255,.06); border: 1px solid var(--hr-line-strong);
+  color: var(--hr-fg-0); font: 900 16px/1 var(--hr-sans);
+  transition: background .15s, border-color .15s, transform .15s;
+}
+.perx-stepbtn:hover {
+  background: color-mix(in srgb, var(--accent) 22%, rgba(255,255,255,.04));
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  transform: scale(1.06);
+}
+.perx-stepbtn:active { transform: scale(.95); }
+.perx-count {
+  width: 56px; height: 34px; text-align: center;
+  background: rgba(0,0,0,.4); border: 1px solid var(--hr-line-strong);
+  border-radius: var(--hr-radius-sm); color: var(--hr-fg-0);
+  font: 800 15px/1 var(--hr-sans);
+  appearance: textfield; -moz-appearance: textfield;
+}
+.perx-count::-webkit-outer-spin-button, .perx-count::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.perx-count:focus { outline: none; border-color: var(--hr-primary); box-shadow: 0 0 0 3px var(--hr-primary-25); }
+
+.perx-calc-right {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 26px 24px;
+  background: radial-gradient(120% 110% at 50% 0%, var(--hr-primary-25), transparent 60%), rgba(0,0,0,.3);
+  border-left: 1px solid var(--hr-line);
+}
+.perx-total-coin {
+  width: 54px; height: 54px; object-fit: contain; margin-bottom: 10px;
+  filter: drop-shadow(0 0 18px var(--hr-primary-25));
+  animation: bob 3.6s ease-in-out infinite;
+}
+.perx-total-n {
+  font: 900 clamp(44px, 7vw, 62px)/1 var(--hr-sans);
+  color: var(--hr-primary); text-shadow: 0 0 34px var(--hr-primary-25);
+  letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+}
+.perx-total-l { margin-top: 8px; font: 800 11px/1.3 var(--hr-sans); letter-spacing: var(--hr-tracking-caps); text-transform: uppercase; color: var(--hr-fg-2); }
+.perx-total-row { display: flex; gap: 22px; margin-top: 16px; font-size: 13px; color: var(--hr-fg-2); }
+.perx-total-row b { font: 900 17px/1 var(--hr-sans); color: var(--hr-fg-0); font-variant-numeric: tabular-nums; }
+.perx-total-note { margin-top: 14px; font-size: 11.5px; color: var(--hr-fg-3); max-width: 230px; }
+.perx-sr-live {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+
+/* ---- Requirements strip ---- */
+.perx-req {
+  margin-top: 18px; padding: 20px 24px;
+  border-radius: var(--hr-radius-xl);
+  border: 1px solid var(--hr-line-strong); border-left: 3px solid var(--hr-primary);
+  background: var(--hr-bg-3); box-shadow: var(--hr-shadow-1);
+}
+.perx-req .eyebrow { color: var(--hr-primary); margin-bottom: 6px; }
+.perx-req p { font-size: 13.5px; color: var(--hr-fg-2); }
+
+/* ---- Responsive ---- */
+@media (max-width: 860px) {
+  .perx-rates { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 760px) {
+  .perx-grid { grid-template-columns: 1fr 1fr; }
+  .perx-card-wide { grid-column: 1 / -1; }
+  .perx-calc-inner { grid-template-columns: 1fr; }
+  .perx-calc-right { border-left: none; border-top: 1px solid var(--hr-line); }
+  .perx-rail { grid-template-columns: 1fr; }
+  .perx-step + .perx-step::before { top: -7px; left: 50%; content: "↓"; }
+}
+@media (max-width: 540px) {
+  .perx-grid { grid-template-columns: 1fr; }
+  .perx-hero { padding: 46px 22px 42px; }
+  .perx-float-gift { display: none; }
+  .perx-rates { gap: 10px; }
+  .perx-crow { flex-wrap: wrap; }
+}
+
+/* ---- Motion safety ---- */
+@media (prefers-reduced-motion: reduce) {
+  .perx-float, .perx-rate-coin, .perx-total-coin { animation: none !important; }
+  .perx-card, .perx-card:hover, .perx-rate, .perx-rate:hover,
+  .perx-cta, .perx-cta:hover, .perx-stepbtn, .perx-stepbtn:hover,
+  a.perx-chip, a.perx-chip:hover {
+    transform: none; transition: none;
+  }
+  .perx-card .perx-card-glow { transition: none; }
 }

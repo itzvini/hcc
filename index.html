@@ -1119,22 +1119,101 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 </main>
 
 <main id="panel-perks" class="tab-panel" role="tabpanel" aria-labelledby="tab-perks" hidden>
+
+  <!-- Hero — the walk-into-the-club moment -->
   <section class="wrap" id="perks-top">
-    <div class="section-head">
-      <span class="topic-ico" style="--accent:#FFF95F;--accent-soft:rgba(255,249,95,0.2)"><img src="/assets/shirt.png" alt="" loading="lazy" width="84" height="84"></span>
-      <div class="section-head-t">
-        <div class="eyebrow" data-i18n="perks.eyebrow">Perks &amp; benefits</div>
-        <h2 data-i18n="perks.h2">What are the perks of owning a Creature?</h2>
-        <p class="lead" data-i18n="perks.lead">These are some of the perks and benefits of owning a Highrise Creature or LAND.</p>
+    <div class="perx-hero g2-reveal">
+      <div class="apply-aurora" aria-hidden="true"></div>
+      <div class="apply-sparkles" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <img class="perx-float perx-float-coin" src="/assets/creature-coin.png" alt="" width="110" height="110" loading="lazy">
+      <img class="perx-float perx-float-shirt" src="/assets/shirt.png" alt="" width="86" height="86" loading="lazy">
+      <img class="perx-float perx-float-gift" src="/assets/membership.png" alt="" width="68" height="68" loading="lazy">
+      <span class="apply-pill" data-i18n="perks.pill">Members only</span>
+      <h2 class="perx-hero-h" data-i18n="perks.h2">Hold one. Unlock the whole club.</h2>
+      <p class="perx-hero-p" data-i18n="perks.lead">One Creature or LAND plot makes you a member — daily Creature Coins, Highrise+ every month, members-only spaces and surprise airdrops, woven right into Highrise.</p>
+    </div>
+  </section>
+
+  <!-- The perks, laid out as a bento showcase -->
+  <section class="wrap">
+    <div class="perx-grid">
+
+      <article class="perx-card perx-card-wide g2-reveal" data-accent="mint" style="--d:.05s">
+        <div class="perx-card-glow" aria-hidden="true"></div>
+        <span class="perx-ico"><img src="/assets/creature-coin.png" alt="" width="38" height="38" loading="lazy"></span>
+        <h3 data-i18n="perks.p3h">Daily Creature Coins</h3>
+        <p data-i18n="perks.coins.p">Every Creature and every LAND plot pays out Creature Coins each day — fuel for grabs only members can spin.</p>
+        <div class="perx-chips">
+          <span class="perx-chip"><b><span data-countup="25">25</span></b><i data-i18n="coins.perDay">/ day</i><span data-i18n="coins.rate.epic">Epic Creature</span></span>
+          <span class="perx-chip"><b><span data-countup="75">75</span></b><i data-i18n="coins.perDay">/ day</i><span data-i18n="coins.rate.legendary">Legendary Creature</span></span>
+          <span class="perx-chip"><b><span data-countup="75">75</span></b><i data-i18n="coins.perDay">/ day</i><span data-i18n="coins.rate.pland">Premium LAND</span></span>
+        </div>
+        <a class="perx-cta" href="#coins-top" data-i18n="perks.coins.cta">Count your daily haul</a>
+      </article>
+
+      <article class="perx-card g2-reveal" data-accent="lavender" style="--d:.12s">
+        <div class="perx-card-glow" aria-hidden="true"></div>
+        <span class="perx-ico"><img src="/assets/shirt.png" alt="" width="38" height="38" loading="lazy"></span>
+        <h3 data-i18n="perks.p1h">Wear your whole outfit</h3>
+        <p data-i18n="perks.p1p">Wear each item in your Creature outfit inside the Highrise Metaverse.</p>
+      </article>
+
+      <article class="perx-card g2-reveal" data-accent="blurple" style="--d:.19s">
+        <div class="perx-card-glow" aria-hidden="true"></div>
+        <span class="perx-ico"><img src="/img/brands/icon_hcc.png" alt="" width="38" height="38" loading="lazy"></span>
+        <h3 data-i18n="perks.p2h">Members-only spaces</h3>
+        <p data-i18n="perks.p2p">Access to the exclusive Creature Club Room in Highrise and the Creature-Club Discord channel.</p>
+        <div class="perx-chips">
+          <a class="perx-chip perx-chip-mark" href="https://high.rs/world?id=6894bd39e3e4a405517cb530&amp;ownedRoomId=619fbac0540abff745ded4d2&amp;invite_id=6a4bf717772889e2018fd499" target="_blank" rel="noopener noreferrer"><img src="/img/brands/highrise.png" alt="" loading="lazy"><span data-i18n="perks.spaces.room">Club Room</span></a>
+          <a class="perx-chip perx-chip-mark perx-chip-discord" href="https://discord.gg/highrise" target="_blank" rel="noopener noreferrer"><img src="/img/brands/discord.svg" alt="" loading="lazy"><span data-i18n="perks.spaces.discord">Discord</span></a>
+        </div>
+      </article>
+
+      <article class="perx-card g2-reveal" data-accent="tangerine" style="--d:.26s">
+        <div class="perx-card-glow" aria-hidden="true"></div>
+        <span class="perx-ico"><img src="/assets/nft.png" alt="" width="38" height="38" loading="lazy"></span>
+        <h3 data-i18n="perks.p5h">Surprise airdrops</h3>
+        <p data-i18n="perks.p5p">Exclusive Creature-themed content airdropped to your inventory's gift section at surprise intervals.</p>
+      </article>
+
+      <article class="perx-card perx-card-land g2-reveal" data-accent="mint" style="--d:.33s">
+        <div class="perx-card-glow" aria-hidden="true"></div>
+        <div class="pet-wrap perx-land-pet"><img src="/assets/pets/slime-composite.svg" alt="Slime pet"></div>
+        <h3 data-i18n="perks.land.h">LAND counts too</h3>
+        <p data-i18n="perks.land.p">LAND owners earn daily coins (Premium plots at 3×), get room capacity boosts, keep their Slime pets, and join every drop and giveaway.</p>
+        <p class="perx-land-g2" data-i18n="perks.land.g2">And Gen 2 gives every LAND its own Creature — full parity is the promise.</p>
+      </article>
+    </div>
+
+    <!-- Highrise+ — the monthly membership perk, with its real rules as a path -->
+    <article class="perx-plus g2-reveal" data-accent="banana" style="--d:.1s">
+      <div class="apply-aurora" aria-hidden="true"></div>
+      <div class="perx-plus-head">
+        <span class="perx-ico"><img src="/assets/membership.png" alt="" width="38" height="38" loading="lazy"></span>
+        <div>
+          <div class="eyebrow" data-i18n="perks.plus.eyebrow">Monthly membership</div>
+          <h3 data-i18n="perks.p4h">Highrise+ each month</h3>
+          <p data-i18n="perks.plus.p">Keep a Creature or LAND linked and stay active — the club covers your Highrise+ Tier 1, renewed on the first day of every month.</p>
+        </div>
       </div>
-    </div>
-    <div class="perks">
-      <div class="perk"><span class="ico">👗</span><h4 data-i18n="perks.p1h">Wear your whole outfit</h4><p data-i18n="perks.p1p">Wear each item in your Creature outfit inside the Highrise Metaverse.</p></div>
-      <div class="perk"><span class="ico">🚪</span><h4 data-i18n="perks.p2h">Members-only spaces</h4><p data-i18n="perks.p2p">Access to the exclusive Creature Club Room in Highrise and the Creature-Club Discord channel.</p></div>
-      <div class="perk"><span class="ico">🪙</span><h4 data-i18n="perks.p3h">Daily Creature Coins</h4><p data-i18n="perks.p3p">Daily Creature Coins based on your eligible NFTs; Premium LAND grants 75 Creature Coins instead of 25.</p></div>
-      <div class="perk"><span class="ico">⭐</span><h4 data-i18n="perks.p4h">Highrise+ each month</h4><p data-i18n="perks.p4p">Highrise+ Tier 1 each month when eligibility is met: keep a Creature or LAND NFT linked for at least 30 uninterrupted days before renewal and log in for seven consecutive days leading up to the new month. Subscriptions renew only on the first day of each month.</p></div>
-      <div class="perk"><span class="ico">🎁</span><h4 data-i18n="perks.p5h">Surprise airdrops</h4><p data-i18n="perks.p5p">Exclusive Creature-themed content airdropped to your inventory's gift section at surprise intervals.</p></div>
-    </div>
+      <ol class="perx-rail">
+        <li class="perx-step">
+          <span class="perx-step-n"><span data-countup="30">30</span></span>
+          <h4 data-i18n="perks.plus.s1h">Days linked</h4>
+          <p data-i18n="perks.plus.s1p">Keep an HCC NFT linked to your Highrise account for the full 30 days before renewal — no gaps.</p>
+        </li>
+        <li class="perx-step">
+          <span class="perx-step-n"><span data-countup="7">7</span></span>
+          <h4 data-i18n="perks.plus.s2h">Day login streak</h4>
+          <p data-i18n="perks.plus.s2p">Log in on each of the seven days leading up to the new month.</p>
+        </li>
+        <li class="perx-step">
+          <span class="perx-step-n">★</span>
+          <h4 data-i18n="perks.plus.s3h">Renewed on the 1st</h4>
+          <p data-i18n="perks.plus.s3p">Highrise+ Tier 1 lands on the first day of the month — subscriptions renew only then.</p>
+        </li>
+      </ol>
+    </article>
   </section>
 
   <div class="divider">• • •</div>
@@ -1148,24 +1227,106 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         <p class="lead" data-i18n="coins.lead">Creature Coins are special tokens awarded daily to all owners of a Creature or LAND, to spin exclusive grabs within the Highrise app.</p>
       </div>
     </div>
-    <div class="honest" style="margin-top:20px">
-      <div class="eyebrow" data-i18n="coins.req.eyebrow">To earn them</div>
-      <p data-i18n-html="coins.req">To receive these coins, you must own at least one Highrise Creature Club NFT and have your wallet connected to the <a href="https://highrise.game/" target="_blank" rel="noopener noreferrer">Highrise website</a>.</p>
+
+    <!-- Daily rates -->
+    <div class="perx-rates">
+      <div class="perx-rate g2-reveal" data-accent="mint" style="--d:.05s">
+        <img class="perx-rate-coin" src="/assets/creature-coin.png" alt="" width="40" height="40" loading="lazy">
+        <div class="perx-rate-n"><span data-countup="25">25</span><i data-i18n="coins.perDay">/ day</i></div>
+        <div class="perx-rate-l" data-i18n="coins.rate.epic">Epic Creature</div>
+      </div>
+      <div class="perx-rate g2-reveal" data-accent="banana" style="--d:.12s">
+        <span class="perx-mult">3×</span>
+        <img class="perx-rate-coin" src="/assets/creature-coin.png" alt="" width="40" height="40" loading="lazy">
+        <div class="perx-rate-n"><span data-countup="75">75</span><i data-i18n="coins.perDay">/ day</i></div>
+        <div class="perx-rate-l" data-i18n="coins.rate.legendary">Legendary Creature</div>
+      </div>
+      <div class="perx-rate g2-reveal" data-accent="lavender" style="--d:.19s">
+        <img class="perx-rate-coin" src="/assets/creature-coin.png" alt="" width="40" height="40" loading="lazy">
+        <div class="perx-rate-n"><span data-countup="25">25</span><i data-i18n="coins.perDay">/ day</i></div>
+        <div class="perx-rate-l" data-i18n="coins.rate.land">LAND</div>
+      </div>
+      <div class="perx-rate g2-reveal" data-accent="blueberry" style="--d:.26s">
+        <span class="perx-mult">3×</span>
+        <img class="perx-rate-coin" src="/assets/creature-coin.png" alt="" width="40" height="40" loading="lazy">
+        <div class="perx-rate-n"><span data-countup="75">75</span><i data-i18n="coins.perDay">/ day</i></div>
+        <div class="perx-rate-l" data-i18n="coins.rate.pland">Premium LAND</div>
+      </div>
     </div>
 
-    <div class="perks" style="margin-top:26px">
-      <div class="perk">
-        <span class="ico">🪙</span>
-        <h4 data-i18n="coins.epic.h">Epic Creature — 25 / day</h4>
-        <p data-i18n="coins.epic.p">Each Epic Creature owned awards 25 Creature Coins daily.</p>
-        <p style="margin-top:8px;font-size:12px;color:var(--hr-fg-3)" data-i18n="coins.epic.ex">1 Creature = 25 coins · 10 Creatures = 250 coins</p>
+    <!-- Yield calculator -->
+    <div class="perx-calc g2-reveal" style="--d:.15s">
+      <div class="apply-aurora" aria-hidden="true"></div>
+      <div class="perx-calc-inner">
+        <div class="perx-calc-left">
+          <div class="eyebrow" data-i18n="coins.calc.eyebrow">Your daily haul</div>
+          <h3 data-i18n="coins.calc.h">Count your coins</h3>
+          <p data-i18n="coins.calc.p">Set what you hold — watch what it earns.</p>
+          <div class="perx-calc-rows">
+            <div class="perx-crow" data-accent="mint">
+              <div>
+                <span class="perx-crow-l" id="perx-l-epic" data-i18n="coins.rate.epic">Epic Creature</span>
+                <span class="perx-crow-rate"><b>25</b> <span data-i18n="coins.perDay">/ day</span></span>
+              </div>
+              <div class="perx-stepper">
+                <button type="button" class="perx-stepbtn" data-step="-1" data-calc="epic">−</button>
+                <input class="perx-count" type="number" inputmode="numeric" min="0" max="999" step="1" value="1" data-calc="epic" aria-labelledby="perx-l-epic">
+                <button type="button" class="perx-stepbtn" data-step="1" data-calc="epic">+</button>
+              </div>
+            </div>
+            <div class="perx-crow" data-accent="banana">
+              <div>
+                <span class="perx-crow-l" id="perx-l-legendary" data-i18n="coins.rate.legendary">Legendary Creature</span>
+                <span class="perx-crow-rate"><b>75</b> <span data-i18n="coins.perDay">/ day</span></span>
+              </div>
+              <div class="perx-stepper">
+                <button type="button" class="perx-stepbtn" data-step="-1" data-calc="legendary">−</button>
+                <input class="perx-count" type="number" inputmode="numeric" min="0" max="999" step="1" value="0" data-calc="legendary" aria-labelledby="perx-l-legendary">
+                <button type="button" class="perx-stepbtn" data-step="1" data-calc="legendary">+</button>
+              </div>
+            </div>
+            <div class="perx-crow" data-accent="lavender">
+              <div>
+                <span class="perx-crow-l" id="perx-l-land" data-i18n="coins.rate.land">LAND</span>
+                <span class="perx-crow-rate"><b>25</b> <span data-i18n="coins.perDay">/ day</span></span>
+              </div>
+              <div class="perx-stepper">
+                <button type="button" class="perx-stepbtn" data-step="-1" data-calc="land">−</button>
+                <input class="perx-count" type="number" inputmode="numeric" min="0" max="999" step="1" value="0" data-calc="land" aria-labelledby="perx-l-land">
+                <button type="button" class="perx-stepbtn" data-step="1" data-calc="land">+</button>
+              </div>
+            </div>
+            <div class="perx-crow" data-accent="blueberry">
+              <div>
+                <span class="perx-crow-l" id="perx-l-pland" data-i18n="coins.rate.pland">Premium LAND</span>
+                <span class="perx-crow-rate"><b>75</b> <span data-i18n="coins.perDay">/ day</span></span>
+              </div>
+              <div class="perx-stepper">
+                <button type="button" class="perx-stepbtn" data-step="-1" data-calc="pland">−</button>
+                <input class="perx-count" type="number" inputmode="numeric" min="0" max="999" step="1" value="0" data-calc="pland" aria-labelledby="perx-l-pland">
+                <button type="button" class="perx-stepbtn" data-step="1" data-calc="pland">+</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="perx-calc-right">
+          <img class="perx-total-coin" src="/assets/creature-coin.png" alt="" width="54" height="54" loading="lazy">
+          <div class="perx-total-n" id="perx-total-day">25</div>
+          <div class="perx-total-l" data-i18n="coins.calc.day">Creature Coins / day</div>
+          <div class="perx-total-row">
+            <div><b id="perx-total-week">175</b> <span data-i18n="coins.calc.week">per week</span></div>
+            <div><b id="perx-total-month">750</b> <span data-i18n="coins.calc.month">per 30 days</span></div>
+          </div>
+          <p class="perx-total-note" data-i18n="coins.calc.note">Coins land daily and fuel exclusive grabs inside Highrise.</p>
+          <span class="perx-sr-live" id="perx-total-live" aria-live="polite"></span>
+        </div>
       </div>
-      <div class="perk">
-        <span class="ico">🏆</span>
-        <h4 data-i18n="coins.legendary.h">Legendary Creature — 75 / day</h4>
-        <p data-i18n="coins.legendary.p">Each Legendary Creature owned awards 75 Creature Coins daily.</p>
-        <p style="margin-top:8px;font-size:12px;color:var(--hr-fg-3)" data-i18n="coins.legendary.ex">1 Legendary = 75 coins · 10 Legendaries = 750 coins</p>
-      </div>
+    </div>
+
+    <!-- Requirements -->
+    <div class="perx-req g2-reveal" style="--d:.2s">
+      <div class="eyebrow" data-i18n="coins.req.eyebrow">To earn them</div>
+      <p data-i18n-html="coins.req">To receive these coins, you must own at least one Highrise Creature Club NFT and have your wallet connected to the <a href="https://highrise.game/" target="_blank" rel="noopener noreferrer">Highrise website</a>.</p>
     </div>
   </section>
 </main>
@@ -1609,7 +1770,6 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
       <a href="https://www.metamask.io/" target="_blank" rel="noopener noreferrer">MetaMask</a>
     </nav>
     <div class="stamp" data-i18n="footer.stamp">Highrise Creature Club</div>
-    <div class="draft" data-i18n="footer.draft">Draft v1 — for community discussion</div>
   </div>
 </footer>
 

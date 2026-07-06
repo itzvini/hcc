@@ -9,6 +9,7 @@ import { loadVote, rerenderVote } from './vote.js';
 import { loadMarketplace, rerenderMarketplace } from './marketplace.js';
 import { loadGen2, rerenderGen2 } from './gen2.js';
 import { initGuideDemos, rerenderGuideDemos } from './guide-demos.js';
+import { initPerks, rerenderPerks } from './perks.js';
 
 // Language switcher — re-render dynamic views after language change
 document.querySelectorAll('.lang-btn').forEach(btn => {
@@ -22,6 +23,7 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
     rerenderMarketplace();
     rerenderGen2();
     rerenderGuideDemos();
+    rerenderPerks();
   }));
 });
 
@@ -212,6 +214,10 @@ document.querySelectorAll('[data-mkt-toggle]').forEach(group => {
 // visible; rerendered after initI18n() resolves and on language switch.
 initGuideDemos();
 
+// Perks tab — coin yield calculator (static markup, so it wires up immediately;
+// number formatting and aria labels are refreshed once translations resolve).
+initPerks();
+
 // Clean tab URLs — every tab (and sub-tab) is a real path the server also serves:
 // /council, /roadmap/gen2, … Tab clicks push the path; legacy #tab links and
 // in-page anchors (#terms, #council) still work and get normalized to paths.
@@ -272,6 +278,7 @@ initI18n().then(() => {
   rerenderMarketplace();
   rerenderGen2();
   rerenderGuideDemos();
+  rerenderPerks();
 });
 
 // Jump animation on hover / click / tap
