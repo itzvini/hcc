@@ -392,8 +392,9 @@ function quoteAreaHtml({ x, y, fees, mins, gas }) {
 
 function crossCardHtml({ title, from = 'eth', to = 'eth', gasSpark = false, active, clock,
   send, recv, routeFrom = 'Ethereum', routeFromImg = 'eth', routeTo = 'Immutable',
-  routeToImg = 'immutable', eta = '~17' }) {
-  const steps = ['trade.bridge.step1', 'trade.bridge.step2', 'trade.bridge.step3'].map((k, i) => {
+  routeToImg = 'immutable', eta = '~17',
+  stepKeys = ['trade.bridge.step1', 'trade.bridge.step2', 'trade.bridge.step3'] }) {
+  const steps = stepKeys.map((k, i) => {
     const cls = i < active ? 'is-done' : i === active ? 'is-active' : '';
     const ic = i < active ? '✓' : i === active ? '<span class="trade-mini-spin" aria-hidden="true"></span>' : '·';
     return `<div class="trade-bstep ${cls}"><span class="trade-bstep-dot">${ic}</span><span class="trade-bstep-lbl">${t(k)}</span></div>`;
@@ -751,47 +752,116 @@ const FUND_GAS = {
 // --- Scenario 6 (Creatures) + LAND cash-out: sale proceeds → real money -------------
 
 function cashSheetHtml(land) {
-  const stepKeys = land
-    ? ['trade.cashout.land.step1', 'trade.cashout.land.step2']
-    : ['trade.cashout.step1', 'trade.cashout.step2', 'trade.cashout.step3'];
+  if (land) {
+    const stepKeys = ['trade.cashout.land.step1', 'trade.cashout.land.step2'];
+    return `<div class="gdemo-safety">
+      <div class="trade-safety-card gdemo-safety-card">
+        <span class="apply-pill">${t('trade.cashout.badge')}</span>
+        <h3 class="trade-safety-h">${t('trade.cashout.guide.h')}</h3>
+        <div class="trade-cashout-warn"><span aria-hidden="true">⚠️</span><p>${t('trade.cashout.land.warn')}</p></div>
+        <ol class="trade-cashout-steps">${stepKeys.map((k, i) =>
+          `<li><span class="trade-cashout-num">${i + 1}</span><span>${t(k)}</span></li>`).join('')}</ol>
+        <div class="trade-safety-actions">
+          <button class="trade-send trade-safety-ok" data-gd="cashact" type="button" tabindex="-1">${t('trade.cashout.land.unwrapBtn')}</button>
+        </div>
+      </div>
+    </div>`;
+  }
+  // Creatures: the in-site Move screen — same wallet on both sides, amount, live quote.
+  const hop = (net, img, sub) => `
+    <div class="trade-cashout-hop">
+      <img class="trade-cashout-hop-mm" src="/img/brands/metamask.svg" alt="" width="26" height="26">
+      <span class="trade-cashout-hop-tx"><b>${t(net)} · ${DEMO_ADDR}</b><span>${t(sub)}</span></span>
+      <span class="trade-bchip"><img src="${img}" alt="" width="14" height="14">${img.includes('eth') ? 'Ethereum' : 'Immutable zkEVM'}</span>
+    </div>`;
   return `<div class="gdemo-safety">
     <div class="trade-safety-card gdemo-safety-card">
       <span class="apply-pill">${t('trade.cashout.badge')}</span>
-      <h3 class="trade-safety-h">${t('trade.cashout.guide.h')}</h3>
-      <div class="trade-cashout-warn"><span aria-hidden="true">⚠️</span><p>${t(land ? 'trade.cashout.land.warn' : 'trade.cashout.warn')}</p></div>
-      <ol class="trade-cashout-steps">${stepKeys.map((k, i) =>
-        `<li><span class="trade-cashout-num">${i + 1}</span><span>${t(k)}</span></li>`).join('')}</ol>
-      <div class="trade-safety-actions">
-        <button class="trade-send trade-safety-ok" data-gd="cashact" type="button" tabindex="-1">
-          ${land ? t('trade.cashout.land.unwrapBtn') : `${t('trade.cashout.bridge')} ↗`}</button>
+      <h3 class="trade-safety-h">${t('trade.cashout.move.h')}</h3>
+      <p class="trade-safety-p">${t('trade.cashout.move.p')}</p>
+      <div class="trade-cashout-route">
+        ${hop('trade.cashout.move.from', '/img/brands/immutable.png', 'trade.cashout.move.fromSub')}
+        <div class="trade-cashout-hop-arrow" aria-hidden="true">↓</div>
+        ${hop('trade.cashout.move.to', '/img/brands/eth.png', 'trade.cashout.move.toSub')}
+      </div>
+      <div class="trade-cashout-amtrow">
+        <span class="trade-cashout-amt" style="text-align:left">0.0585</span>
+        <span class="trade-cashout-unit">ETH</span>
+        <span class="trade-cashout-max">${t('trade.cashout.move.max')}</span>
+      </div>
+      <p class="trade-cashout-balline">${t('trade.cashout.move.bal').replace('{x}', '0.0585 ETH')}</p>
+      <div class="trade-bridge-quote" style="text-align:left">
+        <div class="trade-bridge-line">${t('trade.cashout.move.quoteLine').replace('{y}', '0.0579 ETH')}</div>
+        <div class="trade-bridge-meta">${t('trade.bridge.quote.fees').replace('{f}', '0.23')} · ${t('trade.cashout.move.mins')} · ${t('trade.bridge.quote.by')}</div>
+        <button class="trade-funds-btn" data-gd="cashact" type="button" tabindex="-1">${t('trade.cashout.move.btn')}</button>
       </div>
     </div>
   </div>`;
 }
 
-const FUND_CASHOUT = {
+// The dedicated Cash out walkthrough (Guides › Marketplace › step 6): the full in-site
+// move, every tap shown — sold → open Cash out → the two MetaMask confirmations →
+// crossing (with the real out-direction tracker) → landed on Ethereum → exchange.
+// Deliberately slower and wordier than the funding demos: this is the step people
+// arrive at scared of losing real money, so the captions do the calming.
+// Times mirror a real cash-out (executed in 1m 12s) — this direction is FAST; only
+// the mainnet→zkEVM funding direction waits on Ethereum finality.
+const OUT_STEP_KEYS = ['trade.bridge.step1.out', 'trade.bridge.step2.out', 'trade.bridge.step3'];
+const cashCross = (active, clock) => crossCardHtml({
+  title: t('trade.cashout.move.bridging'), active, clock, eta: '~2',
+  send: '0.0585 ETH', recv: '~0.0579 ETH',
+  routeFrom: 'Immutable', routeFromImg: 'immutable', routeTo: 'Ethereum', routeToImg: 'eth',
+  stepKeys: OUT_STEP_KEYS,
+});
+const cashApproveMock = () => ({
+  title: t('gm.demo.cash2.w.approveT'),
+  rows: [
+    [t('gm.demo.w.network'), 'Immutable zkEVM'],
+    [t('gm.demo.w.action'), t('gm.demo.cash2.w.allow')],
+    [t('gm.demo.w.gas'), '~0.0002 IMX'],
+  ],
+  confirm: t('gm.demo.w.confirm'),
+});
+const cashMoveMock = () => ({
+  title: t('gm.demo.cash2.w.moveT'),
+  rows: [
+    [t('gm.demo.w.network'), 'Immutable zkEVM'],
+    [t('gm.demo.w.amount'), '0.0585 ETH'],
+    [t('gm.demo.w.route'), 'Squid → Ethereum'],
+    [t('gm.demo.w.gas'), '~1.6 IMX (≈ $0.23)'],
+  ],
+  confirm: t('gm.demo.w.confirm'),
+});
+
+const CASH_MOVE = {
   title: 'gm.demo.title.fund.cash',
   steps: [
-    { label: 'gm.demo.beat.sold',   cap: 'gm.demo.fund.cash.c1' },
-    { label: 'gm.demo.beat.bridge', cap: 'gm.demo.fund.cash.c2' },
-    { label: 'gm.demo.beat.send',   cap: 'gm.demo.fund.cash.c3' },
+    { label: 'gm.demo.beat.sold',    cap: 'gm.demo.cash2.c1' },
+    { label: 'gm.demo.beat.open',    cap: 'gm.demo.cash2.c2' },
+    { label: 'gm.demo.beat.confirm', cap: 'gm.demo.cash2.c3' },
+    { label: 'gm.demo.beat.cross',   cap: 'gm.demo.cash2.c4' },
+    { label: 'gm.demo.beat.bank',    cap: 'gm.demo.cash2.c5' },
   ],
   stageHtml() {
     return `<div data-gd="bar">${barOnHtml('creatures', { eth: '0.0585', imx: '12.4', count: 2 }, { cashout: true })}</div>`
       + `<div class="gdemo-panel" data-gd="panel"></div>`
-      + cashSheetHtml(false);
+      + cashSheetHtml(false)
+      + walletMockHtml(cashApproveMock());
   },
   endState(ctx, b) {
     const { stage } = ctx;
-    stage.classList.toggle('safety-open', false);
+    stage.classList.toggle('safety-open', b === 1);
+    stage.classList.remove('w-open');
+    setMock(stage, b >= 2 ? cashMoveMock() : cashApproveMock());
+    stage.querySelector('[data-gd="bar"]').innerHTML =
+      barOnHtml('creatures', { eth: b >= 2 ? '0' : '0.0585', imx: '12.4', count: 2 }, { cashout: true });
     stage.querySelector('[data-gd="panel"]').innerHTML =
-      b < 0 ? '' :
-      b === 0 ? row.ok(t('gm.demo.sold.cr')) :
-      b === 1 ? crossCardHtml({ title: t('trade.bridgebar.bridging'), active: 1, clock: '9:03',
-          send: '0.0585', recv: '~0.0579 ETH', routeFrom: 'Immutable', routeFromImg: 'immutable',
-          routeTo: 'Ethereum', routeToImg: 'eth' }) :
-      doneCardHtml({ h: t('gm.demo.cash.arrived'), recv: '0.0579 ETH', on: 'Ethereum', onImg: 'eth', took: '17m 21s' })
-        + row.ok(t('gm.demo.cash.done'));
+      b <= 0 ? (b === 0 ? row.ok(t('gm.demo.sold.cr')) : '') :
+      b === 1 ? '' :
+      b === 2 ? cashCross(0, '0:12') :
+      b === 3 ? cashCross(1, '0:58') :
+      doneCardHtml({ h: t('trade.cashout.move.done'), recv: '0.0579 ETH', on: 'Ethereum', onImg: 'eth', took: '1m 12s' })
+        + row.ok(t('gm.demo.cash2.next'));
   },
   async choreo(ctx, b) {
     const { stage, go, click, sleep, ok, tick } = ctx;
@@ -800,28 +870,43 @@ const FUND_CASHOUT = {
       await sleep(700); if (!ok()) return;
       panel.innerHTML = pop(row.ok(t('gm.demo.sold.cr')));
     } else if (b === 1) {
+      // Open Cash out → the move screen: your own wallet on both sides, amount, quote.
       const pill = stage.querySelector('[data-gd="cashpill"]');
       await go(pill, 900); if (!ok()) return;
       await click(pill); if (!ok()) return;
+      panel.innerHTML = '';
       stage.classList.add('safety-open');
-      await sleep(2600); if (!ok()) return;
+      await sleep(2000); if (!ok()) return;
+    } else if (b === 2) {
+      // The two MetaMask taps: a one-time allowance, then the move itself.
+      stage.classList.add('safety-open');
       const act = stage.querySelector('[data-gd="cashact"]');
-      await go(act, 800); if (!ok()) return;
+      await go(act, 900); if (!ok()) return;
       await click(act); if (!ok()) return;
       stage.classList.remove('safety-open');
-      panel.innerHTML = pop(crossCardHtml({ title: t('trade.bridgebar.bridging'), active: 0, clock: '0:05',
-        send: '0.0585', recv: '~0.0579 ETH', routeFrom: 'Immutable', routeFromImg: 'immutable',
-        routeTo: 'Ethereum', routeToImg: 'eth' }));
-      await sleep(900); if (!ok()) return;
-      panel.innerHTML = crossCardHtml({ title: t('trade.bridgebar.bridging'), active: 1, clock: '0:48',
-        send: '0.0585', recv: '~0.0579 ETH', routeFrom: 'Immutable', routeFromImg: 'immutable',
-        routeTo: 'Ethereum', routeToImg: 'eth' });
-      await tick(stage.querySelector('[data-gd="clock"]'), ['3:12', '6:27', '9:03'], 480);
-    } else if (b === 2) {
-      await tick(stage.querySelector('[data-gd="clock"]'), ['13:40', '17:21'], 450); if (!ok()) return;
+      setMock(stage, cashApproveMock());
+      stage.classList.add('w-open');
+      const wc = stage.querySelector('[data-gd="wconfirm"]');
+      await go(wc, 900); if (!ok()) return;
+      await sleep(600); if (!ok()) return;
+      await click(wc); if (!ok()) return;
+      setMock(stage, cashMoveMock());
+      await sleep(1100); if (!ok()) return;
+      await go(wc, 500); if (!ok()) return;
+      await click(wc); if (!ok()) return;
+      stage.classList.remove('w-open');
+      stage.querySelector('[data-gd="bar"]').innerHTML =
+        barOnHtml('creatures', { eth: '0', imx: '12.4', count: 2 }, { cashout: true });
+      panel.innerHTML = pop(cashCross(0, '0:04'));
+      await tick(stage.querySelector('[data-gd="clock"]'), ['0:08', '0:12'], 500);
+    } else if (b === 3) {
+      panel.innerHTML = cashCross(1, '0:21');
+      await tick(stage.querySelector('[data-gd="clock"]'), ['0:34', '0:47', '0:58'], 520);
+    } else if (b === 4) {
+      await tick(stage.querySelector('[data-gd="clock"]'), ['1:05', '1:12'], 450); if (!ok()) return;
       panel.innerHTML = pop(
-        doneCardHtml({ h: t('gm.demo.cash.arrived'), recv: '0.0579 ETH', on: 'Ethereum', onImg: 'eth', took: '17m 21s' })
-        + row.ok(t('gm.demo.cash.done')));
+        doneCardHtml({ h: t('trade.cashout.move.done'), recv: '0.0579 ETH', on: 'Ethereum', onImg: 'eth', took: '1m 12s' })
+        + row.ok(t('gm.demo.cash2.next')));
     }
   },
 };
@@ -971,6 +1056,8 @@ const FUNDLA_CASHOUT = {
   },
 };
 
+// Cash-out moved to its own walkthrough step (Guides › Marketplace › 6, demos
+// 'cashout-creatures'/'cashout-land') — funding keeps the getting-money-IN scenarios.
 const FUNDING_CREATURES = {
   scenarios: [
     { label: 'gm.demo.scen.cr.bridge',  spec: FUND_BRIDGE },
@@ -978,7 +1065,6 @@ const FUNDING_CREATURES = {
     { label: 'gm.demo.scen.cr.short',   spec: FUND_SHORT },
     { label: 'gm.demo.scen.cr.split',   spec: FUND_SPLIT },
     { label: 'gm.demo.scen.cr.gas',     spec: FUND_GAS },
-    { label: 'gm.demo.scen.cr.cashout', spec: FUND_CASHOUT },
   ],
 };
 
@@ -986,7 +1072,6 @@ const FUNDING_LAND = {
   scenarios: [
     { label: 'gm.demo.scen.la.short',   spec: FUNDLA_SHORT },
     { label: 'gm.demo.scen.la.zero',    spec: FUNDLA_ZERO },
-    { label: 'gm.demo.scen.la.cashout', spec: FUNDLA_CASHOUT },
   ],
 };
 
@@ -1303,6 +1388,8 @@ const DEMOS = {
   'trading-land': TRADING_LAND,
   'funding-creatures': FUNDING_CREATURES,
   'funding-land': FUNDING_LAND,
+  'cashout-creatures': CASH_MOVE,
+  'cashout-land': FUNDLA_CASHOUT,
   'moving-creatures': makeMovingSpec('creatures'),
   'moving-land': makeMovingSpec('land'),
   'setup-creatures': makeSetupSpec('creatures'),

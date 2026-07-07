@@ -52,6 +52,8 @@ const SEL_SAFE_TRANSFER = '0x42842e0e'; // safeTransferFrom(address,address,uint
 const SEL_BALANCE_OF    = '0x70a08231'; // balanceOf(address)
 const SEL_OWNER_OF      = '0x6352211e'; // ownerOf(uint256)
 const SEL_WETH_WITHDRAW = '0x2e1a7d4d'; // withdraw(uint256) — unwrap WETH → native ETH (1:1)
+const SEL_APPROVE       = '0x095ea7b3'; // approve(address,uint256) — ERC-20, for the cash-out router
+const SEL_ALLOWANCE     = '0xdd62ed3e'; // allowance(address,address)
 const ZERO = '0x0000000000000000000000000000000000000000';
 const METAMASK_IMG = '/img/brands/metamask.svg';
 // Crisp shield-check (currentColor) — emoji shields render as flat glyphs on Windows.
@@ -533,6 +535,17 @@ async function readNative(addr) {
   try { return BigInt(await eth().request({ method: 'eth_getBalance', params: [addr, 'latest'] }) || '0x0'); }
   catch { return null; }
 }
+async function readAllowance(token, owner, spender) {
+  try { return BigInt(await eth().request({ method: 'eth_call', params: [{ to: token, data: SEL_ALLOWANCE + word(owner) + word(spender) }, 'latest'] }) || '0x0'); }
+  catch { return null; }
+}
+// Full-precision wei → decimal ETH string ("0.169923456789012345") — the cash-out Max
+// sends the EXACT balance to the quote, so the route never overdraws by a rounding hair.
+function weiToEthStr(wei) {
+  const s = wei.toString().padStart(19, '0');
+  const frac = s.slice(-18).replace(/0+$/, '');
+  return frac ? `${s.slice(0, -18)}.${frac}` : s.slice(0, -18);
+}
 function fmtWeiEth(wei) {
   if (wei == null) return '—';
   return (Number(wei) / 1e18).toLocaleString(undefined, { maximumFractionDigits: 4 });
@@ -564,8 +577,16 @@ async function ensureNetwork() {
 // lives in Guides → Stay safe; the 🛡 pill by the tabs links there forever after.
 const SAFETY_ACK = 'hcc-safety-ack';
 let safetyOpen = false;
-let cashoutOpen = false;     // the cash-out guidance modal (Creature proceeds are zkEVM ETH)
-let cashoutStep = 'intent';  // 'intent' → 'guide'
+let cashoutOpen = false;     // the cash-out modal (Creature proceeds are zkEVM ETH)
+let cashoutStep = 'intent';  // 'intent' → 'move' (Creatures, in-site) | 'guide' (LAND unwrap / external fallback)
+let cashoutState = null;     // move screen: {phase:'load'|'ready', balWei, imxWei, amount, quote, err}
+let cashoutSeq = 0;          // drops stale quote responses when the amount changes mid-flight
+let cashoutQuoteTimer = null;
+let topupOpen = false;       // the standalone Add-funds modal (mainnet → zkEVM, cash-out's mirror)
+let topupStep = 'intent';    // 'intent' → 'eth' (move mainnet ETH over) | 'gas' (IMX top-up)
+let topupState = null;       // {phase:'load'|'ready', mainnetEthWei, mainnetImxWei, imxWei, zkEthWei, amount, quote, err, gasQuote, gasFrom}
+let topupSeq = 0;
+let topupQuoteTimer = null;
 function safetyAcked() {
   try { return localStorage.getItem(SAFETY_ACK) === '1'; } catch { return true; }
 }
@@ -642,17 +663,22 @@ function openSafetyGuide() {
   document.querySelector('[data-subtab="safety"]')?.click();
 }
 
-// Cash-out guidance: selling pays in a token novices misroute when "withdrawing".
+// Cash-out: selling pays in a token novices misroute when "withdrawing".
 //  • Creatures: ETH on Immutable zkEVM — sent straight to an exchange it's LOST (exchanges
-//    credit only mainnet ETH). Safe path: bridge to Ethereum first, then send.
+//    credit only mainnet ETH). Safe path: move it to Ethereum first, then send. The move
+//    runs IN-SITE (quote → approve → one confirm → live tracker) — sending novices to an
+//    external bridge site cost real support tickets; anything that leaves the site reads
+//    as a scam risk to them. The external deep-link survives only as the quote-less
+//    fallback (Squid not configured / unavailable).
 //  • LAND: WETH on Ethereum — already the right network, but WETH ≠ ETH (many exchanges
 //    won't credit a WETH deposit). Safe path: unwrap to ETH first, then send.
 // An intent-first modal routes them to the right path for the active collection.
 function cashoutHtml() {
   if (!cashoutOpen) return '';
-  const inner = cashoutStep === 'guide'
-    ? (coll === 'land' ? cashoutLandGuideInner() : cashoutGuideInner())
-    : cashoutIntentInner();
+  const inner = cashoutStep === 'move' ? cashoutMoveInner()
+    : cashoutStep === 'guide'
+      ? (coll === 'land' ? cashoutLandGuideInner() : cashoutGuideInner())
+      : cashoutIntentInner();
   return `
     <div class="trade-modal trade-cashout" role="dialog" aria-modal="true" aria-label="${esc(t('trade.cashout.aria'))}">
       <div class="trade-modal-backdrop" data-act="cashout-close"></div>
@@ -665,7 +691,7 @@ function cashoutIntentInner() {
     <h3 class="trade-safety-h">${esc(t('trade.cashout.h'))}</h3>
     <p class="trade-safety-p">${esc(t(coll === 'land' ? 'trade.cashout.p.land' : 'trade.cashout.p'))}</p>
     <div class="trade-cashout-opts">
-      <button class="trade-cashout-opt" data-act="cashout-guide" type="button">
+      <button class="trade-cashout-opt" data-act="${coll === 'land' ? 'cashout-guide' : 'cashout-move'}" type="button">
         <span class="trade-cashout-opt-ico" aria-hidden="true">💸</span>
         <span class="trade-cashout-opt-tx"><b>${esc(t('trade.cashout.opt.move.h'))}</b><span>${esc(t('trade.cashout.opt.move.p'))}</span></span>
         <span class="trade-cashout-opt-arrow" aria-hidden="true">→</span>
@@ -676,6 +702,8 @@ function cashoutIntentInner() {
       </button>
     </div>`;
 }
+// Quote-less fallback (Squid not configured / unavailable): the old step guide with the
+// external deep-link. Never the first resort — see the note on cashoutHtml.
 function cashoutGuideInner() {
   const steps = [1, 2, 3].map(i => `<li><span class="trade-cashout-num">${i}</span><span>${esc(t('trade.cashout.step' + i))}</span></li>`).join('');
   return `
@@ -688,6 +716,228 @@ function cashoutGuideInner() {
       <a class="trade-send trade-safety-ok" href="${CASHOUT_URL}" target="_blank" rel="noopener">${esc(t('trade.cashout.bridge'))} ↗</a>
     </div>
     <p class="trade-safety-foot">${esc(t('trade.cashout.foot'))}</p>`;
+}
+
+// --- In-site cash-out ("Move to Ethereum") -------------------------------------------
+// Token-Trove-style move screen: your wallet on Immutable zkEVM → the SAME wallet on
+// Ethereum, an amount prefilled with the full balance, a live quote, one button. Born
+// from a support ticket: a seller sent to the external Squid deep-link (unconnected
+// wallet, zero balances) froze in fear of losing her proceeds — "anything with crypto
+// that opens outside of the site is something I don't like."
+
+// The typed amount as wei (comma-tolerant — half the community types "0,17"), or null
+// when unparseable/zero.
+function cashoutAmountWei() {
+  const v = String(cashoutState?.amount ?? '').trim().replace(',', '.');
+  const m = /^(\d{1,6})(?:\.(\d{1,18}))?$/.exec(v);
+  if (!m) return null;
+  const wei = BigInt(m[1]) * 10n ** 18n + BigInt((m[2] || '').padEnd(18, '0'));
+  return wei > 0n ? wei : null;
+}
+
+// The quoted route tx needs native IMX: its `value` (the cross-chain relay fee) plus a
+// little headroom for the zkEVM execution gas itself (which is fractions of a cent).
+const CASHOUT_IMX_GAS_HEADROOM = 5n * 10n ** 16n; // 0.05 IMX
+function cashoutImxNeeded(q) {
+  try { return BigInt(q.tx.value || '0x0') + CASHOUT_IMX_GAS_HEADROOM; } catch { return null; }
+}
+
+async function openCashoutMove() {
+  cashoutStep = 'move';
+  cashoutState = { phase: 'load', balWei: null, imxWei: null, amount: '', quote: null, err: null };
+  patchCashout();
+  try { if (!onZk()) await ensureNetwork(); } catch { /* reads below fail soft to em-dashes */ }
+  const st = cashoutState;
+  const [balWei, imxWei] = await Promise.all([readErc20(IMX_ETH_TOKEN, account), readNative(account)]);
+  if (cashoutState !== st || cashoutStep !== 'move') return; // closed / navigated away
+  const hasBal = balWei != null && balWei > 0n;
+  cashoutState = { ...st, phase: 'ready', balWei, imxWei, amount: hasBal ? weiToEthStr(balWei) : '' };
+  patchCashout();
+  if (hasBal) fetchCashoutQuote();
+}
+
+function queueCashoutQuote(ms = 500) {
+  clearTimeout(cashoutQuoteTimer);
+  cashoutQuoteTimer = setTimeout(fetchCashoutQuote, ms);
+}
+async function fetchCashoutQuote() {
+  const st = cashoutState;
+  if (!st || cashoutStep !== 'move') return;
+  const seq = ++cashoutSeq;
+  const wei = cashoutAmountWei();
+  if (wei == null) { st.quote = null; st.err = String(st.amount).trim() ? 'amount' : null; return patchCashoutMove(); }
+  if (st.balWei != null && wei > st.balWei) { st.quote = null; st.err = 'over'; return patchCashoutMove(); }
+  st.quote = 'loading'; st.err = null;
+  patchCashoutMove();
+  try {
+    const res = await fetch('/api/market/creatures/cashout/quote', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: account, amountEth: weiToEthStr(wei) }),
+      signal: AbortSignal.timeout(30000),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (cashoutSeq !== seq || cashoutState !== st) return; // superseded
+    if (!res.ok) {
+      st.quote = null;
+      // not_configured → no in-site quoting at all; fall back to the external-link guide.
+      if (body.error === 'not_configured') { cashoutStep = 'guide'; return patchCashout(); }
+      st.err = body.error === 'no_route' ? 'small' : body.error === 'rate_limited' ? 'rate' : 'quote';
+      return patchCashoutMove();
+    }
+    st.quote = body;
+    // The move is signed on zkEVM, where gas is native IMX — flag a short wallet now
+    // instead of letting MetaMask fail the confirm with a cryptic alert.
+    const needImx = cashoutImxNeeded(body);
+    st.err = (needImx != null && st.imxWei != null && st.imxWei < needImx) ? 'gas' : null;
+    patchCashoutMove();
+  } catch {
+    if (cashoutSeq !== seq || cashoutState !== st) return;
+    st.quote = null; st.err = 'quote';
+    patchCashoutMove();
+  }
+}
+
+function cashoutBalLineHtml() {
+  const st = cashoutState || {};
+  if (st.phase === 'load') return `<span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.cashout.move.balLoading'))}`;
+  if (st.balWei == null) return esc(t('trade.cashout.move.balUnknown'));
+  return esc(t('trade.cashout.move.bal').replace('{x}', fmtEthFiat(weiToEth(st.balWei))));
+}
+function cashoutQuoteAreaHtml() {
+  const st = cashoutState || {};
+  const q = st.quote;
+  const ERR = { over: 'trade.cashout.move.err.over', amount: 'trade.cashout.move.err.amount', small: 'trade.cashout.move.err.small', rate: 'trade.err.rate', quote: 'trade.cashout.move.err.quote' };
+  if (st.err && st.err !== 'gas') return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(t(ERR[st.err]))}</span></div>`;
+  if (q === 'loading') return `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.bridge.quote.loading'))}</div>`;
+  if (!q) return '';
+  // Don't show Squid's durationSeconds here: it's calibrated to the slow (mainnet →
+  // zkEVM) direction. A real cash-out executed in 72s while the quote claimed ~23 min —
+  // an ETA that wrong reads as "something's broken" to a nervous seller.
+  const meta = [
+    q.feeUsd != null ? t('trade.bridge.quote.fees').replace('{f}', String(q.feeUsd)) : null,
+    t('trade.cashout.move.mins'),
+    t('trade.bridge.quote.by'),
+  ].filter(Boolean).join(' · ');
+  const gasShort = st.err === 'gas';
+  const needImx = cashoutImxNeeded(q);
+  const busy = bridgeJob && !BRIDGE_TERMINAL.has(bridgeJob.phase);
+  return `
+    <div class="trade-bridge-quote">
+      <div class="trade-bridge-line">${esc(t('trade.cashout.move.quoteLine').replace('{y}', fmtEthFiat(q.toEth)))}</div>
+      <div class="trade-bridge-meta">${esc(meta)}</div>
+      ${gasShort ? `<div class="trade-status is-error"><span aria-hidden="true">⛽</span><span>${esc(t('trade.cashout.move.gasShort').replace('{x}', fmtImx(weiToEth(needImx))).replace('{y}', fmtImx(weiToEth(cashoutState?.imxWei ?? 0n))))}</span></div>` : ''}
+      <button class="trade-funds-btn" data-act="cashout-now" type="button" ${gasShort || busy ? 'disabled' : ''}>${esc(t('trade.cashout.move.btn'))}</button>
+      ${isCashout(bridgeJob) ? bridgeStatusHtml() : ''}
+    </div>`;
+}
+// One route hop (From / To): the SAME wallet on each side — seeing their own address
+// twice is what makes the move feel safe. MetaMask mark + short address + network chip.
+function cashoutHopHtml(lblKey, netImg, netName, sub) {
+  const short = account ? `${account.slice(0, 6)}…${account.slice(-4)}` : '—';
+  return `
+    <div class="trade-cashout-hop">
+      <img class="trade-cashout-hop-mm" src="${METAMASK_IMG}" alt="" width="26" height="26">
+      <span class="trade-cashout-hop-tx">
+        <b>${esc(t(lblKey))} · ${esc(short)}</b>
+        <span>${esc(t(sub))}</span>
+      </span>
+      <span class="trade-bchip"><img src="${netImg}" alt="" width="14" height="14">${esc(netName)}</span>
+    </div>`;
+}
+function cashoutMoveInner() {
+  // A move is underway/finished — the tracker card takes over the modal (same pattern as
+  // the funds/gas panels), so there's exactly one source of truth on screen.
+  if (isCashout(bridgeJob) && CARD_PHASES.has(bridgeJob.phase)) {
+    return `
+      <span class="apply-pill">${esc(t('trade.cashout.badge'))}</span>
+      ${bridgeCardHtml(bridgeJob)}
+      <p class="trade-safety-foot">${esc(t('trade.cashout.move.foot'))}</p>`;
+  }
+  const st = cashoutState || {};
+  return `
+    <span class="apply-pill">${esc(t('trade.cashout.badge'))}</span>
+    <h3 class="trade-safety-h">${esc(t('trade.cashout.move.h'))}</h3>
+    <p class="trade-safety-p">${esc(t('trade.cashout.move.p'))}</p>
+    <div class="trade-cashout-route" aria-hidden="false">
+      ${cashoutHopHtml('trade.cashout.move.from', '/img/brands/immutable.png', 'Immutable zkEVM', 'trade.cashout.move.fromSub')}
+      <div class="trade-cashout-hop-arrow" aria-hidden="true">↓</div>
+      ${cashoutHopHtml('trade.cashout.move.to', '/img/brands/eth.png', 'Ethereum', 'trade.cashout.move.toSub')}
+    </div>
+    <label class="trade-cashout-amtlbl" for="trade-cashout-amt">${esc(t('trade.cashout.move.amount'))}</label>
+    <div class="trade-cashout-amtrow">
+      <input id="trade-cashout-amt" class="trade-cashout-amt" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"
+        value="${esc(st.amount || '')}" placeholder="0.0" ${st.phase === 'load' ? 'disabled' : ''}>
+      <span class="trade-cashout-unit" aria-hidden="true">ETH</span>
+      <button class="trade-cashout-max" data-act="cashout-max" type="button" ${st.balWei ? '' : 'disabled'}>${esc(t('trade.cashout.move.max'))}</button>
+    </div>
+    <p class="trade-cashout-balline" id="trade-cashout-balline">${cashoutBalLineHtml()}</p>
+    <div id="trade-cashout-qslot">${cashoutQuoteAreaHtml()}</div>
+    <div class="trade-safety-actions">
+      <button class="apply-btn-ghost" data-act="cashout-back" type="button">${esc(t('trade.cashout.back'))}</button>
+    </div>
+    <p class="trade-safety-foot">${esc(t('trade.cashout.move.foot'))}<br>
+      <a class="trade-cashout-diy" href="${CASHOUT_URL}" target="_blank" rel="noopener">${esc(t('trade.cashout.move.diy'))} ↗</a></p>`;
+}
+// Patch only the quote area + balance line — the amount input keeps focus while typing.
+function patchCashoutMove() {
+  const slot = root()?.querySelector('#trade-cashout-qslot');
+  if (slot) slot.innerHTML = cashoutQuoteAreaHtml();
+  const bal = root()?.querySelector('#trade-cashout-balline');
+  if (bal) bal.innerHTML = cashoutBalLineHtml();
+}
+function cashoutMaxClick() {
+  const st = cashoutState;
+  if (!st?.balWei) return;
+  st.amount = weiToEthStr(st.balWei);
+  const input = root()?.querySelector('#trade-cashout-amt');
+  if (input) input.value = st.amount;
+  clearTimeout(cashoutQuoteTimer);
+  fetchCashoutQuote();
+}
+
+// Sign and send the move: (one-time) ERC-20 approval for the router, then the quoted
+// route tx — both on Immutable zkEVM — then hand off to the shared resumable tracker.
+async function runCashout() {
+  const st = cashoutState;
+  const q = st?.quote;
+  if (!q || q === 'loading' || !q.tx || st.err === 'gas') return;
+  if (bridgeJob && !BRIDGE_TERMINAL.has(bridgeJob.phase)) return; // one bridge at a time
+  try {
+    bridgeJob = { phase: 'switch', dir: 'out', kind: 'cashout', account, mins: null, startedAt: Date.now(), fromSym: 'ETH', toSym: 'ETH', fromEth: q.fromEth, toEth: q.toEth };
+    patchCashout();
+    patchBridgeBanner();
+    await ensureNetwork(); // the SOURCE chain this time — Immutable zkEVM (usually a no-op)
+    // The router pulls the ETH ERC-20 from the wallet, so it needs an allowance — exactly
+    // the quoted amount, no open-ended approvals.
+    const fromWei = BigInt(q.fromWei);
+    const allowance = await readAllowance(IMX_ETH_TOKEN, account, q.approveSpender);
+    if (allowance == null || allowance < fromWei) {
+      setBridgeJob({ phase: 'approve' });
+      const aHash = await eth().request({
+        method: 'eth_sendTransaction',
+        params: [{ from: account, to: IMX_ETH_TOKEN, data: SEL_APPROVE + word(q.approveSpender) + word(fromWei) }],
+      });
+      const rec = await waitForReceipt(aHash);
+      if (!rec || rec.status !== '0x1') { setBridgeJob({ phase: 'error', msg: t('trade.cashout.move.err.approve') }); return; }
+    }
+    setBridgeJob({ phase: 'confirm' });
+    const hash = await eth().request({
+      method: 'eth_sendTransaction',
+      params: [{ from: account, to: q.tx.to, data: q.tx.data, value: q.tx.value, ...(q.tx.gas ? { gas: q.tx.gas } : {}) }],
+    });
+    // mins stays null: Squid's estimate is calibrated to the slow funding direction
+    // (a real cash-out landed in 72s vs a quoted ~23 min). Null renders the honest
+    // "a few minutes" ETA, and the 25-min tracking window still guards the slow tail.
+    setBridgeJob({
+      phase: 'waiting', hash, mins: null, startedAt: Date.now(), stage: 'submitted', kind: 'cashout', dir: 'out',
+      axelarUrl: null, needWei: '0', quoteId: q.quoteId || '', requestId: q.requestId || '', account,
+      fromSym: 'ETH', toSym: 'ETH', fromEth: q.fromEth, toEth: q.toEth,
+    });
+    trackBridge();
+  } catch (err) {
+    console.error('Cash-out failed:', err);
+    setBridgeJob({ phase: 'error', msg: friendlyError(err) });
+  }
 }
 // LAND variant: proceeds are WETH already on Ethereum — no bridge, just unwrap to plain ETH.
 // The unwrap runs in-place (its status shows here via patchCashout from setUnwrap).
@@ -706,10 +956,339 @@ function cashoutLandGuideInner() {
     </div>
     <p class="trade-safety-foot">${esc(t('trade.cashout.land.foot'))}</p>`;
 }
+function syncTradeModalClass() {
+  document.body.classList.toggle('trade-modal-open', cashoutOpen || topupOpen || !!modalToken || !!pendingAccept);
+}
 function patchCashout() {
   const slot = root()?.querySelector('#trade-cashout-slot');
   if (slot) slot.innerHTML = cashoutHtml();
-  document.body.classList.toggle('trade-modal-open', cashoutOpen || !!modalToken || !!pendingAccept);
+  syncTradeModalClass();
+}
+
+// --- Add funds ("Move to Immutable zkEVM") -------------------------------------------
+// The cash-out's mirror, opened from the wallet bar BEFORE the user is mid-purchase.
+// The in-checkout bridge (funds panel) only appears once a buy comes up short — anyone
+// wanting to fund their wallet ahead of time used to get the external Squid deep-link,
+// the same leave-the-site jump that spooks novices. Two options: move mainnet ETH over
+// (exact-input quote, native source so no approval) and the ~5 IMX gas top-up (reuses
+// the existing exact-output gas quote + one-tap machinery).
+const TOPUP_RESERVE_WEI = BigInt(Math.round(BRIDGE_GAS_RESERVE_ETH * 1e6)) * 10n ** 12n;
+
+function topupHtml() {
+  if (!topupOpen) return '';
+  const inner = topupStep === 'eth' ? topupEthInner() : topupStep === 'gas' ? topupGasInner() : topupIntentInner();
+  return `
+    <div class="trade-modal trade-cashout" role="dialog" aria-modal="true" aria-label="${esc(t('trade.topup.aria'))}">
+      <div class="trade-modal-backdrop" data-act="topup-close"></div>
+      <div class="trade-safety-card trade-cashout-card">${inner}</div>
+    </div>`;
+}
+function patchTopup() {
+  const slot = root()?.querySelector('#trade-topup-slot');
+  if (slot) slot.innerHTML = topupHtml();
+  syncTradeModalClass();
+}
+// Patch only the quote area + balance line — the amount input keeps focus while typing.
+function patchTopupMove() {
+  const slot = root()?.querySelector('#trade-topup-qslot');
+  if (slot) slot.innerHTML = topupQuoteAreaHtml();
+  const bal = root()?.querySelector('#trade-topup-balline');
+  if (bal) bal.innerHTML = topupBalLineHtml();
+}
+
+// Balances on BOTH chains: mainnet via the server (the wallet sits on zkEVM and can't
+// read across chains; eth-elsewhere reads ETH + IMX there), zkEVM via the wallet.
+async function refreshTopupBalances() {
+  const st = topupState;
+  if (!st) return;
+  const [elsewhere, imxWei, zkEthWei] = await Promise.all([
+    fetch(`/api/market/creatures/eth-elsewhere/${account}`).then(r => (r.ok ? r.json() : null)).catch(() => null),
+    readNative(account),
+    readErc20(IMX_ETH_TOKEN, account),
+  ]);
+  if (topupState !== st || !topupOpen) return;
+  Object.assign(st, {
+    phase: 'ready', imxWei, zkEthWei,
+    mainnetEthWei: elsewhere?.mainnetEthWei != null ? BigInt(elsewhere.mainnetEthWei) : null,
+    mainnetImxWei: elsewhere?.mainnetImxWei != null ? BigInt(elsewhere.mainnetImxWei) : null,
+  });
+  patchTopup();
+}
+function openTopup() {
+  topupOpen = true;
+  cashoutOpen = false; // one wallet modal at a time
+  topupStep = 'intent';
+  topupState = { phase: 'load', mainnetEthWei: null, mainnetImxWei: null, imxWei: null, zkEthWei: null, amount: '', quote: null, err: null, gasQuote: null, gasFrom: null };
+  patchCashout();
+  patchTopup();
+  refreshTopupBalances();
+}
+
+function topupIntentInner() {
+  const st = topupState || {};
+  const loading = st.phase === 'load';
+  const ethSub = loading ? t('trade.topup.checking')
+    : st.mainnetEthWei != null && st.mainnetEthWei > 0n
+      ? t('trade.topup.opt.eth.have').replace('{x}', fmtEthFiat(weiToEth(st.mainnetEthWei)))
+      : t('trade.topup.opt.eth.none');
+  const gasSub = loading ? t('trade.topup.checking')
+    : t('trade.topup.opt.gas.have').replace('{x}', fmtImx(weiToEth(st.imxWei ?? 0n)));
+  const opt = (act, ico, h, sub) => `
+    <button class="trade-cashout-opt" data-act="${act}" type="button" ${loading ? 'disabled' : ''}>
+      <span class="trade-cashout-opt-ico" aria-hidden="true">${ico}</span>
+      <span class="trade-cashout-opt-tx"><b>${esc(t(h))}</b><span>${esc(sub)}</span></span>
+      <span class="trade-cashout-opt-arrow" aria-hidden="true">→</span>
+    </button>`;
+  return `
+    <span class="apply-pill">${esc(t('trade.topup.badge'))}</span>
+    <h3 class="trade-safety-h">${esc(t('trade.topup.h'))}</h3>
+    <p class="trade-safety-p">${esc(t('trade.topup.p'))}</p>
+    <div class="trade-cashout-opts">
+      ${opt('topup-eth', '💎', 'trade.topup.opt.eth.h', ethSub)}
+      ${opt('topup-gas', '⛽', 'trade.topup.opt.gas.h', gasSub)}
+    </div>
+    <p class="trade-safety-foot">${esc(t('trade.topup.foot'))}</p>`;
+}
+
+// The typed amount as wei (comma-tolerant), or null when unparseable/zero.
+function topupAmountWei() {
+  const v = String(topupState?.amount ?? '').trim().replace(',', '.');
+  const m = /^(\d{1,6})(?:\.(\d{1,18}))?$/.exec(v);
+  if (!m) return null;
+  const wei = BigInt(m[1]) * 10n ** 18n + BigInt((m[2] || '').padEnd(18, '0'));
+  return wei > 0n ? wei : null;
+}
+// The most they can move: mainnet balance minus the L1 gas the move tx itself needs.
+function topupMaxWei() {
+  const st = topupState;
+  if (st?.mainnetEthWei == null) return null;
+  const max = st.mainnetEthWei - TOPUP_RESERVE_WEI;
+  return max > 0n ? max : null;
+}
+function topupBalLineHtml() {
+  const st = topupState || {};
+  if (st.phase === 'load') return `<span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.cashout.move.balLoading'))}`;
+  if (st.mainnetEthWei == null) return esc(t('trade.cashout.move.balUnknown'));
+  return esc(t('trade.topup.eth.bal').replace('{x}', fmtEthFiat(weiToEth(st.mainnetEthWei))));
+}
+function topupQuoteAreaHtml() {
+  const st = topupState || {};
+  const q = st.quote;
+  // Quoting unavailable altogether (Squid not configured) → the prefilled deep-link.
+  if (st.err === 'fallback') return `<a class="trade-funds-btn" href="${BRIDGE_URL}" target="_blank" rel="noopener">${esc(t('trade.funds.bridgeBtn'))} ↗</a>`;
+  const ERR = { over: 'trade.topup.eth.err.over', amount: 'trade.cashout.move.err.amount', small: 'trade.cashout.move.err.small', rate: 'trade.err.rate', quote: 'trade.cashout.move.err.quote' };
+  if (st.err && st.err !== 'gas') return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(t(ERR[st.err]))}</span></div>`;
+  if (q === 'loading') return `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.bridge.quote.loading'))}</div>`;
+  if (!q) return '';
+  const mins = q.durationSeconds ? Math.max(1, Math.ceil(q.durationSeconds / 60)) : null;
+  const meta = [
+    q.feeUsd != null ? t('trade.bridge.quote.fees').replace('{f}', String(q.feeUsd)) : null,
+    mins != null ? t('trade.bridge.quote.mins').replace('{m}', String(mins)) : null,
+    t('trade.bridge.quote.by'),
+  ].filter(Boolean).join(' · ');
+  const feesShort = st.err === 'gas';
+  const busy = bridgeJob && !BRIDGE_TERMINAL.has(bridgeJob.phase);
+  return `
+    <div class="trade-bridge-quote">
+      <div class="trade-bridge-line">${esc(t('trade.topup.eth.quoteLine').replace('{y}', fmtEthFiat(q.toEth)))}</div>
+      <div class="trade-bridge-meta">${esc(meta)}</div>
+      ${feesShort ? `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(t('trade.topup.eth.err.fees'))}</span></div>` : ''}
+      <button class="trade-funds-btn" data-act="topup-now" type="button" ${feesShort || busy ? 'disabled' : ''}>${esc(t('trade.topup.eth.btn'))}</button>
+      ${bridgeJob && !isGasBridge(bridgeJob) && !isOutBridge(bridgeJob) ? bridgeStatusHtml() : ''}
+    </div>`;
+}
+function topupEthInner() {
+  // A funding move is underway/finished — the tracker card takes over (this also covers
+  // a checkout-shortfall bridge already in flight: same job, same truth).
+  if (bridgeJob && !isGasBridge(bridgeJob) && !isOutBridge(bridgeJob) && CARD_PHASES.has(bridgeJob.phase)) {
+    return `
+      <span class="apply-pill">${esc(t('trade.topup.badge'))}</span>
+      ${bridgeCardHtml(bridgeJob)}
+      <p class="trade-safety-foot">${esc(t('trade.topup.foot'))}</p>`;
+  }
+  const st = topupState || {};
+  // Known-empty mainnet wallet: nothing to move — route to the card on-ramp instead
+  // (it delivers to Ethereum; the note says to come back and move it over).
+  const noEth = st.phase === 'ready' && st.mainnetEthWei != null && st.mainnetEthWei <= TOPUP_RESERVE_WEI;
+  const body = noEth ? `
+    <p class="trade-cashout-balline">${esc(t('trade.topup.eth.none'))}</p>
+    <button class="trade-funds-btn" data-act="onramp" data-chain="ethereum" data-token="ETH" type="button">${esc(t('trade.onramp.btn'))} ↗</button>
+    <p class="trade-cashout-balline">${esc(t('trade.topup.eth.cardNote'))}</p>` : `
+    <label class="trade-cashout-amtlbl" for="trade-topup-amt">${esc(t('trade.cashout.move.amount'))}</label>
+    <div class="trade-cashout-amtrow">
+      <input id="trade-topup-amt" class="trade-cashout-amt" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"
+        value="${esc(st.amount || '')}" placeholder="0.05" ${st.phase === 'load' ? 'disabled' : ''}>
+      <span class="trade-cashout-unit" aria-hidden="true">ETH</span>
+      <button class="trade-cashout-max" data-act="topup-max" type="button" ${topupMaxWei() ? '' : 'disabled'}>${esc(t('trade.cashout.move.max'))}</button>
+    </div>
+    <p class="trade-cashout-balline" id="trade-topup-balline">${topupBalLineHtml()}</p>
+    <div id="trade-topup-qslot">${topupQuoteAreaHtml()}</div>`;
+  return `
+    <span class="apply-pill">${esc(t('trade.topup.badge'))}</span>
+    <h3 class="trade-safety-h">${esc(t('trade.topup.eth.h'))}</h3>
+    <p class="trade-safety-p">${esc(t('trade.topup.eth.p'))}</p>
+    <div class="trade-cashout-route">
+      ${cashoutHopHtml('trade.cashout.move.from', '/img/brands/eth.png', 'Ethereum', 'trade.topup.eth.fromSub')}
+      <div class="trade-cashout-hop-arrow" aria-hidden="true">↓</div>
+      ${cashoutHopHtml('trade.cashout.move.to', '/img/brands/immutable.png', 'Immutable zkEVM', 'trade.topup.eth.toSub')}
+    </div>
+    ${body}
+    <div class="trade-safety-actions">
+      <button class="apply-btn-ghost" data-act="topup-back" type="button">${esc(t('trade.cashout.back'))}</button>
+    </div>
+    <p class="trade-safety-foot">${esc(t('trade.topup.foot'))}</p>`;
+}
+
+function queueTopupQuote(ms = 500) {
+  clearTimeout(topupQuoteTimer);
+  topupQuoteTimer = setTimeout(fetchTopupQuote, ms);
+}
+async function fetchTopupQuote() {
+  const st = topupState;
+  if (!st || topupStep !== 'eth') return;
+  const seq = ++topupSeq;
+  const wei = topupAmountWei();
+  if (wei == null) { st.quote = null; st.err = String(st.amount).trim() ? 'amount' : null; return patchTopupMove(); }
+  if (st.mainnetEthWei != null && wei + TOPUP_RESERVE_WEI > st.mainnetEthWei) { st.quote = null; st.err = 'over'; return patchTopupMove(); }
+  st.quote = 'loading'; st.err = null;
+  patchTopupMove();
+  try {
+    const res = await fetch('/api/market/creatures/topup/quote', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: account, amountEth: weiToEthStr(wei) }),
+      signal: AbortSignal.timeout(30000),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (topupSeq !== seq || topupState !== st) return; // superseded
+    if (!res.ok) {
+      st.quote = null;
+      st.err = body.error === 'not_configured' ? 'fallback'
+        : body.error === 'no_route' ? 'small' : body.error === 'rate_limited' ? 'rate' : 'quote';
+      return patchTopupMove();
+    }
+    st.quote = body;
+    // The move is signed on Ethereum: the wallet pays tx.value (input + relay fee) plus
+    // that tx's own L1 gas — flag a shortfall before MetaMask fails it cryptically.
+    try {
+      st.err = (st.mainnetEthWei != null && st.mainnetEthWei < BigInt(body.tx.value || '0x0') + TOPUP_RESERVE_WEI) ? 'gas' : null;
+    } catch { st.err = null; }
+    patchTopupMove();
+  } catch {
+    if (topupSeq !== seq || topupState !== st) return;
+    st.quote = null; st.err = 'quote';
+    patchTopupMove();
+  }
+}
+function topupMaxClick() {
+  const st = topupState;
+  const max = topupMaxWei();
+  if (!st || max == null) return;
+  st.amount = weiToEthStr(max);
+  const input = root()?.querySelector('#trade-topup-amt');
+  if (input) input.value = st.amount;
+  clearTimeout(topupQuoteTimer);
+  fetchTopupQuote();
+}
+async function runTopupEth() {
+  const st = topupState;
+  const q = st?.quote;
+  if (!q || q === 'loading' || !q.tx || st.err === 'gas') return;
+  // Arrival target for the tracker's balance signal: what's on zkEVM now plus most of
+  // the quoted arrival (the estimate can drift a little; Squid's status is primary).
+  let needWei = 0n;
+  const cur = await readErc20(IMX_ETH_TOKEN, account);
+  const toWei = BigInt(Math.round((Number(q.toEth) || 0) * 1e6)) * 10n ** 12n;
+  if (cur != null && toWei > 0n) needWei = cur + (toWei * 95n) / 100n;
+  return runBridge(q, { kind: 'eth', needWei });
+}
+
+// IMX gas option: reuses the exact-output gas quote (~5 IMX target) and one-tap flow the
+// Buy/Sell/Transfer panels already use — just reachable before anything fails for gas.
+async function openTopupGas() {
+  const st = topupState;
+  if (!st || st.phase !== 'ready') return;
+  topupStep = 'gas';
+  st.err = null;
+  st.gasFrom = st.mainnetImxWei != null && st.mainnetImxWei > 0n ? 'imx'
+    : st.mainnetEthWei != null && st.mainnetEthWei > TOPUP_RESERVE_WEI ? 'eth' : null;
+  if (!st.gasFrom) { st.gasQuote = null; patchTopup(); return; }
+  st.gasQuote = 'loading';
+  patchTopup();
+  const seq = ++topupSeq;
+  try {
+    const res = await fetch('/api/market/creatures/bridge/gas/quote', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: account, needImx: String(GAS_TARGET_IMX), from: st.gasFrom }),
+      signal: AbortSignal.timeout(30000),
+    });
+    const body = res.ok ? await res.json().catch(() => null) : null;
+    if (topupSeq !== seq || topupState !== st || topupStep !== 'gas') return;
+    st.gasQuote = body && body.tx ? body : null;
+    patchTopup();
+  } catch {
+    if (topupSeq !== seq || topupState !== st) return;
+    st.gasQuote = null;
+    patchTopup();
+  }
+}
+function topupGasInner() {
+  if (isGasBridge(bridgeJob) && CARD_PHASES.has(bridgeJob.phase)) {
+    return `
+      <span class="apply-pill">${esc(t('trade.topup.badge'))}</span>
+      ${bridgeCardHtml(bridgeJob)}
+      <p class="trade-safety-foot">${esc(t('trade.topup.foot'))}</p>`;
+  }
+  const st = topupState || {};
+  const g = st.gasQuote;
+  const gasOk = st.imxWei != null && st.imxWei >= GAS_OK_WEI;
+  const balLine = st.phase === 'load'
+    ? `<span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.cashout.move.balLoading'))}`
+    : esc(t(gasOk ? 'trade.topup.gas.balOk' : 'trade.topup.gas.bal').replace('{x}', fmtImx(weiToEth(st.imxWei ?? 0n))));
+  let area;
+  if (g === 'loading') {
+    area = `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.bridge.quote.loading'))}</div>`;
+  } else if (g && g.tx) {
+    const mins = g.durationSeconds ? Math.max(1, Math.ceil(g.durationSeconds / 60)) : null;
+    const meta = [
+      g.feeUsd != null ? t('trade.bridge.quote.fees').replace('{f}', String(g.feeUsd)) : null,
+      mins != null ? t('trade.bridge.quote.mins').replace('{m}', String(mins)) : null,
+      t('trade.bridge.quote.by'),
+    ].filter(Boolean).join(' · ');
+    const fromTxt = st.gasFrom === 'imx' ? fmtImx(g.fromEth) : fmtEthFiat(g.fromEth);
+    const busy = bridgeJob && !BRIDGE_TERMINAL.has(bridgeJob.phase);
+    area = `
+      <div class="trade-bridge-quote">
+        <div class="trade-bridge-line">${esc(t('trade.gas.bridge.line').replace('{x}', fromTxt).replace('{y}', fmtImx(g.toEth)))}</div>
+        <div class="trade-bridge-meta">${esc(meta)}</div>
+        <button class="trade-funds-btn" data-act="topup-gas-now" type="button" ${busy ? 'disabled' : ''}>${esc(t('trade.gas.bridge.now'))}</button>
+        ${isGasBridge(bridgeJob) ? bridgeStatusHtml() : ''}
+      </div>`;
+  } else if (!st.gasFrom && st.phase === 'ready') {
+    // Nothing on Ethereum to bridge or swap — the card on-ramp delivers IMX straight
+    // to Immutable zkEVM.
+    area = `
+      <p class="trade-cashout-balline">${esc(t('trade.topup.gas.none'))}</p>
+      <button class="trade-funds-btn" data-act="onramp" data-chain="zkevm" data-token="IMX" type="button">${esc(t('trade.onramp.btn'))} ↗</button>`;
+  } else {
+    // Quote failed / not configured — the matching manual deep-link.
+    area = `<a class="trade-funds-btn" href="${st.gasFrom === 'imx' ? GAS_BRIDGE_URL_IMX : GAS_BRIDGE_URL}" target="_blank" rel="noopener">${esc(t('trade.gas.getBtn'))} ↗</a>`;
+  }
+  return `
+    <span class="apply-pill">${esc(t('trade.topup.badge'))}</span>
+    <h3 class="trade-safety-h">${esc(t('trade.topup.gas.h'))}</h3>
+    <p class="trade-safety-p">${esc(t('trade.topup.gas.p'))}</p>
+    <p class="trade-cashout-balline">${balLine}</p>
+    ${area}
+    <div class="trade-safety-actions">
+      <button class="apply-btn-ghost" data-act="topup-back" type="button">${esc(t('trade.cashout.back'))}</button>
+    </div>
+    <p class="trade-safety-foot">${esc(t('trade.topup.foot'))}</p>`;
+}
+function runTopupGas() {
+  const st = topupState;
+  if (!st?.gasQuote || st.gasQuote === 'loading') return;
+  const needWei = BigInt(Math.round(GAS_TARGET_IMX * 1e6)) * 10n ** 12n;
+  return runBridge(st.gasQuote, { kind: 'gas', needWei, fromSym: st.gasFrom === 'imx' ? 'IMX' : 'ETH', toSym: 'IMX' });
 }
 
 async function connect() {
@@ -1517,10 +2096,18 @@ function loadSavedBridge() {
   } catch { return null; }
 }
 function dismissBridge() {
+  const wasCashout = isCashout(bridgeJob);
   bridgeJob = null;
   try { localStorage.removeItem(BRIDGE_STORE); } catch { /* fine */ }
   patchBridgeBanner();
   patchModal();
+  // Dismissing a cash-out from inside the move screen: re-read balances (the move just
+  // changed them) so the refreshed screen offers what's actually left.
+  if (wasCashout && cashoutOpen && cashoutStep === 'move') openCashoutMove();
+  else patchCashout();
+  // Same for the Add-funds modal: balances on both chains just moved.
+  if (topupOpen && topupState) { topupState.phase = 'load'; patchTopup(); refreshTopupBalances(); }
+  else patchTopup();
 }
 
 function fmtElapsed(ms) {
@@ -1528,10 +2115,17 @@ function fmtElapsed(ms) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+// A cash-out runs the same rails the other way (zkEVM → mainnet) — dir 'out' flips the
+// source-chain explorer, the route chips and the copy everywhere below.
+const isOutBridge = b => b?.dir === 'out';
+
 function bridgeLinksHtml(b) {
   if (!b?.hash) return '';
   const axelar = b.axelarUrl || `https://axelarscan.io/gmp/${b.hash}`;
-  return `<a href="https://etherscan.io/tx/${esc(b.hash)}" target="_blank" rel="noopener">${esc(t('trade.bridge.etherscan'))}</a>
+  const src = isOutBridge(b)
+    ? `<a href="${EXPLORER}/tx/${esc(b.hash)}" target="_blank" rel="noopener">${esc(t('trade.bridge.zkExplorer'))}</a>`
+    : `<a href="https://etherscan.io/tx/${esc(b.hash)}" target="_blank" rel="noopener">${esc(t('trade.bridge.etherscan'))}</a>`;
+  return `${src}
     · <a href="${esc(axelar)}" target="_blank" rel="noopener">${esc(t('trade.bridge.axelar'))}</a>`;
 }
 
@@ -1565,7 +2159,7 @@ function bridgePairHtml(b) {
 }
 // The Squid-style from→to detail rows (Send/receive · Route · Time), or the summary on done.
 function bridgeRowsHtml(b, done) {
-  const gas = isGasBridge(b);
+  const gas = isGasBridge(b), out = isOutBridge(b);
   const fromSym = b.fromSym || 'ETH', toSym = b.toSym || (gas ? 'IMX' : 'ETH');
   const chip = (img, name) => `<span class="trade-bchip"><img src="${img}" alt="" width="14" height="14">${esc(name)}</span>`;
   const eth = chip('/img/brands/eth.png', 'Ethereum'), imm = chip('/img/brands/immutable.png', 'Immutable');
@@ -1574,22 +2168,30 @@ function bridgeRowsHtml(b, done) {
   const rows = [];
   if (done) {
     rows.push(row('✓', t('trade.bridge.row.received'), `<span class="trade-brow-to">${esc(fmtBridgeAmt(b.toEth, toSym))}</span>`));
-    rows.push(row('⛓', t('trade.bridge.row.on'), imm));
+    rows.push(row('⛓', t('trade.bridge.row.on'), out ? eth : imm));
     rows.push(row('◷', t('trade.bridge.row.took'), clock));
   } else {
     if (b.fromEth != null) rows.push(row('↔', t('trade.bridge.row.sendrecv'), `${esc(fmtBridgeAmt(b.fromEth, fromSym))} <span class="trade-brow-sep">→</span> <span class="trade-brow-to">~${esc(fmtBridgeAmt(b.toEth, toSym))}</span>`));
-    rows.push(row('⛓', t('trade.bridge.row.route'), `${eth}<span class="trade-brow-sep">→</span>${imm}`));
+    rows.push(row('⛓', t('trade.bridge.row.route'), out ? `${imm}<span class="trade-brow-sep">→</span>${eth}` : `${eth}<span class="trade-brow-sep">→</span>${imm}`));
     rows.push(row('◷', t('trade.bridge.row.time'), `${clock} ${esc(t('trade.bridge.elapsed'))} <span class="trade-brow-sep">→</span> <span class="trade-brow-to">${esc(ETA_MINS(b))}</span>`));
   }
   return `<div class="trade-brows">${rows.join('')}</div>`;
 }
+// Step labels for the live stepper — the source/destination pair flips with direction.
+function bridgeStepKeys(b) {
+  return isOutBridge(b)
+    ? ['trade.bridge.step1.out', 'trade.bridge.step2.out', 'trade.bridge.step3']
+    : ['trade.bridge.step1', 'trade.bridge.step2', 'trade.bridge.step3'];
+}
 function bridgeCardHtml(b) {
-  const gas = isGasBridge(b);
+  const gas = isGasBridge(b), out = isOutBridge(b);
   if (b.phase === 'done') {
     return `<div class="trade-bcard is-ok" role="status" aria-live="polite">
       <div class="trade-bcard-hd"><div class="trade-bcard-badge" aria-hidden="true">✓</div>
-        <h4>${esc(t(gas ? 'trade.gas.bridge.done' : 'trade.bridge.done'))}</h4></div>
+        <h4>${esc(t(gas ? 'trade.gas.bridge.done' : out ? 'trade.cashout.move.done' : 'trade.bridge.done'))}</h4>
+        ${out ? `<p>${esc(t('trade.cashout.move.doneSub'))}</p>` : ''}</div>
       <div class="trade-bcard-body">${bridgeRowsHtml(b, true)}
+        ${out ? `<button class="trade-bcard-btn is-ghost" data-act="add-eth-mainnet" type="button">${esc(t('trade.cashout.move.seeInMM'))}</button>` : ''}
         <button class="trade-bcard-btn" data-act="bridge-dismiss" type="button">${esc(t('trade.bridge.card.done'))}</button>
         <div class="trade-bcard-links">${bridgeLinksHtml(b)}</div></div></div>`;
   }
@@ -1605,7 +2207,7 @@ function bridgeCardHtml(b) {
   // Live — waiting / slow.
   const idx = { submitted: 0, src_confirmed: 1, bridging: 1, arrived: 2 }[b.stage] ?? 0;
   const fill = idx * (100 / 3); // node centres sit at 1/6, 3/6, 5/6 — fill runs centre-to-centre
-  const steps = ['trade.bridge.step1', 'trade.bridge.step2', 'trade.bridge.step3'].map((k, i) => {
+  const steps = bridgeStepKeys(b).map((k, i) => {
     const cls = i < idx ? 'is-done' : i === idx ? 'is-active' : '';
     const ic = i < idx ? '✓' : i === idx ? '<span class="trade-mini-spin" aria-hidden="true"></span>' : '·';
     return `<div class="trade-bstep ${cls}"><span class="trade-bstep-dot">${ic}</span><span class="trade-bstep-lbl">${esc(t(k))}</span></div>`;
@@ -1613,8 +2215,8 @@ function bridgeCardHtml(b) {
   return `<div class="trade-bcard" role="status" aria-live="polite">
     <div class="trade-bcard-hd">
       ${bridgePairHtml(b)}
-      <h4>${esc(t(gas ? 'trade.gas.bridgebar.bridging' : 'trade.bridgebar.bridging'))}</h4>
-      <p>${esc(t(gas ? 'trade.gas.card.sub' : 'trade.bridge.card.sub'))}</p>
+      <h4>${esc(t(gas ? 'trade.gas.bridgebar.bridging' : out ? 'trade.cashout.move.bridging' : 'trade.bridgebar.bridging'))}</h4>
+      <p>${esc(t(gas ? 'trade.gas.card.sub' : out ? 'trade.cashout.move.card.sub' : 'trade.bridge.card.sub'))}</p>
       ${b.phase === 'slow' ? `<span class="trade-bcard-slow">${esc(t('trade.bridgebar.slowTag'))}</span>` : ''}
     </div>
     <div class="trade-bcard-body">
@@ -1629,11 +2231,12 @@ function bridgeCardHtml(b) {
 function bridgeBannerHtml() {
   const b = bridgeJob;
   if (!b || (!b.hash && !BRIDGE_TERMINAL.has(b.phase))) return '';
-  const stageKey = { submitted: 'trade.bridge.step1', src_confirmed: 'trade.bridge.step2', bridging: 'trade.bridge.step2', arrived: 'trade.bridge.step3' }[b.stage] || 'trade.bridge.step1';
+  const stepKeys = bridgeStepKeys(b);
+  const stageKey = { submitted: stepKeys[0], src_confirmed: stepKeys[1], bridging: stepKeys[1], arrived: stepKeys[2] }[b.stage] || stepKeys[0];
   const dismiss = BRIDGE_TERMINAL.has(b.phase)
     ? `<button class="trade-bridgebar-x" data-act="bridge-dismiss" type="button" aria-label="${esc(t('trade.bridgebar.dismiss'))}">×</button>` : '';
   if (b.phase === 'done') {
-    return `<div class="trade-bridgebar is-ok"><span aria-hidden="true">✓</span><span>${esc(t(isGasBridge(b) ? 'trade.gas.bridgebar.done' : 'trade.bridgebar.done'))}</span><span class="trade-bridgebar-links">${bridgeLinksHtml(b)}</span>${dismiss}</div>`;
+    return `<div class="trade-bridgebar is-ok"><span aria-hidden="true">✓</span><span>${esc(t(isGasBridge(b) ? 'trade.gas.bridgebar.done' : isOutBridge(b) ? 'trade.cashout.move.bardone' : 'trade.bridgebar.done'))}</span><span class="trade-bridgebar-links">${bridgeLinksHtml(b)}</span>${dismiss}</div>`;
   }
   if (b.phase === 'error') {
     return `<div class="trade-bridgebar is-bad"><span aria-hidden="true">⚠</span><span>${esc(b.msg || t('trade.bridge.failed'))}</span><span class="trade-bridgebar-links">${bridgeLinksHtml(b)}</span>${dismiss}</div>`;
@@ -1646,7 +2249,7 @@ function bridgeBannerHtml() {
         <img src="${coin(b.fromSym || 'ETH')}" alt="" width="20" height="20">
         <img src="${coin(b.toSym || (isGasBridge(b) ? 'IMX' : 'ETH'))}" alt="" width="20" height="20">
       </span>
-      <span class="trade-bbar-txt">${esc(t(isGasBridge(b) ? 'trade.gas.bridgebar.bridging' : 'trade.bridgebar.bridging'))} — ${esc(t(stageKey))}${slow}</span>
+      <span class="trade-bbar-txt">${esc(t(isGasBridge(b) ? 'trade.gas.bridgebar.bridging' : isOutBridge(b) ? 'trade.cashout.move.bridging' : 'trade.bridgebar.bridging'))} — ${esc(t(stageKey))}${slow}</span>
       <span class="trade-bbar-bar" aria-hidden="true"><i data-bridge-bar></i></span>
       <span class="trade-bbar-time"><b data-bridge-elapsed>${esc(fmtElapsed(Date.now() - b.startedAt))}</b>${b.mins ? ` / ~${esc(String(b.mins))} min` : ''}</span>
       <span class="trade-bridgebar-links">${bridgeLinksHtml(b)}</span>
@@ -1677,10 +2280,12 @@ function startBridgeTicker() {
 function bridgeStatusHtml() {
   const b = bridgeJob;
   if (!b) return '';
-  // waiting/slow/done/error render as the full card; the brief switch/confirm/back phases
-  // (before a tx hash exists) stay a small inline status line under the quote.
+  // waiting/slow/done/error render as the full card; the brief switch/approve/confirm/back
+  // phases (before a tx hash exists) stay a small inline status line under the quote.
   if (CARD_PHASES.has(b.phase)) return bridgeCardHtml(b);
-  const STEP = { switch: 'trade.bridge.switch', confirm: 'trade.bridge.confirm', back: 'trade.bridge.back' };
+  const STEP = isOutBridge(b)
+    ? { switch: 'trade.cashout.move.switch', approve: 'trade.cashout.move.approve', confirm: 'trade.cashout.move.confirm' }
+    : { switch: 'trade.bridge.switch', confirm: 'trade.bridge.confirm', back: 'trade.bridge.back' };
   return `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t(STEP[b.phase]))}</span></div>`;
 }
 
@@ -1690,6 +2295,8 @@ function setBridgeJob(patchFields) {
   patchModal();
   patchBridgeBanner();
   patchGas(); // keep the inline Sell/Transfer gas panels in step with the bridge
+  patchCashout(); // and the cash-out modal's move screen / tracker card
+  patchTopup(); // and the Add-funds modal
   if (patchFields.phase === 'done') refreshAfterBridge();
 }
 
@@ -1706,14 +2313,17 @@ function refreshAfterBridge() {
 }
 
 // A gas bridge moves native IMX (not the ETH ERC-20), so it lands in a different balance
-// and gets its own copy. kind defaults to 'eth' for older persisted jobs.
+// and gets its own copy. kind defaults to 'eth' for older persisted jobs. A cash-out is
+// the reverse direction entirely (zkEVM ETH → mainnet ETH).
 const isGasBridge = b => (b || bridgeJob)?.kind === 'gas';
+const isCashout = b => (b || bridgeJob)?.kind === 'cashout';
 
 // One server-side status read for a job (fresh Squid signal, not the wallet's cached balance).
 // Timed out so it can't hang the caller; returns the parsed payload or null.
 async function fetchBridgeStatus(job) {
   try {
-    const r = await fetch(`/api/market/creatures/bridge/status?tx=${job.hash}&quoteId=${encodeURIComponent(job.quoteId || '')}&requestId=${encodeURIComponent(job.requestId || '')}`, { signal: AbortSignal.timeout(9000) });
+    const dir = job.dir === 'out' ? '&dir=out' : '';
+    const r = await fetch(`/api/market/creatures/bridge/status?tx=${job.hash}&quoteId=${encodeURIComponent(job.quoteId || '')}&requestId=${encodeURIComponent(job.requestId || '')}${dir}`, { signal: AbortSignal.timeout(9000) });
     return r.ok ? await r.json() : null;
   } catch { return null; }
 }
@@ -1774,10 +2384,14 @@ async function trackBridge() {
       if (bridgeJob !== job || job.phase !== 'waiting') return;
     }
     // SECONDARY signal — the balance actually crediting (covers the rare case Squid's status
-    // lags the chain). Capped so a hung provider read can't freeze the loop.
-    const read = isGasBridge(job) ? readNative(job.account) : readErc20(IMX_ETH_TOKEN, job.account);
-    const bal = await readWithTimeout(read, 9000);
-    if (bal != null && bal >= needWei) return setBridgeJob({ phase: 'done', stage: 'arrived' });
+    // lags the chain). Capped so a hung provider read can't freeze the loop. Not for
+    // cash-outs: their destination balance lives on Ethereum mainnet, which the wallet
+    // (sitting on zkEVM) can't read — Squid's status is the only signal there.
+    if (job.dir !== 'out' && needWei > 0n) {
+      const read = isGasBridge(job) ? readNative(job.account) : readErc20(IMX_ETH_TOKEN, job.account);
+      const bal = await readWithTimeout(read, 9000);
+      if (bal != null && bal >= needWei) return setBridgeJob({ phase: 'done', stage: 'arrived' });
+    }
     tick++;
     await new Promise(r => setTimeout(r, 10000));
   }
@@ -2205,6 +2819,16 @@ async function addWethToken() {
   try {
     await eth().request({ method: 'wallet_watchAsset', params: { type: 'ERC20', options: { address: WETH_TOKEN, symbol: 'WETH', decimals: 18 } } });
   } catch (err) { if (err?.code !== 4001) console.error('watchAsset WETH failed:', err.message); }
+}
+// After a cash-out lands: flip MetaMask to Ethereum so the arrived ETH is immediately
+// visible — "where did my money go?" is the #1 post-bridge panic, and native mainnet ETH
+// needs no watchAsset, just the right network selected.
+async function showEthOnMainnet() {
+  if (!eth()) return;
+  try {
+    await switchToChain('0x1');
+    render();
+  } catch (err) { if (err?.code !== 4001) console.error('mainnet switch failed:', err.message); }
 }
 // One-tap WETH → native ETH unwrap (withdraw): turns a seller's WETH proceeds into plain ETH,
 // 1:1, gas only — no DEX/swap. Unwraps the full WETH balance.
@@ -2860,6 +3484,7 @@ function walletBarHtml() {
       <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M6.99 11 3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg>
     </button>
     ${net}${bal ? `<span class="trade-bar-bals">${bal}</span>` : ''}
+    ${coll === 'creatures' && onZk() ? `<button class="trade-cashout-pill trade-topup-pill" data-act="topup-open" type="button" title="${esc(t('trade.topup.barTitle'))}"><span aria-hidden="true">💎</span> ${esc(t('trade.topup.barBtn'))}</button>` : ''}
     ${(coll === 'creatures' && onZk()) || (coll === 'land' && onRightChain()) ? `<button class="trade-cashout-pill" data-act="cashout-open" type="button" title="${esc(t('trade.cashout.barTitle'))}"><span aria-hidden="true">💸</span> ${esc(t('trade.cashout.barBtn'))}</button>` : ''}
     <button class="apply-logout" data-act="disconnect" type="button">${esc(t('trade.disconnect'))}</button>
   </div>`;
@@ -4185,7 +4810,7 @@ function render() {
     </div>
     <div id="trade-mmwarn-slot">${walletNoticeHtml()}</div>
     <div id="trade-bridgebar-slot">${bridgeBannerHtml()}</div>
-    ${viewHtml()}${modalHtml()}${safetyHtml()}<div id="trade-confirm-slot">${confirmAcceptHtml()}</div><div id="trade-cashout-slot">${cashoutHtml()}</div>`;
+    ${viewHtml()}${modalHtml()}${safetyHtml()}<div id="trade-confirm-slot">${confirmAcceptHtml()}</div><div id="trade-cashout-slot">${cashoutHtml()}</div><div id="trade-topup-slot">${topupHtml()}</div>`;
   ensureDelegation();
   if (account && (coll === 'land' || onZk())) {
     refreshBalance();
@@ -4260,10 +4885,37 @@ function onClick(e) {
     case 'add-eth-token':  return addEthToken();
     case 'add-weth-token': return addWethToken();
     case 'unwrap-weth':    return handleUnwrapWeth();
-    case 'cashout-open':   cashoutOpen = true; cashoutStep = 'intent'; return patchCashout();
+    case 'cashout-open':
+      cashoutOpen = true; cashoutStep = 'intent';
+      topupOpen = false; patchTopup(); // one wallet modal at a time
+      return patchCashout();
     case 'cashout-guide':  cashoutStep = 'guide'; return patchCashout();
-    case 'cashout-back':   cashoutStep = 'intent'; return patchCashout();
-    case 'cashout-close':  cashoutOpen = false; return patchCashout();
+    case 'cashout-move':   return openCashoutMove();
+    case 'cashout-max':    return cashoutMaxClick();
+    case 'cashout-now':    return runCashout();
+    case 'add-eth-mainnet': return showEthOnMainnet();
+    case 'cashout-back':
+      cashoutStep = 'intent'; cashoutState = null; clearTimeout(cashoutQuoteTimer);
+      return patchCashout();
+    case 'cashout-close':
+      cashoutOpen = false; cashoutState = null; clearTimeout(cashoutQuoteTimer);
+      return patchCashout();
+    case 'topup-open':     return openTopup();
+    case 'topup-eth':
+      if (topupState) { topupState.err = null; topupState.quote = null; }
+      topupStep = 'eth';
+      return patchTopup();
+    case 'topup-gas':      return openTopupGas();
+    case 'topup-max':      return topupMaxClick();
+    case 'topup-now':      return runTopupEth();
+    case 'topup-gas-now':  return runTopupGas();
+    case 'topup-back':
+      topupStep = 'intent'; clearTimeout(topupQuoteTimer);
+      if (topupState) { topupState.err = null; topupState.quote = null; topupState.gasQuote = null; }
+      return patchTopup();
+    case 'topup-close':
+      topupOpen = false; topupState = null; clearTimeout(topupQuoteTimer);
+      return patchTopup();
     case 'cancel-offer':   return handleCancelOffer(target.dataset.offer);
     case 'cancel-land-offer': return handleCancelLandOffer(target.dataset.offer);
     case 'bridge-now':     return handleBridgeNow();
@@ -4417,6 +5069,14 @@ function onChange(e) {
 }
 function onInput(e) {
   if (e.target?.id === 'trade-to') return queueTransferCheck(e.target.value);
+  if (e.target?.id === 'trade-cashout-amt') {
+    if (cashoutState) { cashoutState.amount = e.target.value; queueCashoutQuote(); }
+    return;
+  }
+  if (e.target?.id === 'trade-topup-amt') {
+    if (topupState) { topupState.amount = e.target.value; queueTopupQuote(); }
+    return;
+  }
   if (e.target?.id === 'inv-q') {
     invFlt.q = e.target.value.trim();
     return patchInvFilter(); // patches facets/chips/picker, not the input — focus survives
@@ -4480,6 +5140,7 @@ function wireEsc() {
   if (escWired) return; escWired = true;
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
+    if (topupOpen) { topupOpen = false; patchTopup(); return; }
     if (cashoutOpen) { cashoutOpen = false; patchCashout(); return; }
     if (pendingAccept) { pendingAccept = null; patchConfirmAccept(); return; }
     if (openFacet) { openFacet = null; repaintFacetUI(); return; }

@@ -1082,6 +1082,26 @@ footer p  { color: var(--hr-fg-2); font-size: 14px; max-width: 420px; margin: 10
   .wt-mkt:not([hidden]) { animation: apply-rise .4s cubic-bezier(.16,.84,.3,1) backwards; }
 }
 
+/* Calm strip (Cash out step): three glass reassurance cards, brand-accented via --calm */
+.gm-calm { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 2px 0 6px; }
+.gm-calm-card {
+  position: relative; padding: 14px 15px 13px; border-radius: var(--hr-radius-lg);
+  background: linear-gradient(160deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
+  border: 1px solid var(--hr-line);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  overflow: hidden;
+}
+.gm-calm-card::before {
+  content: ''; position: absolute; inset: -40% -40% auto auto; width: 120px; height: 120px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--calm, var(--hr-primary)) 22%, transparent), transparent 70%);
+  pointer-events: none;
+}
+.gm-calm-ico { display: block; font-size: 20px; line-height: 1; margin-bottom: 8px; }
+.gm-calm-card b { display: block; font-family: var(--hr-sans); font-weight: 800; font-size: 13.5px; color: var(--hr-fg-0); margin-bottom: 4px; }
+.gm-calm-card p { margin: 0; font-size: 12px; line-height: 1.55; color: var(--hr-fg-2); }
+@media (max-width: 700px) { .gm-calm { grid-template-columns: 1fr; } }
+
 /* ---------- INTERACTIVE GUIDE DEMOS (js/guide-demos.js) ----------
    Scripted replays of the live marketplace inside the walkthrough cards. The stage
    reuses the real .trade-* components (tiles, modal card, statuses, filter chips) so
@@ -1336,8 +1356,13 @@ footer p  { color: var(--hr-fg-2); font-size: 14px; max-width: 420px; margin: 10
 /* Cash-out scenarios: their stage is just a bar + status row, shorter than the
    warning sheet — give it a floor so the sheet never clips. */
 .gdemo-stage:has(.trade-cashout-warn) { min-height: 470px; }
+/* The in-site Move mock (route hops + amount + quote) runs taller than the old step list */
+.gdemo-stage:has(.trade-cashout-route) { min-height: 620px; }
 .gdemo-safety-card .trade-cashout-warn { margin-bottom: 12px; }
 .gdemo-safety-card .trade-cashout-steps { margin-bottom: 14px; }
+.gdemo-safety-card .trade-cashout-route { margin-bottom: 12px; }
+.gdemo-safety-card .trade-cashout-max { pointer-events: none; }
+.gdemo-safety-card .trade-funds-btn { pointer-events: none; }
 .gdemo-stage.safety-open .gdemo-safety { opacity: 1; }
 .gdemo-safety .trade-safety-card.gdemo-safety-card {
   width: min(430px, 94%); max-height: 100%; overflow: hidden; padding: 18px 20px;
@@ -3281,8 +3306,65 @@ a.trade-buy-btn { display: inline-flex; }
   transition: transform .15s, box-shadow .15s, border-color .15s;
 }
 .trade-cashout-pill:hover { border-color: var(--hr-secondary); transform: translateY(-1px); box-shadow: 0 0 16px rgba(133,97,255,.3); }
+/* Add-funds twin pill — mint, to read as "money in" beside the lavender "money out" */
+.trade-topup-pill { background: var(--hr-primary-25); border-color: rgba(81,255,165,.45); color: var(--hr-primary); }
+.trade-topup-pill:hover { border-color: var(--hr-primary); box-shadow: 0 0 16px rgba(81,255,165,.3); }
+
+/* In-site cash-out ("Move to Ethereum") — Token-Trove-style From→To, all on-brand */
+.trade-cashout-route { display: flex; flex-direction: column; gap: 2px; margin: 6px 0 16px; text-align: left; }
+.trade-cashout-hop {
+  display: flex; align-items: center; gap: 11px;
+  padding: 11px 14px; border-radius: var(--hr-radius-lg);
+  background: linear-gradient(160deg, rgba(255,255,255,.055), rgba(255,255,255,.02));
+  border: 1px solid var(--hr-line);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.trade-cashout-hop-mm { flex: 0 0 auto; }
+.trade-cashout-hop-tx { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+.trade-cashout-hop-tx b { font-family: var(--hr-sans); font-weight: 800; font-size: 13px; color: var(--hr-fg-0); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trade-cashout-hop-tx span { font-size: 11.5px; color: var(--hr-fg-3); }
+.trade-cashout-hop .trade-bchip { flex: 0 0 auto; }
+.trade-cashout-hop-arrow {
+  align-self: center; width: 26px; height: 26px; margin: -7px 0; z-index: 1;
+  display: grid; place-items: center; border-radius: 50%;
+  background: var(--hr-primary-25); border: 1px solid rgba(81,255,165,.5);
+  color: var(--hr-primary); font-weight: 900; font-size: 14px;
+}
+.trade-cashout-amtlbl { display: block; text-align: left; margin: 0 0 6px; font-family: var(--hr-sans); font-weight: 800; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--hr-fg-2); }
+.trade-cashout-amtrow {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 6px 6px 14px; border-radius: var(--hr-radius-lg);
+  background: rgba(0,0,0,.32); border: 1px solid var(--hr-line-strong);
+  transition: border-color .15s, box-shadow .15s;
+}
+.trade-cashout-amtrow:focus-within { border-color: var(--hr-primary); box-shadow: 0 0 0 3px rgba(81,255,165,.15); }
+.trade-cashout-amt {
+  flex: 1; min-width: 0; background: none; border: 0; outline: 0; padding: 8px 0;
+  font-family: var(--hr-sans); font-weight: 800; font-size: 19px; color: var(--hr-fg-0);
+}
+.trade-cashout-amt::placeholder { color: var(--hr-fg-3); }
+.trade-cashout-unit { font-family: var(--hr-sans); font-weight: 800; font-size: 13px; color: var(--hr-fg-2); }
+.trade-cashout-max {
+  flex: 0 0 auto; cursor: pointer; padding: 0 12px; height: 30px;
+  border-radius: var(--hr-radius-pill); border: 1px solid rgba(81,255,165,.45);
+  background: var(--hr-primary-25); color: var(--hr-primary);
+  font-family: var(--hr-sans); font-weight: 900; font-size: 12px;
+  transition: transform .15s, box-shadow .15s;
+}
+.trade-cashout-max:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 0 12px rgba(81,255,165,.3); }
+.trade-cashout-max:disabled { opacity: .45; cursor: default; }
+.trade-cashout-balline { margin: 7px 2px 12px; text-align: left; font-size: 12px; color: var(--hr-fg-2); }
+.trade-cashout-card .trade-bridge-quote { text-align: left; }
+.trade-cashout-card .trade-safety-actions { margin-top: 14px; }
+.trade-cashout-diy { color: var(--hr-fg-3); text-decoration: underline; font-size: 11.5px; }
+.trade-cashout-diy:hover { color: var(--hr-fg-1); }
+.trade-bcard-btn.is-ghost { background: rgba(255,255,255,.06); border: 1px solid var(--hr-line-strong); color: var(--hr-fg-0); margin-bottom: 8px; }
+.trade-bcard-btn.is-ghost:hover { border-color: var(--hr-primary); color: var(--hr-primary); }
+
 @media (prefers-reduced-motion: reduce) {
-  .trade-cashout-opt, .trade-cashout-opt:hover, .trade-cashout-pill, .trade-cashout-pill:hover { transform: none; transition: none; }
+  .trade-cashout-opt, .trade-cashout-opt:hover, .trade-cashout-pill, .trade-cashout-pill:hover,
+  .trade-cashout-max, .trade-cashout-max:hover { transform: none; transition: none; }
 }
 
 /* Wallet-bug notice (e.g. MetaMask 13.33+ phantom "insufficient IMX") */

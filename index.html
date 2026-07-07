@@ -895,6 +895,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
       <button class="wt-tab" id="gm-tab-3" type="button" role="tab" aria-selected="false" aria-controls="gm-panel-3" data-wt="3" data-wt-slug="trading" tabindex="-1"><span class="wt-tab-num">3</span><span data-i18n="gm.trade.tag">Trading</span></button>
       <button class="wt-tab" id="gm-tab-4" type="button" role="tab" aria-selected="false" aria-controls="gm-panel-4" data-wt="4" data-wt-slug="moving" tabindex="-1"><span class="wt-tab-num">4</span><span data-i18n="gm.move.tag">Moving</span></button>
       <button class="wt-tab" id="gm-tab-5" type="button" role="tab" aria-selected="false" aria-controls="gm-panel-5" data-wt="5" data-wt-slug="in-game" tabindex="-1"><span class="wt-tab-num">5</span><span data-i18n="gm.game.tag">In-game</span></button>
+      <button class="wt-tab" id="gm-tab-6" type="button" role="tab" aria-selected="false" aria-controls="gm-panel-6" data-wt="6" data-wt-slug="cashout" tabindex="-1"><span class="wt-tab-num">6</span><span data-i18n="gm.cash.tag">Cash out</span></button>
     </div>
 
     <div class="wt-panels">
@@ -934,7 +935,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
             <h3 class="guide-title" data-i18n="gm.fund.h">Get funds on the right network</h3>
           </div>
         </div>
-        <p class="guide-intro" data-i18n="gm.fund.p">Money is the hardest part the first time — so pick the situation that matches yours and watch exactly what happens, click by click. No crypto knowledge needed: getting coins, moving them between networks, gas fees and cashing out are all covered.</p>
+        <p class="guide-intro" data-i18n="gm.fund.p">Money is the hardest part the first time — so pick the situation that matches yours and watch exactly what happens, click by click. No crypto knowledge needed: getting coins, moving them between networks and gas fees are all covered. (Sold something and want your money out? That has its own step — see Cash out at the end.)</p>
         <div class="wt-mkt-toggle">
           <div class="seg" role="tablist" data-mkt-toggle aria-label="Choose a collection">
             <button class="seg-btn is-active" id="gm-fund-cr" type="button" role="tab" aria-selected="true" aria-controls="gm-fund-cr-p" data-mkt-btn="creatures" data-i18n="trade.coll.creatures">Creatures</button>
@@ -1034,11 +1035,44 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         </div>
       </article>
 
+      <article class="guide-card wt-panel" id="gm-panel-6" data-wt-panel="6" role="tabpanel" aria-labelledby="gm-tab-6" hidden>
+        <div class="guide-head">
+          <span class="guide-num">6</span>
+          <div>
+            <span class="guide-tag" data-i18n="gm.cash.tag">Cash out</span>
+            <h3 class="guide-title" data-i18n="gm.cash.h">Turn your sale into money in your bank</h3>
+          </div>
+        </div>
+        <p class="guide-intro" data-i18n="gm.cash.p">You sold — congratulations! Now let's get that money to you, calmly. There's no deadline and no way to "miss" anything: your ETH sits safely in your own wallet until you decide to move it. The whole cash-out happens right here on this site, and the walkthrough below shows every single tap before you make it for real.</p>
+        <div class="gm-calm" role="list">
+          <div class="gm-calm-card" role="listitem" style="--calm:#51FFA5"><span class="gm-calm-ico" aria-hidden="true">🔒</span><b data-i18n="gm.cash.calm1h">Always in your wallet</b><p data-i18n="gm.cash.calm1p">Your ETH never passes through us or anyone else — it moves between networks inside the same wallet, same address, and only you can approve each step.</p></div>
+          <div class="gm-calm-card" role="listitem" style="--calm:#8561FF"><span class="gm-calm-ico" aria-hidden="true">☕</span><b data-i18n="gm.cash.calm2h">No rush, ever</b><p data-i18n="gm.cash.calm2p">The move usually lands in just a few minutes and runs on its own. Close the page, make a coffee — the tracker keeps going and picks up right where it was.</p></div>
+          <div class="gm-calm-card" role="listitem" style="--calm:#FFF95F"><span class="gm-calm-ico" aria-hidden="true">💬</span><b data-i18n="gm.cash.calm3h">We're one message away</b><p data-i18n="gm.cash.calm3p">Unsure at any step? Stop — nothing happens without your confirmation — and ask in the Highrise Discord. A real person will walk you through it.</p></div>
+        </div>
+        <div class="wt-mkt-toggle">
+          <div class="seg" role="tablist" data-mkt-toggle aria-label="Choose a collection">
+            <button class="seg-btn is-active" id="gm-cash-cr" type="button" role="tab" aria-selected="true" aria-controls="gm-cash-cr-p" data-mkt-btn="creatures" data-i18n="trade.coll.creatures">Creatures</button>
+            <button class="seg-btn" id="gm-cash-la" type="button" role="tab" aria-selected="false" aria-controls="gm-cash-la-p" data-mkt-btn="land" tabindex="-1" data-i18n="trade.coll.land">LAND</button>
+          </div>
+        </div>
+        <div class="wt-mkt" id="gm-cash-cr-p" data-mkt="creatures" role="tabpanel" aria-labelledby="gm-cash-cr" style="--accent:#51FFA5;--accent-soft:rgba(81,255,165,0.12)">
+          <p class="wt-mkt-where" data-i18n="gm.cash.cr.where">Creature sales pay you in ETH on Immutable zkEVM — we move it to Ethereum for you, right here.</p>
+          <div class="gdemo" data-gdemo="cashout-creatures"></div>
+          <p class="guide-note" data-i18n="gm.cash.cr.note">The one golden rule: don't send this ETH straight from Immutable zkEVM to an exchange — most exchanges only understand the Ethereum network. That's the entire reason the Cash out button exists: it puts your ETH on Ethereum first, and from there everything works the way you're used to.</p>
+          <p class="guide-note" data-i18n="gm.cash.cr.note2">After it lands: open MetaMask, switch the network picker to Ethereum, and your ETH is right there (the site's "Show it in MetaMask" button does the switch for you). Sending it to Coinbase, Kraken or any exchange is then a normal transfer — copy the exchange's ETH deposit address, double-check it, send.</p>
+        </div>
+        <div class="wt-mkt" id="gm-cash-la-p" data-mkt="land" role="tabpanel" aria-labelledby="gm-cash-la" style="--accent:#0DA6FC;--accent-soft:rgba(13,166,252,0.12)" hidden>
+          <p class="wt-mkt-where" data-i18n="gm.cash.la.where">LAND sales pay you in WETH on Ethereum — one tap unwraps it to plain ETH, no bridging needed.</p>
+          <div class="gdemo" data-gdemo="cashout-land"></div>
+          <p class="guide-note" data-i18n="gm.cash.la.note">WETH ("wrapped ETH") is worth exactly the same as ETH — it's just a different token under the hood, and some exchanges won't recognise a WETH deposit. The unwrap is a 1:1 swap back to plain ETH that costs only gas. After that, send to your exchange as you always would.</p>
+        </div>
+      </article>
+
     </div>
 
     <div class="wt-foot">
       <button class="wt-prev" type="button" data-wt-prev disabled><span aria-hidden="true">←</span> <span data-i18n="guide.wt.prev">Previous</span></button>
-      <span class="wt-count" data-wt-count aria-live="polite">1 / 5</span>
+      <span class="wt-count" data-wt-count aria-live="polite">1 / 6</span>
       <button class="wt-next" type="button" data-wt-next><span data-i18n="guide.wt.next">Next</span> <span aria-hidden="true">→</span></button>
     </div>
   </section>

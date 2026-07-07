@@ -2230,6 +2230,54 @@ async function handleMarketplaceApi(request, response, url) {
     return;
   }
 
+  // In-site cash-out quote: the EXACT-INPUT reverse bridge — "send X of your zkEVM ETH,
+  // receive ~Y native ETH on Ethereum mainnet" — plus the ready-to-sign zkEVM transaction
+  // and the ERC-20 approval target. Powers the Token-Trove-style Move flow in the cash-out
+  // modal, so sellers never have to leave the site to reach an exchange-friendly network.
+  // Amount is the seller's own proceeds; capped so a tampered request can't quote a huge
+  // bridge against our shared integrator id.
+  if (pathname === '/api/market/creatures/cashout/quote' && request.method === 'POST') {
+    if (!squidBridge.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    const cWait = rateLimited(`mktbridge:${ip}`, 6, 60 * 1000);
+    if (cWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(cWait) }); return; }
+
+    const body = await readJsonBody(request, 4 * 1024);
+    const addr = String(body.address || '').toLowerCase();
+    const wei = parseEthToWei(body.amountEth);
+    if (!HEX_ADDRESS.test(addr)) { sendJson(response, 400, { error: 'bad_address' }); return; }
+    if (wei == null || wei > 100n * 10n ** 18n) { sendJson(response, 400, { error: 'bad_price' }); return; }
+
+    try {
+      sendJson(response, 200, await squidBridge.quoteCashout(wei, addr));
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // Standalone "Add funds" quote: the EXACT-INPUT funding move — "send X of your mainnet
+  // ETH, receive ~Y ETH on Immutable zkEVM". The checkout-shortfall bridge (bridge/quote,
+  // exact-output) stays for buys; this one powers the wallet-bar modal where the user
+  // picks the amount themselves. Same cap + rate bucket as the cash-out quote.
+  if (pathname === '/api/market/creatures/topup/quote' && request.method === 'POST') {
+    if (!squidBridge.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    const tqWait = rateLimited(`mktbridge:${ip}`, 6, 60 * 1000);
+    if (tqWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(tqWait) }); return; }
+
+    const body = await readJsonBody(request, 4 * 1024);
+    const addr = String(body.address || '').toLowerCase();
+    const wei = parseEthToWei(body.amountEth);
+    if (!HEX_ADDRESS.test(addr)) { sendJson(response, 400, { error: 'bad_address' }); return; }
+    if (wei == null || wei > 100n * 10n ** 18n) { sendJson(response, 400, { error: 'bad_price' }); return; }
+
+    try {
+      sendJson(response, 200, await squidBridge.quoteTopup(wei, addr));
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
   // Fiat on-ramp: mint a fresh, single-use card-on-ramp session via Immutable's hosted checkout
   // (rides Immutable's Transak account — no creds of ours, no dependency on our account being
   // provisioned). Transak has no fiat→zkEVM-ETH product (a live test order delivered ETH to L1),
@@ -2271,7 +2319,8 @@ async function handleMarketplaceApi(request, response, url) {
 
   // Live bridge progress for the in-panel tracker. Squid's status API is the primary
   // signal; before Squid indexes the tx (~1 min) we fall back to the source-chain
-  // receipt so the tracker can still show "confirmed on Ethereum".
+  // receipt so the tracker can still show "confirmed on Ethereum". `dir=out` flips the
+  // chain pair for cash-out (zkEVM → mainnet) transactions — same stages, zkEVM receipt.
   if (pathname === '/api/market/creatures/bridge/status') {
     const sWait = rateLimited(`mktbst:${ip}`, 30, 60 * 1000);
     if (sWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(sWait) }); return; }
@@ -2279,6 +2328,7 @@ async function handleMarketplaceApi(request, response, url) {
     const tx = String(url.searchParams.get('tx') || '').toLowerCase();
     const quoteId = String(url.searchParams.get('quoteId') || '').slice(0, 100);
     const requestId = String(url.searchParams.get('requestId') || '').slice(0, 100);
+    const reverse = url.searchParams.get('dir') === 'out';
     if (!/^0x[0-9a-f]{64}$/.test(tx)) { sendJson(response, 400, { error: 'bad_tx' }); return; }
     if ((quoteId && !/^[\w-]+$/.test(quoteId)) || (requestId && !/^[\w-]+$/.test(requestId))) {
       sendJson(response, 400, { error: 'bad_request' }); return;
@@ -2286,14 +2336,27 @@ async function handleMarketplaceApi(request, response, url) {
 
     let squid = null;
     if (squidBridge.configured()) {
-      try { squid = await squidBridge.getStatus({ txHash: tx, quoteId, requestId }); }
+      try { squid = await squidBridge.getStatus({ txHash: tx, quoteId, requestId, reverse }); }
       catch (err) { console.error('Squid status failed:', err.message); }
     }
     const MAP = { success: 'arrived', ongoing: 'bridging', needs_gas: 'needs_gas', partial_success: 'failed', refund: 'failed' };
     let stage = MAP[squid?.squidStatus] || null;
-    if (!stage) { // not indexed yet (or Squid unavailable) — check the mainnet receipt
+    let destUrl = squid?.destUrl || null;
+    // Squid's status indexer can lag a FINISHED bridge by 30+ minutes (a live cash-out
+    // sat on "Crossing" while Axelar showed it executed after 72s) — so whenever Squid
+    // hasn't given a terminal answer, ask Axelar's GMP API directly. Both bridge
+    // directions ride Axelar, so this covers funding too.
+    if (stage !== 'arrived' && stage !== 'failed' && stage !== 'needs_gas') {
       try {
-        const rec = await ethGetTxReceipt(ETH_RPC_URL, tx);
+        const ax = await squidBridge.getAxelarStatus(tx, { reverse });
+        if (ax?.stage) { stage = ax.stage; destUrl = destUrl || ax.destUrl; }
+      } catch (err) {
+        console.error('Axelar status failed:', err.message);
+      }
+    }
+    if (!stage) { // not indexed anywhere yet — check the source-chain receipt
+      try {
+        const rec = await ethGetTxReceipt(reverse ? ZK_RPC_URL : ETH_RPC_URL, tx);
         stage = rec ? (rec.status === '0x1' ? 'src_confirmed' : 'failed_src') : 'submitted';
       } catch (err) {
         console.error('Bridge receipt check failed:', err.message);
@@ -2302,9 +2365,9 @@ async function handleMarketplaceApi(request, response, url) {
     }
     sendJson(response, 200, {
       stage,
-      axelarUrl: squid?.axelarUrl || null,
+      axelarUrl: squid?.axelarUrl || `https://axelarscan.io/gmp/${tx}`,
       srcUrl: squid?.srcUrl || null,
-      destUrl: squid?.destUrl || null,
+      destUrl,
     });
     return;
   }
