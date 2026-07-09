@@ -3750,6 +3750,11 @@ a.trade-buy-btn { display: inline-flex; }
 .ballot-opt-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .ballot-opt-name { font-family: var(--hr-sans); font-weight: 800; font-size: 14.5px; color: var(--hr-fg-0); }
 .ballot-opt-pitch { font-size: 12.5px; color: var(--hr-fg-2); line-height: 1.45; }
+/* Upside + cost lines on poll options — both on the ballot, so the vote is informed */
+.ballot-opt-take { display: flex; gap: 7px; font-size: 12.5px; color: var(--hr-fg-2); line-height: 1.45; }
+.ballot-opt-take i { font-style: normal; font-weight: 900; flex: 0 0 auto; }
+.ballot-opt-take.is-pro i { color: var(--hr-primary); }
+.ballot-opt-take.is-con i { color: var(--hr-alert); }
 
 /* Cast row — two-tap confirm; the armed state glows to signal "this is final" */
 .ballot-cast-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; }

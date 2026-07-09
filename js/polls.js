@@ -28,6 +28,8 @@ function esc(s) {
 
 // Poll copy lives in the locales under polls.p.<key>.*
 const pt = (p, part) => t(`polls.p.${p.key}.${part}`);
+// Optional copy: '' when the key isn't defined for this poll (t() echoes the key).
+const ptOpt = (p, part) => { const k = `polls.p.${p.key}.${part}`; const v = t(k); return v === k ? '' : v; };
 
 function fmtDate(iso) {
   if (!iso) return '';
@@ -96,13 +98,21 @@ function blockedGate(viewer) {
 
 function optionRow(p, opt, interactive) {
   const checked = sel[p.id] === opt;
+  // Each option carries its upside and its cost, price scenarios included (the
+  // Council asked for the implications to be on the ballot, so every vote is an
+  // informed one). A plain pitch line is the fallback for polls without that copy.
+  const pitch = ptOpt(p, `opt.${opt}.p`);
+  const pro = ptOpt(p, `opt.${opt}.pro`);
+  const con = ptOpt(p, `opt.${opt}.con`);
   return `
     <label class="ballot-opt ${checked ? 'is-checked' : ''} ${interactive ? '' : 'is-preview'}">
       <input type="radio" name="poll-${esc(p.id)}" value="${esc(opt)}" ${checked ? 'checked' : ''} ${interactive ? '' : 'disabled'} />
       <span class="ballot-opt-dot" aria-hidden="true"></span>
       <span class="ballot-opt-body">
         <span class="ballot-opt-name">${esc(pt(p, `opt.${opt}`))}</span>
-        <span class="ballot-opt-pitch">${esc(pt(p, `opt.${opt}.p`))}</span>
+        ${pitch ? `<span class="ballot-opt-pitch">${esc(pitch)}</span>` : ''}
+        ${pro ? `<span class="ballot-opt-take is-pro"><i aria-hidden="true">✓</i>${esc(pro)}</span>` : ''}
+        ${con ? `<span class="ballot-opt-take is-con"><i aria-hidden="true">✕</i>${esc(con)}</span>` : ''}
       </span>
     </label>`;
 }
