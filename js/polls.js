@@ -255,7 +255,7 @@ function viewerStrip(viewer) {
       ${avatar}
       <span class="poll-viewer-name">${esc(profile.username || '')}</span>
       ${holderChip}
-      <a class="apply-logout poll-viewer-out" href="/api/auth/logout">${esc(t('apply.logout'))}</a>
+      <a class="apply-logout poll-viewer-out" href="/api/auth/logout?return=%2Fpolls">${esc(t('apply.logout'))}</a>
     </div>`;
 }
 

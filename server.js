@@ -2742,9 +2742,14 @@ function rateLimited(key, max, windowMs) {
 // only, so a crafted link can never turn the callback into an open redirect.
 const RETURN_COOKIE = 'hcc_return';
 const RETURN_PATHS = new Set(['/council/vote', '/polls']);
+// Validate an untrusted return target against the allowlist; anything else falls back
+// to the Council vote page. Shared by login (reads it from the round-trip cookie) and
+// logout (reads it straight from the ?return= query param).
+function safeReturnPath(raw) {
+  return RETURN_PATHS.has(raw) ? raw : '/council/vote';
+}
 function returnPathFrom(cookies) {
-  const p = cookies?.[RETURN_COOKIE];
-  return RETURN_PATHS.has(p) ? p : '/council/vote';
+  return safeReturnPath(cookies?.[RETURN_COOKIE]);
 }
 
 // Send the user back to the panel that started the sign-in; `error` (if set) is
@@ -2986,7 +2991,10 @@ async function handleAuthApi(request, response, url) {
     return;
   }
 
-  // Logout.
+  // Logout. Returns the user to the page they logged out from (?return=, allowlisted)
+  // so signing out on Polls doesn't bounce them over to Council; defaults to the
+  // Council vote page. All these pages render fine signed-out (they show the sign-in
+  // gate), so returning in place is the least surprising behaviour.
   if (pathname === '/api/auth/logout') {
     const cookies = auth.parseCookies(request);
     const sid = cookies[auth.SESSION_COOKIE];
@@ -2994,7 +3002,7 @@ async function handleAuthApi(request, response, url) {
     await db.deleteSession(sid);
     db.recordEvent({ event: 'auth.logout', discordId: endingSession?.discord_id || null });
     response.writeHead(302, {
-      Location: '/#council',
+      Location: safeReturnPath(url.searchParams.get('return')),
       'Set-Cookie': auth.serializeCookie(auth.SESSION_COOKIE, '', { maxAge: 0, secure: auth.isSecure(request) }),
       'Cache-Control': 'no-store',
     });

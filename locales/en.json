@@ -43,7 +43,6 @@
   "market.zoom.hint": "Scroll or pinch to zoom · drag to pan",
   "market.land.note": "🗺️ LAND price history is on the way. For now, here's LAND's current floor from OpenSea — its full sale history will light up here soon.",
   "market.source": "Creatures via Immutable · LAND via OpenSea",
-
   "trade.eyebrow": "Marketplace",
   "trade.beta.note": "This marketplace is brand new and still being tested. Transactions are real and move real money — use it at your own risk, start small, and double-check every confirmation in your wallet. Spotted something odd? Tell us on Discord.",
   "trade.beta.short": "Trades are real and at your own risk — start small.",
@@ -528,12 +527,10 @@
   "trade.modal.close": "Close",
   "trade.modal.viewExplorer": "View on explorer",
   "trade.modal.aria": "Creature details",
-
   "hero.kicker": "Highrise Creature Club",
   "hero.h1": "Creatures + LAND get a ",
   "hero.pop": "voice.",
   "hero.subtitle": "A friendly guide to what HCC is, how Creatures and LAND came together, and the new <strong>Player Council</strong> that puts holders in the room where creative decisions get made.",
-
   "s1.eyebrow": "Start here",
   "s1.h2": "So… what is the Creature Club?",
   "s1.lead": "The Highrise Creature Club is built from two collectible NFT concepts: <strong>11,111 one-of-a-kind creature avatars</strong> and the <strong>Highrise LAND NFTs</strong> that were brought into the same club. Hold either one and you're a member, with perks woven right into Highrise.",
@@ -557,7 +554,6 @@
   "s1.p3p": "Early and free access to fresh creature content as it ships.",
   "s1.p4h": "Members-only spaces",
   "s1.p4p": "An exclusive club room and a real seat at the community table.",
-
   "land.eyebrow": "The other way in",
   "land.h3": "Highrise LAND NFTs",
   "land.perks.summary": "LAND owners earn Creature Coins (Premium plots at 3×), get room capacity boosts, keep their slime pets, and take part in the same drops and giveaways as Creature holders.",
@@ -570,7 +566,6 @@
   "land.p3p": "Premium LAND earns triple the Creature Coins of Standard, like Legendary creatures do.",
   "land.p4h": "Full Creature perks",
   "land.p4p": "LAND NFT owners now earn Creature Coins and join in club drops and giveaways.",
-
   "journey.eyebrow": "The journey",
   "journey.h2": "How HCC got here",
   "journey.lead": "No spin — just the honest arc of where the club has been and where it's headed.",
@@ -595,11 +590,9 @@
   "t7.year": "NOW — THE COUNCIL",
   "t7.h": "Holders get a real voice",
   "t7.p": "The next step: a holder-led Player Council that helps shape what gets made — across Creatures and LAND alike. Head to the Council page to see how it works.",
-
   "honest.eyebrow": "Straight talk",
   "honest.h2": "Why we're doing this",
   "honest.p": "Trust doesn't come back from promises — it comes from consistent delivery <em>and</em> from actually listening. The Council exists so HCC holders aren't just told what's coming next, but help decide it. It's a sounding board with real teeth on creative direction, run alongside the team that builds.",
-
   "unify.eyebrow": "Where we're headed",
   "unify.h2": "One club: Creatures <span class=\"pop\">+</span> LAND, together",
   "unify.lead": "For a long time, Creatures and LAND lived as two separate NFT projects with two separate stories. The goal now is to unify them into <strong>a single Creature Club concept</strong> — one community, one set of benefits, one roadmap, and one holder voice.",
@@ -612,7 +605,6 @@
   "unify.p4h": "One voice",
   "unify.p4p": "The Player Council represents Creature <em>and</em> LAND holders alike.",
   "unify.note": "Your assets don't change — your creature, your LAND plot, and your slime pet stay exactly as they are. Unifying is about the <em>experience</em> around them: one family that's easier to grow, support and build for.",
-
   "council.member.note": "Every HCC holder — Creature or LAND — is a member; hold for 3 months and you can vote. A Council \"seat\" is a formal elected role on top of that: only 7 exist, and you vote on who fills 4 of them.",
   "council.eyebrow": "The big idea",
   "council.h2": "Meet the Player Council",
@@ -624,7 +616,6 @@
   "council.fact1": "seats, kept small on purpose",
   "council.fact2": "one holder, one vote per seat — never whale-weighted",
   "council.fact3": "terms, so it stays fresh",
-
   "brackets.eyebrow": "How a seat is won",
   "brackets.h2": "4 elected seats, across 3 brackets",
   "brackets.lead": "Your bracket is set by how many HCC assets you hold (Creatures + LAND combined) when the candidacy window opens. Every holder size has a path to run.",
@@ -635,8 +626,7 @@
   "brackets.why.p": "So the Council can't be dominated by the largest holders. Every tier of the community has at least one seat reserved for someone who actually lives in it — a holder with a single Creature has a real shot, not just in theory.",
   "brackets.run.h": "What it takes to run",
   "brackets.run.p": "Meet your bracket's asset count at the snapshot, have held at least 1 HCC asset continuously for 3 months (same bar as voters), and self-nominate during the open window by answering the application's open questions on your positions. Brackets gate running, not voting — every eligible holder votes on all 4 races.",
-
-  "vote.eyebrow": "At the ballot",
+  "vote.eyebrow": "Voting advice",
   "vote.h2": "How voting works",
   "vote.lead": "You vote in every seat race, with one vote per seat — the Member race elects two, so you pick two candidates there. The candidates with the most votes win. One holder's vote is never weighted by how much you hold.",
   "vote.p1h": "Sign in to vote",
@@ -647,7 +637,6 @@
   "vote.p3p": "Votes are final once cast, and most election statistics are published right here on the site.",
   "vote.p4h": "Unopposed? You still decide",
   "vote.p4p": "If a race has no more candidates than seats, you vote to seat them or to reopen nominations. If reopening wins but nobody new steps up, the original candidate is seated — a seat can be contested, never blocked into a vacancy.",
-
   "vaa.eyebrow": "Vote on merit",
   "vaa.h2": "Find your candidate",
   "vaa.lead": "To help you vote on substance rather than name recognition, the site includes a Voting Advice Application.",
@@ -657,7 +646,6 @@
   "vaa.p2p": "You answer the same questions, then see a ranked affinity score for every candidate.",
   "vaa.p3h": "You decide",
   "vaa.p3p": "It never casts a vote for you — it's advice. The full methodology is published.",
-
   "power.eyebrow": "Who decides what",
   "power.h2": "Where the Council has real power",
   "power.lead": "Some calls the Council makes. Some it advises on. A few it's simply kept in the loop on — and that scope grows as it proves out.",
@@ -672,7 +660,6 @@
   "power.advises": "Advises",
   "power.informed": "Informed",
   "power.note": "Pocket Worlds stays the executor and keeps final say on anything touching the economy, brand or legal guardrails — so the things that protect the whole club stay protected.",
-
   "seat.eyebrow": "How a seat works",
   "seat.h2": "Fair, simple, and yours",
   "seat.p1h": "Hold to vote",
@@ -683,12 +670,10 @@
   "seat.p3p": "A self-nomination window opens — you answer a few open questions on your positions — then holders vote. Clean and open.",
   "seat.p4h": "Fresh blood",
   "seat.p4p": "Six-month terms, max two in a row for elected seats. No entrenchment.",
-
   "rhythm.eyebrow": "The rhythm",
   "rhythm.h2": "How decisions move",
   "rhythm.p1": "The PM owns the roadmap and brings the Council clear, scoped questions — each with a \"done looks like this\" attached. The Council weighs in on specific decisions, not endless open debate.",
   "rhythm.p2": "<strong style=\"color:var(--hr-primary)\">Cadence:</strong> a quick check-in every two weeks, plus a live call once a month. <strong style=\"color:var(--hr-alert)\">Where:</strong> a private holder channel to start, with token-gated holder-wide votes for the bigger questions down the line.",
-
   "faq.eyebrow": "Quick answers",
   "faq.h2": "Questions you might have",
   "faq.q1": "Is this a DAO? Do I own part of the company now?",
@@ -709,53 +694,39 @@
   "faq.a8": "First, make sure the wallet holding it is linked to your Highrise account — that's what connects your NFTs to the club. Once it's linked, your Discord roles and perks sync on their own, usually within an hour. If it's been longer, double-check you linked the right wallet, then ask in the public Highrise Discord.",
   "faq.q9": "Which marketplace do I use — and how do I avoid fakes?",
   "faq.a9": "Gen 1 Creatures trade on <strong>Token Trove</strong> (Immutable zkEVM). LAND and Gen 2 live on <strong>OpenSea</strong>, under the \"Highrise LAND\" collection. Important: Gen 1 Creatures are <strong>not</strong> on OpenSea — any \"Highrise Creature\" or \"Highrise Creature Club\" collection you see there is a fake scam. Always reach a marketplace through the official links in the Highrise Discord, never a random DM.",
-
   "roadmap.eyebrow": "What's coming",
   "roadmap.h2": "The path ahead",
   "roadmap.lead": "From the next drop to Gen 2 — every milestone we're working toward, in order.",
-
   "rm.status.done": "✓ Done",
   "rm.status.now": "Now",
   "rm.status.next": "Next",
   "rm.status.soon": "Soon",
   "rm.status.later": "Later",
   "rm.status.goal": "The Goal",
-
   "rm.cat.content": "Content",
   "rm.cat.governance": "Governance",
   "rm.cat.utility": "Utility",
   "rm.cat.product": "Product",
-
   "rm.m1.h": "Pink Anniversary Drop",
   "rm.m1.p": "The 4th anniversary recolour grab is dropping next — pink and white recolours, exclusive to HCC members.",
-
   "rm.medu.h": "Educational NFT Content",
   "rm.medu.p": "Clear, accessible content explaining what HCC NFTs are, how they work, and what holding one actually means — lowering the barrier for new and existing members alike.",
-
   "rm.m2.h": "Council Final Definition",
   "rm.m2.p": "Finalising the council rules: candidacy eligibility, the appointed seat process, and anti-gaming guardrails. The structure needs to be right before the clock starts.",
-
   "rm.m3.h": "Council Timelines Published",
   "rm.m3.p": "Application window, campaign period, and voting date — all locked in and published here. No more guessing when.",
-
   "rm.m4.h": "First Election",
   "rm.m4.p": "Self-nominations open, community votes. 4 seats filled by holders, 3 appointed for continuity. One holder, one vote.",
-
   "rm.m7.h": "Council's First Decisions",
   "rm.m7.p": "The council weighs in on its first real creative questions: next drop theme, Gen 2 variants, Creature Shop priorities.",
-
   "rm.m9.h": "Gen 2 Community Preview",
   "rm.m9.p": "The council reviews Gen 2 designs before they're final. Structured feedback from holders, not a leaked WIP.",
-
   "rm.m10.h": "Gen 2 Launch",
   "rm.m10.p": "Gen 2 Creatures released as a proper event — not a quiet drop. Marketing, a community launch moment, and a clear Gen 1 vs Gen 2 utility story.",
-
   "rm.note": "Milestones in approximate order — dates announced as confirmed",
   "rm.gen2cta": "Dive into the Gen 2 roadmap →",
-
   "roadmap.sub.milestones": "Milestones",
   "roadmap.sub.gen2": "Gen 2",
-
   "g2.eyebrow": "The big one",
   "g2.h2": "Gen 2 — the full picture",
   "g2.lead": "Six full creature sets are being built right now — the biggest content push in club history. Follow the road, stop by stop, to see exactly where each set stands.",
@@ -794,7 +765,6 @@
   "g2.word.c3h": "Quality over deadlines",
   "g2.word.c3p": "If a date has to move, you'll hear it from us early — with the why. We won't rush a set out broken.",
   "g2.note": "Set order and pacing can shift as the Council weighs in — every change gets explained in the bi-weekly updates",
-
   "perks.pill": "Members only",
   "perks.h2": "Hold one. Unlock the whole club.",
   "perks.lead": "One Creature or LAND plot makes you a member — daily Creature Coins, Highrise+ every month, members-only spaces and surprise airdrops, woven right into Highrise.",
@@ -821,7 +791,6 @@
   "perks.land.h": "LAND counts too",
   "perks.land.p": "LAND owners earn daily coins (Premium plots at 3×), get room capacity boosts, keep their Slime pets, and join every drop and giveaway.",
   "perks.land.g2": "And Gen 2 gives every LAND its own Creature — full parity is the promise.",
-
   "coins.eyebrow": "Creature Coins",
   "coins.h2": "What are Creature Coins?",
   "coins.lead": "Creature Coins are special tokens awarded daily to all owners of a Creature or LAND, to spin exclusive grabs within the Highrise app.",
@@ -841,7 +810,6 @@
   "coins.calc.note": "Coins land daily and fuel exclusive grabs inside Highrise.",
   "coins.calc.plus": "Add one",
   "coins.calc.minus": "Remove one",
-
   "holders.eyebrow": "Community snapshot",
   "holders.h2": "Who holds what",
   "holders.lead": "A live look at current HCC wallets — how many hold Creatures, LAND, or both collections.",
@@ -855,19 +823,16 @@
   "holders.dist.creatures": "🐾 Creatures",
   "holders.dist.land": "🗺️ LAND",
   "holders.dist.combined": "✨ All HCC assets",
-
   "chart.creaturesOnly": "Creatures only",
   "chart.landOnly": "LAND only",
   "chart.both": "Both collections",
   "chart.wallets": "wallets",
-
   "footer.h2": "Built with the club, for the club.",
   "footer.p": "This is the start of HCC holders having a real hand in what gets made. More to come — every two weeks, like we promised.",
   "footer.stamp": "Highrise Creature Club",
   "footer.draft": "Draft v1 — for community discussion",
   "footer.terms": "Terms",
   "footer.privacy": "Privacy",
-
   "terms.eyebrow": "Player Council",
   "terms.h2": "Terms of Participation",
   "terms.accept": "<strong>Acceptance.</strong> Voters tick \"I agree to the Terms\" after logging in with Discord, before their first ballot; candidates explicitly accept at nomination submission. Acceptance is recorded with your Highrise Person ID, Discord ID, and a timestamp.",
@@ -893,7 +858,6 @@
   "terms.s10.p": "To authenticate and check eligibility we process your <strong>Discord ID, Highrise ID, Person ID, linked wallet address(es) and wallet-change history</strong> (via Discord OAuth and Highrise's internal API), plus the holdings snapshot, vote records (kept private), candidate answers (public), and voter answers (private; used to compute your own affinity, not published per-user). Candidate answers are sent to <strong>Anthropic (Claude)</strong> so the tool can map each into a position the candidate confirms. On-chain/wallet data is inherently public. See the <a href=\"#privacy\">Privacy Policy</a> for retention and deletion-request handling.",
   "terms.s11.h": "11. Disclaimers & liability",
   "terms.s11.p": "Provided \"as is.\" The VAA affinity score is <strong>advisory</strong> and not guaranteed accurate. Nothing here is financial, investment, tax, or legal advice, a securities offering, or a guarantee of any NFT's value. Liability is limited to the extent permitted by law; candidates indemnify Pocket Worlds for content they submit.",
-
   "privacy.eyebrow": "Player Council",
   "privacy.h2": "Privacy Policy",
   "privacy.who.h": "Who we are",
@@ -918,16 +882,13 @@
   "privacy.children.p": "The election is not directed to children, consistent with Highrise's policies.",
   "privacy.changes.h": "Changes & contact",
   "privacy.changes.p": "We may update this policy; all changes are published on the website and in Discord. Contact: <a href=\"https://discord.gg/highrise\" target=\"_blank\" rel=\"noopener noreferrer\">Highrise Discord support channel</a>.",
-
   "progress.default": "Fetching holder data from the blockchain…",
   "progress.connecting": "Connecting to blockchain explorers…",
   "progress.creatures": "Fetching Creature holders — page {n}…",
   "progress.land": "Fetching LAND holders — page {n}…",
   "progress.both": "Scanning wallets — Creatures: page {c} · LAND: page {l}…",
   "progress.computing": "Crunching the numbers…",
-
   "stale.badge": "REFRESHING",
-
   "changelog.eyebrow": "Track record",
   "changelog.h2": "What's changed",
   "changelog.club.eyebrow": "Club updates",
@@ -937,7 +898,6 @@
   "changelog.order": "newest first",
   "changelog.latest": "LATEST",
   "changelog.empty": "Nothing here yet.",
-
   "contrib.badge": "Open source",
   "contrib.gate.h": "This site is yours to shape",
   "contrib.gate.p": "Every line of this site is public on GitHub — the pages, the styles, even the election logic. Spot a typo, have an idea, or want to ship a fix? You're welcome to. No NFT required.",
@@ -946,7 +906,6 @@
   "contrib.trust.nonft": "No NFT needed",
   "contrib.trust.anyone": "Anyone can help",
   "contrib.trust.review": "Reviewed before it ships",
-
   "contrib.why.eyebrow": "Why it matters",
   "contrib.why.h2": "Why your contribution counts",
   "contrib.why.lead": "The Council gives holders a voice in what gets made. Keeping this site open is the same idea, in code — a place where anyone can check the work and help make it better.",
@@ -958,7 +917,6 @@
   "contrib.why.c3p": "A fixed typo, a clearer guide, a smoother mobile layout — small improvements add up for everyone who visits.",
   "contrib.why.c4h": "Built with the club",
   "contrib.why.c4p": "This site is built with the community, for the community. Your fixes and ideas are how that promise stays real.",
-
   "contrib.ways.eyebrow": "Pick a lane",
   "contrib.ways.h2": "Ways to pitch in",
   "contrib.ways.lead": "You don't have to write code to help. Every one of these makes the site better — pick whatever fits you.",
@@ -974,7 +932,6 @@
   "contrib.ways.c5p": "Comfortable with HTML, CSS, or vanilla JS? Fork the repo and open a pull request with your change.",
   "contrib.ways.c6h": "Flag a security issue",
   "contrib.ways.c6p": "Found something sensitive? Report it privately to the team in the Highrise Discord rather than opening a public issue.",
-
   "contrib.how.eyebrow": "Step by step",
   "contrib.how.h2": "How to submit a change",
   "contrib.how.lead": "Four steps from idea to pull request. There's no build step and no framework — just plain HTML, CSS, and vanilla JS.",
@@ -991,7 +948,6 @@
   "contrib.how.s4h": "Open a pull request",
   "contrib.how.s4p": "Push your branch and open a pull request against <code>main</code>. We'll review it with you right there in the PR.",
   "contrib.how.note": "Keep each pull request focused on one thing — a single fix or a single feature. It makes review faster and the history cleaner.",
-
   "contrib.merged.eyebrow": "The bar",
   "contrib.merged.h2": "What gets merged",
   "contrib.merged.lead": "Nothing goes live without review. Here's the kind of change that sails through.",
@@ -1000,17 +956,14 @@
   "contrib.merged.i3": "Visual and UX improvements that match the existing style",
   "contrib.merged.i4": "Accessibility and translation improvements",
   "contrib.merged.note": "Changes to the Council rules, the election process, or Pocket Worlds commitments need a sign-off from the team — no worries, just open the pull request and we'll discuss it there.",
-
   "contrib.cta.eyebrow": "Your move",
   "contrib.cta.h": "Ready to jump in?",
   "contrib.cta.p": "Star the repo, open an issue, or ship your first fix. And if you get stuck, the community and team are a message away in the Highrise Discord.",
   "contrib.cta.btn": "Open the repo",
   "contrib.cta.discord": "Ask in Discord",
-
   "guide.eyebrow": "New here?",
   "guide.h2": "Owning your creature, made simple",
   "guide.lead": "Everything you need to buy, sell, move, and protect your HCC NFTs — step by step. Put together with the community.",
-
   "guide.what.eyebrow": "The basics",
   "guide.what.h2": "What you actually own",
   "guide.what.lead": "Your creature and your LAND are NFTs — items you truly own on the blockchain, not just inside an app. Here's what that means.",
@@ -1022,7 +975,6 @@
   "guide.what.c3p": "Your wallet, like MetaMask, is how you prove ownership and move your assets. Guard it like your house keys.",
   "guide.what.c4h": "Trade on Token Trove",
   "guide.what.c4p": "Token Trove is the marketplace where you buy, sell, and transfer your creatures.",
-
   "guide.kit.eyebrow": "Before you start",
   "guide.kit.h2": "Your toolkit",
   "guide.kit.lead": "Four things you'll meet again and again. Get familiar and the rest is easy.",
@@ -1036,14 +988,12 @@
   "guide.kit.c4p": "Immutable X ($IMX) covers the tiny network fee (\"gas\") on every action. Keep a little on hand.",
   "guide.kit.netEyebrow": "One thing to know",
   "guide.kit.network": "Creatures live on the Immutable zkEVM network. You'll switch your wallet to it when buying or moving creatures — Token Trove walks you through it each time.",
-
   "guide.steps.eyebrow": "Step by step",
   "guide.steps.h2": "The walkthroughs",
   "guide.steps.lead": "Six short guides, in the order you'll likely need them. Pick a step below — most come with a community video to follow along.",
   "guide.wt.prev": "Previous",
   "guide.wt.next": "Next",
   "guide.video.soon": "Walkthrough video coming soon",
-
   "guide.g1.tag": "Setup",
   "guide.g1.h": "Find Token Trove & link your wallet",
   "guide.g1.p": "Get to the official marketplace and connect MetaMask so you can see your balances and creatures.",
@@ -1051,7 +1001,6 @@
   "guide.g1.s2": "Have your MetaMask wallet ready — extension or mobile app — and make sure you're logged in.",
   "guide.g1.s3": "On Token Trove, click Connect Wallet. Choose Immutable zkEVM, then pick MetaMask.",
   "guide.g1.s4": "Approve the connection in MetaMask. Token Trove now shows your balances — ETH, IMX, USDC — and your creatures under My NFTs.",
-
   "guide.g2.tag": "Funding",
   "guide.g2.h": "Bridge ETH & IMX to Immutable",
   "guide.g2.p": "Bridging moves your crypto from Ethereum mainnet to the Immutable zkEVM network where creatures live. Before bridging, you'll need a small amount of $IMX — every action on Immutable requires it as a network fee. Balances can take 20–40 minutes to appear.",
@@ -1062,7 +1011,6 @@
   "guide.g2.s5": "Now bridge your ETH the same way — this is what you'll buy creatures with. Pick ETH, enter an amount (e.g. 0.025), and confirm the single request.",
   "guide.g2.s6": "Wait roughly 20–40 minutes. When it's done, your $ETH and $IMX balances appear on Token Trove, ready to use.",
   "guide.g2.note": "Remember: $ETH buys creatures, $IMX pays the gas. You need a little $IMX for anything you do on Immutable — buying, selling, or transferring.",
-
   "guide.g3.tag": "Trading",
   "guide.g3.h": "Buy & sell creatures",
   "guide.g3.p": "With funds bridged over, you're ready to shop the collection or list one of your own.",
@@ -1072,7 +1020,6 @@
   "guide.g3.s4": "To sell, open one of your creatures and click List Now. Set your price and confirm the signature request in MetaMask.",
   "guide.g3.s5": "Your creature is now listed. Anyone can buy it directly — you don't have to do anything else until it sells.",
   "guide.g3.note": "When a creature sells, a 5% creator royalty is built into the smart contract and comes out of the sale price automatically — worth factoring into the price you set.",
-
   "guide.g4.tag": "Moving",
   "guide.g4.h": "Transfer a creature to another wallet",
   "guide.g4.p": "Send a creature straight to another wallet — handy for moving between your own wallets or gifting.",
@@ -1081,7 +1028,6 @@
   "guide.g4.s3": "Review the small gas fee and click Confirm. The Immutable zkEVM network confirms the transfer.",
   "guide.g4.s4": "After a few seconds, refresh My NFTs. The creature leaves your wallet and lands in the new one. A full page refresh helps if it lingers.",
   "guide.g4.note": "Always paste and verify the address yourself. There's no undo, and no one can reverse a transfer to the wrong wallet.",
-
   "guide.g5.tag": "In-game",
   "guide.g5.h": "Link your creatures to Highrise",
   "guide.g5.p": "Connect your wallet to your Highrise account so your creatures, items, and perks show up in the app.",
@@ -1089,7 +1035,6 @@
   "guide.g5.s2": "Go to your account Settings and scroll to the bottom, to Connect MetaMask Wallet. Make sure you're logged into the MetaMask wallet you want to link.",
   "guide.g5.s3": "Click Connect MetaMask Wallet. When highrise.game asks to connect, click Connect.",
   "guide.g5.s4": "Confirm the signature request — it just lets Highrise read your wallet. You're linked, and your creatures now show up in Highrise under Your Collections.",
-
   "guide.g6.tag": "LAND",
   "guide.g6.h": "Mint LAND you bought with Deeds",
   "guide.g6.p": "Bought a parcel during an in-app LAND Deeds sale? It lives inside Highrise until you mint it onto the blockchain. Minting is what lets you sell, transfer, or trade it on OpenSea.",
@@ -1100,7 +1045,6 @@
   "guide.g6.s4": "MetaMask pops up — Confirm and Sign the transaction. Keep a little ETH in your wallet to cover the gas fee.",
   "guide.g6.s5": "Once it confirms, your parcel is minted onto the blockchain and ready to trade, sell, or transfer on OpenSea.",
   "guide.g6.note": "Until you mint it, the plot stays tied to the Highrise account it was bought with — it can't move between accounts or wallets until it's on-chain.",
-
   "gm.eyebrow": "Our marketplace",
   "gm.h2": "Trade right here, step by step",
   "gm.lead": "A full walkthrough of the in-site marketplace — non-custodial, 0% marketplace fee, and every action signed by your own wallet. Flip each step between Creatures and LAND. It's in Beta, so trades are real — start small.",
@@ -1116,7 +1060,6 @@
   "gm.demo.sent": "Sent! It's in the recipient's wallet now.",
   "gm.demo.linked": "Linked — read-only",
   "gm.demo.readyBuy": "You're set — tap Buy now again.",
-
   "gm.demo.title.tradingCreatures": "Trade — Creatures · Immutable zkEVM",
   "gm.demo.title.tradingLand": "Trade — LAND · Ethereum",
   "gm.demo.title.fundingCreatures": "Funding — bridge ETH to Immutable zkEVM",
@@ -1127,7 +1070,6 @@
   "gm.demo.title.setupLand": "Setup — connect · Ethereum",
   "gm.demo.title.ingameCreatures": "highrise.game — link your Creatures",
   "gm.demo.title.ingameLand": "highrise.game — link your LAND",
-
   "gm.demo.beat.browse": "Browse",
   "gm.demo.beat.open": "Open",
   "gm.demo.beat.buy": "Buy",
@@ -1155,7 +1097,6 @@
   "gm.demo.beat.confirm": "Confirm",
   "gm.demo.beat.cross": "Crossing",
   "gm.demo.beat.bank": "To bank",
-
   "gm.demo.w.title": "Your wallet — confirm",
   "gm.demo.w.network": "Network",
   "gm.demo.w.amount": "Amount",
@@ -1177,12 +1118,10 @@
   "gm.demo.w.free": "Free — nothing is spent",
   "gm.demo.w.route": "Route",
   "gm.demo.w.unwrapAction": "Unwrap 0.176 WETH → ETH",
-
   "gm.demo.sold.cr": "Sold! 0.0585 ETH just landed in your wallet — on Immutable zkEVM.",
   "gm.demo.sold.la": "Sold! You received 0.176 WETH in your wallet — on Ethereum.",
   "gm.demo.cash.done": "From here it's a normal transfer — send it to your exchange or bank as usual.",
   "gm.demo.cash.unwrapped": "Unwrapped — 0.176 plain ETH, ready to send anywhere.",
-
   "gm.demo.funds": "Funds check — 0.084 ETH ready on Immutable zkEVM",
   "gm.demo.done.p": "Creature #9453 just landed in your wallet — no middleman, 0% marketplace fee.",
   "gm.demo.la.funds": "Funds check — 0.31 ETH ready on Ethereum",
@@ -1192,7 +1131,6 @@
   "gm.demo.la.cap.open": "Open a parcel to meet its Slime: nickname, rarity rank and traits — plus the parcel coordinates you're actually buying.",
   "gm.demo.la.cap.buy": "Tap Buy now and confirm in your wallet — plain ETH on Ethereum mainnet, 0% fee from us. Mainnet gas applies.",
   "gm.demo.la.cap.yours": "Done — the parcel and its Slime are yours. Selling works from the Sell tab: set a price and listing length, then sign for free.",
-
   "gm.demo.n.browse": "Take your time here. The price under each Creature is the full amount you'd pay, with every fee already inside it.",
   "gm.demo.n.filter": "Too many to scan? Tap a rarity chip and the grid narrows to only those. Tap it again to clear the filter.",
   "gm.demo.n.open": "Always open a card before you decide. The rarity rank and traits in the big view are how you judge whether the asking price is fair.",
@@ -1230,7 +1168,6 @@
   "gm.demo.n.approve": "MetaMask will ask twice. The first tap allows exactly this amount and nothing more; the second one actually moves it.",
   "gm.demo.n.swap": "Tap Get IMX gas. It converts a couple of dollars of your ETH into IMX, which pays the network fee on everything you do here.",
   "gm.demo.n.unwrap": "Tap Unwrap to ETH. Same coin, same amount: it only removes the \"wrapped\" label that exchanges don't understand.",
-
   "gm.demo.scen.pick": "Pick your situation",
   "gm.demo.scen.cr.bridge": "My ETH is on Ethereum",
   "gm.demo.scen.cr.zero": "I don't have crypto yet",
@@ -1239,38 +1176,31 @@
   "gm.demo.scen.cr.gas": "I have ETH but no gas (IMX)",
   "gm.demo.scen.la.short": "I'm a little short",
   "gm.demo.scen.la.zero": "I don't have crypto yet",
-
   "gm.demo.title.fund.zero": "Funding — starting from zero",
   "gm.demo.title.fund.short": "Funding — topping up the difference",
   "gm.demo.title.fund.split": "Funding — gathering split ETH",
   "gm.demo.title.fund.gas": "Funding — the tiny IMX gas fee",
   "gm.demo.title.fund.cash": "Cashing out — ETH to your bank",
   "gm.demo.title.fundla.cash": "Cashing out — WETH to your bank",
-
   "gm.demo.fund.cap.short": "Tapped Buy but your ETH is sitting on Ethereum? Totally normal — Creatures live on a different network (Immutable zkEVM). The panel spots it and explains the one move needed.",
   "gm.demo.fund.cap.quote": "Moving coins between networks is called bridging. Before anything happens you get an exact quote — what you send, what arrives, the fee and the time. No surprises.",
   "gm.demo.fund.cap.bridge": "One tap, one wallet confirmation. The tracker follows your ETH as it crosses — it really takes about 17 minutes; we've sped it up here.",
   "gm.demo.fund.cap.landed": "Your ETH arrives on Immutable zkEVM — same coin, now on the right network. We tell you the moment it lands, then you just tap Buy again.",
-
   "gm.demo.fund.zero.c1": "No crypto at all? No problem. ETH is the digital money Creatures are priced in — and you can buy it with a normal bank card, right from this panel.",
   "gm.demo.fund.zero.c2": "The checkout works like any online purchase — card, Apple Pay or Google Pay. Your ETH arrives in your wallet on Ethereum in a few minutes.",
   "gm.demo.fund.zero.c3": "One more tap moves it to Immutable zkEVM, the network Creatures live on. That move is called bridging — the panel does it for you.",
   "gm.demo.fund.zero.c4": "That's it — your ETH is in place. The tiny IMX network fee (called \"gas\") works the same way: the panel offers it right after, for about a dollar.",
-
   "gm.demo.fund.short.c1": "Almost there — you already hold ETH on the right network, just not quite enough. The panel does the math and asks only for the difference.",
   "gm.demo.fund.short.c2": "The card checkout is pre-set to the missing amount — you never buy the full price twice. Card, Apple Pay or Google Pay.",
   "gm.demo.fund.short.c3": "The top-up lands on Ethereum first, then one tap bridges it over to Immutable zkEVM, where the rest of your ETH is waiting.",
   "gm.demo.fund.short.c4": "Topped up — your balance now covers the price. Tap Buy again and it's yours.",
-
   "gm.demo.fund.split.c1": "Your ETH is split — a little on each network, together still short. The panel sees all of it and only asks you to buy the missing piece.",
   "gm.demo.fund.split.c2": "The checkout is pre-set to just the difference. What you already own stays counted — you never pay for the same ETH twice.",
   "gm.demo.fund.split.c3": "Then everything on Ethereum bridges over in one go, joining the ETH already sitting on Immutable zkEVM.",
   "gm.demo.fund.split.c4": "All your ETH in one place, and enough for the price. Tap Buy again — done.",
-
   "gm.demo.fund.gas.c1": "You have ETH to pay — but every blockchain action also needs a tiny network fee, paid in a coin called IMX (\"gas\"). You have none yet, so the panel steps in.",
   "gm.demo.fund.gas.c2": "It swaps a couple of dollars of your ETH into IMX automatically — one tap, one wallet confirmation.",
   "gm.demo.fund.gas.c3": "Gas covered — that little IMX lasts for hundreds of actions. If it ever runs low, the same panel simply reappears.",
-
   "gm.demo.cash2.c1": "You sold! 🎉 There's nothing you need to do quickly here — your payment is already in your own wallet, as ETH on Immutable zkEVM (the network Creatures trade on). It'll wait there safely for as long as you like.",
   "gm.demo.cash2.c2": "When you're ready, tap Cash out → \"Cash out or move to Ethereum\". Everything happens on this site — no other websites. Notice the screen shows your own wallet twice: where the ETH is now, and where it's going. Same wallet, same address — only the network underneath changes. The amount comes prefilled with your balance, and the live quote tells you exactly what you'll receive before you commit to anything.",
   "gm.demo.cash2.c3": "MetaMask opens twice, and that's normal: the first tap grants a one-time permission for exactly this amount (nothing more, ever), the second confirms the move itself. Take your time reading each one — nothing happens until you tap Confirm, and rejecting is always safe.",
@@ -1280,19 +1210,15 @@
   "gm.demo.cash2.w.approveT": "Allow the move",
   "gm.demo.cash2.w.moveT": "Confirm the move",
   "gm.demo.cash2.w.allow": "Spend 0.0585 ETH — this exact amount only",
-
   "gm.demo.fundla.cap.check": "LAND is priced in ETH on Ethereum — the main network, the one exchanges use. If you're a little short, the panel says exactly how much more you need.",
   "gm.demo.fundla.cap.topup": "Buy just the missing ETH with a card, Apple Pay or Google Pay — it arrives in your wallet in a few minutes.",
   "gm.demo.fundla.cap.ready": "Balance topped up — tap Buy now again and the parcel is yours. No second network, no extra gas coin.",
-
   "gm.demo.fundla.zero.c1": "No crypto yet? ETH is the digital money LAND is priced in — and you can buy exactly what you need with a normal bank card.",
   "gm.demo.fundla.zero.c2": "A normal checkout — card, Apple Pay or Google Pay. The ETH lands in your wallet on Ethereum in a few minutes.",
   "gm.demo.fundla.zero.c3": "That's everything — LAND needs no second network and no extra gas coin. Tap Buy now and the parcel is yours.",
-
   "gm.demo.fundla.cash.c1": "You sold your parcel! OpenSea pays you in WETH — \"wrapped ETH\". Same value as ETH, but technically a different token.",
   "gm.demo.fundla.cash.c2": "Many exchanges won't recognise a WETH deposit — so unwrap it first. It's a 1:1 swap back to plain ETH, one tap from the Cash out guide.",
   "gm.demo.fundla.cash.c3": "Now it's ordinary ETH on Ethereum — send it to your exchange or bank as you always would.",
-
   "gm.demo.move.cap.pick": "Pick the Creature to send. Listed Creatures are hidden — cancel the listing first if you want to move one.",
   "gm.demo.move.cap.paste": "Paste the recipient's address. We check it instantly — one wrong character and the checksum fails before anything is sent.",
   "gm.demo.move.cap.checks": "A good address earns its green ticks: checksum verified, active on Immutable zkEVM, already holding Creatures.",
@@ -1301,7 +1227,6 @@
   "gm.demo.movela.cap.paste": "Paste the recipient's Ethereum address. We check it instantly — one wrong character and the checksum fails before anything is sent.",
   "gm.demo.movela.cap.checks": "A good address earns its green ticks: checksum verified, active on Ethereum, already holding LAND.",
   "gm.demo.movela.cap.send": "Tap Send and confirm — Ethereum mainnet gas applies. Permanent, so the checks come first.",
-
   "gm.demo.setup.cap.connect": "Tap Connect MetaMask on the Trade tab. Before anything touches your wallet, a quick safety check steps in.",
   "gm.demo.setup.cap.connectLand": "Switch the collection to LAND, then tap Connect MetaMask. The same safety check comes first.",
   "gm.demo.setup.cap.safety": "Four habits that stop nearly every scam — and a short timer so they actually get read. Worth every second.",
@@ -1311,7 +1236,6 @@
   "gm.demo.setup.cap.readyLand": "Connected. The bar shows your address, your mainnet ETH, and your LAND — everything trades from here.",
   "gm.demo.setup.done": "You're connected — buying, selling and transfers all start from this bar.",
   "gm.demo.setup.doneLand": "You're connected on Ethereum — buying, selling and transfers all start from this bar.",
-
   "gm.demo.onramp.landNet": "New to this? You can buy ETH right here with a card, Apple Pay or Google Pay — it arrives on Ethereum in a few minutes, ready to spend.",
   "gm.demo.onramp.title": "Card checkout",
   "gm.demo.onramp.buyRow": "Buying",
@@ -1320,7 +1244,6 @@
   "gm.demo.onramp.methods": "Card · Apple Pay · Google Pay",
   "gm.demo.onramp.pay": "Pay",
   "gm.demo.onramp.paid": "Payment complete — your ETH is on its way.",
-
   "gm.demo.perks.h": "Perks unlocked",
   "gm.demo.perks.cr1": "Creature wearable in your Highrise closet",
   "gm.demo.perks.la1": "Slime pet equipable in your Highrise closet",
@@ -1331,7 +1254,6 @@
   "gm.demo.cap.open": "Open any Creature to see its traits, rarity rank, and the all-in price up front — price + royalty, 0% marketplace fee.",
   "gm.demo.cap.buy": "Tap Buy now — we check your funds first, then your wallet asks you to confirm. One tap.",
   "gm.demo.cap.yours": "Done — the Creature lands in your wallet. You can also place offers on any Creature, or list and instant-sell your own from the Sell tab.",
-
   "gm.setup.tag": "Setup",
   "gm.setup.h": "Connect & switch network",
   "gm.setup.p": "Open the Trade tab and connect your wallet. A quick safety check appears first, then your balances show in the bar up top.",
@@ -1339,7 +1261,6 @@
   "gm.setup.cr.note": "Only self-custody wallets like MetaMask can trade here. If your Creatures are in Immutable Passport, withdraw them to MetaMask first.",
   "gm.setup.la.where": "LAND lives on Ethereum mainnet.",
   "gm.setup.la.note": "LAND trades settle on Ethereum mainnet — there's no network to add, just switch MetaMask to Ethereum.",
-
   "gm.fund.tag": "Funding",
   "gm.fund.h": "Get funds on the right network",
   "gm.fund.p": "Money is the hardest part the first time — so pick the situation that matches yours and watch exactly what happens, click by click. No crypto knowledge needed: getting coins, moving them between networks and gas fees are all covered. (Sold something and want your money out? That has its own step — see Cash out at the end.)",
@@ -1361,7 +1282,6 @@
   "gm.fund.cr.note": "ETH pays the price, IMX pays the gas — and both must be on Immutable zkEVM, not Ethereum mainnet.",
   "gm.fund.la.where": "LAND is bought with plain ETH on Ethereum mainnet — no bridging, no IMX.",
   "gm.fund.la.note": "LAND uses mainnet ETH for both the price and gas — there's nothing to bridge and no IMX needed.",
-
   "gm.trade.tag": "Trading",
   "gm.trade.h": "Browse, buy & sell",
   "gm.trade.p": "The heart of the marketplace — find what you want, buy it, or list your own. We charge 0% marketplace fee.",
@@ -1369,7 +1289,6 @@
   "gm.trade.cr.note": "0% marketplace fee. Buyers pay the 5% creator royalty, and listings and offers are free to create — just a signature.",
   "gm.trade.la.where": "LAND: Ethereum mainnet via OpenSea. No offers yet.",
   "gm.trade.la.note": "A LAND sale costs 1% OpenSea + 5% creator royalty. Offers aren't available for LAND yet.",
-
   "gm.move.tag": "Moving",
   "gm.move.h": "Transfer to another wallet",
   "gm.move.p": "Send an asset straight to another wallet — your own or a friend's. Transfers can't be undone, so we help you check the address.",
@@ -1377,7 +1296,6 @@
   "gm.move.cr.note": "Transfers are permanent — a little IMX covers gas, and no one can reverse a send to the wrong wallet, so double-check the address.",
   "gm.move.la.where": "Send LAND on Ethereum mainnet.",
   "gm.move.la.note": "LAND transfers settle on Ethereum mainnet and pay mainnet gas.",
-
   "gm.game.tag": "In-game",
   "gm.game.h": "See it inside Highrise",
   "gm.game.p": "Owning the NFT is half the fun — link your wallet to Highrise so it shows up and unlocks its perks in the app.",
@@ -1391,7 +1309,6 @@
   "gm.game.la.s2": "Your parcel and its Slime pet show up in your account, with room-capacity boosts and daily Creature Coins (Premium plots at 3×).",
   "gm.game.la.s3": "Check the Slime Pet Map under Guides → Links to see which Slime belongs to your plot.",
   "gm.game.la.note": "LAND owners are full Creature Club members — the same drops, giveaways and Coins as Creature holders.",
-
   "guide.safe.eyebrow": "Stay safe",
   "guide.safe.h2": "Protect your assets",
   "guide.safe.lead": "Your creatures are valuable and ownership is final. A few habits keep them safe.",
@@ -1414,11 +1331,9 @@
   "guide.safe.c5h": "Beware fake support",
   "guide.safe.c5p": "Real staff won't DM you first asking for wallet access, payments, or your phrase. When in doubt, ask in the public Discord.",
   "guide.safe.alert": "HCC staff and support will never message you first. If anyone DMs you claiming to be from the team — asking for wallet access, your seed phrase, or any payment — it's a scam. Ask publicly in the Highrise Discord instead.",
-
   "guide.cta.eyebrow": "Need a hand?",
   "guide.cta.h": "Still stuck?",
   "guide.cta.p": "Hop into the Highrise Discord and ask — the community and team are happy to help you get set up.",
-
   "hub.eyebrow": "Find your way around",
   "hub.h2": "Where do you want to go?",
   "hub.roadmap.d": "What's shipping next, in order.",
@@ -1430,13 +1345,11 @@
   "hub.council.d": "How the Player Council works, your eligibility, and the seat elections.",
   "hub.polls.d": "Official votes where every holder gets a say in the big calls.",
   "club.cta": "Explore the Player Council →",
-
   "council.top.eyebrow": "Holder-led",
   "council.top.h2": "The Player Council",
   "council.top.lead": "What the Council is, how it works, and your part in it: eligibility, candidacy, and the official ballot.",
   "council.sub.about": "The Council",
   "council.sub.vote": "Apply & Vote",
-
   "polls.eyebrow": "Your say",
   "polls.h2": "Polls & Votes",
   "polls.lead": "Some calls belong to every holder, not just seven seats. Sign in with Discord, we check that your linked wallet holds, and your vote counts once.",
@@ -1475,19 +1388,17 @@
   "polls.err": "We couldn't cast your vote. Try again in a moment.",
   "polls.loaderr": "We couldn't load the polls. Try again in a moment.",
   "polls.none": "No official votes are running right now. When the Council sends a big call to the club, it lands here.",
-
-  "polls.p.gen2order.title": "Gen 2: what ships first?",
-  "polls.p.gen2order.desc": "Gen 2 lands in two parts: pets for Gen 1 creature holders, creatures for LAND owners. Production can't complete both at the same pace, so the club picks the rollout order. Every option has a real cost, prices included. Weigh them, then vote.",
+  "polls.p.gen2order.title": "Gen 2: what releases first?",
+  "polls.p.gen2order.desc": "Gen 2 is divided into two parts: Pets for Gen 1 Creature holders, and Creatures for LAND owners. Production can't complete both at the same pace, so the club picks the rollout order. Every option has a real cost, prices included. Weigh them, then vote.",
   "polls.p.gen2order.opt.pets": "Pets first",
-  "polls.p.gen2order.opt.pets.pro": "Fastest to ship, reaches the most holders, and creature prices likely hold or climb",
+  "polls.p.gen2order.opt.pets.pro": "Fastest to produce, reaches the most holders, and creature prices likely hold or climb",
   "polls.p.gen2order.opt.pets.con": "LAND owners wait longer, and LAND prices may dip until its turn comes",
   "polls.p.gen2order.opt.creatures": "Creatures first",
-  "polls.p.gen2order.opt.creatures.pro": "LAND carried the most broken promises and gets delivered first, so its price likely holds or climbs",
+  "polls.p.gen2order.opt.creatures.pro": "LAND carried the most broken promises and gets released first, so its price likely holds or climbs",
   "polls.p.gen2order.opt.creatures.con": "Takes longer to produce, and creature prices may dip while pets wait",
-  "polls.p.gen2order.opt.together": "Ship together",
-  "polls.p.gen2order.opt.together.pro": "One complete drop, and neither collection takes the dip of shipping second",
-  "polls.p.gen2order.opt.together.con": "The longest wait for everyone, with both priced on promises until it ships",
-
+  "polls.p.gen2order.opt.together": "Release together",
+  "polls.p.gen2order.opt.together.pro": "One complete release, so neither collection takes the dip of going second",
+  "polls.p.gen2order.opt.together.con": "The longest wait for everyone, with both priced on promises until release",
   "apply.eyebrow": "Run or vote",
   "apply.h2": "Check your eligibility",
   "apply.lead": "Sign in with the Discord account linked to your Highrise profile. We check your linked wallet against current HCC holders to confirm whether you can vote and which seat you can run for.",
@@ -1525,7 +1436,6 @@
   "apply.err.denied": "Sign-in was cancelled. You can try again whenever you're ready.",
   "apply.err.state": "Your sign-in session expired or didn't match. Please try signing in again.",
   "apply.err.failed": "Something went wrong during sign-in. Please try again.",
-
   "apply.race.eyebrow": "The race so far",
   "apply.race.h": "Where the election stands",
   "apply.race.open": "Applications open",
@@ -1549,7 +1459,6 @@
   "apply.race.foot.closed": "These are the seats up for election — self-nominations open when the candidacy window starts.",
   "apply.race.empty": "No candidacies in yet — be the first to run.",
   "apply.race.err": "We couldn't load the election status. Try again in a moment.",
-
   "apply.result.turnout": "{n} votes cast",
   "apply.result.seated": "Elected",
   "apply.result.seatedByRule": "nominations reopened and nobody new ran, so the seat is filled by rule",
@@ -1560,8 +1469,6 @@
   "apply.result.vacant": "No candidates ran — this seat is filled from the appointed track",
   "apply.result.receipts": "Verify your vote — {n} receipts",
   "apply.result.receipts.p": "Every ballot cast in this race is listed here by its receipt code — codes are random and tied to neither voter nor choice. Find yours to confirm your vote was counted; the number of codes always equals the votes cast.",
-
-  "vote.eyebrow": "Voting advice",
   "vote.h": "Find your match",
   "vote.intro": "Set where you stand on each statement and we'll rank the candidates by how closely they align with you. Your answers are saved on this device and used only to work out your match — never stored, logged, or linked to you.",
   "vote.private": "Private — used only to compute your match, never stored or logged",
@@ -1598,7 +1505,6 @@
   "vote.gate.signin.p": "Sign in with Discord above to privately match yourself against the candidates. Your answers are used only to compute your match and are never stored or linked to you.",
   "vote.gate.noteligible.h": "Eligible voters only",
   "vote.gate.noteligible.p": "We couldn't confirm any HCC holdings on your linked wallet, so candidate matching isn't available. Hold a Creature or LAND NFT to take part.",
-
   "ballot.eyebrow": "Official vote",
   "ballot.h": "Cast your ballot",
   "ballot.intro": "You get one vote for each seat in a race — the Member race elects two, so you can pick two candidates there. Every eligible holder votes in all races. Each vote is final once cast, and you'll get a private receipt for it.",
@@ -1635,7 +1541,6 @@
   "ballot.locked.p": "Before your official ballot opens, use the voting advice above — set where you stand and see how each candidate lines up with you. Your ballot unlocks the moment you've reviewed your matches, so the names you pick are ones you actually know.",
   "ballot.gate.snapshot.h": "Your wallet isn't in the voting snapshot",
   "ballot.gate.snapshot.p": "To vote in this election, your wallet must already have been holding when the official snapshot was taken on {date} — and still be holding now. Assets picked up after the snapshot can't vote this time, but they'll count for the next election.",
-
   "app.cta": "Run for a seat",
   "app.closed.banner": "Applications open when the candidacy window starts. You can fill this in and save a draft now — submitting and AI drafting unlock when it opens.",
   "app.closed.note": "Available when applications open.",
@@ -1681,7 +1586,6 @@
   "app.err.required": "Complete every field, set a position on every statement, and tick the acknowledgements before submitting.",
   "app.err.consent": "Please tick all three acknowledgements to submit.",
   "app.err.generic": "Something went wrong. Please try again.",
-
   "app.positions.title": "Your positions",
   "app.positions.intro": "Set where you stand on each statement. These become your public voting-advice profile, and holders are matched to you on them.",
   "app.derive": "Draft from my answers",
@@ -1694,7 +1598,6 @@
   "app.scale.3": "Neutral",
   "app.scale.4": "Agree",
   "app.scale.5": "Strongly agree",
-
   "prop.quality": "The Council should favour fewer, higher-quality drops over more frequent ones.",
   "prop.exclusivity": "What earlier holders already received should stay exclusive to them — newer holders shouldn't get the same things back through recolours, similar drops, or marketplace re-releases.",
   "prop.gen2bold": "Gen 2 should take bold creative risks rather than play it safe with familiar designs.",
@@ -1704,13 +1607,11 @@
   "prop.smallholders": "Every holder should have an equal say, whether they hold 1 asset or 100.",
   "prop.pushback": "The Council should push Pocket Worlds privately rather than through public pressure.",
   "prop.mandate": "The Council should push to expand its decision-making power over time.",
-
   "guide.sub.basics": "Basics",
   "guide.sub.walkthroughs": "Walkthroughs",
   "guide.sub.marketplace": "Marketplace",
   "guide.sub.safety": "Stay safe",
   "guide.sub.links": "Links",
-
   "guide.links.eyebrow": "Go deeper",
   "guide.links.h2": "Useful links",
   "guide.links.lead": "Official places to buy, explore, and manage your HCC assets.",

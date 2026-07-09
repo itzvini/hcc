@@ -78,7 +78,7 @@ function memberHeader(profile, tierKey) {
         <div class="apply-name">${esc(profile.username)} ${tier}</div>
         <div class="apply-sub"><span class="apply-discord-dot">${DISCORD_SVG}</span>${esc(t('apply.connected'))}</div>
       </div>
-      <a class="apply-logout" href="/api/auth/logout">${esc(t('apply.logout'))}</a>
+      <a class="apply-logout" href="/api/auth/logout?return=%2Fcouncil%2Fvote">${esc(t('apply.logout'))}</a>
     </div>`;
 }
 
