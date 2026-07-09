@@ -421,6 +421,44 @@
   ],
   "site": [
     {
+      "date": "July 8, 2026",
+      "title": "Polls & Votes — official club-wide votes",
+      "body": "Council and Apply & Vote are now one tab: the Council's story on one side, your eligibility, candidacy and official ballot on the other (/council/vote — old links still work). And there's a new Polls & Votes page for the calls the whole club should make: sign in with Discord, we verify your Highrise-linked wallet holds, and your voice counts once — one holder, one vote, final once cast, with a private receipt. First up: the Gen 2 ship order.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "8 de jul. de 2026",
+          "title": "Enquetes & Votos — votações oficiais de todo o clube",
+          "body": "Conselho e Candidatura & Voto agora são uma aba só: a história do Conselho de um lado, sua elegibilidade, candidatura e cédula oficial do outro (/council/vote — links antigos continuam funcionando). E há uma nova página de Enquetes & Votos para as decisões que o clube inteiro deve tomar: entre com o Discord, verificamos que sua carteira vinculada à Highrise possui ativos, e sua voz conta uma vez — um holder, um voto, definitivo após o envio, com comprovante privado. Primeira votação: a ordem de entrega da Gen 2."
+        },
+        "es": {
+          "date": "8 jul. 2026",
+          "title": "Encuestas y Votos — votaciones oficiales de todo el club",
+          "body": "Consejo y Candidatura y Voto ahora son una sola pestaña: la historia del Consejo por un lado y tu elegibilidad, candidatura y papeleta oficial por el otro (/council/vote — los enlaces antiguos siguen funcionando). Y hay una nueva página de Encuestas y Votos para las decisiones que debe tomar todo el club: inicia sesión con Discord, verificamos que tu wallet vinculada a Highrise posee activos, y tu voz cuenta una vez — un holder, un voto, definitivo una vez emitido, con comprobante privado. Primera votación: el orden de entrega de la Gen 2."
+        },
+        "fr": {
+          "date": "8 juil. 2026",
+          "title": "Sondages & Votes — des votes officiels à l'échelle du club",
+          "body": "Conseil et Candidature & Vote ne font plus qu'un onglet : l'histoire du Conseil d'un côté, votre éligibilité, votre candidature et votre bulletin officiel de l'autre (/council/vote — les anciens liens fonctionnent toujours). Et une nouvelle page Sondages & Votes accueille les décisions que tout le club doit prendre : connectez-vous avec Discord, nous vérifions que votre wallet lié à Highrise détient des actifs, et votre voix compte une fois — un holder, un vote, définitif une fois validé, avec un reçu privé. Premier vote : l'ordre de livraison de la Gen 2."
+        },
+        "de": {
+          "date": "8. Juli 2026",
+          "title": "Umfragen & Abstimmungen — offizielle clubweite Votes",
+          "body": "Council und Bewerben & Abstimmen sind jetzt ein Tab: die Geschichte des Councils auf der einen Seite, deine Berechtigung, Kandidatur und dein offizieller Stimmzettel auf der anderen (/council/vote — alte Links funktionieren weiter). Dazu gibt es eine neue Seite Umfragen & Abstimmungen für die Entscheidungen, die der ganze Club treffen soll: Melde dich mit Discord an, wir prüfen deine mit Highrise verknüpfte Wallet, und deine Stimme zählt genau einmal — ein Holder, eine Stimme, endgültig nach Abgabe, mit privater Quittung. Den Anfang macht die Gen-2-Reihenfolge."
+        },
+        "ru": {
+          "date": "8 июля 2026",
+          "title": "Опросы и голосования — официальные голосования всего клуба",
+          "body": "Совет и «Заявка и голосование» теперь одна вкладка: история Совета с одной стороны, ваш статус, кандидатура и официальный бюллетень с другой (/council/vote — старые ссылки работают). А для решений, которые должен принимать весь клуб, появилась новая страница «Опросы и голосования»: войдите через Discord, мы проверим ваш привязанный к Highrise кошелёк, и ваш голос учтётся один раз — один холдер, один голос, окончательно после отправки, с личной квитанцией. Первым — порядок выпуска Gen 2."
+        },
+        "tr": {
+          "date": "8 Temmuz 2026",
+          "title": "Anketler ve Oylamalar — kulüp çapında resmî oylamalar",
+          "body": "Council ile Başvuru ve Oy artık tek sekme: bir yanda Council'ın hikâyesi, diğer yanda uygunluğun, adaylığın ve resmî oy pusulan (/council/vote — eski bağlantılar çalışmaya devam ediyor). Ayrıca tüm kulübün vermesi gereken kararlar için yeni bir Anketler ve Oylamalar sayfası var: Discord ile giriş yap, Highrise'a bağlı cüzdanının varlık tuttuğunu doğrulayalım; sesin bir kez sayılır — bir holder, bir oy, verildikten sonra kesin, özel makbuzlu. İlk oylama: Gen 2 teslim sırası."
+        }
+      }
+    },
+    {
       "date": "June 21, 2026",
       "title": "Creature & LAND marketplace is live",
       "body": "A non-custodial marketplace with a 0% marketplace fee is now live at /trade. Browse, list, buy, sell, and cancel Creatures and LAND — filter LAND by slime traits and rarity rank — make collection offers or instantly sell a parcel, and toggle any price between ETH and your currency. New to crypto? A built-in card on-ramp (Transak) lets you buy without already holding ETH, with wallet-safety checks along the way.",

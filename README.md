@@ -69,7 +69,8 @@ database is needed — history is recomputed from on-chain/marketplace sales eac
 
 ## Apply & Vote (the First Election)
 
-The **Apply & Vote** tab runs the Council's first election end-to-end: a holder signs
+The **Council › Apply & Vote** sub-tab (`/council/vote` — the old `/apply` links
+redirect there) runs the Council's first election end-to-end: a holder signs
 in with Discord, sees whether they can vote and which seat bracket they can run for,
 self-nominates if eligible, and uses the Voting Advice Application to find their
 best-matching candidates.
@@ -260,6 +261,27 @@ node d:\hcc-player-council\server.js
 - `…/api/auth/dev-login?user=LateBuyer&creatures=2&wallet=0xdev-late` → wallet not in
   the snapshot → the "not in the voting snapshot" gate screen.
 - Add `&icon=https://cdn.highrisegame.com/...` to test candidate avatars end-to-end.
+
+## Polls & Votes (official community polls)
+
+The **Polls & Votes** tab (`/polls`) hosts official club-wide votes — decisions the
+Council sends to every holder rather than deciding in the room (the first: the Gen 2
+ship order). Same trust chain as the election ballot: Discord sign-in → Highrise-linked
+wallet → live holder check. One holder, one vote — enforced per Discord account *and*
+per wallet — insert-only with a private receipt code; per-option tallies and the full
+receipt list are published only after the poll closes.
+
+- **Definitions** live in [lib/polls.js](lib/polls.js) (id, i18n key, option ids).
+  Copy lives in the locales under `polls.p.<key>.*` — the API never ships display text.
+- **Scheduling** is env-driven, no redeploy needed: e.g. `POLL_GEN2_OPENS` /
+  `POLL_GEN2_CLOSES` (ISO timestamps). Unset opens-at → the poll shows as "opens soon";
+  unset closes-at → open-ended until the env is set.
+- **API**: `GET /api/polls` (viewer context + polls; results once closed),
+  `POST /api/polls/vote` `{ poll, choice }` (401 signed-out, 403 non-holder/closed,
+  409 already-voted).
+- **Local testing**: use the in-memory recipe above with
+  `$env:POLL_GEN2_OPENS='2026-01-01T00:00:00Z'` to force the poll open, then
+  dev-login as a holder and vote. Set `POLL_GEN2_CLOSES` in the past to see results.
 
 ## Railway
 

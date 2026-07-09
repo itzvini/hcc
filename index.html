@@ -53,7 +53,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
       <div class="tab-list" role="tablist" aria-label="Highrise Creature Club pages">
         <button class="page-tab is-active" type="button" role="tab" id="tab-club" aria-selected="true" aria-controls="panel-club" data-tab="club" data-i18n="nav.club">The Club</button>
         <button class="page-tab" type="button" role="tab" id="tab-council" aria-selected="false" aria-controls="panel-council" data-tab="council" data-i18n="nav.council">Council</button>
-        <button class="page-tab" type="button" role="tab" id="tab-apply" aria-selected="false" aria-controls="panel-apply" data-tab="apply" data-i18n="nav.apply">Apply &amp; Vote</button>
+        <button class="page-tab" type="button" role="tab" id="tab-polls" aria-selected="false" aria-controls="panel-polls" data-tab="polls" data-i18n="nav.polls">Polls &amp; Votes</button>
         <button class="page-tab" type="button" role="tab" id="tab-roadmap" aria-selected="false" aria-controls="panel-roadmap" data-tab="roadmap" data-i18n="nav.roadmap">Roadmap</button>
         <button class="page-tab" type="button" role="tab" id="tab-guides" aria-selected="false" aria-controls="panel-guides" data-tab="guides" data-i18n="nav.guides">Guides</button>
         <button class="page-tab" type="button" role="tab" id="tab-perks" aria-selected="false" aria-controls="panel-perks" data-tab="perks" data-i18n="nav.perks">Perks</button>
@@ -85,13 +85,13 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
     <button class="hub-card" type="button" data-goto="council">
       <span class="hub-ico">🏛️</span>
       <span class="hub-t" data-i18n="nav.council">Council</span>
-      <span class="hub-d" data-i18n="hub.council.d">The Player Council — its role, seats, and how voting works.</span>
+      <span class="hub-d" data-i18n="hub.council.d">The Player Council — how it works, your eligibility, and the official seat elections.</span>
       <span class="hub-arrow">→</span>
     </button>
-    <button class="hub-card" type="button" data-goto="apply">
+    <button class="hub-card" type="button" data-goto="polls">
       <span class="hub-ico">🗳️</span>
-      <span class="hub-t" data-i18n="nav.apply">Apply &amp; Vote</span>
-      <span class="hub-d" data-i18n="hub.apply.d">Sign in with Discord to check your eligibility to run or vote.</span>
+      <span class="hub-t" data-i18n="nav.polls">Polls &amp; Votes</span>
+      <span class="hub-d" data-i18n="hub.polls.d">Official club-wide votes — every holder gets a say in the big calls.</span>
       <span class="hub-arrow">→</span>
     </button>
     <button class="hub-card" type="button" data-goto="roadmap">
@@ -253,6 +253,18 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 
 <main id="panel-council" class="tab-panel" role="tabpanel" aria-labelledby="tab-council" hidden>
 
+<section class="wrap subnav-top" id="council-top">
+  <div class="eyebrow" data-i18n="council.top.eyebrow">Holder-led</div>
+  <h2 data-i18n="council.top.h2">The Player Council</h2>
+  <p class="lead" data-i18n="council.top.lead">Everything Council in one place — what it is and how it works, plus your eligibility, candidacy and official ballot whenever a window is open.</p>
+</section>
+
+<nav class="guide-subnav wrap" role="tablist" aria-label="Council sections">
+  <button class="guide-subtab is-active" type="button" role="tab" aria-selected="true" data-subtab="about" data-i18n="council.sub.about">The Council</button>
+  <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="vote" data-i18n="council.sub.vote">Apply &amp; Vote</button>
+</nav>
+
+<div class="guide-subpanel" data-subpanel="about">
 <section class="wrap">
   <div class="honest">
     <div class="eyebrow" data-i18n="honest.eyebrow">Straight talk</div>
@@ -367,10 +379,9 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
   <details><summary data-i18n="faq.q3">What about Gen 1 and Gen 2?</summary><p data-i18n="faq.a3">A dedicated artist is on finishing them, and the Council helps decide which creatures and variants make each Gen 2 set — picking from the options the art team can actually build.</p></details>
   <details><summary data-i18n="faq.q6">What does the Council actually start with?</summary><p data-i18n="faq.a6">It starts advisory-leaning, and its "Decides" power grows release by release as it proves out. Think training wheels that come off over time, not everything on day one.</p></details>
 </section>
+</div>
 
-</main>
-
-<main id="panel-apply" class="tab-panel" role="tabpanel" aria-labelledby="tab-apply" hidden>
+<div class="guide-subpanel" data-subpanel="vote" hidden>
 <section class="wrap">
   <div class="eyebrow" data-i18n="apply.eyebrow">Run or vote</div>
   <h2 data-i18n="apply.h2">Check your eligibility</h2>
@@ -389,6 +400,22 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
   <div id="ballot-app" class="ballot-box" aria-live="polite"></div>
 
   <p class="apply-fineprint" data-i18n="apply.fineprint">We only read your Discord identity and your linked wallet's public holdings. The 3-month continuous-holding rule for voting is verified against the official snapshot when the candidacy window opens.</p>
+</section>
+</div>
+
+</main>
+
+<main id="panel-polls" class="tab-panel" role="tabpanel" aria-labelledby="tab-polls" hidden>
+<section class="wrap">
+  <div class="eyebrow" data-i18n="polls.eyebrow">Your say</div>
+  <h2 data-i18n="polls.h2">Polls &amp; Votes</h2>
+  <p class="lead" data-i18n="polls.lead">When a call is too big for seven seats, it comes here — an official vote, open to every HCC holder. Sign in with Discord, we confirm your Highrise-linked wallet holds, and your voice counts once: one holder, one vote.</p>
+
+  <div id="polls-app" class="polls-box" aria-live="polite" aria-busy="true">
+    <div class="apply-loading"><div class="apply-spinner"></div></div>
+  </div>
+
+  <p class="apply-fineprint" data-i18n="polls.fineprint">We only read your Discord identity and your linked wallet's public holdings. Individual votes are never published — only totals, and only after a poll closes.</p>
 </section>
 </main>
 

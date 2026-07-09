@@ -7,6 +7,7 @@ import { loadElection, rerenderElection } from './election.js';
 import { loadBallot, rerenderBallot } from './ballot.js';
 import { loadVote, rerenderVote } from './vote.js';
 import { loadMarketplace, rerenderMarketplace } from './marketplace.js';
+import { loadPolls, rerenderPolls } from './polls.js';
 import { loadGen2, rerenderGen2 } from './gen2.js';
 import { initGuideDemos, rerenderGuideDemos } from './guide-demos.js';
 import { initPerks, rerenderPerks } from './perks.js';
@@ -21,6 +22,7 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
     rerenderBallot();
     rerenderVote();
     rerenderMarketplace();
+    rerenderPolls();
     rerenderGen2();
     rerenderGuideDemos();
     rerenderPerks();
@@ -36,7 +38,8 @@ const navCurrent = document.getElementById('nav-current');
 let holdersLoaded   = false;
 let marketLoaded    = false;
 let changelogLoaded = false;
-let applyLoaded     = false;
+let councilLoaded   = false;
+let pollsLoaded     = false;
 let tradeLoaded     = false;
 let roadmapLoaded   = false;
 
@@ -86,7 +89,8 @@ function selectTab(name, updateUrl = true) {
   if (name === 'holders'   && !holdersLoaded)   { holdersLoaded   = true; loadHoldersChart(); }
   if (name === 'market'    && !marketLoaded)    { marketLoaded    = true; loadMarketChart(); }
   if (name === 'changelog' && !changelogLoaded) { changelogLoaded = true; loadChangelog(); }
-  if (name === 'apply'     && !applyLoaded)     { applyLoaded     = true; loadApply(); loadElection(); loadBallot(); loadVote(); }
+  if (name === 'council'   && !councilLoaded)   { councilLoaded   = true; loadApply(); loadElection(); loadBallot(); loadVote(); }
+  if (name === 'polls'     && !pollsLoaded)     { pollsLoaded     = true; loadPolls(); }
   if (name === 'trade'     && !tradeLoaded)     { tradeLoaded     = true; loadMarketplace(); }
   if (name === 'roadmap'   && !roadmapLoaded)   { roadmapLoaded   = true; loadGen2(); }
   if (updateUrl && location.pathname !== urlFor(name)) history.pushState(null, '', urlFor(name));
@@ -219,9 +223,11 @@ initGuideDemos();
 initPerks();
 
 // Clean tab URLs — every tab (and sub-tab) is a real path the server also serves:
-// /council, /roadmap/gen2, … Tab clicks push the path; legacy #tab links and
-// in-page anchors (#terms, #council) still work and get normalized to paths.
-const ROUTE_TABS = ['club', 'council', 'apply', 'roadmap', 'guides', 'perks', 'holders', 'market', 'trade', 'changelog', 'contribute', 'terms', 'privacy'];
+// /council, /polls, /roadmap/gen2, … Tab clicks push the path; legacy #tab links
+// and in-page anchors (#terms, #council) still work and get normalized to paths.
+// 'apply' is a legacy alias: the old Apply & Vote tab now lives at /council/vote,
+// and route() rewrites it so bookmarks and old OAuth redirects keep working.
+const ROUTE_TABS = ['club', 'council', 'apply', 'polls', 'roadmap', 'guides', 'perks', 'holders', 'market', 'trade', 'changelog', 'contribute', 'terms', 'privacy'];
 
 function urlFor(name, sub) {
   return name === 'club' && !sub ? '/' : `/${name}${sub ? `/${sub}` : ''}`;
@@ -229,28 +235,36 @@ function urlFor(name, sub) {
 
 function route(pathname) {
   const segs = pathname.split('/').filter(Boolean);
-  const tab = ROUTE_TABS.includes(segs[0]) ? segs[0] : 'club';
+  let tab = ROUTE_TABS.includes(segs[0]) ? segs[0] : 'club';
+  let sub = segs[1] && /^[a-z0-9-]+$/.test(segs[1]) ? segs[1] : null;
+  if (tab === 'apply') {
+    // Legacy path → the merged tab, keeping the query string (?auth= errors).
+    tab = 'council';
+    sub = 'vote';
+    history.replaceState(null, '', '/council/vote' + location.search);
+  }
   selectTab(tab, false);
-  if (segs[1] && /^[a-z0-9-]+$/.test(segs[1])) {
+  if (sub) {
     const scope = document.getElementById(`panel-${tab}`);
-    if (scope && scope.querySelector(`[data-subtab="${segs[1]}"]`)) selectSubTab(scope, segs[1]);
+    if (scope && scope.querySelector(`[data-subtab="${sub}"]`)) selectSubTab(scope, sub);
   }
   // Deep link to a specific step, e.g. /guides/walkthroughs/funding or
   // /guides/marketplace/trading
-  if (tab === 'guides' && segs[1] && segs[2] && stepperRouters[segs[1]]) {
-    stepperRouters[segs[1]](segs[2]);
+  if (tab === 'guides' && sub && segs[2] && stepperRouters[sub]) {
+    stepperRouters[sub](segs[2]);
   }
 }
 
 // Back/forward navigation
 window.addEventListener('popstate', () => route(location.pathname));
 
-// Legacy hash links switch tabs; the URL is normalized to the path form.
+// Legacy hash links switch tabs; the URL is normalized to the path form. Routing
+// through route() keeps the '#apply' → /council/vote alias working here too.
 window.addEventListener('hashchange', () => {
   const name = location.hash.slice(1);
   if (ROUTE_TABS.includes(name)) {
     history.replaceState(null, '', urlFor(name) + location.search);
-    selectTab(name, false);
+    route(location.pathname);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 });
@@ -276,6 +290,7 @@ initI18n().then(() => {
   rerenderVote();
   rerenderMarket();
   rerenderMarketplace();
+  rerenderPolls();
   rerenderGen2();
   rerenderGuideDemos();
   rerenderPerks();

@@ -18,6 +18,7 @@ const landPets = require('./lib/land-pets');
 const slimeIndex = require('./lib/slime-index');
 const { computeEligibility, BRACKETS } = require('./lib/eligibility');
 const { PROPOSITIONS, PROPOSITION_IDS } = require('./lib/propositions');
+const { POLLS, pollStatus } = require('./lib/polls');
 const derive = require('./lib/derive-positions');
 
 // Treat common truthy spellings (1/true/yes/on, case- and whitespace-insensitive) as
@@ -2735,10 +2736,28 @@ function rateLimited(key, max, windowMs) {
   return b.count > max ? Math.max(1, Math.ceil((b.reset - now) / 1000)) : 0;
 }
 
-// Send the user back to the Apply panel; `error` (if set) is read by the front-end.
+// Where the OAuth round-trip lands back on the site. Sign-in buttons live on more
+// than one page now (Council › Apply & Vote, Polls & Votes), so the login endpoint
+// remembers which one started the flow in a short-lived cookie — allowlisted paths
+// only, so a crafted link can never turn the callback into an open redirect.
+const RETURN_COOKIE = 'hcc_return';
+const RETURN_PATHS = new Set(['/council/vote', '/polls']);
+function returnPathFrom(cookies) {
+  const p = cookies?.[RETURN_COOKIE];
+  return RETURN_PATHS.has(p) ? p : '/council/vote';
+}
+
+// Send the user back to the panel that started the sign-in; `error` (if set) is
+// read by the front-end (apply.js / polls.js render it as a friendly alert).
 function redirectToApp(request, response, error) {
-  const location = error ? `/apply?auth=${encodeURIComponent(error)}` : '/apply';
-  response.writeHead(302, { Location: location, 'Cache-Control': 'no-store' });
+  const cookies = auth.parseCookies(request);
+  const base = returnPathFrom(cookies);
+  const location = error ? `${base}?auth=${encodeURIComponent(error)}` : base;
+  response.writeHead(302, {
+    Location: location,
+    'Set-Cookie': auth.serializeCookie(RETURN_COOKIE, '', { maxAge: 0, secure: auth.isSecure(request) }),
+    'Cache-Control': 'no-store',
+  });
   response.end();
 }
 
@@ -2821,11 +2840,18 @@ function publicProfile(p) {
 async function handleAuthApi(request, response, url) {
   const { pathname } = url;
 
-  // Step 1 — begin OAuth: redirect to Discord with a CSRF state cookie.
+  // Step 1 — begin OAuth: redirect to Discord with a CSRF state cookie. An optional
+  // ?return= names the page that started the flow (allowlisted — see RETURN_PATHS)
+  // so the callback can land the user back where they were.
   if (pathname === '/api/auth/discord/login') {
     if (!auth.isConfigured()) { sendJson(response, 503, { error: 'Discord login is not configured.' }); return; }
     const { location, stateCookie } = auth.buildLoginRedirect(request);
-    response.writeHead(302, { Location: location, 'Set-Cookie': stateCookie, 'Cache-Control': 'no-store' });
+    const wanted = url.searchParams.get('return') || '';
+    const secure = auth.isSecure(request);
+    const returnCookie = RETURN_PATHS.has(wanted)
+      ? auth.serializeCookie(RETURN_COOKIE, wanted, { maxAge: 600, secure })
+      : auth.serializeCookie(RETURN_COOKIE, '', { maxAge: 0, secure });
+    response.writeHead(302, { Location: location, 'Set-Cookie': [stateCookie, returnCookie], 'Cache-Control': 'no-store' });
     response.end();
     return;
   }
@@ -2917,10 +2943,11 @@ async function handleAuthApi(request, response, url) {
 
       const secure = auth.isSecure(request);
       response.writeHead(302, {
-        Location: '/apply',
+        Location: returnPathFrom(cookies),
         'Set-Cookie': [
           auth.serializeCookie(auth.SESSION_COOKIE, sid, { maxAge: SESSION_MAX_AGE, secure }),
           auth.serializeCookie(auth.STATE_COOKIE, '', { maxAge: 0, secure }),
+          auth.serializeCookie(RETURN_COOKIE, '', { maxAge: 0, secure }),
         ],
         'Cache-Control': 'no-store',
       });
@@ -3676,6 +3703,126 @@ async function handleBallotApi(request, response) {
   sendJson(response, 405, { error: 'Method not allowed.' });
 }
 
+// /api/polls — official community polls (lib/polls.js), the Council's mechanism for
+// sending a big call to an HCC-wide vote. Same trust chain as the election ballot:
+// Discord sign-in → Highrise-linked wallet → live holder check. One holder, one vote
+// (enforced per account AND per wallet), insert-only with a private receipt.
+//   GET  → viewer context (signed-in? holder?) + every poll's status, options,
+//          turnout, the caller's own vote, and — once closed — the final tallies
+//          with the published receipt-code list (inclusion verifiability, as on
+//          the election board).
+//   POST /api/polls/vote { poll, choice } → casts the vote. FINAL once cast —
+//          storage is insert-only and re-votes get a 409.
+// PRIVACY: the vote row (voter ↔ choice) exists only to enforce the one-vote rule;
+// it never leaves the server. The audit event records THAT a vote was cast, never
+// the choice. No running tally while a poll is open (same rule as the election).
+async function handlePollsApi(request, response, url) {
+  const { pathname } = url;
+  const cookies = auth.parseCookies(request);
+  const sid = cookies[auth.SESSION_COOKIE];
+  const session = await db.getSession(sid);
+
+  if (pathname === '/api/polls' && request.method === 'GET') {
+    // Viewer context for the page's gates. Eligibility is recomputed against the
+    // current holder snapshot (cheap in-memory read) so buys/sells reflect
+    // without a re-login — same behaviour as the eligibility card.
+    let viewer = { authenticated: false };
+    let myVotes = [];
+    if (session) {
+      const elig = await refreshEligibility(session, sid);
+      viewer = {
+        authenticated: true,
+        profile: publicProfile(session.profile),
+        linked: !!(elig.linked && elig.ethWallet),
+        holdersAvailable: !!elig.holdersAvailable,
+        holder: !!elig.canVotePendingHoldTime,
+      };
+      myVotes = await db.getPollVotesFor(session.discord_id);
+    }
+
+    const tallies = await db.getPollTallies();
+    const polls = [];
+    for (const p of POLLS) {
+      const status = pollStatus(p);
+      const mine = myVotes.find(v => v.poll_id === p.id);
+      const row = {
+        id: p.id,
+        key: p.i18nKey,
+        options: p.options,
+        status,
+        opensAt: p.opensAt ? new Date(p.opensAt).toISOString() : null,
+        closesAt: p.closesAt ? new Date(p.closesAt).toISOString() : null,
+        // Participation count is public while open (motivating, reveals no choice);
+        // per-option counts wait for the close.
+        turnout: tallies.filter(t => t.poll_id === p.id).reduce((n, t) => n + t.n, 0),
+        myVote: mine ? { choice: mine.choice, receipt: mine.receipt, castAt: mine.cast_at || null } : null,
+      };
+      if (status === 'closed') {
+        const counts = {};
+        for (const opt of p.options) {
+          counts[opt] = tallies.find(t => t.poll_id === p.id && t.choice === opt)?.n || 0;
+        }
+        row.results = { counts, receipts: await db.getPollReceipts(p.id) };
+      }
+      polls.push(row);
+    }
+    sendJson(response, 200, { viewer, polls });
+    return;
+  }
+
+  if (pathname === '/api/polls/vote' && request.method === 'POST') {
+    if (!session) { sendJson(response, 401, { error: 'Sign in to vote.' }); return; }
+    // LIVE eligibility — recompute against current holdings so a wallet emptied
+    // since login can't vote on a stale session snapshot (same as the ballot).
+    const elig = await refreshEligibility(session, sid);
+    if (!elig.canVotePendingHoldTime || !elig.ethWallet) {
+      sendJson(response, 403, { error: 'Only HCC holders can vote in official polls.' });
+      return;
+    }
+
+    const wait = rateLimited(`poll:${session.discord_id}`, 20, 60 * 60 * 1000);
+    if (wait) { sendJson(response, 429, { error: 'Too many requests. Try again shortly.' }, { 'Retry-After': String(wait) }); return; }
+
+    let body;
+    try { body = await readJsonBody(request); }
+    catch (err) { sendJson(response, err.statusCode || 400, { error: err.message }); return; }
+
+    const poll = POLLS.find(p => p.id === String(body.poll || ''));
+    if (!poll) { sendJson(response, 400, { error: 'Unknown poll.' }); return; }
+    const status = pollStatus(poll);
+    if (status !== 'open') {
+      sendJson(response, 403, { error: status === 'closed' ? 'This poll has closed.' : 'This poll isn\'t open yet.' });
+      return;
+    }
+    const choice = poll.options.includes(String(body.choice || '')) ? String(body.choice) : null;
+    if (!choice) { sendJson(response, 400, { error: 'That choice isn\'t on this poll.' }); return; }
+
+    const receipt = crypto.randomBytes(5).toString('hex').toUpperCase();
+    const { row: saved, reason } = await db.castPollVote({
+      pollId: poll.id,
+      discordId: session.discord_id,
+      wallet: elig.ethWallet,
+      choice,
+      receipt,
+    });
+    if (!saved) {
+      const msg = reason === 'wallet'
+        ? 'Your linked wallet already voted in this poll — one holder, one vote.'
+        : 'You already voted in this poll — votes are final once cast.';
+      sendJson(response, 409, { error: msg });
+      return;
+    }
+
+    // Audit THAT a vote was cast (turnout traceability) — never the choice.
+    db.recordEvent({ event: 'poll.cast', discordId: session.discord_id, detail: { poll: poll.id } });
+    sendJson(response, 200, { ok: true, poll: poll.id, receipt: saved.receipt, castAt: saved.cast_at || null });
+    return;
+  }
+
+  sendJson(response, pathname === '/api/polls' || pathname === '/api/polls/vote' ? 405 : 404,
+    { error: pathname === '/api/polls' || pathname === '/api/polls/vote' ? 'Method not allowed.' : 'Not found' });
+}
+
 // Validate a client-sent positions map into { id: { stance 1-5, rationale } }.
 function cleanPositions(raw) {
   const out = {};
@@ -3894,8 +4041,10 @@ const PUBLIC_FILES = new Set(['index.html', 'changelog.json', 'gen2-progress.jso
 const COMPRESSIBLE_EXT = new Set(['.html', '.css', '.js', '.json', '.svg', '.otf', '.ttf']);
 const gzipCache = new Map(); // filePath → { etag, body } — one gzipped copy per content version
 // Clean tab URLs (/council, /roadmap/gen2, …) all serve the app shell; the client
-// router in js/app.js opens the matching tab from location.pathname.
-const TAB_ROUTES = new Set(['club', 'council', 'apply', 'roadmap', 'guides', 'perks',
+// router in js/app.js opens the matching tab from location.pathname. 'apply' is a
+// legacy alias — the old Apply & Vote tab now lives at /council/vote and the client
+// router rewrites it — kept so bookmarks and old OAuth redirects keep working.
+const TAB_ROUTES = new Set(['club', 'council', 'apply', 'polls', 'roadmap', 'guides', 'perks',
   'holders', 'market', 'trade', 'changelog', 'contribute', 'terms', 'privacy']);
 const SERVABLE_EXT = new Set([
   '.html', '.css', '.js', '.json',
@@ -4025,6 +4174,16 @@ const server = http.createServer((request, response) => {
   if (request.url.startsWith('/api/ballot')) {
     handleBallotApi(request, response).catch(err => {
       console.error('Ballot API error:', err.message);
+      if (!response.headersSent) sendJson(response, 500, { error: 'Something went wrong.' });
+    });
+    return;
+  }
+
+  if (request.url.startsWith('/api/polls')) {
+    const url = parseRequestUrl(request);
+    if (!url) { sendJson(response, 400, { error: 'Bad request.' }); return; }
+    handlePollsApi(request, response, url).catch(err => {
+      console.error('Polls API error:', err.message);
       if (!response.headersSent) sendJson(response, 500, { error: 'Something went wrong.' });
     });
     return;
