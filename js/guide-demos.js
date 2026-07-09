@@ -201,9 +201,10 @@ function makeTradingSpec(cfg) {
       }
     },
     async choreo(ctx, b) {
-      const { stage, go, click, sleep, ok } = ctx;
+      const { stage, go, click, sleep, ok, say } = ctx;
       const tiles = stage.querySelectorAll('.gdemo-tile');
       if (b === 0) {
+        await say('gm.demo.n.browse');
         await sleep(500); if (!ok()) return;
         await go(tiles[1]); if (!ok()) return;
         tiles[1].classList.add('is-hov'); await sleep(650); if (!ok()) return;
@@ -211,37 +212,48 @@ function makeTradingSpec(cfg) {
         await go(tiles[2]); if (!ok()) return;
         tiles[2].classList.add('is-hov'); await sleep(650); if (!ok()) return;
         tiles[2].classList.remove('is-hov');
+        await say('gm.demo.n.filter');
         const chip = stage.querySelector('[data-gd="chip"]');
         await go(chip, 800); if (!ok()) return;
         await click(chip); if (!ok()) return;
         chip.classList.add('is-on');
+        await sleep(700);
       } else if (b === 1) {
+        await say('gm.demo.n.open');
         await sleep(300); if (!ok()) return;
         await go(tiles[0], 850); if (!ok()) return;
         tiles[0].classList.add('is-hov'); await sleep(450); if (!ok()) return;
         await click(tiles[0]); if (!ok()) return;
         tiles[0].classList.remove('is-hov');
         stage.classList.add('m-open');
+        await sleep(900);
       } else if (b === 2) {
         const buy = stage.querySelector('[data-gd="buy"]');
         const status = stage.querySelector('[data-gd="status"]');
+        await say('gm.demo.n.buy');
         await sleep(400); if (!ok()) return;
         await go(buy, 850); if (!ok()) return;
         await click(buy); if (!ok()) return;
+        await say('gm.demo.n.check');
         status.innerHTML = row.ok(t(cfg.fundsKey)); await sleep(750); if (!ok()) return;
         status.innerHTML = row.ok(t(cfg.fundsKey)) + row.info(t('trade.buy.confirm'));
+        await say('gm.demo.n.walletBuy');
         stage.classList.add('w-open');
         const wc = stage.querySelector('[data-gd="wconfirm"]');
         await go(wc, 800); if (!ok()) return;
         await sleep(400); if (!ok()) return;
         await click(wc); if (!ok()) return;
         stage.classList.remove('w-open');
+        await say('gm.demo.n.wait');
         status.innerHTML = row.ok(t(cfg.fundsKey)) + row.info(t('trade.buy.confirmWait'));
+        await sleep(800);
       } else if (b === 3) {
         const status = stage.querySelector('[data-gd="status"]');
+        await say('gm.demo.n.wait');
         await sleep(700); if (!ok()) return;
         status.innerHTML = row.ok(t(cfg.fundsKey)) + row.ok(t('trade.buy.done'));
         await sleep(650); if (!ok()) return;
+        await say('');
         stage.classList.add('s-open');
       }
     },
@@ -486,37 +498,47 @@ const FUND_BRIDGE = {
       doneCardHtml({ h: t('trade.bridge.done'), recv: '0.0648 ETH' });
   },
   async choreo(ctx, b) {
-    const { stage, go, click, sleep, ok, tick } = ctx;
+    const { stage, go, click, sleep, ok, tick, say } = ctx;
     const panel = stage.querySelector('[data-gd="panel"]');
     if (b === 0) {
       const buy = stage.querySelector('[data-gd="buy"]');
+      await say('gm.demo.n.buy');
       await sleep(400); if (!ok()) return;
       await go(buy, 850); if (!ok()) return;
       await click(buy); if (!ok()) return;
+      await say('gm.demo.n.check');
       panel.innerHTML = pop(fundsPanelHtml(false));
+      await sleep(900);
     } else if (b === 1) {
+      await say('gm.demo.n.quote');
       await sleep(900); if (!ok()) return;
       panel.innerHTML = fundsPanelHtml(true);
+      await sleep(900);
     } else if (b === 2) {
       const now = stage.querySelector('[data-gd="bridgenow"]');
       await go(now, 850); if (!ok()) return;
       await click(now); if (!ok()) return;
+      await say('gm.demo.n.walletMove');
       stage.classList.add('w-open');
       const wc = stage.querySelector('[data-gd="wconfirm"]');
       await go(wc, 800); if (!ok()) return;
       await sleep(400); if (!ok()) return;
       await click(wc); if (!ok()) return;
       stage.classList.remove('w-open');
+      await say('gm.demo.n.crossing');
       panel.innerHTML = pop(crossCardHtml({ title: t('trade.bridgebar.bridging'), active: 0, clock: '0:04', send: '0.0655', recv: '~0.0648 ETH' }));
       await sleep(900); if (!ok()) return;
       panel.innerHTML = crossCardHtml({ title: t('trade.bridgebar.bridging'), active: 1, clock: '0:31', send: '0.0655', recv: '~0.0648 ETH' });
       await tick(stage.querySelector('[data-gd="clock"]'), ['1:02', '2:48', '5:15', '8:24'], 500);
     } else if (b === 3) {
+      await say('gm.demo.n.crossing');
       await tick(stage.querySelector('[data-gd="clock"]'), ['11:36', '14:52', '16:40'], 420); if (!ok()) return;
       panel.innerHTML = crossCardHtml({ title: t('trade.bridgebar.bridging'), active: 2, clock: '16:40', send: '0.0655', recv: '~0.0648 ETH' });
       await sleep(800); if (!ok()) return;
+      await say('gm.demo.n.landed');
       panel.innerHTML = pop(doneCardHtml({ h: t('trade.bridge.done'), recv: '0.0648 ETH' }));
       stage.querySelector('[data-gd="bar"]').innerHTML = barOnHtml('creatures', { eth: '0.065', imx: '12.4', count: 3 });
+      await sleep(1100);
     }
   },
 };
@@ -581,26 +603,34 @@ function makeAcquireScenario(o) {
         doneCardHtml({ h: t('trade.bridge.done'), recv: o.doneRecv });
     },
     async choreo(ctx, b) {
-      const { stage, go, click, sleep, ok, tick } = ctx;
+      const { stage, go, click, sleep, ok, tick, say } = ctx;
       const panel = stage.querySelector('[data-gd="panel"]');
       if (b === 0) {
         const buy = stage.querySelector('[data-gd="buy"]');
+        await say('gm.demo.n.buy');
         await sleep(400); if (!ok()) return;
         await go(buy, 850); if (!ok()) return;
         await click(buy); if (!ok()) return;
+        await say('gm.demo.n.check');
         panel.innerHTML = pop(acquirePanelHtml(o.panel));
+        await sleep(900);
       } else if (b === 1) {
         setMock(stage, checkout());
+        await say('gm.demo.n.card');
         const btn = stage.querySelector('[data-gd="onramp"]');
         await go(btn, 850); if (!ok()) return;
         await click(btn); if (!ok()) return;
+        await say('gm.demo.n.pay');
         stage.classList.add('w-open');
         const wc = stage.querySelector('[data-gd="wconfirm"]');
         await go(wc, 900); if (!ok()) return;
         await sleep(500); if (!ok()) return;
         await click(wc); if (!ok()) return;
+        await say('gm.demo.n.paid');
         setMock(stage, { paidRow: t('gm.demo.onramp.paid') });
+        await sleep(900);
       } else if (b === 2) {
+        await say('gm.demo.n.quote');
         panel.innerHTML = loadingHtml();
         await sleep(900); if (!ok()) return;
         panel.innerHTML = pop(quoteAreaHtml(o.quote));
@@ -608,20 +638,25 @@ function makeAcquireScenario(o) {
         const now = stage.querySelector('[data-gd="bridgenow"]');
         await go(now, 900); if (!ok()) return;
         await click(now); if (!ok()) return;
+        await say('gm.demo.n.walletMove');
         stage.classList.add('w-open');
         const wc = stage.querySelector('[data-gd="wconfirm"]');
         await go(wc, 800); if (!ok()) return;
         await sleep(400); if (!ok()) return;
         await click(wc); if (!ok()) return;
         stage.classList.remove('w-open');
+        await say('gm.demo.n.crossing');
         panel.innerHTML = pop(crossCardHtml({ title: t('trade.bridgebar.bridging'), active: 1, clock: '0:42', send: o.crossSend, recv: o.crossRecv }));
         await tick(stage.querySelector('[data-gd="clock"]'), ['2:10', '4:55', '7:12'], 480);
       } else if (b === 3) {
+        await say('gm.demo.n.crossing');
         await tick(stage.querySelector('[data-gd="clock"]'), ['11:02', '15:26', '16:31'], 420); if (!ok()) return;
         panel.innerHTML = crossCardHtml({ title: t('trade.bridgebar.bridging'), active: 2, clock: '16:31', send: o.crossSend, recv: o.crossRecv });
         await sleep(800); if (!ok()) return;
+        await say('gm.demo.n.landed');
         panel.innerHTML = pop(doneCardHtml({ h: t('trade.bridge.done'), recv: o.doneRecv, took: '16m 31s' }));
         stage.querySelector('[data-gd="bar"]').innerHTML = barOnHtml('creatures', o.barEnd);
+        await sleep(1100);
       }
     },
   };
@@ -719,32 +754,41 @@ const FUND_GAS = {
       doneCardHtml({ h: t('trade.gas.bridge.done'), recv: '4.9 IMX', took: '1m 04s' });
   },
   async choreo(ctx, b) {
-    const { stage, go, click, sleep, ok, tick } = ctx;
+    const { stage, go, click, sleep, ok, tick, say } = ctx;
     const panel = stage.querySelector('[data-gd="panel"]');
     if (b === 0) {
       const buy = stage.querySelector('[data-gd="buy"]');
+      await say('gm.demo.n.buy');
       await sleep(400); if (!ok()) return;
       await go(buy, 850); if (!ok()) return;
       await click(buy); if (!ok()) return;
+      await say('gm.demo.n.check');
       panel.innerHTML = pop(gasPanelHtml(false));
       await sleep(900); if (!ok()) return;
       panel.innerHTML = gasPanelHtml(true);
+      await sleep(700);
     } else if (b === 1) {
+      await say('gm.demo.n.swap');
       const now = stage.querySelector('[data-gd="bridgenow"]');
       await go(now, 850); if (!ok()) return;
       await click(now); if (!ok()) return;
+      await say('gm.demo.n.walletMove');
       stage.classList.add('w-open');
       const wc = stage.querySelector('[data-gd="wconfirm"]');
       await go(wc, 800); if (!ok()) return;
       await sleep(400); if (!ok()) return;
       await click(wc); if (!ok()) return;
       stage.classList.remove('w-open');
+      await say('gm.demo.n.crossing');
       panel.innerHTML = pop(crossCardHtml({ title: t('trade.gas.bridgebar.bridging'), to: 'imx', gasSpark: true, active: 1, clock: '0:07', send: '0.002 ETH', recv: '~4.9 IMX', eta: '~1' }));
       await tick(stage.querySelector('[data-gd="clock"]'), ['0:19', '0:38'], 500);
     } else if (b === 2) {
+      await say('gm.demo.n.crossing');
       await tick(stage.querySelector('[data-gd="clock"]'), ['0:52', '1:04'], 450); if (!ok()) return;
+      await say('gm.demo.n.landed');
       panel.innerHTML = pop(doneCardHtml({ h: t('trade.gas.bridge.done'), recv: '4.9 IMX', took: '1m 04s' }));
       stage.querySelector('[data-gd="bar"]').innerHTML = barOnHtml('creatures', { eth: '0.084', imx: '4.9', count: 3 });
+      await sleep(1100);
     }
   },
 };
@@ -864,18 +908,22 @@ const CASH_MOVE = {
         + row.ok(t('gm.demo.cash2.next'));
   },
   async choreo(ctx, b) {
-    const { stage, go, click, sleep, ok, tick } = ctx;
+    const { stage, go, click, sleep, ok, tick, say } = ctx;
     const panel = stage.querySelector('[data-gd="panel"]');
     if (b === 0) {
+      await say('gm.demo.n.sold');
       await sleep(700); if (!ok()) return;
       panel.innerHTML = pop(row.ok(t('gm.demo.sold.cr')));
+      await sleep(900);
     } else if (b === 1) {
       // Open Cash out → the move screen: your own wallet on both sides, amount, quote.
+      await say('gm.demo.n.cashguide');
       const pill = stage.querySelector('[data-gd="cashpill"]');
       await go(pill, 900); if (!ok()) return;
       await click(pill); if (!ok()) return;
       panel.innerHTML = '';
       stage.classList.add('safety-open');
+      await say('gm.demo.n.readwarn');
       await sleep(2000); if (!ok()) return;
     } else if (b === 2) {
       // The two MetaMask taps: a one-time allowance, then the move itself.
@@ -884,29 +932,36 @@ const CASH_MOVE = {
       await go(act, 900); if (!ok()) return;
       await click(act); if (!ok()) return;
       stage.classList.remove('safety-open');
+      await say('gm.demo.n.approve');
       setMock(stage, cashApproveMock());
       stage.classList.add('w-open');
       const wc = stage.querySelector('[data-gd="wconfirm"]');
       await go(wc, 900); if (!ok()) return;
       await sleep(600); if (!ok()) return;
       await click(wc); if (!ok()) return;
+      await say('gm.demo.n.walletMove');
       setMock(stage, cashMoveMock());
       await sleep(1100); if (!ok()) return;
       await go(wc, 500); if (!ok()) return;
       await click(wc); if (!ok()) return;
       stage.classList.remove('w-open');
+      await say('gm.demo.n.crossing');
       stage.querySelector('[data-gd="bar"]').innerHTML =
         barOnHtml('creatures', { eth: '0', imx: '12.4', count: 2 }, { cashout: true });
       panel.innerHTML = pop(cashCross(0, '0:04'));
       await tick(stage.querySelector('[data-gd="clock"]'), ['0:08', '0:12'], 500);
     } else if (b === 3) {
+      await say('gm.demo.n.crossing');
       panel.innerHTML = cashCross(1, '0:21');
       await tick(stage.querySelector('[data-gd="clock"]'), ['0:34', '0:47', '0:58'], 520);
     } else if (b === 4) {
+      await say('gm.demo.n.crossing');
       await tick(stage.querySelector('[data-gd="clock"]'), ['1:05', '1:12'], 450); if (!ok()) return;
+      await say('gm.demo.n.landed');
       panel.innerHTML = pop(
         doneCardHtml({ h: t('trade.cashout.move.done'), recv: '0.0579 ETH', on: 'Ethereum', onImg: 'eth', took: '1m 12s' })
         + row.ok(t('gm.demo.cash2.next')));
+      await sleep(1100);
     }
   },
 };
@@ -953,28 +1008,38 @@ function makeLandAcquireScenario(o) {
         row.ok(t('gm.demo.readyBuy'));
     },
     async choreo(ctx, b) {
-      const { stage, go, click, sleep, ok, tick } = ctx;
+      const { stage, go, click, sleep, ok, tick, say } = ctx;
       const panel = stage.querySelector('[data-gd="panel"]');
       if (b === 0) {
         const buy = stage.querySelector('[data-gd="buy"]');
+        await say('gm.demo.n.buy');
         await sleep(400); if (!ok()) return;
         await go(buy, 850); if (!ok()) return;
         await click(buy); if (!ok()) return;
+        await say('gm.demo.n.check');
         panel.innerHTML = pop(landAcquirePanelHtml(o.short));
+        await sleep(900);
       } else if (b === 1) {
+        await say('gm.demo.n.card');
         const btn = stage.querySelector('[data-gd="onramp"]');
         await go(btn, 850); if (!ok()) return;
         await click(btn); if (!ok()) return;
+        await say('gm.demo.n.pay');
         stage.classList.add('w-open');
         const wc = stage.querySelector('[data-gd="wconfirm"]');
         await go(wc, 900); if (!ok()) return;
         await sleep(500); if (!ok()) return;
         await click(wc); if (!ok()) return;
+        await say('gm.demo.n.paid');
         setMock(stage, { paidRow: t('gm.demo.onramp.paid') });
+        await sleep(900);
       } else if (b === 2) {
+        await say('gm.demo.n.balances');
         await sleep(500); if (!ok()) return;
         await tick(stage.querySelector('[data-gd="bal-eth"]'), o.tickVals, 420); if (!ok()) return;
+        await say('gm.demo.n.landed');
         panel.innerHTML = pop(row.ok(t('gm.demo.readyBuy')));
+        await sleep(1000);
       }
     },
   };
@@ -1023,32 +1088,40 @@ const FUNDLA_CASHOUT = {
       row.ok(t('gm.demo.cash.unwrapped')) + row.ok(t('gm.demo.cash.done'));
   },
   async choreo(ctx, b) {
-    const { stage, go, click, sleep, ok } = ctx;
+    const { stage, go, click, sleep, ok, say } = ctx;
     const panel = stage.querySelector('[data-gd="panel"]');
     if (b === 0) {
+      await say('gm.demo.n.sold');
       await sleep(700); if (!ok()) return;
       panel.innerHTML = pop(row.ok(t('gm.demo.sold.la')));
+      await sleep(900);
     } else if (b === 1) {
+      await say('gm.demo.n.cashguide');
       const pill = stage.querySelector('[data-gd="cashpill"]');
       await go(pill, 900); if (!ok()) return;
       await click(pill); if (!ok()) return;
       stage.classList.add('safety-open');
+      await say('gm.demo.n.readwarn');
       await sleep(2600); if (!ok()) return;
+      await say('gm.demo.n.unwrap'); // the instruction narrates BEFORE the tap it describes
       const act = stage.querySelector('[data-gd="cashact"]');
       await go(act, 800); if (!ok()) return;
       await click(act); if (!ok()) return;
       stage.classList.remove('safety-open');
+      await say('gm.demo.n.walletMove');
       stage.classList.add('w-open');
       const wc = stage.querySelector('[data-gd="wconfirm"]');
       await go(wc, 800); if (!ok()) return;
       await sleep(400); if (!ok()) return;
       await click(wc); if (!ok()) return;
       stage.classList.remove('w-open');
+      await say('gm.demo.n.wait');
       panel.innerHTML = pop(row.info(t('gm.demo.sending')));
       await sleep(1000); if (!ok()) return;
       panel.innerHTML = row.ok(t('gm.demo.cash.unwrapped'));
       stage.querySelector('[data-gd="bar"]').innerHTML =
         barOnHtml('land', { eth: '0.196', count: 1 }, { cashout: true });
+      await sleep(800);
     } else if (b === 2) {
       await sleep(800); if (!ok()) return;
       panel.innerHTML = row.ok(t('gm.demo.cash.unwrapped')) + pop(row.ok(t('gm.demo.cash.done')));
@@ -1147,39 +1220,52 @@ function makeMovingSpec(coll) {
         : '';
     },
     async choreo(ctx, b) {
-      const { stage, go, click, sleep, ok, type } = ctx;
+      const { stage, go, click, sleep, ok, type, say } = ctx;
       const addr = stage.querySelector('[data-gd="addr"]');
       const checks = stage.querySelector('[data-gd="checks"]');
       if (b === 0) {
+        await say('gm.demo.n.pick');
         const tile = stage.querySelector('[data-gd-pick="1"]');
         await sleep(400); if (!ok()) return;
         await go(tile, 900); if (!ok()) return;
         await click(tile); if (!ok()) return;
         tile.classList.add('is-sel');
+        await sleep(700);
       } else if (b === 1) {
+        await say('gm.demo.n.paste');
         await go(addr, 850); if (!ok()) return;
         await type(addr, ADDR_BAD); if (!ok()) return;
+        await say('gm.demo.n.checking');
         checks.innerHTML = `<div class="trade-check-row is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${t(k('trade.check.checking'))}</span></div>`;
         await sleep(900); if (!ok()) return;
+        await say('gm.demo.n.badaddr');
         checks.innerHTML = pop(`<div class="trade-check-row is-err"><span aria-hidden="true">⛔</span><span>${t('trade.check.checksumBad')}</span></div>`);
+        await sleep(1200);
       } else if (b === 2) {
+        await say('gm.demo.n.retype');
         await go(addr, 700); if (!ok()) return;
         await type(addr, ADDR_GOOD); if (!ok()) return;
+        await say('gm.demo.n.checking');
         checks.innerHTML = `<div class="trade-check-row is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${t(k('trade.check.checking'))}</span></div>`;
         await sleep(900); if (!ok()) return;
+        await say('gm.demo.n.green');
         checks.innerHTML = pop(checksOk());
         stage.querySelector('[data-gd="send"]').disabled = false;
+        await sleep(1000);
       } else if (b === 3) {
         const send = stage.querySelector('[data-gd="send"]');
         const status = stage.querySelector('[data-gd="status"]');
+        await say('gm.demo.n.send');
         await go(send, 850); if (!ok()) return;
         await click(send); if (!ok()) return;
+        await say('gm.demo.n.walletSend');
         stage.classList.add('w-open');
         const wc = stage.querySelector('[data-gd="wconfirm"]');
         await go(wc, 800); if (!ok()) return;
         await sleep(400); if (!ok()) return;
         await click(wc); if (!ok()) return;
         stage.classList.remove('w-open');
+        await say('gm.demo.n.sending');
         status.innerHTML = row.info(t('gm.demo.sending'));
         await sleep(1100); if (!ok()) return;
         status.innerHTML = row.ok(`${t('gm.demo.sent')} <span class="gdemo-fauxlink">${t('trade.status.view')} ↗</span>`);
@@ -1255,14 +1341,18 @@ function makeSetupSpec(coll) {
       panel.innerHTML = b >= 3 ? row.ok(t(land ? 'gm.demo.setup.doneLand' : 'gm.demo.setup.done')) : '';
     },
     async choreo(ctx, b) {
-      const { stage, go, click, sleep, ok, tick } = ctx;
+      const { stage, go, click, sleep, ok, tick, say } = ctx;
       if (b === 0) {
+        await say('gm.demo.n.connect');
         const btn = stage.querySelector('[data-gd="connect"]');
         await sleep(400); if (!ok()) return;
         await go(btn, 900); if (!ok()) return;
         await click(btn); if (!ok()) return;
+        await say('gm.demo.n.safety');
         stage.classList.add('safety-open');
+        await sleep(900);
       } else if (b === 1) {
+        await say('gm.demo.n.timer');
         const sbar = stage.querySelector('[data-gd="sbar"]');
         const sok = stage.querySelector('[data-gd="sok"]');
         await sleep(400); if (!ok()) return;
@@ -1273,16 +1363,22 @@ function makeSetupSpec(coll) {
         await go(sok, 800); if (!ok()) return;
         await click(sok); if (!ok()) return;
         stage.classList.remove('safety-open');
+        await say('gm.demo.n.walletConnect');
         stage.classList.add('w-open');
+        await sleep(700);
       } else if (b === 2) {
+        await say('gm.demo.n.walletConnect');
         const wc = stage.querySelector('[data-gd="wconfirm"]');
         await sleep(400); if (!ok()) return;
         await go(wc, 850); if (!ok()) return;
         await click(wc); if (!ok()) return;
         stage.classList.remove('w-open');
+        await say('gm.demo.n.network');
         stage.querySelector('[data-gd="bar"]').innerHTML = pop(barOnHtml(coll, {}));
         stage.querySelectorAll('.gdemo-tile').forEach(el => el.classList.remove('is-dim'));
+        await sleep(900);
       } else if (b === 3) {
+        await say('gm.demo.n.balances');
         const bar = stage.querySelector('[data-gd="bar"]');
         await sleep(500); if (!ok()) return;
         bar.innerHTML = barOnHtml(coll, land ? { eth: '0.31', count: '—' } : { eth: '0.084', imx: '—', count: '—' });
@@ -1290,6 +1386,7 @@ function makeSetupSpec(coll) {
         bar.innerHTML = barOnHtml(coll, land ? { eth: '0.31', count: 2 } : { eth: '0.084', imx: '12.4', count: 3 });
         stage.querySelector('[data-gd="panel"]').innerHTML =
           pop(row.ok(t(land ? 'gm.demo.setup.doneLand' : 'gm.demo.setup.done')));
+        await sleep(900);
       }
     },
   };
@@ -1361,20 +1458,25 @@ function makeIngameSpec(coll) {
       stage.querySelector('[data-gd="app"]').innerHTML = appHtml(b >= 1);
     },
     async choreo(ctx, b) {
-      const { stage, go, click, sleep, ok } = ctx;
+      const { stage, go, click, sleep, ok, say } = ctx;
       if (b === 0) {
+        await say('gm.demo.n.applink');
         const btn = stage.querySelector('[data-gd="hrconnect"]');
         await sleep(400); if (!ok()) return;
         await go(btn, 900); if (!ok()) return;
         await click(btn); if (!ok()) return;
+        await say('gm.demo.n.sign');
         stage.classList.add('w-open');
+        await sleep(700);
       } else if (b === 1) {
+        await say('gm.demo.n.sign');
         const wc = stage.querySelector('[data-gd="wconfirm"]');
         await sleep(400); if (!ok()) return;
         await go(wc, 850); if (!ok()) return;
         await click(wc); if (!ok()) return;
         stage.classList.remove('w-open');
         stage.querySelector('[data-gd="app"]').innerHTML = pop(appHtml(true));
+        await sleep(700);
       } else if (b === 2) {
         await sleep(600); if (!ok()) return;
         stage.classList.add('perks-open');
@@ -1413,6 +1515,7 @@ function frameHtml(spec) {
     <div class="gdemo-stagewrap">
       <div class="gdemo-stage" aria-hidden="true">${spec.stageHtml()}
         <div class="gdemo-cursor" data-gd="cursor" aria-hidden="true"></div>
+        <div class="gdemo-sub" data-gd="sub"></div>
         <div class="gdemo-intro" data-gd="intro">
           <span class="gdemo-intro-eye" data-gd="intro-eye"></span>
           <span class="gdemo-intro-h" data-gd="intro-h"></span>
@@ -1445,7 +1548,7 @@ function createDemo(mount, spec, host = mount) {
   // swipe, replay) or finishing the tour hands control over to the manual model for good.
   const inst = { gen: 0, step: 0, visible: false, started: false, dirty: false, auto: true };
   let stage, cursor, capEl, eyeEl, beatsEl, backBtn, nextBtn, replayBtn, navPrev, navNext,
-    intro, introEye, introH;
+    intro, introEye, introH, subEl;
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -1487,7 +1590,32 @@ function createDemo(mount, spec, host = mount) {
         await sleep(ms);
       }
     },
+    // Live subtitle narrating the current micro-action. Reading-speed aware: every line
+    // earns a minimum on-screen time from its word count, and the NEXT say() awaits it —
+    // so the choreography paces itself to the reader, and no caption can blink away.
+    // ('' fades the bar, also only after the current line was readable.) The rail caption
+    // stays the accessible text (the stage is aria-hidden), so this never double-speaks.
+    async say(key) {
+      if (!subEl) return;
+      const remain = subShownAt + subMinMs - Date.now();
+      if (remain > 0) { await sleep(remain); if (!ctx.ok()) return; }
+      if (!key) { subEl.classList.remove('is-in'); subMinMs = 0; return; }
+      const text = t(key);
+      subEl.textContent = text;
+      subEl.classList.remove('is-in');
+      void subEl.offsetWidth; // restart the entrance so each new line visibly pops
+      subEl.classList.add('is-in');
+      subShownAt = Date.now();
+      subMinMs = Math.min(6800, Math.max(1800, 800 + text.split(/\s+/).length * 240));
+    },
   };
+  let subShownAt = 0, subMinMs = 0;
+  // Instant, unconditional reset — used between steps where the scene rebuilds anyway.
+  function clearSub() {
+    subEl?.classList.remove('is-in');
+    subShownAt = 0;
+    subMinMs = 0;
+  }
 
   function syncRail() {
     const b = inst.step;
@@ -1537,22 +1665,27 @@ function createDemo(mount, spec, host = mount) {
     syncRail();
     if (motionOK() && inst.visible) {
       spec.endState(ctx, b - 1);
+      clearSub(); // fresh step starts clean under its title card
       inst.dirty = true;
       ctx.ok = () => g === inst.gen;
       if (!await playIntro(b, g)) return;
       await spec.choreo(ctx, b);
       if (g !== inst.gen) return;
       inst.dirty = false;
+      // The last narration line PERSISTS on the settled scene — vanishing text was the
+      // #1 readability complaint. The next step (or a jump) clears it.
     } else {
       spec.endState(ctx, b);
+      clearSub();
       inst.dirty = false;
       inst.auto = false; // reduced motion / off-screen: never tour
     }
     setCue(true);
-    // First-visit tour: linger on the settled scene, then continue on its own.
+    // First-visit tour: linger on the settled scene — at least 1.6s, and never less
+    // than the final narration line still needs to be read — then continue on its own.
     if (inst.auto && motionOK() && inst.visible) {
       if (b >= spec.steps.length - 1) { inst.auto = false; return; }
-      await sleep(1600);
+      await sleep(Math.max(1600, subShownAt + subMinMs - Date.now()));
       if (g !== inst.gen || !inst.auto) return;
       enterStep(b + 1);
     }
@@ -1573,6 +1706,7 @@ function createDemo(mount, spec, host = mount) {
     intro     = host.querySelector('[data-gd="intro"]');
     introEye  = host.querySelector('[data-gd="intro-eye"]');
     introH    = host.querySelector('[data-gd="intro-h"]');
+    subEl     = host.querySelector('[data-gd="sub"]');
     spec.steps.forEach((st, i) => {
       const d = document.createElement('button');
       d.type = 'button';
