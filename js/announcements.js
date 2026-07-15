@@ -271,8 +271,16 @@ function channelCta(d) {
     </a>`;
 }
 
+// An announcement is worth showing only if it renders SOMETHING: body text (after the
+// ping-line strip), an image/file, or an embed. Guards against blank cards from messages
+// that carry no displayable content (e.g. a forward we couldn't unwrap, or a ping-only post).
+function hasRenderable(a) {
+  const body = a.content ? renderContent(a.content, a.mentions || {}, { stripLeadingPings: true }) : '';
+  return !!(body || (a.attachments && a.attachments.length) || (a.embeds && a.embeds.length));
+}
+
 function listView(d) {
-  const list = d.announcements || [];
+  const list = (d.announcements || []).filter(hasRenderable);
   if (!list.length) {
     return `
       <div class="ann-empty" data-reveal>
