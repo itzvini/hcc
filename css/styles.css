@@ -4762,3 +4762,180 @@ a.perx-chip:hover {
   }
   .perx-card .perx-card-glow { transition: none; }
 }
+
+/* ============================================================
+   ANNOUNCEMENTS — read-only mirror of the Discord announcements
+   channel. Feed of glass cards, one per official post.
+   ============================================================ */
+.ann-box { margin: 22px 0 4px; }
+
+.ann-topbar {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.ann-count {
+  font-family: var(--hr-sans); font-weight: 900; font-size: 11px;
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase;
+  color: var(--hr-fg-2);
+}
+.ann-channel-btn { margin-left: auto; padding: 12px 24px; font-size: 14.5px; }
+
+.ann-feed { display: flex; flex-direction: column; gap: 18px; }
+
+/* One glass card per announcement — mint accent, staggered entrance */
+.ann-card {
+  --accent: var(--hr-primary); --accent-soft: var(--hr-primary-25);
+  position: relative; overflow: hidden; isolation: isolate;
+  padding: 24px 26px; border-radius: var(--hr-radius-2xl);
+  border: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(40,39,45,.72), rgba(20,19,23,.86));
+  backdrop-filter: blur(10px);
+  box-shadow: var(--hr-shadow-3), inset 0 1px 0 rgba(255,255,255,.06);
+  opacity: 0; transform: translateY(12px);
+  animation: apply-rise .55s cubic-bezier(.2,.7,.2,1) forwards;
+  animation-delay: calc(.08s * var(--i, 0) + .06s);
+}
+.ann-card > * { position: relative; z-index: 1; }
+.ann-card .apply-aurora { z-index: 0; opacity: .32; }
+.ann-card.is-static { opacity: 1; transform: none; animation: none; }
+
+/* Header — avatar, author, timestamp, official badge */
+.ann-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.ann-avatar {
+  width: 44px; height: 44px; flex: 0 0 auto; border-radius: 50%;
+  object-fit: cover; border: 1px solid var(--hr-line-strong);
+  background: var(--hr-bg-3);
+}
+.ann-avatar.is-fallback { display: grid; place-items: center; font-size: 20px; }
+.ann-meta { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ann-author {
+  font-family: var(--hr-sans); font-weight: 800; font-size: 15.5px; color: var(--hr-fg-0);
+}
+.ann-sub { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ann-badge {
+  font-family: var(--hr-sans); font-weight: 900; font-size: 9.5px;
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase;
+  color: var(--hr-banana); background: var(--hr-banana-25);
+  border: 1px solid color-mix(in srgb, var(--hr-banana) 40%, transparent);
+  padding: 3px 9px; border-radius: var(--hr-radius-pill);
+}
+.ann-when { font-size: 12px; font-weight: 700; color: var(--hr-fg-3); }
+.ann-edited {
+  font-size: 11px; font-weight: 700; color: var(--hr-fg-3); font-style: italic;
+}
+
+/* Body — rendered Discord markdown */
+.ann-body { color: var(--hr-fg-1); font-size: 15px; line-height: 1.65; }
+.ann-body p { margin: 0 0 10px; }
+.ann-body p:last-child { margin-bottom: 0; }
+.ann-body strong { color: var(--hr-fg-0); font-weight: 800; }
+.ann-body a.ann-link { color: var(--hr-primary); font-weight: 700; text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--hr-primary) 45%, transparent); }
+.ann-body a.ann-link:hover { color: var(--hr-fg-0); border-bottom-color: var(--hr-primary); }
+.ann-mh { font-family: var(--hr-sans); font-weight: 900; color: var(--hr-fg-0); line-height: 1.2; margin: 6px 0 8px; }
+.ann-mh-1 { font-size: 21px; }
+.ann-mh-2 { font-size: 18px; }
+.ann-mh-3 { font-size: 15.5px; }
+.ann-ul { margin: 4px 0 12px; padding-left: 20px; }
+.ann-ul li { margin: 3px 0; }
+.ann-quote {
+  margin: 6px 0 12px; padding: 6px 0 6px 14px;
+  border-left: 3px solid color-mix(in srgb, var(--hr-primary) 55%, transparent);
+  color: var(--hr-fg-2);
+}
+.ann-code {
+  margin: 8px 0 12px; padding: 12px 14px; overflow-x: auto;
+  background: rgba(0,0,0,.32); border: 1px solid var(--hr-line);
+  border-radius: var(--hr-radius-md);
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--hr-fg-1);
+}
+.ann-code-inline {
+  padding: 2px 6px; border-radius: var(--hr-radius-xs);
+  background: rgba(0,0,0,.32); border: 1px solid var(--hr-line);
+  font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--hr-fg-0);
+}
+.ann-emoji { width: 1.35em; height: 1.35em; vertical-align: -0.28em; object-fit: contain; }
+.ann-ts {
+  padding: 1px 6px; border-radius: var(--hr-radius-xs);
+  background: color-mix(in srgb, var(--hr-secondary) 18%, transparent); color: var(--hr-fg-0); font-weight: 700;
+}
+.ann-mention {
+  padding: 1px 6px; border-radius: var(--hr-radius-xs);
+  background: var(--hr-secondary-25); color: var(--hr-secondary); font-weight: 700;
+}
+.ann-spoiler {
+  background: var(--hr-fg-3); color: transparent; border-radius: var(--hr-radius-xs);
+  padding: 0 4px; cursor: pointer; transition: color .15s, background .15s;
+}
+.ann-spoiler.is-open { background: rgba(0,0,0,.3); color: var(--hr-fg-1); cursor: default; }
+
+/* Media — images + file chips */
+.ann-media { margin-top: 14px; display: grid; gap: 8px; border-radius: var(--hr-radius-lg); overflow: hidden; }
+.ann-media.is-single { grid-template-columns: 1fr; }
+.ann-media.is-grid { grid-template-columns: repeat(2, 1fr); }
+.ann-shot { display: block; overflow: hidden; border-radius: var(--hr-radius-md); border: 1px solid var(--hr-line); background: rgba(0,0,0,.25); }
+.ann-shot img { display: block; width: 100%; height: 100%; object-fit: cover; max-height: 440px; transition: transform .3s cubic-bezier(.2,.7,.2,1); }
+.ann-media.is-grid .ann-shot img { aspect-ratio: 16 / 10; }
+.ann-shot:hover img { transform: scale(1.03); }
+.ann-files { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.ann-file {
+  display: inline-flex; align-items: center; gap: 8px; align-self: flex-start;
+  padding: 9px 14px; border-radius: var(--hr-radius-md);
+  background: var(--hr-bg-3); border: 1px solid var(--hr-line-strong);
+  color: var(--hr-fg-1); font-weight: 700; font-size: 13.5px; text-decoration: none;
+  transition: background .2s, transform .2s;
+}
+.ann-file:hover { background: var(--hr-bg-2); transform: translateY(-1px); color: var(--hr-fg-0); }
+.ann-file-ico { font-size: 15px; }
+
+/* Embeds — a lavender-edged sub-card */
+.ann-embed {
+  margin-top: 14px; padding: 14px 16px;
+  border-radius: var(--hr-radius-md);
+  border-left: 3px solid color-mix(in srgb, var(--hr-secondary) 60%, transparent);
+  background: color-mix(in srgb, var(--hr-secondary) 8%, rgba(0,0,0,.22));
+}
+.ann-embed-title { display: block; font-family: var(--hr-sans); font-weight: 800; font-size: 15px; color: var(--hr-fg-0); margin-bottom: 6px; text-decoration: none; }
+a.ann-embed-title:hover { color: var(--hr-secondary); }
+.ann-embed-desc { color: var(--hr-fg-1); font-size: 14px; line-height: 1.6; }
+.ann-embed-img { margin-top: 10px; }
+
+/* Footer — view-on-Discord link */
+.ann-foot { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--hr-line); }
+.ann-discord-link {
+  display: inline-flex; align-items: center; gap: 8px;
+  color: var(--hr-fg-2); font-weight: 700; font-size: 13px; text-decoration: none;
+  transition: color .2s;
+}
+.ann-discord-link:hover { color: #8b95ff; }
+.ann-discord-logo { display: inline-flex; }
+.ann-discord-logo svg { width: 20px; height: 15px; display: block; fill: currentColor; }
+
+/* Empty + error states */
+.ann-empty, .ann-error {
+  position: relative; overflow: hidden; isolation: isolate;
+  text-align: center; padding: 48px 30px;
+  border-radius: var(--hr-radius-2xl); border: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(40,39,45,.72), rgba(20,19,23,.82));
+  backdrop-filter: blur(10px);
+  box-shadow: var(--hr-shadow-3), inset 0 1px 0 rgba(255,255,255,.06);
+}
+.ann-empty > *, .ann-error > * { position: relative; z-index: 1; }
+.ann-empty .apply-aurora { z-index: 0; opacity: .4; }
+.ann-empty-ico { font-size: 40px; margin-bottom: 10px; }
+.ann-empty h4 { font-family: var(--hr-sans); font-weight: 900; font-size: 20px; color: var(--hr-fg-0); margin: 0 0 8px; }
+.ann-empty p { color: var(--hr-fg-2); max-width: 420px; margin: 0 auto 22px; font-size: 14.5px; }
+.ann-error p { color: var(--hr-fg-1); margin: 0 0 16px; }
+
+@media (max-width: 560px) {
+  .ann-card { padding: 20px 18px; }
+  .ann-media.is-grid { grid-template-columns: 1fr; }
+  .ann-channel-btn { margin-left: 0; width: 100%; justify-content: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ann-card { opacity: 1; transform: none; animation: none !important; }
+  .ann-shot img, .ann-file, .ann-discord-link, .ann-spoiler { transition: none; }
+  .ann-shot:hover img { transform: none; }
+}

@@ -52,6 +52,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
     <div class="nav-drawer" id="nav-drawer">
       <div class="tab-list" role="tablist" aria-label="Highrise Creature Club pages">
         <button class="page-tab is-active" type="button" role="tab" id="tab-club" aria-selected="true" aria-controls="panel-club" data-tab="club" data-i18n="nav.club">The Club</button>
+        <button class="page-tab" type="button" role="tab" id="tab-announcements" aria-selected="false" aria-controls="panel-announcements" data-tab="announcements" data-i18n="nav.announcements">Announcements</button>
         <button class="page-tab" type="button" role="tab" id="tab-council" aria-selected="false" aria-controls="panel-council" data-tab="council" data-i18n="nav.council">Council</button>
         <button class="page-tab" type="button" role="tab" id="tab-polls" aria-selected="false" aria-controls="panel-polls" data-tab="polls" data-i18n="nav.polls">Polls &amp; Votes</button>
         <button class="page-tab" type="button" role="tab" id="tab-roadmap" aria-selected="false" aria-controls="panel-roadmap" data-tab="roadmap" data-i18n="nav.roadmap">Roadmap</button>
@@ -249,6 +250,20 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
   <details><summary data-i18n="faq.q9">Which marketplace do I use — and how do I avoid fakes?</summary><p data-i18n-html="faq.a9">Gen 1 Creatures trade on <strong>Token Trove</strong> (Immutable zkEVM). LAND and Gen 2 live on <strong>OpenSea</strong>, under the "Highrise LAND" collection. Important: Gen 1 Creatures are <strong>not</strong> on OpenSea — any "Highrise Creature" or "Highrise Creature Club" collection you see there is a fake scam. Always reach a marketplace through the official links in the Highrise Discord, never a random DM.</p></details>
 </section>
 
+</main>
+
+<main id="panel-announcements" class="tab-panel" role="tabpanel" aria-labelledby="tab-announcements" hidden>
+<section class="wrap">
+  <div class="eyebrow" data-i18n="ann.eyebrow">Straight from Discord</div>
+  <h2 data-i18n="ann.h2">Announcements</h2>
+  <p class="lead" data-i18n="ann.lead">Every official Creature Club announcement, mirrored here the moment it's posted. No Discord account needed to read along.</p>
+
+  <div id="announcements-app" class="ann-box" aria-live="polite" aria-busy="true">
+    <div class="apply-loading"><div class="apply-spinner"></div></div>
+  </div>
+
+  <p class="apply-fineprint" data-i18n="ann.fineprint">This is a read-only mirror of the official announcements channel. Edits and deletions in Discord are reflected here automatically.</p>
+</section>
 </main>
 
 <main id="panel-council" class="tab-panel" role="tabpanel" aria-labelledby="tab-council" hidden>

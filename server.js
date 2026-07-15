@@ -41,6 +41,20 @@ const root = __dirname;
 const port = Number(process.env.PORT || 3000);
 const host = '0.0.0.0';
 
+// --- Announcements feed (public Discord mirror) ---
+// The Discord bot POSTs the announcements channel's messages to
+// /api/announcements/ingest, authenticated with an HMAC-SHA256 of the raw request
+// body under ANNOUNCEMENTS_INGEST_SECRET. No secret set → ingest is disabled (503),
+// so a misconfigured deploy can never accept unauthenticated writes. The website
+// holds NO credential to the bot's database; the bot is the only thing that reads
+// Discord, and it only ever pushes this one channel — so the worst a leaked secret
+// buys an attacker is the ability to append a fake announcement, never to read
+// anything. Idempotency + the channel/thread guards below mean edits never double a
+// card, deletes hide instantly, and thread replies are refused outright.
+const ANNOUNCEMENTS_CHANNEL_ID  = String(process.env.ANNOUNCEMENTS_CHANNEL_ID || '1083852782722887691').trim();
+const DISCORD_GUILD_ID          = String(process.env.DISCORD_GUILD_ID || '890228388311228456').trim();
+const ANNOUNCEMENTS_INGEST_SECRET = process.env.ANNOUNCEMENTS_INGEST_SECRET || '';
+
 // --- Holder stats ---
 const CREATURE_HOLDERS_URL    = 'https://explorer.immutable.com/api/v2/tokens/0xCf44b1cBC959295bbBb49935B1b339cC0AA77cdA/holders';
 const LAND_HOLDERS_URL        = 'https://eth.blockscout.com/api/v2/tokens/0x8bf3a40ea2337e6e4f6e540680ea6390cb3b4e11/holders';
@@ -3724,6 +3738,216 @@ async function handleBallotApi(request, response) {
 // PRIVACY: the vote row (voter ↔ choice) exists only to enforce the one-vote rule;
 // it never leaves the server. The audit event records THAT a vote was cast, never
 // the choice. No running tally while a poll is open (same rule as the election).
+// Read the raw request body as a Buffer (bounded). The ingest route needs the exact
+// bytes to verify the HMAC, so it can't go through readJsonBody (which parses).
+function readRawBody(request, limitBytes = 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    let size = 0, aborted = false; const chunks = [];
+    request.on('data', chunk => {
+      if (aborted) return;
+      size += chunk.length;
+      if (size > limitBytes) {
+        aborted = true; chunks.length = 0;
+        reject(Object.assign(new Error('Request body too large.'), { statusCode: 413 }));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on('end', () => { if (!aborted) resolve(Buffer.concat(chunks)); });
+    request.on('error', err => { if (!aborted) reject(err); });
+  });
+}
+
+// Constant-time hex compare that never throws on malformed input.
+function safeEqualHex(a, b) {
+  try {
+    const ba = Buffer.from(String(a || ''), 'hex');
+    const bb = Buffer.from(String(b || ''), 'hex');
+    return ba.length > 0 && ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+  } catch { return false; }
+}
+
+// Verify the ingest HMAC: sha256(secret, rawBody). The header may be bare hex or
+// prefixed 'sha256='. Replay of a captured request is harmless — every write is an
+// idempotent upsert/delete keyed on the message id — so no timestamp/nonce is needed.
+function verifyIngestSignature(rawBody, headerVal) {
+  if (!ANNOUNCEMENTS_INGEST_SECRET) return false;
+  const provided = String(headerVal || '').trim().replace(/^sha256=/i, '');
+  const expected = crypto.createHmac('sha256', ANNOUNCEMENTS_INGEST_SECRET).update(rawBody).digest('hex');
+  return safeEqualHex(provided, expected);
+}
+
+const DISCORD_IMG_HOSTS = new Set(['cdn.discordapp.com', 'media.discordapp.net']);
+// Keep only https URLs served from Discord's own CDNs (matches the page CSP img-src).
+// Anything else is dropped so a malformed/hostile payload can't point an <img> off-site.
+function safeDiscordImg(url) {
+  try {
+    const u = new URL(String(url));
+    return u.protocol === 'https:' && DISCORD_IMG_HOSTS.has(u.host) ? u.href : null;
+  } catch { return null; }
+}
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|avif)(\?|$)/i;
+function isImageAttachment(att) {
+  return /^image\//i.test(att?.content_type || '') || IMAGE_EXT_RE.test(att?.filename || att?.url || '');
+}
+
+function discordMessageUrl(messageId) {
+  return `https://discord.com/channels/${DISCORD_GUILD_ID}/${ANNOUNCEMENTS_CHANNEL_ID}/${messageId}`;
+}
+
+// Bound + normalize an incoming Discord message into the row our DB stores. Trusted
+// source (the bot), but still capped so one bad payload can't bloat the table.
+function normalizeAnnouncementMessage(msg) {
+  const clip = (s, n) => String(s ?? '').slice(0, n);
+  const attachments = Array.isArray(msg.attachments) ? msg.attachments.slice(0, 10).map(a => ({
+    url: clip(a.url, 600),
+    filename: clip(a.filename, 200),
+    content_type: clip(a.content_type, 100),
+    width: Number(a.width) || null,
+    height: Number(a.height) || null,
+    size: Number(a.size) || null,
+  })) : [];
+  const embeds = Array.isArray(msg.embeds) ? msg.embeds.slice(0, 10).map(e => ({
+    title: clip(e.title, 400),
+    description: clip(e.description, 4000),
+    url: clip(e.url, 600),
+    image: clip(e.image?.url || e.image, 600),
+    thumbnail: clip(e.thumbnail?.url || e.thumbnail, 600),
+  })) : [];
+  return {
+    messageId: String(msg.id),
+    channelId: String(msg.channel_id),
+    authorId: msg.author?.id ? String(msg.author.id) : null,
+    authorName: clip(msg.author?.username, 200) || null,
+    authorDisplay: clip(msg.author?.display_name || msg.author?.global_name, 200) || null,
+    authorAvatar: clip(msg.author?.avatar, 600) || null,
+    content: clip(msg.content, 8000),
+    attachments,
+    embeds,
+    postedAt: msg.timestamp,
+    editedAt: msg.edited_timestamp || null,
+  };
+}
+
+// Shape a stored row for the public feed. Announcements are already public in Discord,
+// so nothing here is sensitive — but URLs are still constrained to Discord's CDNs and
+// image/file attachments are split so the client renders each correctly.
+function shapeAnnouncement(row) {
+  const atts = Array.isArray(row.attachments) ? row.attachments : [];
+  const attachments = atts.map(a => {
+    if (isImageAttachment(a)) {
+      const src = safeDiscordImg(a.url);
+      return src ? { type: 'image', url: src, name: a.filename || '', width: a.width || null, height: a.height || null } : null;
+    }
+    // Non-image files render as a download chip; the href is a plain link (not an <img>).
+    return a.url ? { type: 'file', url: String(a.url), name: a.filename || 'attachment', size: a.size || null } : null;
+  }).filter(Boolean);
+
+  const embeds = (Array.isArray(row.embeds) ? row.embeds : []).map(e => ({
+    title: e.title || '',
+    description: e.description || '',
+    url: /^https?:\/\//i.test(e.url || '') ? e.url : '',
+    image: safeDiscordImg(e.image) || safeDiscordImg(e.thumbnail) || '',
+  })).filter(e => e.title || e.description || e.image);
+
+  return {
+    id: row.message_id,
+    url: discordMessageUrl(row.message_id),
+    author: {
+      name: row.author_display || row.author_name || 'Highrise Creature Club',
+      avatar: safeDiscordImg(row.author_avatar) || null,
+    },
+    content: row.content || '',
+    attachments,
+    embeds,
+    postedAt: row.posted_at ? new Date(row.posted_at).toISOString() : null,
+    editedAt: row.edited_at ? new Date(row.edited_at).toISOString() : null,
+  };
+}
+
+// Announcements feed API.
+//   GET  /api/announcements          → public feed (live rows, newest first)
+//   POST /api/announcements/ingest   → the bot mirrors create/edit/delete here.
+// INGEST CONTRACT (see the config block near the top of this file):
+//   Auth: header `X-HCC-Signature: sha256=<hmac>` where hmac = HMAC-SHA256(secret, rawBody).
+//   Body: a single `{ type, message }` or a batch `{ events: [{ type, message }, ...] }`.
+//     type 'upsert' (default) stores/updates; 'delete' soft-deletes by message id.
+//   GUARDS: a message is only stored when it belongs to ANNOUNCEMENTS_CHANNEL_ID and
+//   carries no thread_id — so thread replies under an announcement, and anything from
+//   another channel, are refused. Upsert is keyed on the message id, so an edited
+//   message updates its one card instead of ever creating a second.
+async function handleAnnouncementsApi(request, response, url) {
+  const { pathname } = url;
+
+  if (pathname === '/api/announcements' && request.method === 'GET') {
+    const rows = await db.getAnnouncements({ limit: 50 });
+    sendJson(response, 200, {
+      channelUrl: `https://discord.com/channels/${DISCORD_GUILD_ID}/${ANNOUNCEMENTS_CHANNEL_ID}`,
+      announcements: rows.map(shapeAnnouncement),
+    }, { 'Cache-Control': 'public, max-age=60' });
+    return;
+  }
+
+  if (pathname === '/api/announcements/ingest' && request.method === 'POST') {
+    if (!ANNOUNCEMENTS_INGEST_SECRET) {
+      sendJson(response, 503, { error: 'Announcement ingest is not configured.' });
+      return;
+    }
+    // Light rate limit — the bot batches, so this only ever trips on abuse.
+    const wait = rateLimited(`ann-ingest:${request.socket.remoteAddress || 'unknown'}`, 240, 60 * 1000);
+    if (wait) { sendJson(response, 429, { error: 'Too many requests.' }, { 'Retry-After': String(wait) }); return; }
+
+    let raw;
+    try { raw = await readRawBody(request); }
+    catch (err) { sendJson(response, err.statusCode || 400, { error: err.message }); return; }
+
+    if (!verifyIngestSignature(raw, request.headers['x-hcc-signature'])) {
+      db.recordEvent({ event: 'announcement.ingest', ok: false, detail: { reason: 'bad_signature' } });
+      sendJson(response, 401, { error: 'Invalid signature.' });
+      return;
+    }
+
+    let body;
+    try { body = JSON.parse(raw.toString('utf8') || '{}'); }
+    catch { sendJson(response, 400, { error: 'Invalid JSON.' }); return; }
+
+    const events = Array.isArray(body.events) ? body.events
+      : (body.message || body.type) ? [{ type: body.type, message: body.message }] : [];
+    if (!events.length) { sendJson(response, 400, { error: 'No events.' }); return; }
+    if (events.length > 200) { sendJson(response, 413, { error: 'Too many events in one request.' }); return; }
+
+    let upserted = 0, deleted = 0, skipped = 0;
+    for (const ev of events) {
+      const msg = ev?.message || {};
+      const type = ev?.type === 'delete' ? 'delete' : 'upsert';
+      const messageId = msg.id != null ? String(msg.id) : null;
+      if (!messageId) { skipped++; continue; }
+
+      if (type === 'delete') {
+        // Safe to delete by id alone: only ids we actually stored exist in the table,
+        // and thread replies were never stored, so this can't touch anything but a
+        // real announcement.
+        await db.deleteAnnouncement(messageId);
+        deleted++;
+        continue;
+      }
+
+      // Upsert guards: right channel, and NOT a thread reply.
+      if (String(msg.channel_id) !== ANNOUNCEMENTS_CHANNEL_ID || msg.thread_id) { skipped++; continue; }
+      if (!msg.timestamp) { skipped++; continue; }
+      await db.upsertAnnouncement(normalizeAnnouncementMessage(msg));
+      upserted++;
+    }
+
+    db.recordEvent({ event: 'announcement.ingest', ok: true, detail: { upserted, deleted, skipped } });
+    sendJson(response, 200, { ok: true, upserted, deleted, skipped });
+    return;
+  }
+
+  sendJson(response, request.method === 'GET' || request.method === 'POST' ? 404 : 405,
+    { error: request.method === 'GET' || request.method === 'POST' ? 'Not found' : 'Method not allowed.' });
+}
+
 async function handlePollsApi(request, response, url) {
   const { pathname } = url;
   const cookies = auth.parseCookies(request);
@@ -4052,7 +4276,7 @@ const gzipCache = new Map(); // filePath → { etag, body } — one gzipped copy
 // router in js/app.js opens the matching tab from location.pathname. 'apply' is a
 // legacy alias — the old Apply & Vote tab now lives at /council/vote and the client
 // router rewrites it — kept so bookmarks and old OAuth redirects keep working.
-const TAB_ROUTES = new Set(['club', 'council', 'apply', 'polls', 'roadmap', 'guides', 'perks',
+const TAB_ROUTES = new Set(['club', 'announcements', 'council', 'apply', 'polls', 'roadmap', 'guides', 'perks',
   'holders', 'market', 'trade', 'changelog', 'contribute', 'terms', 'privacy']);
 const SERVABLE_EXT = new Set([
   '.html', '.css', '.js', '.json',
@@ -4068,7 +4292,7 @@ const CSP = [
   "default-src 'self'",
   "script-src 'self' https://cdn.jsdelivr.net",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: https://cdn.highrisegame.com https://cdn.discordapp.com https://cdn-production.joinhighrise.com https://i2c.seadn.io",
+  "img-src 'self' data: https://cdn.highrisegame.com https://cdn.discordapp.com https://media.discordapp.net https://cdn-production.joinhighrise.com https://i2c.seadn.io",
   "font-src 'self'",
   "connect-src 'self'",
   "frame-src https://www.youtube.com",
@@ -4192,6 +4416,16 @@ const server = http.createServer((request, response) => {
     if (!url) { sendJson(response, 400, { error: 'Bad request.' }); return; }
     handlePollsApi(request, response, url).catch(err => {
       console.error('Polls API error:', err.message);
+      if (!response.headersSent) sendJson(response, 500, { error: 'Something went wrong.' });
+    });
+    return;
+  }
+
+  if (request.url.startsWith('/api/announcements')) {
+    const url = parseRequestUrl(request);
+    if (!url) { sendJson(response, 400, { error: 'Bad request.' }); return; }
+    handleAnnouncementsApi(request, response, url).catch(err => {
+      console.error('Announcements API error:', err.message);
       if (!response.headersSent) sendJson(response, 500, { error: 'Something went wrong.' });
     });
     return;
