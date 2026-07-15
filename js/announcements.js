@@ -77,11 +77,30 @@ function fmtDiscordTs(unix, style) {
   } catch { return d.toISOString(); }
 }
 
-function renderContent(raw) {
+// Drop a leading line that's nothing but Discord pings (the "@role @role" / "@everyone"
+// header ping most announcements open with). Website readers aren't being pinged, so it's
+// pure noise up top. Only the first such line is removed; real content is untouched.
+function stripLeadingPingLine(raw) {
+  let lines = String(raw).split('\n');
+  while (lines.length && lines[0].trim() === '') lines.shift();
+  if (lines.length) {
+    const stripped = lines[0]
+      .replace(/<@[!&]?\d+>/g, '')
+      .replace(/<#\d+>/g, '')
+      .replace(/@everyone|@here/g, '')
+      .trim();
+    if (stripped === '') lines.shift();
+  }
+  while (lines.length && lines[0].trim() === '') lines.shift();
+  return lines.join('\n');
+}
+
+function renderContent(raw, mentions = {}, { stripLeadingPings = false } = {}) {
   if (!raw) return '';
   const tokens = [];
   const stash = html => { tokens.push(html); return `${MARK}${tokens.length - 1}${MARK}`; };
-  let s = String(raw);
+  let s = stripLeadingPings ? stripLeadingPingLine(String(raw)) : String(raw);
+  if (!s) return '';
 
   // 1. Fenced code blocks — captured from the RAW source, escaped once here.
   s = s.replace(/```(?:[a-zA-Z0-9+#.\-]*\n)?([\s\S]*?)```/g, (_, code) =>
@@ -105,10 +124,21 @@ function renderContent(raw) {
   // 7. Discord timestamps <t:unix:style>.
   s = s.replace(/&lt;t:(\d{1,15})(?::([tTdDfFR]))?&gt;/g, (_, unix, style) =>
     `<time class="ann-ts">${esc(fmtDiscordTs(unix, style))}</time>`);
-  // 8. Mentions — we don't resolve names, so render neutral pills. @everyone/@here stay as text.
-  s = s.replace(/&lt;@!?(\d{5,25})&gt;/g, `<span class="ann-mention">${esc(t('ann.mention.user'))}</span>`);
-  s = s.replace(/&lt;@&amp;(\d{5,25})&gt;/g, `<span class="ann-mention">${esc(t('ann.mention.role'))}</span>`);
-  s = s.replace(/&lt;#(\d{5,25})&gt;/g, `<span class="ann-mention">${esc(t('ann.mention.channel'))}</span>`);
+  // 8. Mentions — resolve to real names from the server-supplied map (member = the
+  // person's SERVER display name, which is what matches their Highrise username). Falls
+  // back to a neutral pill when an id isn't in the map. @everyone/@here stay as text.
+  const pill = (id, kind) => {
+    const name = mentions[String(id)]?.name || '';
+    if (kind === 'channel') {
+      return name ? `<span class="ann-mention is-channel">#${esc(name)}</span>`
+                  : `<span class="ann-mention is-channel">${esc(t('ann.mention.channel'))}</span>`;
+    }
+    if (name) return `<span class="ann-mention">@${esc(name)}</span>`;
+    return `<span class="ann-mention">${esc(kind === 'role' ? t('ann.mention.role') : t('ann.mention.user'))}</span>`;
+  };
+  s = s.replace(/&lt;@!?(\d{5,25})&gt;/g, (_, id) => pill(id, 'user'));
+  s = s.replace(/&lt;@&amp;(\d{5,25})&gt;/g, (_, id) => pill(id, 'role'));
+  s = s.replace(/&lt;#(\d{5,25})&gt;/g, (_, id) => pill(id, 'channel'));
 
   // 9. Inline styling. Spoiler first so its content isn't eaten by other passes.
   s = s.replace(/\|\|([^\n]+?)\|\|/g, '<span class="ann-spoiler">$1</span>');
@@ -188,14 +218,14 @@ function attachmentsNode(atts) {
   return imgGrid + fileList;
 }
 
-function embedsNode(embeds) {
+function embedsNode(embeds, mentions) {
   if (!embeds?.length) return '';
   return embeds.map(e => `
     <div class="ann-embed">
       ${e.title ? (e.url
         ? `<a class="ann-embed-title" href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">${esc(e.title)}</a>`
         : `<div class="ann-embed-title">${esc(e.title)}</div>`) : ''}
-      ${e.description ? `<div class="ann-embed-desc">${renderContent(e.description)}</div>` : ''}
+      ${e.description ? `<div class="ann-embed-desc">${renderContent(e.description, mentions || {})}</div>` : ''}
       ${e.image ? `<a class="ann-shot ann-embed-img" href="${esc(e.image)}" target="_blank" rel="noopener noreferrer"><img src="${esc(e.image)}" alt="" loading="lazy" /></a>` : ''}
     </div>`).join('');
 }
@@ -203,11 +233,12 @@ function embedsNode(embeds) {
 function card(a, i) {
   const editedChip = a.editedAt
     ? `<span class="ann-edited" title="${esc(fmtFull(a.editedAt))}">${esc(t('ann.edited'))}</span>` : '';
-  const content = a.content ? `<div class="ann-body">${renderContent(a.content)}</div>` : '';
+  const rendered = a.content ? renderContent(a.content, a.mentions || {}, { stripLeadingPings: true }) : '';
+  const content = rendered ? `<div class="ann-body">${rendered}</div>` : '';
   return `
     <article class="ann-card ${revealed ? 'is-static' : ''}" style="--i:${i}">
       <div class="apply-aurora" aria-hidden="true"></div>
-      <header class="ann-head">
+      <div class="ann-head">
         ${avatarNode(a.author)}
         <div class="ann-meta">
           <span class="ann-author">${esc(a.author.name)}</span>
@@ -217,16 +248,16 @@ function card(a, i) {
             ${editedChip}
           </span>
         </div>
-      </header>
+      </div>
       ${content}
       ${attachmentsNode(a.attachments)}
-      ${embedsNode(a.embeds)}
-      <footer class="ann-foot">
+      ${embedsNode(a.embeds, a.mentions)}
+      <div class="ann-foot">
         <a class="ann-discord-link" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">
           <span class="ann-discord-logo" aria-hidden="true">${DISCORD_SVG}</span>
           <span>${esc(t('ann.viewon'))}</span>
         </a>
-      </footer>
+      </div>
     </article>`;
 }
 

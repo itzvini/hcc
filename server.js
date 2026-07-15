@@ -3814,6 +3814,18 @@ function normalizeAnnouncementMessage(msg) {
     image: clip(e.image?.url || e.image, 600),
     thumbnail: clip(e.thumbnail?.url || e.thumbnail, 600),
   })) : [];
+  // Resolved mention names, keyed by snowflake id. Bounded and type-checked so a bad
+  // payload can't bloat the row; names are escaped at render time, never trusted as HTML.
+  const mentions = {};
+  const rawMentions = (msg.mentions && typeof msg.mentions === 'object' && !Array.isArray(msg.mentions)) ? msg.mentions : {};
+  let mcount = 0;
+  for (const [id, val] of Object.entries(rawMentions)) {
+    if (mcount >= 200) break;
+    if (!/^\d{1,25}$/.test(id) || !val) continue;
+    const type = ['role', 'user', 'channel'].includes(val.type) ? val.type : 'user';
+    mentions[id] = { type, name: clip(val.name, 100) };
+    mcount++;
+  }
   return {
     messageId: String(msg.id),
     channelId: String(msg.channel_id),
@@ -3824,6 +3836,7 @@ function normalizeAnnouncementMessage(msg) {
     content: clip(msg.content, 8000),
     attachments,
     embeds,
+    mentions,
     postedAt: msg.timestamp,
     editedAt: msg.edited_timestamp || null,
   };
@@ -3860,6 +3873,7 @@ function shapeAnnouncement(row) {
     content: row.content || '',
     attachments,
     embeds,
+    mentions: (row.mentions && typeof row.mentions === 'object') ? row.mentions : {},
     postedAt: row.posted_at ? new Date(row.posted_at).toISOString() : null,
     editedAt: row.edited_at ? new Date(row.edited_at).toISOString() : null,
   };
