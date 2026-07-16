@@ -4422,6 +4422,20 @@ function resolveFile(requestUrl) {
   return filePath;
 }
 
+// A link pasted into chat / a game / a sentence often picks up trailing punctuation —
+// e.g. "https://hcc.highrise.game/announcements." → the request path is "/announcements.",
+// which matches no route and 404s. Given a request URL, return the same URL with trailing
+// punctuation stripped from the PATH (query preserved) when that actually changes it and
+// leaves a non-empty path, else null. Only used as a last resort on would-be 404s, so it
+// can never affect a URL that already resolves.
+function trimmedTrailingPunctUrl(requestUrl) {
+  let url;
+  try { url = new URL(requestUrl, `http://${host}:${port}`); } catch { return null; }
+  const stripped = url.pathname.replace(/[.,;:!?'")\]]+$/g, '');
+  if (stripped === url.pathname || stripped === '' || stripped === '/') return null;
+  return stripped + url.search;
+}
+
 // Parse a request URL against the (untrusted) Host header. A malformed Host makes
 // `new URL` throw synchronously — before any async .catch() attaches — which would
 // crash the process; return null instead so routes can answer 400.
@@ -4566,6 +4580,14 @@ const server = http.createServer((request, response) => {
   const filePath = resolveFile(request.url);
 
   if (!filePath) {
+    // Rescue links that arrived with trailing punctuation (e.g. "/announcements." from a
+    // pasted URL): if dropping it yields a real route, redirect there instead of 404ing.
+    const cleaned = trimmedTrailingPunctUrl(request.url);
+    if (cleaned && resolveFile(cleaned)) {
+      response.writeHead(302, { Location: cleaned, 'Cache-Control': 'no-store' });
+      response.end();
+      return;
+    }
     response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     response.end('Not found');
     return;
