@@ -298,6 +298,20 @@ function esc(s) {
 function shortWallet(a) {
   return a && a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : (a || '');
 }
+// A small, reusable copy-to-clipboard chip for long codes people need to lift out
+// whole — a Creature's owner wallet (so they can hunt down a lost creature), its full
+// token id. We keep the compact display and put the FULL value on the button. Shows a
+// copy glyph; flips to a mint "Copied!" for a beat on success (handled in copyValue).
+function copyBtnHtml(value, ariaKey) {
+  if (!value) return '';
+  const label = esc(t(ariaKey));
+  return `<button type="button" class="trade-copy" data-act="copy" data-copy="${esc(value)}" aria-label="${label}" title="${label}">`
+    + `<svg class="trade-copy-ic" viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" focusable="false">`
+    + `<rect x="9" y="9" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>`
+    + `<path d="M6 15H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`
+    + `</svg>`
+    + `<span class="trade-copy-label">${esc(t('trade.modal.copied'))}</span></button>`;
+}
 const root = () => document.getElementById('trade-app');
 
 // Small ⓘ disclosure for non-crucial detail: hover on desktop, tap on touch. Keeps the
@@ -1534,7 +1548,25 @@ function slimeModalMeta(it) {
     rankOf: browseCollectionTotal,
     coords: it.coords,
     parcelName: it.parcelName,
+    // Listed parcels: the seller IS the current owner (you can't list what you don't
+    // hold, and estate-locked parcels can't be listed). Unlisted parcels have no seller
+    // here — openModal fills the owner in from the on-chain read.
+    owner: it.seller || null,
   };
+}
+// Unlisted LAND has no seller in its browse row, so fetch the on-chain owner and patch
+// it into the open modal. A nice-to-have — quietly do nothing if it fails or the user
+// has already moved on to another token.
+async function fetchLandOwner(tokenId) {
+  try {
+    const res = await fetch(`/api/market/land/token/${encodeURIComponent(tokenId)}`, { headers: { Accept: 'application/json' } });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.owner && modalMeta && !modalMeta.owner && String(modalToken) === String(tokenId)) {
+      modalMeta.owner = data.owner;
+      patchModal();
+    }
+  } catch { /* owner is optional detail — ignore */ }
 }
 
 async function openModal(tokenId) {
@@ -1549,6 +1581,7 @@ async function openModal(tokenId) {
     modalMeta = slimeModalMeta(slimeRow);
     modalLoading = false;
     patchModal();
+    if (!modalMeta.owner) fetchLandOwner(tokenId); // unlisted parcel → fill owner from chain
     return;
   }
   patchModal();
@@ -1647,11 +1680,13 @@ function modalCardHtml() {
           }).join('')}</div>`
         : '');
 
-  const owner = meta.owner ? `<div class="trade-modal-meta-row">${esc(t('trade.modal.owner'))}: <code>${esc(shortWallet(meta.owner))}</code></div>` : '';
+  const owner = meta.owner
+    ? `<div class="trade-modal-meta-row">${esc(t('trade.modal.owner'))}: <code title="${esc(meta.owner)}">${esc(shortWallet(meta.owner))}</code>${copyBtnHtml(meta.owner, 'trade.modal.copyOwner')}</div>`
+    : '';
   // Slimes live on a parcel — show its coordinates, not the parcel's 50-digit token id.
   const idRow = meta.isSlime
     ? `<div class="trade-modal-meta-row">${esc(t('trade.land.parcel'))}: <code>${esc(meta.parcelName || `(${meta.coords?.x}, ${meta.coords?.y})`)}</code></div>`
-    : `<div class="trade-modal-meta-row">${esc(t('trade.modal.tokenId'))}: <code class="trade-modal-tokenid">${esc(modalToken)}</code></div>`;
+    : `<div class="trade-modal-meta-row">${esc(t('trade.modal.tokenId'))}: <code class="trade-modal-tokenid">${esc(modalToken)}</code>${copyBtnHtml(String(modalToken), 'trade.modal.copyId')}</div>`;
   const explorer = tokenExplorerUrl(modalToken);
 
   const rank = meta.rank != null
@@ -4822,12 +4857,43 @@ function render() {
   if (account && tradeTab === 'history') maybeLoadHistory();
 }
 
+// Copy a full value (owner wallet, token id) to the clipboard and flash "Copied!" on
+// the button. Prefers the async Clipboard API; falls back to a throwaway textarea +
+// execCommand for older/insecure contexts. No re-render — that would drop the flash.
+let copyFlashTimer = null;
+async function copyValue(btn) {
+  const value = btn?.dataset?.copy;
+  if (!value) return;
+  let ok = false;
+  try {
+    if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(value); ok = true; }
+  } catch { ok = false; }
+  if (!ok) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = value;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch { ok = false; }
+  }
+  if (!ok) return;
+  document.querySelectorAll('.trade-copy.is-copied').forEach(b => b.classList.remove('is-copied'));
+  btn.classList.add('is-copied');
+  clearTimeout(copyFlashTimer);
+  copyFlashTimer = setTimeout(() => btn.classList.remove('is-copied'), 1400);
+}
+
 function onClick(e) {
   const target = e.target.closest('[data-act]');
   if (!target) return;
   switch (target.dataset.act) {
     case 'open':       return openModal(target.dataset.token);
     case 'close':      return closeModal();
+    case 'copy':       return copyValue(target);
     case 'buy':        return handleBuy(target.dataset.listing);
     case 'trade-tab':
       if (tradeTab === target.dataset.tab) return;

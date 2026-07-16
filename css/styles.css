@@ -2957,6 +2957,28 @@ body.trade-modal-open { overflow: hidden; }
 .trade-modal-meta-row { font-size: 12.5px; color: var(--hr-fg-2); margin-bottom: 6px; }
 .trade-modal-meta-row code { font-family: ui-monospace, Menlo, monospace; color: var(--hr-fg-1); }
 .trade-modal-tokenid { font-size: 11px; word-break: break-all; }
+/* Copy-to-clipboard chip — lifts a long code (owner wallet, token id) out whole.
+   Icon by default; flips to a mint "Copied!" for a beat on success (.is-copied). */
+.trade-copy {
+  display: inline-flex; align-items: center; gap: 5px; vertical-align: middle;
+  margin-left: 7px; padding: 3px 8px; line-height: 1; cursor: pointer;
+  font-family: var(--hr-sans); font-size: 10px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: var(--hr-tracking-caps);
+  color: var(--hr-fg-2); background: rgba(255,255,255,.05);
+  border: 1px solid var(--hr-line); border-radius: var(--hr-radius-pill);
+  transition: color .15s ease, background .15s ease, border-color .15s ease;
+}
+.trade-copy:hover { color: var(--hr-fg-0); background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.22); }
+.trade-copy:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; }
+.trade-copy-ic { display: block; }
+.trade-copy-label { display: none; }
+.trade-copy.is-copied {
+  color: var(--hr-primary); background: rgba(81,255,165,.12);
+  border-color: var(--hr-primary-25);
+}
+.trade-copy.is-copied .trade-copy-ic { display: none; }
+.trade-copy.is-copied .trade-copy-label { display: inline; }
+@media (prefers-reduced-motion: reduce) { .trade-copy { transition: none; } }
 .trade-modal-loading { display: flex; align-items: center; gap: 8px; color: var(--hr-fg-2); font-size: 13px; margin: 16px 0; }
 .trade-modal-traits { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 16px 0; }
 .trade-trait { background: rgba(0,0,0,.28); border: 1px solid var(--hr-line); border-radius: var(--hr-radius-sm); padding: 8px 10px; min-width: 0; }

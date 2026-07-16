@@ -54,6 +54,11 @@ const host = '0.0.0.0';
 const ANNOUNCEMENTS_CHANNEL_ID  = String(process.env.ANNOUNCEMENTS_CHANNEL_ID || '1083852782722887691').trim();
 const DISCORD_GUILD_ID          = String(process.env.DISCORD_GUILD_ID || '890228388311228456').trim();
 const ANNOUNCEMENTS_INGEST_SECRET = process.env.ANNOUNCEMENTS_INGEST_SECRET || '';
+// Long announcements are often split across several messages posted back-to-back. We
+// merge consecutive messages from the SAME author whose gaps are within this window into
+// one card (read-time only — the rows stay individual). The window is generous vs. how
+// far apart distinct announcements land (hours/days) but tight enough not to merge them.
+const ANNOUNCEMENTS_GROUP_WINDOW_MS = Math.max(0, Number(process.env.ANNOUNCEMENTS_GROUP_WINDOW_MIN || 5)) * 60 * 1000;
 
 // --- Holder stats ---
 const CREATURE_HOLDERS_URL    = 'https://explorer.immutable.com/api/v2/tokens/0xCf44b1cBC959295bbBb49935B1b339cC0AA77cdA/holders';
@@ -3842,6 +3847,46 @@ function normalizeAnnouncementMessage(msg) {
   };
 }
 
+// Merge announcements that are one post split across several back-to-back messages.
+// Consecutive rows by the SAME author within ANNOUNCEMENTS_GROUP_WINDOW_MS collapse into
+// one row: texts joined in order, attachments/embeds/mentions concatenated, timestamp =
+// the first message (when the announcement began), edited = the latest edit in the group,
+// and message_id = the first message so "View on Discord" opens where it starts. Purely a
+// read-time transform — stored rows remain individual, so edits/deletes still work and a
+// deleted middle message just drops out and the group re-forms. Input is newest-first (as
+// db returns); output is newest-first too.
+function groupAnnouncementRows(rows) {
+  if (ANNOUNCEMENTS_GROUP_WINDOW_MS <= 0) return rows;
+  const asc = rows.slice().sort((a, b) => new Date(a.posted_at) - new Date(b.posted_at));
+  const groups = [];
+  for (const r of asc) {
+    const g = groups[groups.length - 1];
+    const prev = g && g[g.length - 1];
+    const sameAuthor = prev && r.author_id && prev.author_id && String(r.author_id) === String(prev.author_id);
+    const gap = prev ? (new Date(r.posted_at) - new Date(prev.posted_at)) : Infinity;
+    if (prev && sameAuthor && gap >= 0 && gap <= ANNOUNCEMENTS_GROUP_WINDOW_MS) g.push(r);
+    else groups.push([r]);
+  }
+  const merged = groups.map(g => {
+    if (g.length === 1) return g[0];
+    const first = g[0];
+    const mentions = {};
+    for (const r of g) Object.assign(mentions, (r.mentions && typeof r.mentions === 'object') ? r.mentions : {});
+    const editTimes = g.map(r => r.edited_at).filter(Boolean).map(t => new Date(t).getTime());
+    return {
+      ...first,
+      content: g.map(r => r.content || '').join('\n\n'),
+      attachments: g.flatMap(r => Array.isArray(r.attachments) ? r.attachments : []),
+      embeds: g.flatMap(r => Array.isArray(r.embeds) ? r.embeds : []),
+      mentions,
+      posted_at: first.posted_at,
+      edited_at: editTimes.length ? new Date(Math.max(...editTimes)) : null,
+    };
+  });
+  merged.sort((a, b) => new Date(b.posted_at) - new Date(a.posted_at));
+  return merged;
+}
+
 // Shape a stored row for the public feed. Announcements are already public in Discord,
 // so nothing here is sensitive — but URLs are still constrained to Discord's CDNs and
 // image/file attachments are split so the client renders each correctly.
@@ -3897,7 +3942,7 @@ async function handleAnnouncementsApi(request, response, url) {
     const rows = await db.getAnnouncements({ limit: 50 });
     sendJson(response, 200, {
       channelUrl: `https://discord.com/channels/${DISCORD_GUILD_ID}/${ANNOUNCEMENTS_CHANNEL_ID}`,
-      announcements: rows.map(shapeAnnouncement),
+      announcements: groupAnnouncementRows(rows).map(shapeAnnouncement),
     }, { 'Cache-Control': 'public, max-age=60' });
     return;
   }
