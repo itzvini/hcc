@@ -143,6 +143,12 @@ let fltOpenMobile = false;     // filter drawer expanded (mobile)
 let fltDebounce = null;
 let browseReqId = 0;           // drops stale responses when filters change mid-flight
 let browseIndexTimer = null;   // quiet re-poll while the server is still cataloguing
+// Wallet view: a full address typed into the Browse search flips the grid to that wallet's
+// holdings. browseOwner echoes the address the server resolved (null = normal browse).
+let browseOwner = null;
+let browseOwnedTotal = null;   // how many assets the wallet holds (pre-filter denominator)
+const WALLET_RE = /^0x[0-9a-fA-F]{40}$/;
+const isWalletQuery = s => WALLET_RE.test((s || '').trim());
 const RARITY_TIERS = ['Legendary', 'Epic', 'Rare', 'Uncommon', 'Common'];
 // LAND plot tiers — a parcel attribute (the "Tier" facet), shown as their own always-
 // visible chip group rather than buried in the trait dropdowns. Ordered common → premium.
@@ -200,6 +206,7 @@ function resetBrowseForView() {
   browseFacets = null; browseTotal = null; browseListedTotal = null; browsePriceRange = null;
   browseCollectionTotal = null; browseScope = flt.scope; browseIndexing = false;
   browsePage = 0; browseHasMore = false; browseHadFilters = false;
+  browseOwner = null; browseOwnedTotal = null;
   setFltSheet(false);
   clearTimeout(fltDebounce);
 }
@@ -1411,6 +1418,8 @@ async function loadBrowse(reset = true, quiet = false) {
     browseCollectionTotal = data.collectionTotal ?? browseCollectionTotal;
     browseScope = data.scope || 'listed';
     browseIndexing = !!data.indexing;
+    browseOwner = data.owner || null;
+    browseOwnedTotal = data.ownedTotal ?? null;
     browseHadFilters = hadFilters;
     if (data.facets) browseFacets = data.facets;
     if (data.priceRange) browsePriceRange = data.priceRange;
@@ -1492,6 +1501,17 @@ function gridInnerHtml() {
     // Slime catalogue still sweeping Highrise — say so rather than "nothing here".
     if (isBrowseView() && browseIndexing) {
       return `<div class="trade-grid-state"><span class="trade-mini-spin" aria-hidden="true"></span><p>${esc(t(browseDataset().indexing))}</p></div>`;
+    }
+    // A resolved wallet with nothing to show: either it holds none of this collection, or
+    // the extra filters emptied its holdings — say which, and offer the matching way out.
+    if (isBrowseView() && browseOwner) {
+      const noun = t(coll === 'land' ? 'trade.wallet.nounLand' : 'trade.wallet.noun');
+      if (extraFiltersActive()) {
+        return `<div class="trade-grid-state"><div class="trade-grid-state-ico" aria-hidden="true">🔍</div><p>${esc(t(browseDataset().noMatch))}</p>
+          <button class="apply-btn-ghost" data-act="flt-clear" type="button">${esc(t('trade.filter.clear'))}</button></div>`;
+      }
+      return `<div class="trade-grid-state"><div class="trade-grid-state-ico" aria-hidden="true">👛</div><p>${esc(t('trade.wallet.empty').replace('{noun}', noun))}</p>
+        <button class="apply-btn-ghost" data-act="flt-rm" data-kind="q" type="button">${esc(t('trade.wallet.clear'))}</button></div>`;
     }
     if (isBrowseView() && fltActive()) {
       return `<div class="trade-grid-state"><div class="trade-grid-state-ico" aria-hidden="true">🔍</div><p>${esc(t(browseDataset().noMatch))}</p>
@@ -3619,10 +3639,21 @@ function scopeSegHtml() {
       aria-selected="${flt.scope === v}" data-act="flt-scope" data-scope="${v}">${esc(t(key))}</button>`).join('');
 }
 
+// Filters that narrow WITHIN a wallet's holdings (the address itself isn't one of them).
+function extraFiltersActive() {
+  return !!(flt.min || flt.max || flt.traits.size);
+}
+
 function countLineHtml() {
   // Everything here is response-time state (browse*) — mixing in live flt state mid-
   // fetch produced nonsense like "103 in the collection". Dim it while a fetch runs.
   const ds = browseDataset();
+  if (browseOwner) {
+    if (browseTotal == null || browseOwnedTotal == null) return '';
+    const key = extraFiltersActive() ? 'trade.wallet.countFiltered' : 'trade.wallet.count';
+    return `<span class="trade-flt-count ${listingsLoading ? 'is-stale' : ''}" role="status">${esc(t(key)
+      .replace('{n}', browseTotal.toLocaleString()).replace('{total}', browseOwnedTotal.toLocaleString()))}</span>`;
+  }
   const allScope = browseScope === 'all';
   const denom = allScope ? browseCollectionTotal : browseListedTotal;
   if (browseTotal == null || denom == null) return '';
@@ -3635,7 +3666,8 @@ function countLineHtml() {
 
 function activeChipsHtml() {
   const chips = [];
-  if (flt.q)   chips.push({ k: 'q',   label: `“${flt.q}”` });
+  // A wallet address isn't a text filter — the owner banner represents it instead.
+  if (flt.q && !isWalletQuery(flt.q)) chips.push({ k: 'q', label: `“${flt.q}”` });
   if (flt.min) chips.push({ k: 'min', label: `≥ ${flt.min} ETH` });
   if (flt.max) chips.push({ k: 'max', label: `≤ ${flt.max} ETH` });
   for (const [type, vals] of flt.traits) for (const v of vals) chips.push({ k: 't', type, v, label: `${type}: ${v}` });
@@ -3647,6 +3679,24 @@ function activeChipsHtml() {
       ${esc(c.label)}<span class="trade-flt-x" aria-hidden="true">×</span>
     </button>`).join('')}
     <button type="button" class="trade-flt-clearall" data-act="flt-clear">${esc(t('trade.filter.clear'))}</button>`;
+}
+
+// The "you're looking at one wallet's holdings" banner — shown whenever a wallet address
+// resolved. Carries the count, the (copyable) address, and a one-tap way back to browsing.
+function walletBannerHtml() {
+  if (!browseOwner) return '';
+  const noun = t(coll === 'land' ? 'trade.wallet.nounLand' : 'trade.wallet.noun');
+  const n = (browseOwnedTotal ?? 0).toLocaleString();
+  return `<div class="trade-wallet-banner" role="status">
+    <svg class="trade-wallet-ico" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+      <rect x="3" y="6" width="18" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/>
+      <path d="M3 9h13a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H3" fill="none" stroke="currentColor" stroke-width="2"/>
+      <circle cx="16.5" cy="12.5" r="1.3" fill="currentColor"/>
+    </svg>
+    <span class="trade-wallet-txt">${esc(t('trade.wallet.showing').replace('{n}', n).replace('{noun}', noun))}</span>
+    <span class="trade-wallet-addr">${esc(shortWallet(browseOwner))}${copyBtnHtml(browseOwner, 'trade.wallet.copyAria')}</span>
+    <button type="button" class="trade-wallet-clear" data-act="flt-rm" data-kind="q">${esc(t('trade.wallet.clear'))}</button>
+  </div>`;
 }
 
 // Filter sidebar (desktop) / slide-up sheet (mobile): rarity, price and every trait
@@ -3719,6 +3769,7 @@ function patchFilters() {
   const tier = r.querySelector('#flt-tier');   if (tier) tier.innerHTML = tierChipsHtml();
   const tr  = r.querySelector('#flt-traits');  if (tr)  tr.innerHTML = traitDropsHtml();
   const act = r.querySelector('#flt-active');  if (act) act.innerHTML = activeChipsHtml();
+  const wb  = r.querySelector('#trade-wallet-slot'); if (wb) wb.innerHTML = walletBannerHtml();
   const tog = r.querySelector('.trade-flt-toggle');
   if (tog) tog.innerHTML = `${esc(t('trade.filter.toggle'))}${fltCount() ? `<span class="trade-flt-badge">${fltCount()}</span>` : ''}`;
   if (browsePriceRange) {
@@ -3960,6 +4011,7 @@ function browseHtml() {
         </div>
       </div>
       ${browseToolbarHtml()}
+      <div id="trade-wallet-slot">${walletBannerHtml()}</div>
       ${coll === 'creatures' ? collStripHtml() : landOfferStripHtml()}
       <div class="trade-grid" id="trade-grid">${gridInnerHtml()}</div>
       <div class="trade-loadmore" id="trade-loadmore">${loadMoreHtml()}</div>
@@ -5161,8 +5213,14 @@ function onInput(e) {
     return;
   }
   if (e.target?.id === 'flt-q') {
-    flt.q = e.target.value.trim();
-    return applyFilters(300);
+    const v = e.target.value.trim();
+    const nowWallet = isWalletQuery(v);
+    // Entering a wallet address shows its FULL holdings (listed + unlisted), so switch to
+    // the "All" scope. Apply at once when it's a complete address (the view flip should feel
+    // instant); debounce ordinary name/number typing so every keystroke isn't a request.
+    if (nowWallet && !isWalletQuery(flt.q) && flt.scope !== 'all') flt.scope = 'all';
+    flt.q = v;
+    return applyFilters(nowWallet ? 0 : 300);
   }
   if (e.target?.id === 'flt-min' || e.target?.id === 'flt-max') {
     const v = e.target.value.trim().replace(',', '.');

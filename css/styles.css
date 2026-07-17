@@ -2561,6 +2561,40 @@ button.trade-net:hover { box-shadow: 0 0 12px var(--hr-banana-25); }
 .trade-flt-count.is-stale { opacity: .5; }
 .trade-flt-note { font-size: 12px; color: var(--hr-fg-3); }
 
+/* Wallet view banner — shown when the search box holds an address (one wallet's holdings).
+   Frosted lavender surface with an inset highlight, matching the premium card language. */
+.trade-wallet-banner {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 2px 0 14px; padding: 11px 14px;
+  border-radius: var(--hr-radius-md, 14px);
+  border: 1px solid rgba(133,97,255,.42);
+  background:
+    radial-gradient(120% 180% at 0% 0%, rgba(133,97,255,.20), transparent 60%),
+    var(--hr-secondary-15, rgba(133,97,255,.12));
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 4px 18px rgba(0,0,0,.28);
+  animation: trade-wallet-in .28s ease both;
+}
+.trade-wallet-ico { color: var(--hr-secondary); flex: 0 0 auto; }
+.trade-wallet-txt { font-size: 13px; font-weight: 700; color: var(--hr-fg-1); }
+.trade-wallet-addr {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--hr-mono, ui-monospace, monospace);
+  font-size: 12.5px; font-weight: 700; color: var(--hr-fg-0);
+  padding: 3px 6px 3px 10px; border-radius: var(--hr-radius-pill);
+  background: rgba(15,16,20,.5); border: 1px solid var(--hr-line-strong);
+}
+.trade-wallet-clear {
+  margin-left: auto; padding: 6px 13px;
+  font-family: var(--hr-sans); font-weight: 800; font-size: 12px;
+  color: var(--hr-fg-0); cursor: pointer;
+  background: var(--hr-secondary-25); border: 1px solid rgba(133,97,255,.45);
+  border-radius: var(--hr-radius-pill); transition: border-color .2s, background .2s;
+}
+.trade-wallet-clear:hover { border-color: var(--hr-primary); background: var(--hr-secondary-40, rgba(133,97,255,.3)); }
+.trade-wallet-clear:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; }
+@keyframes trade-wallet-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
 /* Statistical rarity rank — glass pill, top-left of the art (rarity tier sits top-right) */
 .trade-rank {
   position: absolute; top: 8px; left: 8px;
@@ -2677,7 +2711,7 @@ body.trade-sheet-open { overflow: hidden; }
   .trade-side-card, .trade-side, .trade-side-backdrop,
   .trade-flt-pop, .trade-flt-rchip, .trade-flt-ddbtn, .trade-flt-chip,
   .trade-flt-caret, .trade-flt-opt, .trade-flt-check,
-  .trade-flt-search input, .trade-flt-price {
+  .trade-flt-search input, .trade-flt-price, .trade-wallet-banner {
     animation: none !important; transition: none !important;
   }
   .trade-flt-rchip:hover:not(:disabled) { transform: none; }

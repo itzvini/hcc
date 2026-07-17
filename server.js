@@ -1599,6 +1599,8 @@ function allPoolOf(listIdx, coll) {
 
 async function getCreatureBrowse(searchParams) {
   const f = parseBrowseQuery(searchParams);
+  // A full wallet address in the search box switches Browse into "this wallet's holdings".
+  if (HEX_ADDRESS.test(f.q)) return getWalletBrowse('creatures', f);
   const [listIdx, fx] = await Promise.all([getBrowseIndex(), getMarketplaceFx()]);
   const coll = getCollectionIndex(); // null until the first build lands
   const wantAll = f.scope === 'all';
@@ -1686,6 +1688,7 @@ const listingRowOf = (tokenId, L) => landRowOf({
 
 async function getLandBrowse(searchParams) {
   const f = parseBrowseQuery(searchParams);
+  if (HEX_ADDRESS.test(f.q)) return getWalletBrowse('land', f);
   const [fx, listings] = await Promise.all([getMarketplaceFx(), landListingsByToken()]);
   const index = slimeIndex.getSlimeIndex(); // null while the first sweep runs
 
@@ -1727,6 +1730,117 @@ async function getLandBrowse(searchParams) {
     priceRange: lo === null ? null : { min: lo, max: hi },
     listedTotal: rows.reduce((n, r) => n + (r.listed ? 1 : 0), 0),
     collectionTotal: index ? index.total : null,
+    ethUsd: fx.ethUsd,
+    fxRates: fx.fxRates,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+// --- Wallet view: paste an address into Browse search → that wallet's holdings ------------
+// Public on-chain data (the same owner index OpenSea/Immutable already expose, and the
+// site already surfaces per-token). We show EVERY asset the wallet holds — listed AND
+// unlisted — joined with any live listing so a for-sale item keeps its price and stays
+// buyable. NOTE: only on-chain assets, never any off-chain identity (Discord/Highrise) —
+// that mapping must never reach the client. Owned rows are cached briefly per address so
+// paging (which re-requests the same wallet) doesn't re-hit the upstream indexer each page.
+const ownedPoolCache = new Map(); // `${collKind}:${addr}` -> { at, rows }
+const OWNED_POOL_TTL_MS = 45 * 1000;
+
+// Every Creature a wallet holds, as browse rows. Listings/traits are keyed by the real
+// on-chain token id, which MATCHES the account endpoint's id — so a wallet's listed items
+// join cleanly for price + buyability. (The COLLECTION catalogue's ids differ, so its
+// statistical rank is only a best-effort overlay; absent → the tile just shows no rank.)
+async function ownedCreatureRows(addr) {
+  const [{ items }, listIdx] = await Promise.all([getOwnedCreatures(addr), getBrowseIndex()]);
+  const coll = getCollectionIndex();
+  const byListing = new Map(listIdx.items.map(it => [String(it.tokenId), it]));
+  return items.map(o => {
+    const id = String(o.tokenId);
+    const L = byListing.get(id);
+    const known = coll?.byId.get(id);
+    const traits = Object.keys(o.traits || {}).length ? o.traits : (L?.traits || known?.traits || {});
+    return {
+      tokenId: id,
+      name: o.name || L?.name || known?.name || `Highrise Creature #${id}`,
+      image: o.image || L?.image || known?.image || null,
+      rarity: Object.entries(traits).find(([k]) => /rarity/i.test(k))?.[1] || null,
+      rank: known?.rank ?? null,
+      traits,
+      listed: !!L,
+      listingId: L?.listingId || null,
+      seller: L?.seller || null,
+      priceEth: L?.priceEth ?? null,
+      totalEth: L?.totalEth ?? null,
+      listedAt: L?.listedAt ?? 0,
+    };
+  });
+}
+
+// Every LAND parcel a wallet holds, as browse rows. Token ids come straight from the
+// contract (see landOwnedOnChain); coords/traits/rank come from the slime sweep and the
+// listing (price) from OpenSea — the same joins /land/owned and getLandBrowse already do.
+// Estate-locked parcels live in the estate contract, so they're naturally absent here.
+async function ownedLandRows(addr) {
+  let items;
+  try {
+    items = await landOwnedOnChain(addr);
+  } catch (err) {
+    console.error('Wallet LAND chain read failed, falling back to OpenSea:', err.message);
+    items = landMarket.configured() ? (await landMarket.ownedLand(addr)).items : [];
+  }
+  const [listings] = await Promise.all([landListingsByToken()]);
+  const sidx = slimeIndex.getSlimeIndex();
+  return items.map(it => {
+    const id = String(it.tokenId);
+    const s = sidx?.byToken.get(id);
+    const L = listings.get(id);
+    const parcelName = s?.coords ? `Highrise LAND (${s.coords.x}, ${s.coords.y})` : (it.name || `Highrise LAND #${id}`);
+    return landRowOf({
+      tokenId: id, coords: s?.coords || it.coords || { x: '', y: '' },
+      slimeName: s?.slimeName || null, parcelName, traits: s?.traits || {}, rank: s?.rank ?? null,
+    }, L);
+  });
+}
+
+async function getWalletBrowse(collKind, f) {
+  const addr = f.q; // full address, already lowercased + validated by parseBrowseQuery/HEX_ADDRESS
+  const cacheKey = `${collKind}:${addr}`;
+  const hit = ownedPoolCache.get(cacheKey);
+  let rows;
+  if (hit && Date.now() - hit.at < OWNED_POOL_TTL_MS) {
+    rows = hit.rows;
+  } else {
+    rows = collKind === 'land' ? await ownedLandRows(addr) : await ownedCreatureRows(addr);
+    if (ownedPoolCache.size > 300) ownedPoolCache.clear(); // bound memory from many distinct addresses
+    ownedPoolCache.set(cacheKey, { at: Date.now(), rows });
+  }
+  const fx = await getMarketplaceFx();
+  const fq = { ...f, q: '' }; // the address selects the pool; it's not a name substring to match
+  const pool = f.scope === 'listed' ? rows.filter(r => r.listed) : rows;
+  const matched = pool.filter(it => browseMatch(it, fq)).sort(BROWSE_SORTS[f.sort]);
+  const start = f.page * BROWSE_PAGE_SIZE;
+  let lo = null, hi = null;
+  for (const r of rows) { const p = r.totalEth; if (p == null) continue; if (lo === null || p < lo) lo = p; if (hi === null || p > hi) hi = p; }
+  const listedCount = rows.reduce((n, r) => n + (r.listed ? 1 : 0), 0);
+  // Match each collection's existing wire shape: LAND keeps `traits` on the row (its modal
+  // reads them); Creatures strip them (their modal refetches token detail).
+  const strip = collKind === 'land'
+    ? ({ search, listedAt, ...pub }) => pub
+    : ({ traits, listedAt, ...pub }) => pub;
+  return {
+    items: matched.slice(start, start + BROWSE_PAGE_SIZE).map(strip),
+    total: matched.length,
+    page: f.page,
+    hasMore: start + BROWSE_PAGE_SIZE < matched.length,
+    scope: f.scope,
+    owner: addr,
+    ownedTotal: rows.length,
+    ownedListed: listedCount,
+    indexing: false,
+    facets: computeBrowseFacets(pool, fq),
+    priceRange: lo === null ? null : { min: lo, max: hi },
+    listedTotal: listedCount,
+    collectionTotal: rows.length,
     ethUsd: fx.ethUsd,
     fxRates: fx.fxRates,
     fetchedAt: new Date().toISOString(),
@@ -1903,8 +2017,14 @@ async function handleMarketplaceApi(request, response, url) {
     return;
   }
 
-  // Filterable explorer: name search, trait/rarity facets, price range, sort.
+  // Filterable explorer: name search, trait/rarity facets, price range, sort. A full
+  // wallet address in `q` flips it to that wallet's holdings — an uncached upstream read,
+  // so it carries its own modest per-IP budget (paging shares a 45s per-address pool cache).
   if (pathname === '/api/market/creatures/browse') {
+    if (HEX_ADDRESS.test((url.searchParams.get('q') || '').trim().toLowerCase())) {
+      const w = rateLimited(`mktwallet:${ip}`, 40, 60 * 1000);
+      if (w) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(w) }); return; }
+    }
     const data = await getCreatureBrowse(url.searchParams);
     sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=15' });
     return;
@@ -2441,6 +2561,10 @@ async function handleMarketplaceApi(request, response, url) {
   // Unified LAND browse: every parcel via its Slime — trait facets, rarity rank,
   // price when listed. (LAND and its Slime are one NFT — one browse, not two.)
   if (pathname === '/api/market/land/browse') {
+    if (HEX_ADDRESS.test((url.searchParams.get('q') || '').trim().toLowerCase())) {
+      const w = rateLimited(`mktwallet:${ip}`, 40, 60 * 1000);
+      if (w) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(w) }); return; }
+    }
     const data = await getLandBrowse(url.searchParams);
     sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=15' });
     return;
