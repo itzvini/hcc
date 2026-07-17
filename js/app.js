@@ -12,6 +12,7 @@ import { loadAnnouncements, rerenderAnnouncements } from './announcements.js';
 import { loadGen2, rerenderGen2 } from './gen2.js';
 import { initGuideDemos, rerenderGuideDemos } from './guide-demos.js';
 import { initPerks, rerenderPerks } from './perks.js';
+import { initSafety, rerenderSafety } from './safety.js';
 
 // Language switcher — re-render dynamic views after language change
 document.querySelectorAll('.lang-btn').forEach(btn => {
@@ -28,6 +29,7 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
     rerenderGen2();
     rerenderGuideDemos();
     rerenderPerks();
+    rerenderSafety();
   }));
 });
 
@@ -226,6 +228,11 @@ initGuideDemos();
 // number formatting and aria labels are refreshed once translations resolve).
 initPerks();
 
+// Scam Watch (Guides › Scam Watch) — spot-the-scam + persisted safety checklist.
+// Static markup, so listeners attach now; count/progress strings and the tap-to-
+// reveal tooltips are filled once translations resolve and on each language switch.
+initSafety();
+
 // Clean tab URLs — every tab (and sub-tab) is a real path the server also serves:
 // /council, /polls, /roadmap/gen2, … Tab clicks push the path; legacy #tab links
 // and in-page anchors (#terms, #council) still work and get normalized to paths.
@@ -299,6 +306,7 @@ initI18n().then(() => {
   rerenderGen2();
   rerenderGuideDemos();
   rerenderPerks();
+  rerenderSafety();
 });
 
 // Jump animation on hover / click / tap

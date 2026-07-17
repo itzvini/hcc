@@ -724,6 +724,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
     <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="walkthroughs" data-i18n="guide.sub.walkthroughs">Walkthroughs</button>
     <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="marketplace" data-i18n="guide.sub.marketplace">Marketplace</button>
     <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="safety" data-i18n="guide.sub.safety">Stay safe</button>
+    <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="scams" data-i18n="guide.sub.scams">Scam Watch</button>
     <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="links" data-i18n="guide.sub.links">Links</button>
   </nav>
 
@@ -1142,8 +1143,455 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
       <div class="eyebrow" data-i18n="guide.safe.hacked.eyebrow">If something feels wrong</div>
       <p data-i18n="guide.safe.hacked.p">Clicked a bad link or signed something suspicious? Act fast: move your Creatures and funds to a fresh wallet first, then revoke old approvals from the compromised one, and tell the team in the public Discord so others get warned. Speed matters more than embarrassment — everyone has a close call eventually.</p>
     </div>
+    <button class="scam-jump" type="button" data-subgoto="scams">
+      <span class="scam-jump-ico" aria-hidden="true">🎭</span>
+      <span class="scam-jump-t">
+        <span class="scam-jump-h" data-i18n="guide.safe.more.h">See the full scam playbook</span>
+        <span class="scam-jump-p" data-i18n="guide.safe.more.p">Fake airdrops, drainer signatures, impostor DMs and more, with the red flags for each.</span>
+      </span>
+      <span class="scam-jump-arrow" aria-hidden="true">→</span>
+    </button>
   </section>
   </div><!-- /safety -->
+
+  <div class="guide-subpanel" data-subpanel="scams" hidden>
+
+    <!-- Hero -->
+    <section class="wrap">
+      <div class="scam-hero g2-reveal">
+        <div class="apply-aurora" aria-hidden="true"></div>
+        <div class="apply-sparkles" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <span class="apply-pill" data-i18n="guide.scam.pill">Scam Watch</span>
+        <h2 class="scam-hero-h" data-i18n="guide.scam.h2">Know the tricks before they find you</h2>
+        <p class="scam-hero-p" data-i18n="guide.scam.lead">Scammers target Creature and LAND holders because the assets are worth real money. Here's the full playbook they run, the red flags that give it away, and what to do if you slip. This is the club's living safety reference, so bookmark it.</p>
+      </div>
+    </section>
+
+    <!-- The one rule -->
+    <section class="wrap">
+      <div class="scam-rule g2-reveal" style="--d:.05s">
+        <span class="scam-rule-ico" aria-hidden="true">🛑</span>
+        <div class="scam-rule-t">
+          <div class="eyebrow" data-i18n="guide.scam.rule.eyebrow">The one rule</div>
+          <p data-i18n="guide.scam.rule.p">Never type your 12-word seed phrase anywhere, and never approve a wallet request you don't fully understand. Nearly every drained wallet starts the moment one of those two slips.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Common tactics -->
+    <section class="wrap">
+      <div class="section-head">
+        <span class="topic-ico" style="--accent:#FF5B95;--accent-soft:rgba(255,91,149,0.22)" aria-hidden="true">🎭</span>
+        <div class="section-head-t">
+          <div class="eyebrow" data-i18n="guide.scam.tactics.eyebrow">Know the playbook</div>
+          <h2 data-i18n="guide.scam.tactics.h2">Common scam tactics</h2>
+          <p class="lead" data-i18n="guide.scam.tactics.lead">Tap any card for how the trick works, the red flags, and exactly what to do. These are the ones actually hitting Highrise holders.</p>
+        </div>
+      </div>
+
+      <div class="scam-cards">
+
+        <details class="scam-card" style="--accent:#FF5B95">
+          <summary>
+            <span class="scam-card-ico" aria-hidden="true">📥</span>
+            <span class="scam-card-head">
+              <span class="scam-card-t" data-i18n="guide.scam.t1.t">Fake airdropped NFTs</span>
+              <span class="scam-card-sub" data-i18n="guide.scam.t1.s">A "free" item you never bought lands in your wallet</span>
+            </span>          </summary>
+          <div class="scam-card-body">
+            <div class="scam-block scam-how">
+              <h5 data-i18n="guide.scam.l.how">How it works</h5>
+              <p data-i18n="guide.scam.t1.how">Scammers send an unsolicited NFT (often a lookalike like a fake "Highrise Estate") straight to your wallet. Its image, name or description carries a link to "claim", "unlock" or "sell" it. That link leads to a drainer site that asks you to connect and sign, and the signature hands over your real assets. Just receiving it is harmless. Interacting with it is the trap.</p>
+            </div>
+            <div class="scam-block scam-flags">
+              <h5 data-i18n="guide.scam.l.flags">Red flags</h5>
+              <ul>
+                <li data-i18n="guide.scam.t1.f1">An item appears that you never bought or claimed.</li>
+                <li data-i18n="guide.scam.t1.f2">Its details push you to visit a site to "claim" or "redeem" value.</li>
+              </ul>
+            </div>
+            <div class="scam-block scam-do">
+              <h5 data-i18n="guide.scam.l.do">What to do</h5>
+              <ul>
+                <li data-i18n="guide.scam.t1.d1">Don't click anything on it. Don't try to sell, transfer or "claim" it.</li>
+                <li data-i18n="guide.scam.t1.d2">Hide it in your wallet or marketplace and carry on. It can't hurt you sitting there.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="scam-card" style="--accent:#8561FF">
+          <summary>
+            <span class="scam-card-ico" aria-hidden="true">✍️</span>
+            <span class="scam-card-head">
+              <span class="scam-card-t" data-i18n="guide.scam.t2.t">Wallet-drainer signatures</span>
+              <span class="scam-card-sub" data-i18n="guide.scam.t2.s">One "harmless" approval hands over everything</span>
+            </span>          </summary>
+          <div class="scam-card-body">
+            <div class="scam-block scam-how">
+              <h5 data-i18n="guide.scam.l.how">How it works</h5>
+              <p data-i18n="guide.scam.t2.how">A site tells you to sign to "connect", "verify" or "claim". The request is actually a token approval or a blanket "set approval for all" that lets the scammer move your Creatures or funds whenever they like. It feels routine, so people click through without reading.</p>
+            </div>
+            <div class="scam-block scam-flags">
+              <h5 data-i18n="guide.scam.l.flags">Red flags</h5>
+              <ul>
+                <li data-i18n="guide.scam.t2.f1">A signature request you didn't start, or that mentions "approve", "permit" or "set approval for all".</li>
+                <li data-i18n="guide.scam.t2.f2">The site rushes you or says signing is "just to log in".</li>
+              </ul>
+            </div>
+            <div class="scam-block scam-do">
+              <h5 data-i18n="guide.scam.l.do">What to do</h5>
+              <ul>
+                <li data-i18n="guide.scam.t2.d1">Read every wallet popup. If you can't explain what it approves, reject it.</li>
+                <li data-i18n="guide.scam.t2.d2">Review and revoke old approvals now and then with a tool like revoke.cash.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="scam-card" style="--accent:#0DA6FC">
+          <summary>
+            <span class="scam-card-ico" aria-hidden="true">🎧</span>
+            <span class="scam-card-head">
+              <span class="scam-card-t" data-i18n="guide.scam.t3.t">Fake support &amp; impostor DMs</span>
+              <span class="scam-card-sub" data-i18n="guide.scam.t3.s">"Staff" messages you first to help</span>
+            </span>          </summary>
+          <div class="scam-card-body">
+            <div class="scam-block scam-how">
+              <h5 data-i18n="guide.scam.l.how">How it works</h5>
+              <p data-i18n="guide.scam.t3.how">Someone copies a team member's name and avatar and DMs you offering to "fix" a problem or "verify" your wallet. They send you to a phishing site or a fake ticket bot. Real staff and support never message you first.</p>
+            </div>
+            <div class="scam-block scam-flags">
+              <h5 data-i18n="guide.scam.l.flags">Red flags</h5>
+              <ul>
+                <li data-i18n="guide.scam.t3.f1">An unprompted DM claiming to be staff, support or a "helper".</li>
+                <li data-i18n="guide.scam.t3.f2">Pressure to act fast, move to another app, or open a link.</li>
+              </ul>
+            </div>
+            <div class="scam-block scam-do">
+              <h5 data-i18n="guide.scam.l.do">What to do</h5>
+              <ul>
+                <li data-i18n="guide.scam.t3.d1">Assume any first-contact DM is a scam. Don't reply, don't click.</li>
+                <li data-i18n="guide.scam.t3.d2">Ask your question in the public Highrise Discord instead.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="scam-card" style="--accent:#FF9900">
+          <summary>
+            <span class="scam-card-ico" aria-hidden="true">🔑</span>
+            <span class="scam-card-head">
+              <span class="scam-card-t" data-i18n="guide.scam.t4.t">Seed phrase &amp; "wallet validation"</span>
+              <span class="scam-card-sub" data-i18n="guide.scam.t4.s">A form asks for your 12 words</span>
+            </span>          </summary>
+          <div class="scam-card-body">
+            <div class="scam-block scam-how">
+              <h5 data-i18n="guide.scam.l.how">How it works</h5>
+              <p data-i18n="guide.scam.t4.how">A site or DM claims your wallet needs to be "validated", "synced", "migrated" or "restored", then shows a box to type your 12-word seed phrase. Anyone who gets those words owns your wallet forever. No real app or person ever needs them.</p>
+            </div>
+            <div class="scam-block scam-flags">
+              <h5 data-i18n="guide.scam.l.flags">Red flags</h5>
+              <ul>
+                <li data-i18n="guide.scam.t4.f1">Any request to enter, confirm or "back up" your seed phrase online.</li>
+                <li data-i18n="guide.scam.t4.f2">Words like validate, sync, migrate or restore attached to your wallet.</li>
+              </ul>
+            </div>
+            <div class="scam-block scam-do">
+              <h5 data-i18n="guide.scam.l.do">What to do</h5>
+              <ul>
+                <li data-i18n="guide.scam.t4.d1">Never type your seed phrase anywhere. Close the page immediately.</li>
+                <li data-i18n="guide.scam.t4.d2">Keep it offline only. MetaMask never asks for it after setup.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="scam-card" style="--accent:#51FFA5">
+          <summary>
+            <span class="scam-card-ico" aria-hidden="true">🛒</span>
+            <span class="scam-card-head">
+              <span class="scam-card-t" data-i18n="guide.scam.t5.t">Fake marketplaces &amp; lookalike sites</span>
+              <span class="scam-card-sub" data-i18n="guide.scam.t5.s">A convincing clone of the real thing</span>
+            </span>          </summary>
+          <div class="scam-card-body">
+            <div class="scam-block scam-how">
+              <h5 data-i18n="guide.scam.l.how">How it works</h5>
+              <p data-i18n="guide.scam.t5.how">Scammers spin up a fake "Highrise Creature" collection on OpenSea, or a phishing clone of Token Trove at a near-identical web address. You connect your wallet expecting the real site and sign a drainer request. Gen 1 Creatures only trade on Token Trove. Any Gen 1 "Highrise Creature" collection on OpenSea is fake.</p>
+            </div>
+            <div class="scam-block scam-flags">
+              <h5 data-i18n="guide.scam.l.flags">Red flags</h5>
+              <ul>
+                <li data-i18n="guide.scam.t5.f1">A web address with an extra letter, dash or odd ending you don't recognise.</li>
+                <li data-i18n="guide.scam.t5.f2">A "Highrise Creature" Gen 1 listing anywhere but Token Trove.</li>
+              </ul>
+            </div>
+            <div class="scam-block scam-do">
+              <h5 data-i18n="guide.scam.l.do">What to do</h5>
+              <ul>
+                <li data-i18n="guide.scam.t5.d1">Reach every marketplace through the official links in the Highrise Discord.</li>
+                <li data-i18n="guide.scam.t5.d2">Check the exact address before connecting. See the Links tab for the real ones.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="scam-card" style="--accent:#FFF95F">
+          <summary>
+            <span class="scam-card-ico" aria-hidden="true">🎁</span>
+            <span class="scam-card-head">
+              <span class="scam-card-t" data-i18n="guide.scam.t6.t">Fake giveaways &amp; free mints</span>
+              <span class="scam-card-sub" data-i18n="guide.scam.t6.s">"You won" something you never entered</span>
+            </span>          </summary>
+          <div class="scam-card-body">
+            <div class="scam-block scam-how">
+              <h5 data-i18n="guide.scam.l.how">How it works</h5>
+              <p data-i18n="guide.scam.t6.how">A post or DM says you won a prize, a whitelist spot, or a limited free mint. To "claim" it you connect your wallet and sign. The claim is a drainer, or the "small gas fee" is the theft itself. Urgency and a countdown are the bait.</p>
+            </div>
+            <div class="scam-block scam-flags">
+              <h5 data-i18n="guide.scam.l.flags">Red flags</h5>
+              <ul>
+                <li data-i18n="guide.scam.t6.f1">A win or free mint you never signed up for, with a ticking timer.</li>
+                <li data-i18n="guide.scam.t6.f2">"Just connect and sign to claim" or "pay a small fee to release it".</li>
+              </ul>
+            </div>
+            <div class="scam-block scam-do">
+              <h5 data-i18n="guide.scam.l.do">What to do</h5>
+              <ul>
+                <li data-i18n="guide.scam.t6.d1">Treat every surprise prize as fake until confirmed in an official channel.</li>
+                <li data-i18n="guide.scam.t6.d2">Real HCC drops come through official Highrise channels, never a random DM.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="scam-card" style="--accent:#5865F2">
+          <summary>
+            <span class="scam-card-ico" aria-hidden="true">💬</span>
+            <span class="scam-card-head">
+              <span class="scam-card-t" data-i18n="guide.scam.t7.t">Discord account &amp; bot compromise</span>
+              <span class="scam-card-sub" data-i18n="guide.scam.t7.s">A hacked friend or fake "verify" bot</span>
+            </span>          </summary>
+          <div class="scam-card-body">
+            <div class="scam-block scam-how">
+              <h5 data-i18n="guide.scam.l.how">How it works</h5>
+              <p data-i18n="guide.scam.t7.how">A hacked friend's account sends you a link, or a fake bot tells you to "re-verify" by scanning a QR code or authorising an app. Scanning a Discord login QR from a stranger hands them your account. Malicious links can also install software that reads your wallet.</p>
+            </div>
+            <div class="scam-block scam-flags">
+              <h5 data-i18n="guide.scam.l.flags">Red flags</h5>
+              <ul>
+                <li data-i18n="guide.scam.t7.f1">A "verify", "re-verify" or QR-scan prompt from a DM or unknown bot.</li>
+                <li data-i18n="guide.scam.t7.f2">A friend suddenly sharing a link, a giveaway, or a "free Nitro" offer.</li>
+              </ul>
+            </div>
+            <div class="scam-block scam-do">
+              <h5 data-i18n="guide.scam.l.do">What to do</h5>
+              <ul>
+                <li data-i18n="guide.scam.t7.d1">Never scan a login QR you didn't generate yourself. Turn on 2FA.</li>
+                <li data-i18n="guide.scam.t7.d2">If a friend sends something odd, confirm with them another way first.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="scam-card" style="--accent:#A8A7B5">
+          <summary>
+            <span class="scam-card-ico" aria-hidden="true">📋</span>
+            <span class="scam-card-head">
+              <span class="scam-card-t" data-i18n="guide.scam.t8.t">Address poisoning</span>
+              <span class="scam-card-sub" data-i18n="guide.scam.t8.s">A lookalike address in your history</span>
+            </span>          </summary>
+          <div class="scam-card-body">
+            <div class="scam-block scam-how">
+              <h5 data-i18n="guide.scam.l.how">How it works</h5>
+              <p data-i18n="guide.scam.t8.how">Scammers send tiny transactions from an address that starts and ends with the same characters as one you use. Later, you copy the address from your history to send funds, grab the lookalike by mistake, and the money goes to them. Transfers can't be reversed.</p>
+            </div>
+            <div class="scam-block scam-flags">
+              <h5 data-i18n="guide.scam.l.flags">Red flags</h5>
+              <ul>
+                <li data-i18n="guide.scam.t8.f1">Tiny unexpected transfers from an address that looks familiar.</li>
+                <li data-i18n="guide.scam.t8.f2">Relying on your transaction history to copy a "known" address.</li>
+              </ul>
+            </div>
+            <div class="scam-block scam-do">
+              <h5 data-i18n="guide.scam.l.do">What to do</h5>
+              <ul>
+                <li data-i18n="guide.scam.t8.d1">Check the full address, not just the first and last few characters.</li>
+                <li data-i18n="guide.scam.t8.d2">Send a tiny test amount first, or use a saved, verified address book.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+      </div>
+    </section>
+
+    <div class="divider">• • •</div>
+
+    <!-- Anatomy of a drain -->
+    <section class="wrap">
+      <div class="section-head">
+        <span class="topic-ico" style="--accent:#EC3326;--accent-soft:rgba(236,51,38,0.22)" aria-hidden="true">🩸</span>
+        <div class="section-head-t">
+          <div class="eyebrow" data-i18n="guide.scam.flow.eyebrow">Anatomy of a scam</div>
+          <h2 data-i18n="guide.scam.flow.h2">How an airdrop empties a wallet</h2>
+          <p class="lead" data-i18n="guide.scam.flow.lead">The exact chain of events behind the fake-NFT trick, so you can spot where to stop it. The safe move is to break the chain at step one.</p>
+        </div>
+      </div>
+      <ol class="scam-flow">
+        <li class="scam-flow-step" style="--accent:#51FFA5">
+          <span class="scam-flow-num">1</span>
+          <div class="scam-flow-t">
+            <h4 data-i18n="guide.scam.flow.s1h">A "gift" arrives</h4>
+            <p data-i18n="guide.scam.flow.s1p">An NFT you never bought shows up in your wallet. It's designed to look valuable and to make you curious.</p>
+          </div>
+        </li>
+        <li class="scam-flow-step" style="--accent:#FFF95F">
+          <span class="scam-flow-num">2</span>
+          <div class="scam-flow-t">
+            <h4 data-i18n="guide.scam.flow.s2h">It lures you to a site</h4>
+            <p data-i18n="guide.scam.flow.s2p">Its name or description carries a link to "claim", "sell" or "unlock" it. The link opens a drainer dressed up as a real marketplace.</p>
+          </div>
+        </li>
+        <li class="scam-flow-step" style="--accent:#FF9900">
+          <span class="scam-flow-num">3</span>
+          <div class="scam-flow-t">
+            <h4 data-i18n="guide.scam.flow.s3h">You connect and sign</h4>
+            <p data-i18n="guide.scam.flow.s3p">The site asks you to connect and approve a request. It looks routine, but the signature grants access to your real assets.</p>
+          </div>
+        </li>
+        <li class="scam-flow-step" style="--accent:#EC3326">
+          <span class="scam-flow-num">4</span>
+          <div class="scam-flow-t">
+            <h4 data-i18n="guide.scam.flow.s4h">The wallet is drained</h4>
+            <p data-i18n="guide.scam.flow.s4p">With that approval, the scammer moves out your Creatures and funds. On-chain transfers are final, so there's no undo.</p>
+          </div>
+        </li>
+      </ol>
+      <div class="guide-note" data-i18n="guide.scam.flow.note">Break the chain at step one: never interact with an item you didn't buy. Receiving it is harmless. Clicking is the trap.</div>
+    </section>
+
+    <div class="divider">• • •</div>
+
+    <!-- Spot the scam (interactive) -->
+    <section class="wrap">
+      <div class="section-head">
+        <span class="topic-ico" style="--accent:#8561FF;--accent-soft:rgba(133,97,255,0.22)" aria-hidden="true">🔎</span>
+        <div class="section-head-t">
+          <div class="eyebrow" data-i18n="guide.scam.spot.eyebrow">Train your eye</div>
+          <h2 data-i18n="guide.scam.spot.h2">Spot the scam</h2>
+          <p class="lead" data-i18n="guide.scam.spot.lead">Here's a real-style DM. Tap every part that looks like a red flag. See how many you catch.</p>
+        </div>
+      </div>
+
+      <div class="scam-spot" id="scam-spot">
+        <div class="scam-dm" role="group" aria-label="Example scam direct message">
+          <div class="scam-dm-head">
+            <span class="scam-dm-av" aria-hidden="true">HR</span>
+            <div class="scam-dm-id">
+              <span class="scam-dm-name">
+                <span class="scam-flag" data-flag data-i18n-tip="guide.scam.spot.tip.name" tabindex="0" role="button" aria-label="Red flag" data-i18n="guide.scam.spot.dm.name">Hlghrise Support</span>
+                <span class="scam-dm-badge" data-i18n="guide.scam.spot.dm.badge">MOD</span>
+              </span>
+              <span class="scam-dm-handle" data-i18n="guide.scam.spot.dm.handle">@highrise-support-team</span>
+            </div>
+            <span class="scam-dm-time" data-i18n="guide.scam.spot.dm.time">now</span>
+          </div>
+          <div class="scam-dm-body">
+            <p data-i18n="guide.scam.spot.dm.l1">Hey! This is the official Highrise team.</p>
+            <p>
+              <span class="scam-flag" data-flag data-i18n-tip="guide.scam.spot.tip.first" tabindex="0" role="button" aria-label="Red flag" data-i18n="guide.scam.spot.dm.l2">We noticed suspicious activity on your wallet and need to secure it right away.</span>
+            </p>
+            <p>
+              <span data-i18n="guide.scam.spot.dm.l3a">Please verify your wallet here within </span><span class="scam-flag" data-flag data-i18n-tip="guide.scam.spot.tip.urgency" tabindex="0" role="button" aria-label="Red flag" data-i18n="guide.scam.spot.dm.l3b">10 minutes</span><span data-i18n="guide.scam.spot.dm.l3c"> or it will be locked:</span>
+            </p>
+            <p>
+              <span class="scam-flag scam-flag-link" data-flag data-i18n-tip="guide.scam.spot.tip.link" tabindex="0" role="button" aria-label="Red flag" data-i18n="guide.scam.spot.dm.link">highrise-verify.app/secure</span>
+            </p>
+            <p>
+              <span class="scam-flag" data-flag data-i18n-tip="guide.scam.spot.tip.seed" tabindex="0" role="button" aria-label="Red flag" data-i18n="guide.scam.spot.dm.l4">Have your 12-word secret phrase ready to confirm ownership.</span>
+            </p>
+          </div>
+        </div>
+
+        <div class="scam-spot-side">
+          <div class="scam-spot-score">
+            <div class="scam-spot-count"><span data-count>0</span><span class="scam-spot-total">/ <span data-total>5</span></span></div>
+            <p class="scam-spot-label" data-scam-progress data-i18n="guide.scam.spot.startlabel">Tap the red flags above.</p>
+          </div>
+          <div class="scam-spot-actions">
+            <button class="apply-btn-ghost" type="button" data-scam-reveal data-i18n="guide.scam.spot.reveal">Reveal all</button>
+            <button class="apply-btn-ghost" type="button" data-scam-reset data-i18n="guide.scam.spot.reset">Reset</button>
+          </div>
+          <p class="scam-spot-hint" data-scam-hint data-i18n="guide.scam.spot.hint">Each flag you find is explained here.</p>
+          <ol class="scam-spot-tips" data-scam-tips aria-live="polite"></ol>
+          <p class="scam-spot-win" data-scam-win hidden data-i18n="guide.scam.spot.win">Nice. That instinct, treat surprises as guilty until proven safe, is what keeps your wallet yours.</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="divider">• • •</div>
+
+    <!-- Safety checklist (interactive, persisted) -->
+    <section class="wrap">
+      <div class="section-head">
+        <span class="topic-ico" style="--accent:#51FFA5;--accent-soft:rgba(81,255,165,0.22)" aria-hidden="true">✅</span>
+        <div class="section-head-t">
+          <div class="eyebrow" data-i18n="guide.scam.check.eyebrow">Lock it in</div>
+          <h2 data-i18n="guide.scam.check.h2">Your safety checklist</h2>
+          <p class="lead" data-i18n="guide.scam.check.lead">Tick these off once and they become second nature. Your progress is saved on this device.</p>
+        </div>
+      </div>
+
+      <div class="scam-check" id="scam-check">
+        <div class="scam-check-bar" aria-hidden="true"><span class="scam-check-fill" data-check-fill></span></div>
+        <p class="scam-check-progress" data-check-progress role="status" data-i18n="guide.scam.check.progress">0 of 6 habits locked in</p>
+        <ul class="scam-check-list">
+          <li><label class="scam-check-item"><input type="checkbox" data-check-item><span class="scam-check-box" aria-hidden="true"></span><span class="scam-check-text" data-i18n="guide.scam.check.c1">My seed phrase lives offline only. I've never typed it into a website.</span></label></li>
+          <li><label class="scam-check-item"><input type="checkbox" data-check-item><span class="scam-check-box" aria-hidden="true"></span><span class="scam-check-text" data-i18n="guide.scam.check.c2">I only reach marketplaces through the official Highrise Discord links.</span></label></li>
+          <li><label class="scam-check-item"><input type="checkbox" data-check-item><span class="scam-check-box" aria-hidden="true"></span><span class="scam-check-text" data-i18n="guide.scam.check.c3">I read every wallet popup before I sign, and reject anything I can't explain.</span></label></li>
+          <li><label class="scam-check-item"><input type="checkbox" data-check-item><span class="scam-check-box" aria-hidden="true"></span><span class="scam-check-text" data-i18n="guide.scam.check.c4">I ignore unsolicited DMs claiming to be staff or support.</span></label></li>
+          <li><label class="scam-check-item"><input type="checkbox" data-check-item><span class="scam-check-box" aria-hidden="true"></span><span class="scam-check-text" data-i18n="guide.scam.check.c5">I never interact with NFTs I didn't buy. I just hide them.</span></label></li>
+          <li><label class="scam-check-item"><input type="checkbox" data-check-item><span class="scam-check-box" aria-hidden="true"></span><span class="scam-check-text" data-i18n="guide.scam.check.c6">I have 2FA on Discord and I've reviewed my wallet's token approvals.</span></label></li>
+        </ul>
+        <p class="scam-check-done" data-check-done hidden data-i18n="guide.scam.check.done">You're dialed in. Come back any time to refresh.</p>
+      </div>
+    </section>
+
+    <div class="divider">• • •</div>
+
+    <!-- Emergency triage -->
+    <section class="wrap">
+      <div class="scam-emergency g2-reveal">
+        <div class="scam-emergency-head">
+          <span class="scam-emergency-ico" aria-hidden="true">🚨</span>
+          <div>
+            <div class="eyebrow" data-i18n="guide.scam.er.eyebrow">If you've been hit</div>
+            <h2 data-i18n="guide.scam.er.h2">Act now, in this order</h2>
+            <p data-i18n="guide.scam.er.lead">Clicked a bad link or signed something wrong? Move fast. Speed matters far more than embarrassment, and everyone has a close call eventually.</p>
+          </div>
+        </div>
+        <ol class="scam-er-steps">
+          <li><span class="scam-er-num">1</span><div><h4 data-i18n="guide.scam.er.s1h">Disconnect and go offline from it</h4><p data-i18n="guide.scam.er.s1p">Close the site, disconnect your wallet from it, and stop signing anything. Don't approve one more request "to fix it".</p></div></li>
+          <li><span class="scam-er-num">2</span><div><h4 data-i18n="guide.scam.er.s2h">Move your assets to a safe wallet</h4><p data-i18n="guide.scam.er.s2p">If you still have access, send your Creatures, LAND and funds to a fresh wallet whose seed phrase has never touched a website. Do the most valuable first.</p></div></li>
+          <li><span class="scam-er-num">3</span><div><h4 data-i18n="guide.scam.er.s3h">Revoke the approvals</h4><p data-i18n="guide.scam.er.s3p">From the compromised wallet, revoke token and collection approvals with a tool like revoke.cash. This cuts off the access the signature gave away.</p></div></li>
+          <li><span class="scam-er-num">4</span><div><h4 data-i18n="guide.scam.er.s4h">Secure your accounts</h4><p data-i18n="guide.scam.er.s4p">Change passwords and turn on 2FA for Discord and your email. If a device feels compromised, run a malware scan before you sign anything again.</p></div></li>
+          <li><span class="scam-er-num">5</span><div><h4 data-i18n="guide.scam.er.s5h">Report it and warn others</h4><p data-i18n="guide.scam.er.s5p">Tell the team in the public Highrise Discord with what happened and any links or addresses involved. Your report protects the next holder.</p></div></li>
+        </ol>
+        <p class="scam-er-note" data-i18n="guide.scam.er.note">A compromised seed phrase can't be made safe again. Once assets are on a fresh wallet, treat the old one as burned and stop using it.</p>
+      </div>
+    </section>
+
+    <!-- Report CTA -->
+    <section class="wrap">
+      <div class="card tilt" style="text-align:center">
+        <div class="eyebrow" data-i18n="guide.scam.report.eyebrow">See something?</div>
+        <h2 style="font-size:1.8rem" data-i18n="guide.scam.report.h">Report it, protect the club</h2>
+        <p style="margin-top:10px;color:var(--hr-fg-2)" data-i18n="guide.scam.report.p">Spotted a fake site, a scam DM or a suspicious airdrop? Post it in the Highrise Discord so the team can warn everyone. Members watching out for each other is our best defence.</p>
+      </div>
+    </section>
+
+  </div><!-- /scams -->
 
   <div class="guide-subpanel" data-subpanel="links" hidden>
   <section class="wrap">
