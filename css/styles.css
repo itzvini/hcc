@@ -713,72 +713,115 @@ footer p  { color: var(--hr-fg-2); font-size: 14px; max-width: 420px; margin: 10
   margin-left: 8px; vertical-align: middle;
 }
 
-/* ---------- ROADMAP ---------- */
-.rm-track { margin-top: 30px; position: relative; padding-left: 48px; }
-.rm-track::before {
-  content: ""; position: absolute;
-  left: 13px; top: 16px; bottom: 16px; width: 3px;
-  background: var(--hr-bg-4); border-radius: 4px;
+/* ---------- ROADMAP (phase board) ---------- */
+.rm-board { margin-top: 26px; display: flex; flex-direction: column; gap: 30px; }
+
+/* Phase group + per-phase accent — the accent cascades into the tiles inside.
+   padding:0 overrides the site-wide `section { padding: 40px 0 }` that would otherwise
+   only hit the <section> phases (not the Done <details>), creating lopsided gaps. */
+.rm-phase { margin: 0; padding: 0; }
+details.rm-phase:not([open]) > .rm-phase-head { margin-bottom: 0; }
+.rm-phase-done  { --accent: var(--hr-primary);   --accent-soft: var(--hr-primary-25);   }
+.rm-phase-now   { --accent: var(--hr-primary);   --accent-soft: var(--hr-primary-25);   }
+.rm-phase-next  { --accent: var(--hr-secondary); --accent-soft: var(--hr-secondary-25); }
+.rm-phase-later { --accent: var(--hr-banana);    --accent-soft: var(--hr-banana-25);    }
+.rm-phase-goal  { --accent: var(--hr-primary);   --accent-soft: var(--hr-primary-25);   }
+
+/* Neutralise the site-wide FAQ details/summary card chrome for the collapsible Done phase.
+   The "+"/"×" toggle (summary::after) and its rotate are intentionally kept — same convention
+   as the FAQ and Scam cards. */
+details.rm-phase { background: none; border: 0; border-radius: 0; margin: 0; overflow: visible; box-shadow: none; }
+
+/* Phase header — a <div> on static phases, a <summary> on the collapsible Done phase */
+.rm-phase-head {
+  display: flex; align-items: center; justify-content: flex-start; gap: 11px;
+  margin-bottom: 15px;
 }
-.rm-item { position: relative; margin-bottom: 20px; }
-.rm-dot {
-  position: absolute; left: -48px; top: 16px;
-  width: 26px; height: 26px; border-radius: 50%;
-  background: var(--hr-bg-4); border: 3px solid var(--hr-bg-3);
-  box-shadow: var(--hr-shadow-1); z-index: 1;
+summary.rm-phase-head { padding: 0; cursor: pointer; font: inherit; }
+summary.rm-phase-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; border-radius: 6px; }
+.rm-phase-dot {
+  width: 9px; height: 9px; border-radius: 50%; flex: none;
+  background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft);
 }
-.rm-item.rm-now  .rm-dot { background: var(--hr-primary);   border-color: var(--hr-primary-25);   animation: pulse 1.8s infinite; }
-.rm-item.rm-next .rm-dot { background: var(--hr-secondary); border-color: var(--hr-secondary-25); }
-.rm-item.rm-soon .rm-dot { background: var(--hr-alert);     border-color: var(--hr-alert-15);     }
-.rm-item.rm-later .rm-dot,
-.rm-item.rm-goal  .rm-dot { background: var(--hr-banana);   border-color: var(--hr-banana-25);    }
-.rm-item.rm-done .rm-dot  { background: var(--hr-primary);  border-color: var(--hr-primary-25);   }
-.rm-item.rm-done .rm-dot::after {
-  content: ""; position: absolute; left: 8px; top: 4px;
-  width: 5px; height: 10px; border: solid var(--hr-on-primary);
-  border-width: 0 2.5px 2.5px 0; transform: rotate(45deg);
-}
-.rm-card {
-  background: var(--hr-bg-2); border: 1px solid var(--hr-line);
-  border-radius: var(--hr-radius-xl); padding: 20px 22px 18px;
-  box-shadow: var(--hr-shadow-1);
-}
-.rm-item.rm-now .rm-card  { border-color: rgba(81,255,165,.2); box-shadow: 0 0 0 1px rgba(81,255,165,.1), var(--hr-shadow-2); }
-.rm-item.rm-goal .rm-card { background: var(--hr-primary);     border-color: transparent; box-shadow: var(--hr-shadow-2), var(--hr-glow-green); }
-.rm-item.rm-done .rm-card  { opacity: .65; }
-.rm-item.rm-done .rm-title { text-decoration: line-through; text-decoration-color: var(--hr-primary); }
-.rm-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
-.rm-emoji { font-size: 1.8rem; line-height: 1; margin-top: 2px; }
-.rm-badge {
-  font: 700 11px/1 var(--hr-sans);
+.rm-phase-now .rm-phase-dot { animation: pulse 1.8s infinite; }
+.rm-phase-label {
+  font: 800 12px/1 var(--hr-sans);
   letter-spacing: var(--hr-tracking-caps); text-transform: uppercase;
-  padding: 4px 12px; border-radius: var(--hr-radius-pill); white-space: nowrap;
+  color: var(--accent);
 }
-.rm-badge-now   { background: var(--hr-primary);   color: var(--hr-on-primary); }
-.rm-badge-next  { background: var(--hr-secondary); color: #fff; }
-.rm-badge-soon  { background: var(--hr-alert);     color: #fff; }
-.rm-badge-later { background: var(--hr-bg-4);      color: var(--hr-fg-1); }
-.rm-badge-goal  { background: var(--hr-on-primary); color: var(--hr-primary); }
-.rm-badge-done  { background: var(--hr-primary-25); color: var(--hr-primary); }
+.rm-phase-count {
+  font: 700 11px/1 var(--hr-sans); color: var(--hr-fg-3);
+  padding: 3px 9px; border-radius: var(--hr-radius-pill);
+  background: var(--hr-bg-3); border: 1px solid var(--hr-line);
+}
+.rm-phase-rule { flex: 1; height: 1px; background: linear-gradient(90deg, var(--hr-line), transparent); }
+
+/* Tile grid — 3-up on desktop, wraps down to 1 on mobile */
+.rm-grid { display: grid; gap: 13px; grid-template-columns: repeat(auto-fill, minmax(258px, 1fr)); }
+details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
+@keyframes rm-fade { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: none; } }
+
+/* Compact tile */
+.rm-tile {
+  position: relative; overflow: hidden;
+  background: var(--hr-bg-2); border: 1px solid var(--hr-line);
+  border-radius: var(--hr-radius-lg); padding: 15px 16px 14px;
+  box-shadow: var(--hr-shadow-1);
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease, opacity .2s ease;
+}
+.rm-tile::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px;
+  background: linear-gradient(90deg, var(--accent), transparent 72%);
+}
+.rm-tile:hover { transform: translateY(-3px); border-color: var(--accent-soft); box-shadow: var(--hr-shadow-2); }
+.rm-tile-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
+.rm-tile .rm-emoji { font-size: 1.45rem; line-height: 1; }
+
+/* Category chip (reused) */
 .rm-cat {
   display: inline-block; font: 700 11px/1 var(--hr-sans);
   letter-spacing: var(--hr-tracking-caps); text-transform: uppercase;
-  padding: 3px 10px; border-radius: var(--hr-radius-pill); margin-bottom: 8px;
+  padding: 3px 10px; border-radius: var(--hr-radius-pill); margin: 0;
 }
 .rm-cat-content    { background: var(--hr-alert-15);     color: var(--hr-alert);     }
 .rm-cat-governance { background: var(--hr-secondary-25); color: var(--hr-secondary); }
 .rm-cat-utility    { background: var(--hr-primary-25);   color: var(--hr-primary);   }
 .rm-cat-product    { background: var(--hr-banana-25);    color: var(--hr-banana);    }
-.rm-item.rm-goal .rm-cat  { background: rgba(0,0,0,.18); color: var(--hr-on-primary); }
-.rm-title { font: 700 16px/1.25 var(--hr-sans); color: var(--hr-fg-0); margin-bottom: 6px; }
-.rm-item.rm-goal .rm-title { color: var(--hr-on-primary); }
-.rm-desc { font-size: 13px; color: var(--hr-fg-2); line-height: 1.5; }
-.rm-item.rm-goal .rm-desc  { color: rgba(15,16,20,.7); }
+
+.rm-title { font: 700 14.5px/1.3 var(--hr-sans); color: var(--hr-fg-0); margin: 0 0 5px; }
+/* padding:0 also overrides the site-wide `details p` rule for descriptions inside the Done phase */
+.rm-desc { font-size: 12.5px; line-height: 1.5; color: var(--hr-fg-2); margin: 0; padding: 0; }
+
+/* Now — spotlight glow + emphasis */
+.rm-phase-now .rm-tile { border-color: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-soft), var(--hr-glow-green); }
+
+/* Done — completed, recessive; each tile brightens on hover */
+.rm-phase-done .rm-tile { opacity: .58; }
+.rm-phase-done .rm-tile:hover { opacity: 1; }
+.rm-phase-done .rm-title { text-decoration: line-through; text-decoration-color: var(--hr-primary); text-decoration-thickness: 2px; }
+
+/* Goal — full-width filled capstone */
+.rm-tile-goal { grid-column: 1 / -1; background: var(--hr-primary); border-color: transparent; box-shadow: var(--hr-shadow-2), var(--hr-glow-green); padding: 20px 22px; }
+.rm-tile-goal::before { display: none; }
+.rm-tile-goal .rm-title { color: var(--hr-on-primary); font-size: 16px; }
+.rm-tile-goal .rm-desc  { color: rgba(15,16,20,.72); }
+.rm-tile-goal .rm-cat   { background: rgba(0,0,0,.18); color: var(--hr-on-primary); }
+
 .rm-note {
-  margin-top: 28px; text-align: center;
+  margin-top: 30px; text-align: center;
   font: 700 11px/1 var(--hr-sans);
   letter-spacing: var(--hr-tracking-caps); text-transform: uppercase;
   color: var(--hr-fg-3);
+}
+
+@media (max-width: 560px) {
+  .rm-board { gap: 26px; }
+  .rm-grid { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rm-tile, .rm-tile:hover { transition: none; transform: none; }
+  .rm-phase-now .rm-phase-dot { animation: none; }
+  details.rm-phase[open] > .rm-grid { animation: none; }
 }
 
 /* ---------- GEN 2 SHOWCASE (Roadmap tab) ---------- */
