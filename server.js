@@ -4442,7 +4442,9 @@ const contentTypes = {
   '.gif': 'image/gif',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
-  '.webp': 'image/webp'
+  '.webp': 'image/webp',
+  '.txt': 'text/plain; charset=utf-8',
+  '.xml': 'application/xml; charset=utf-8'
 };
 
 // Strict allowlist for static serving. ONLY these top-level directories and root
@@ -4450,7 +4452,7 @@ const contentTypes = {
 // server.js, package.json, node_modules, etc.) returns 404. This is the primary
 // guard against leaking secrets or source on an open-source, self-hostable repo.
 const PUBLIC_DIRS  = new Set(['css', 'js', 'img', 'assets', 'fonts', 'locales']);
-const PUBLIC_FILES = new Set(['index.html', 'changelog.json', 'gen2-progress.json', 'favicon.ico', 'robots.txt']);
+const PUBLIC_FILES = new Set(['index.html', 'changelog.json', 'gen2-progress.json', 'favicon.ico', 'robots.txt', 'sitemap.xml']);
 // Gzip candidates: text formats plus raw OpenType/TrueType fonts (~45% smaller).
 // WOFF/WOFF2 and images are already compressed — recompressing wastes CPU for ~0%.
 const COMPRESSIBLE_EXT = new Set(['.html', '.css', '.js', '.json', '.svg', '.otf', '.ttf']);
@@ -4464,7 +4466,7 @@ const TAB_ROUTES = new Set(['club', 'announcements', 'council', 'apply', 'polls'
 const SERVABLE_EXT = new Set([
   '.html', '.css', '.js', '.json',
   '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp',
-  '.otf', '.ttf', '.woff', '.woff2', '.txt',
+  '.otf', '.ttf', '.woff', '.woff2', '.txt', '.xml',
 ]);
 
 // Content-Security-Policy for HTML pages: scripts only from self + the Chart.js CDN
