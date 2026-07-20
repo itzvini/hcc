@@ -1820,6 +1820,12 @@ footer { margin-top: 28px; }
   box-shadow: 0 18px 44px rgba(88,101,242,.62), inset 0 1px 0 rgba(255,255,255,.3);
 }
 .apply-discord-btn:active { transform: translateY(-1px) scale(.99); }
+/* Compact variant — inline in tight spots like the profile popover. */
+.apply-discord-btn.is-sm {
+  gap: 8px; padding: 11px 20px; font-size: 13.5px;
+  box-shadow: 0 6px 18px rgba(88,101,242,.4), inset 0 1px 0 rgba(255,255,255,.22);
+}
+.apply-discord-btn.is-sm .apply-discord-logo svg { width: 20px; height: 15px; }
 .apply-discord-logo { display: inline-flex; }
 .apply-discord-logo svg { width: 26px; height: 20px; display: block; }
 .apply-discord-btn:hover .apply-discord-logo { animation: apply-wiggle .55s ease; }
@@ -2309,6 +2315,8 @@ footer { margin-top: 28px; }
 /* One-row command bar: collection ⟷ actions ⟷ wallet. */
 .trade-command {
   position: relative; z-index: 6; /* its ⓘ tips and net pill ride above the browse area */
+  /* Profile deep links scrollIntoView here — clear the sticky nav bar above. */
+  scroll-margin-top: 170px;
   display: flex; flex-direction: column; gap: 12px;
   padding: 12px 14px;
   border: 1px solid var(--hr-line-strong); border-radius: var(--hr-radius-xl);
@@ -5330,4 +5338,389 @@ a.ann-embed-title:hover { color: var(--hr-secondary); }
   .scam-check-box, .scam-check-box::after { transition: none; }
   .scam-card-body, .scam-spot-tips li { animation: none; }
   .scam-jump:hover { transform: none; }
+}
+
+/* --- Public holder profile (rendered inside the Trade panel's profile view) --- */
+/* The opt-in collection showcase. Same premium bar as the Apply panel: frosted
+   glass, brand-token aurora, staggered reveals — all off under reduced motion. */
+
+/* One-strip identity band: avatar (spinning brand ring) · name/wallet · inline stat
+   chips · share CTA, safety note as a slim footer. Keeps everything above the grid
+   to ~a third of the old three-block stack, so the collection is the page. */
+.hp-hero {
+  position: relative; overflow: hidden;
+  display: flex; align-items: center; gap: 14px 22px; flex-wrap: wrap;
+  text-align: left;
+  padding: 18px 22px 14px;
+  border-radius: var(--hr-radius-2xl);
+  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015));
+  border: 1px solid var(--hr-line-strong);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), var(--hr-shadow-3);
+}
+.hp-hero-glow {
+  position: absolute; inset: -40%; pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(38% 42% at 18% 8%,  var(--hr-primary-25) 0%, transparent 70%),
+    radial-gradient(34% 40% at 85% 20%, var(--hr-secondary-25) 0%, transparent 70%),
+    radial-gradient(26% 30% at 60% 95%, var(--hr-banana-25) 0%, transparent 75%);
+  opacity: 0.55; filter: blur(30px);
+  animation: hp-aurora 14s ease-in-out infinite alternate;
+}
+@keyframes hp-aurora {
+  from { transform: rotate(0deg) scale(1); }
+  to   { transform: rotate(6deg) scale(1.08); }
+}
+.hp-hero > *:not(.hp-hero-glow) { position: relative; z-index: 1; }
+
+/* Avatar in a slowly sweeping brand-gradient ring (the sweep halts under reduced motion). */
+.hp-avatar-wrap { position: relative; flex: none; width: 74px; height: 74px; }
+.hp-avatar-wrap::before {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(from 0deg, var(--hr-primary), var(--hr-secondary), var(--hr-banana), var(--hr-primary));
+  box-shadow: var(--hr-glow-green);
+  animation: hp-ring 9s linear infinite;
+}
+@keyframes hp-ring { to { transform: rotate(360deg); } }
+.hp-avatar {
+  position: absolute; inset: 3px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  font: 900 28px/1 var(--hr-sans); color: var(--hr-on-primary);
+  background: linear-gradient(135deg, var(--hr-primary), var(--hr-secondary));
+}
+.hp-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.hp-who { min-width: 0; flex: 1 1 200px; }
+.hp-name { font-size: clamp(1.3rem, 3vw, 1.75rem); color: var(--hr-fg-0); margin: 2px 0 7px; overflow-wrap: anywhere; }
+.hp-wallet { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hp-wallet-addr {
+  font-size: 13px; color: var(--hr-fg-1); letter-spacing: 0.02em;
+  background: rgba(255,255,255,0.06); border: 1px solid var(--hr-line);
+  padding: 5px 10px; border-radius: var(--hr-radius-pill);
+}
+.hp-chipbtn {
+  font: 700 12px/1 var(--hr-sans); color: var(--hr-fg-1); cursor: pointer;
+  background: rgba(255,255,255,0.06); border: 1px solid var(--hr-line);
+  padding: 6px 12px; border-radius: var(--hr-radius-pill);
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.hp-chipbtn:hover { color: var(--hr-fg-0); border-color: var(--hr-line-strong); background: rgba(255,255,255,0.1); }
+.hp-chipbtn.is-copied { color: var(--hr-primary); border-color: var(--hr-primary-25); }
+.hp-share {
+  flex: none; cursor: pointer; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 18px; border: none; border-radius: var(--hr-radius-pill);
+  background: var(--hr-primary); color: var(--hr-on-primary);
+  font: 800 13px/1 var(--hr-sans);
+  box-shadow: var(--hr-glow-green), inset 0 1px 0 rgba(255,255,255,0.3);
+  transition: transform 0.18s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.2s, background 0.2s;
+}
+.hp-share:hover { background: var(--hr-primary-press); transform: translateY(-2px); box-shadow: 0 14px 34px rgba(81,255,165,0.4); }
+.hp-share:active { transform: translateY(0) scale(0.99); }
+.hp-share.is-copied { filter: brightness(1.1); }
+
+/* Inline stat chips (brand marks, count-up numbers) instead of the old stat boxes. */
+.hp-statchips { display: flex; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+.hp-statchip {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 9px 15px; border-radius: var(--hr-radius-lg);
+  background: rgba(255,255,255,0.045); border: 1px solid var(--hr-line);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  transition: transform 0.18s ease, border-color 0.18s ease;
+}
+.hp-statchip:hover { transform: translateY(-2px); border-color: var(--hr-primary-25); }
+.hp-statchip-ico { width: 22px; height: 22px; object-fit: contain; border-radius: 4px; flex: none; }
+span.hp-statchip-ico { font-size: 17px; line-height: 22px; text-align: center; color: var(--hr-banana); }
+.hp-statchip-txt { display: flex; flex-direction: column; }
+.hp-statchip-txt b { font: 900 18px/1.1 var(--hr-sans); color: var(--hr-primary); font-variant-numeric: tabular-nums; }
+.hp-statchip.is-total .hp-statchip-txt b { color: var(--hr-banana); }
+.hp-statchip-txt span { font: 700 9.5px/1.3 var(--hr-sans); color: var(--hr-fg-2); text-transform: uppercase; letter-spacing: 0.07em; }
+
+/* Safety note: slim full-width footer inside the band. */
+.hp-safety { flex-basis: 100%; margin: 2px 0 0; font-size: 11.5px; color: var(--hr-fg-3); line-height: 1.45; padding-left: 10px; border-left: 2px solid var(--hr-primary-25); }
+
+/* One toolbar row: collection + scope + wallet segs left, result meta right. */
+.hp-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0 12px; }
+.hp-meta { font-size: 12.5px; color: var(--hr-fg-2); margin: 0 2px 0 auto; min-height: 1.2em; }
+
+.hp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 14px; }
+.hp-tile {
+  position: relative; overflow: hidden;
+  border-radius: var(--hr-radius-lg);
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012));
+  border: 1px solid var(--hr-line);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), var(--hr-shadow-1);
+  opacity: 0; transform: translateY(10px);
+  animation: hp-tile-in 0.45s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+  animation-delay: var(--hp-d, 0ms);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+@keyframes hp-tile-in { to { opacity: 1; transform: none; } }
+.hp-tile:hover { transform: translateY(-3px); border-color: var(--hr-primary-25); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), var(--hr-glow-green), var(--hr-shadow-2); }
+.hp-tile-media { position: relative; aspect-ratio: 1; background: var(--hr-bg-2); }
+.hp-tile-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hp-tile-noimg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 30px; color: var(--hr-fg-4); }
+/* Market state on every tile: listed (mint + price) or not listed (neutral glass). */
+.hp-tile-status {
+  position: absolute; left: 8px; bottom: 8px; z-index: 2;
+  font: 800 10.5px/1 var(--hr-sans); border-radius: var(--hr-radius-pill);
+  padding: 5px 10px; box-shadow: var(--hr-shadow-1);
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.hp-tile-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.hp-tile-status.is-listed { color: var(--hr-on-primary); background: var(--hr-primary); }
+.hp-tile-status.is-unlisted {
+  color: var(--hr-fg-2); background: rgba(20,19,23,0.82);
+  border: 1px solid var(--hr-line-strong);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+
+/* Full-cover "view in market" button: invisible hit target with a hint that slides up
+   on hover/focus. Sits above the media so a tap anywhere on the tile opens the token. */
+.hp-tile-view {
+  position: absolute; inset: 0; z-index: 3; cursor: pointer;
+  border: 0; background: transparent; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.18s ease;
+}
+.hp-tile:hover .hp-tile-view { background: rgba(10,10,14,0.28); }
+.hp-tile-view:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: -2px; border-radius: var(--hr-radius-lg); }
+.hp-tile-view-hint {
+  pointer-events: none;
+  font: 800 12px/1 var(--hr-sans); color: var(--hr-on-primary);
+  background: var(--hr-secondary); border-radius: var(--hr-radius-pill);
+  padding: 8px 14px; box-shadow: var(--hr-shadow-2);
+  opacity: 0; transform: translateY(8px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.hp-tile:hover .hp-tile-view-hint,
+.hp-tile-view:focus-visible .hp-tile-view-hint { opacity: 1; transform: none; }
+.hp-tile-body { padding: 10px 12px 12px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.hp-tile-name { font: 800 13.5px/1.3 var(--hr-sans); color: var(--hr-fg-0); width: 100%; overflow-wrap: anywhere; }
+.hp-tile-sub { font: 700 11px/1.2 var(--hr-sans); color: var(--hr-fg-2); text-transform: uppercase; letter-spacing: 0.05em; }
+.hp-tile-sub[data-rar="legendary"] { color: var(--hr-banana); }
+.hp-tile-sub[data-rar="epic"]      { color: var(--hr-secondary); }
+.hp-tile-sub[data-rar="rare"]      { color: var(--hr-blueberry); }
+.hp-tile-sub[data-rar="uncommon"]  { color: var(--hr-primary); }
+.hp-tile-rank { margin-left: auto; font: 700 11px/1.2 var(--hr-sans); color: var(--hr-fg-3); font-variant-numeric: tabular-nums; }
+
+.hp-skel { animation: hp-tile-in 0.3s ease forwards; }
+.hp-skel .hp-tile-media { background: linear-gradient(100deg, var(--hr-bg-2) 40%, var(--hr-bg-3) 50%, var(--hr-bg-2) 60%); background-size: 200% 100%; animation: hp-shimmer 1.4s linear infinite; }
+.hp-skel .hp-tile-body span { display: block; height: 11px; border-radius: 6px; background: var(--hr-bg-3); }
+.hp-skel .hp-tile-body span:first-child { width: 70%; }
+.hp-skel .hp-tile-body span:last-child { width: 45%; }
+@keyframes hp-shimmer { to { background-position: -200% 0; } }
+
+.hp-state { grid-column: 1 / -1; text-align: center; padding: 48px 20px; color: var(--hr-fg-2); font-size: 14.5px; display: grid; gap: 14px; justify-items: center; }
+.hp-loadmore { display: flex; justify-content: center; margin-top: 20px; }
+.hp-fineprint { margin-top: 30px; }
+
+.hp-notfound { text-align: center; padding: 56px 30px; display: grid; gap: 12px; justify-items: center; }
+.hp-state-ico { font-size: 44px; }
+.hp-notfound-p { color: var(--hr-fg-2); font-size: 14.5px; line-height: 1.55; max-width: 460px; }
+
+/* Multi-wallet profile: "+N wallets" hint, wallet filter chips, per-tile wallet badge. */
+.hp-wallet-more { font-size: 12px; color: var(--hr-fg-3); font-weight: 700; }
+.hp-wallet-seg { flex-wrap: wrap; }
+.hp-tile-wallet {
+  position: absolute; top: 8px; left: 8px;
+  font: 800 10px/1 var(--hr-sans); letter-spacing: 0.02em;
+  color: var(--hr-fg-0); background: rgba(20,19,23,0.82);
+  border: 1px solid var(--hr-line-strong); border-radius: var(--hr-radius-pill);
+  padding: 4px 8px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.hp-tile-wallet.is-highrise { color: var(--hr-primary); border-color: var(--hr-primary-25); }
+/* Trust tiers on tile badges + hero: verified (mint), Highrise-linked (neutral), warning (amber). */
+.hp-tile-wallet.hp-trust-verified { color: var(--hr-primary); border-color: var(--hr-primary-25); }
+.hp-tile-wallet.hp-trust-verified::before { content: "✓ "; }
+.hp-tile-wallet.hp-trust-linked { color: var(--hr-fg-1); }
+.hp-tile-wallet.hp-trust-warn { color: var(--hr-banana); border-color: var(--hr-banana-25); }
+.hp-tile-wallet.hp-trust-warn::before { content: "⚠ "; }
+.hp-badge { font: 800 11px/1 var(--hr-sans); padding: 4px 9px; border-radius: var(--hr-radius-pill); border: 1px solid var(--hr-line); }
+.hp-badge-verified { color: var(--hr-primary); border-color: var(--hr-primary-25); background: rgba(81,255,165,0.08); }
+.hp-badge-verified::before { content: "✓ "; }
+
+/* Anti-scam banner: a wallet on this profile that a DIFFERENT member has verified. */
+.hp-warn {
+  display: flex; flex-direction: column; gap: 8px; margin: 14px 0 4px;
+  padding: 14px 16px; border-radius: var(--hr-radius-lg);
+  background: var(--hr-banana-25); border: 1px solid rgba(255,249,95,0.4);
+}
+.hp-warn-line { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--hr-fg-0); line-height: 1.5; }
+.hp-warn-ico { flex: none; color: var(--hr-banana); font-size: 15px; }
+.hp-warn-link { color: var(--hr-primary); font-weight: 800; text-decoration: none; }
+.hp-warn-link:hover { text-decoration: underline; }
+
+/* --- Collection-switcher brand icons (Creatures = HCC glyph, LAND = Highrise emoji) --- */
+.trade-coll-switch .seg-btn { display: inline-flex; align-items: center; gap: 6px; }
+.trade-coll-ico { width: 16px; height: 16px; object-fit: contain; border-radius: 3px; flex: none; }
+/* Wallet-bar balance pips (Creatures / LAND counts) — brand marks, not emoji. */
+.trade-bal-ico { width: 14px; height: 14px; object-fit: contain; border-radius: 3px; vertical-align: -2px; }
+
+/* --- Holder profile: nav pill (action-tab row) + in-view manage card --- */
+/* The pill sits at the far right of the action-tab row — the persistent doorway to
+   your own profile. Clicking it swaps the marketplace content area for the profile
+   view (manage card + live showcase). */
+.trade-hp-pill {
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  margin-left: auto;
+  padding: 9px 14px; border-radius: var(--hr-radius-pill);
+  border: 1px solid var(--hr-line-strong); background: rgba(255,255,255,0.05);
+  color: var(--hr-fg-1); font: 800 12px/1 var(--hr-sans); white-space: nowrap;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+.trade-hp-pill:hover { color: var(--hr-fg-0); border-color: var(--hr-fg-3); transform: translateY(-1px); }
+.trade-hp-pill svg { flex: none; }
+.trade-hp-pill.is-live { color: var(--hr-primary); border-color: var(--hr-primary-25); background: rgba(81,255,165,0.08); }
+.trade-hp-pill.is-active {
+  color: var(--hr-on-primary); background: var(--hr-primary); border-color: var(--hr-primary);
+  box-shadow: var(--hr-glow-green);
+}
+.trade-hp-pill.is-active .trade-hp-dot { background: var(--hr-on-primary); box-shadow: none; }
+
+/* The profile view stacks manage card over showcase in the marketplace content area. */
+.trade-profile-view { display: flex; flex-direction: column; gap: 18px; }
+#profile-app[hidden] { display: none; }
+
+/* Manage card. Pre-enable: pitch + one CTA on a single row. Live: a slim strip
+   (LIVE · link · Copy · Wallets toggle · Turn off) with the wallet manager in a
+   collapsible drawer — the showcase below stays one glance away. */
+.trade-hp-card {
+  display: flex; flex-direction: column; gap: 12px; padding: 13px 18px;
+  border-radius: var(--hr-radius-xl);
+  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015));
+  border: 1px solid var(--hr-line-strong);
+  box-shadow: var(--hr-shadow-2), inset 0 1px 0 rgba(255,255,255,0.06);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  animation: hp-pop-in 0.16s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.trade-hp-card[hidden] { display: none; }
+@keyframes hp-pop-in { from { opacity: 0; transform: translateY(-6px); } }
+.trade-hp-pitchrow { display: flex; align-items: center; gap: 14px 24px; flex-wrap: wrap; justify-content: space-between; }
+.trade-hp-pitchrow .trade-hp-pop-head { flex: 1 1 320px; }
+.trade-hp-pitch-cta { display: inline-flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; }
+.trade-hp-strip { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; }
+.trade-hp-strip .trade-hp-link { padding: 7px 11px; }
+/* Push Turn off + Disconnect to the far right; a hairline separates them from the link tools. */
+.trade-hp-strip-sep { margin-left: auto; }
+/* Discord disconnect — quiet text link, reddens on hover (it ends the session). */
+.trade-hp-disc {
+  font: 700 12px/1 var(--hr-sans); color: var(--hr-fg-3); text-decoration: none;
+  padding: 8px 6px; white-space: nowrap; transition: color 0.15s ease;
+}
+.trade-hp-disc:hover { color: var(--hr-alert); text-decoration: underline; }
+.trade-hp-wtoggle {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  padding: 8px 13px; border-radius: var(--hr-radius-pill);
+  border: 1px solid var(--hr-line-strong); background: rgba(255,255,255,0.05);
+  color: var(--hr-fg-1); font: 800 12px/1 var(--hr-sans); white-space: nowrap;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.trade-hp-wtoggle:hover { color: var(--hr-fg-0); border-color: var(--hr-fg-3); }
+.trade-hp-wtoggle svg { transition: transform 0.18s ease; }
+.trade-hp-wtoggle.is-open { color: var(--hr-primary); border-color: var(--hr-primary-25); }
+.trade-hp-wtoggle.is-open svg { transform: rotate(180deg); }
+.trade-hp-wdrawer { animation: hp-pop-in 0.16s cubic-bezier(0.2, 0.7, 0.3, 1); }
+.trade-hp-pop-head { display: flex; align-items: flex-start; gap: 12px; }
+.trade-hp-pop-ico {
+  flex: none; width: 34px; height: 34px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--hr-primary); background: rgba(81,255,165,0.1); border: 1px solid var(--hr-primary-25);
+}
+.trade-hp-h { font: 800 14px/1.3 var(--hr-sans); color: var(--hr-fg-0); }
+.trade-hp-sub { font-size: 12.5px; color: var(--hr-fg-2); line-height: 1.45; margin-top: 3px; }
+.trade-hp-hint { font-size: 12.5px; color: var(--hr-fg-2); line-height: 1.45; }
+.trade-hp-err { font-size: 12px; color: var(--hr-alert); font-weight: 700; }
+.trade-hp-live { display: inline-flex; align-items: center; gap: 7px; font: 800 11px/1 var(--hr-sans); color: var(--hr-primary); text-transform: uppercase; letter-spacing: 0.06em; }
+.trade-hp-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--hr-online); box-shadow: 0 0 8px var(--hr-online); animation: hp-pulse 2s ease-in-out infinite; flex: none; }
+@keyframes hp-pulse { 50% { opacity: 0.45; } }
+.trade-hp-link {
+  font: 700 12px/1.3 var(--hr-sans); color: var(--hr-fg-0); text-decoration: none;
+  background: rgba(255,255,255,0.06); border: 1px solid var(--hr-line);
+  padding: 8px 12px; border-radius: var(--hr-radius-md);
+  transition: border-color 0.15s ease, color 0.15s ease; overflow-wrap: anywhere;
+}
+.trade-hp-link:hover { color: var(--hr-primary); border-color: var(--hr-primary-25); }
+.trade-hp-signin { justify-content: center; }
+/* Buttons borrowed from other components need popover-friendly sizing. */
+.trade-hp-btn { width: auto; margin-top: 0; }
+.trade-hp-btn.trade-send { flex: none; padding: 10px 16px; font-size: 13px; }
+.trade-hp-btn.trade-send.is-sm { padding: 9px 14px; font-size: 12.5px; }
+.trade-hp-btn.apply-logout { padding: 9px 14px; }
+
+/* Manage-wallets block inside the drawer. */
+.trade-hp-wallets { border-top: 1px solid var(--hr-line); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.trade-hp-wtitle { font: 800 11px/1 var(--hr-sans); color: var(--hr-fg-2); text-transform: uppercase; letter-spacing: 0.07em; }
+.trade-hp-wlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.trade-hp-wrow {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px; border-radius: var(--hr-radius-md);
+  background: rgba(255,255,255,0.04); border: 1px solid var(--hr-line);
+}
+.trade-hp-wsrc { font: 800 10px/1 var(--hr-sans); text-transform: uppercase; letter-spacing: 0.05em; color: var(--hr-fg-2); }
+.trade-hp-wsrc.is-anchor { color: var(--hr-primary); }
+.trade-hp-wtag { font: 800 9.5px/1 var(--hr-sans); text-transform: uppercase; letter-spacing: 0.04em; padding: 3px 7px; border-radius: var(--hr-radius-pill); border: 1px solid var(--hr-line); }
+.trade-hp-wtag.is-verified { color: var(--hr-primary); border-color: var(--hr-primary-25); background: rgba(81,255,165,0.08); }
+.trade-hp-wtag.is-verified::before { content: "✓ "; }
+.trade-hp-wtag.is-linked { color: var(--hr-fg-3); }
+.trade-hp-waddr { font: 700 12px/1 var(--hr-sans); color: var(--hr-fg-0); margin-right: auto; }
+.trade-hp-wlock { font-size: 12px; opacity: 0.7; }
+.trade-hp-wverify {
+  flex: none; cursor: pointer; font: 800 11px/1 var(--hr-sans);
+  padding: 6px 11px; border-radius: var(--hr-radius-pill);
+  color: var(--hr-on-primary); background: var(--hr-primary); border: none;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.trade-hp-wverify:hover:not(:disabled) { background: var(--hr-primary-press); transform: translateY(-1px); }
+.trade-hp-wverify:disabled { opacity: 0.6; cursor: default; }
+.trade-hp-wx {
+  width: 22px; height: 22px; flex: none; cursor: pointer; line-height: 1;
+  display: grid; place-items: center; border-radius: 50%; font-size: 15px;
+  color: var(--hr-fg-2); background: rgba(255,255,255,0.06); border: 1px solid var(--hr-line);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.trade-hp-wx:hover:not(:disabled) { color: var(--hr-alert); border-color: var(--hr-alert); }
+.trade-hp-whint { font-size: 12px; color: var(--hr-fg-3); line-height: 1.45; }
+.trade-hp-linkbtn { align-self: flex-start; }
+
+/* Profile-username match banner in the marketplace browse grid. */
+.trade-wallet-banner.is-profile { border-color: var(--hr-primary-25); }
+.trade-profile-link { color: var(--hr-primary); text-decoration: none; font-weight: 700; cursor: pointer; }
+.trade-profile-link:hover { text-decoration: underline; }
+
+@media (max-width: 720px) {
+  /* The action tabs go full-width on mobile; the pill takes its own row below them. */
+  .trade-hp-pill { width: 100%; justify-content: center; margin-left: 0; padding: 12px 14px; }
+  /* The mobile sticky nav is the compact one-line bar. */
+  .trade-command { scroll-margin-top: 76px; }
+}
+
+@media (max-width: 720px) {
+  .hp-hero { padding: 15px 15px 12px; gap: 10px 14px; }
+  .hp-avatar-wrap { width: 56px; height: 56px; }
+  .hp-avatar { font-size: 21px; }
+  .hp-statchips { margin-left: 0; width: 100%; }
+  .hp-statchip { flex: 1 1 0; justify-content: center; padding: 8px 8px; gap: 8px; }
+  .hp-share { width: 100%; }
+  .hp-meta { margin-left: 2px; width: 100%; }
+  .hp-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .trade-hp-body { width: 100%; }
+  .trade-hp-strip-sep { margin-left: 0; display: none; }
+}
+@media (max-width: 480px) {
+  .hp-statchip-txt b { font-size: 15px; }
+  .hp-statchip-ico { width: 18px; height: 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hp-hero-glow { animation: none; }
+  .hp-avatar-wrap::before { animation: none; }
+  .hp-tile { animation: none; opacity: 1; transform: none; transition: none; }
+  .hp-tile:hover { transform: none; }
+  .hp-statchip { transition: none; }
+  .hp-statchip:hover { transform: none; }
+  .hp-skel .hp-tile-media { animation: none; }
+  .trade-hp-dot { animation: none; }
+  .trade-hp-card, .trade-hp-wdrawer { animation: none; }
 }

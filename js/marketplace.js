@@ -1,4 +1,6 @@
 import { t } from './i18n.js';
+import { DISCORD_SVG } from './apply.js';
+import { loadProfile } from './profile.js';
 
 // HCC Marketplace — Phase 0 (connect + transfer) + Phase 1 (public browse).
 // Non-custodial throughout: browsing is read-only public data from our own server;
@@ -21,9 +23,16 @@ const EXPLORER = 'https://explorer.immutable.com';
 // the chain every action needs, and which features exist (offers/sell are
 // Creatures-only until LAND listing-creation ships).
 const LAND_CONTRACT_L1 = '0x8bf3a40ea2337e6e4f6e540680ea6390cb3b4e11';
+// Brand marks for each collection (real assets, not emoji): the HCC glyph for Creatures,
+// the Highrise LAND emoji for LAND. cdn.discordapp.com is in the page CSP img-src.
+const COLL_ICONS = {
+  creatures: '/img/brands/icon_hcc.png',
+  land:      'https://cdn.discordapp.com/emojis/974503320414744626.webp?size=128',
+};
+const collIco = id => `<img class="trade-coll-ico" src="${COLL_ICONS[id]}" alt="" aria-hidden="true" />`;
 const COLLECTIONS = {
-  creatures: { api: '/api/market/creatures', chainHex: ZK_CHAIN_ID_HEX, contract: CREATURE_CONTRACT, labelKey: 'trade.coll.creatures', ico: '🐾' },
-  land:      { api: '/api/market/land',      chainHex: '0x1',           contract: LAND_CONTRACT_L1, labelKey: 'trade.coll.land',      ico: '🗺️' },
+  creatures: { api: '/api/market/creatures', chainHex: ZK_CHAIN_ID_HEX, contract: CREATURE_CONTRACT, labelKey: 'trade.coll.creatures' },
+  land:      { api: '/api/market/land',      chainHex: '0x1',           contract: LAND_CONTRACT_L1, labelKey: 'trade.coll.land' },
 };
 let coll = 'creatures';
 // Both collections use the same faceted browse. LAND is browsed via its attached Slime
@@ -147,6 +156,10 @@ let browseIndexTimer = null;   // quiet re-poll while the server is still catalo
 // holdings. browseOwner echoes the address the server resolved (null = normal browse).
 let browseOwner = null;
 let browseOwnedTotal = null;   // how many assets the wallet holds (pre-filter denominator)
+// Profile search: typing a public-profile username resolves to that profile's collection
+// (the union of its wallets). browseOwnerProfile = {name, slug} when the server matched one.
+let browseOwnerProfile = null;
+let browseProfileExpandedFor = null; // query we've already auto-expanded to scope=all
 const WALLET_RE = /^0x[0-9a-fA-F]{40}$/;
 const isWalletQuery = s => WALLET_RE.test((s || '').trim());
 const RARITY_TIERS = ['Legendary', 'Epic', 'Rare', 'Uncommon', 'Common'];
@@ -206,7 +219,7 @@ function resetBrowseForView() {
   browseFacets = null; browseTotal = null; browseListedTotal = null; browsePriceRange = null;
   browseCollectionTotal = null; browseScope = flt.scope; browseIndexing = false;
   browsePage = 0; browseHasMore = false; browseHadFilters = false;
-  browseOwner = null; browseOwnedTotal = null;
+  browseOwner = null; browseOwnedTotal = null; browseOwnerProfile = null; browseProfileExpandedFor = null;
   setFltSheet(false);
   clearTimeout(fltDebounce);
 }
@@ -245,8 +258,13 @@ const BUY_BUSY_PHASES = new Set(['prepare', 'approve', 'approveWait', 'fulfill',
 // {ctx:'buy'|'sell'|'transfer', imxBal, mainnetEthWei, quote:'loading'|null|{...}}; null = idle.
 let gasState = null;
 
-// Which action tab is active inside the Trade panel: 'buy' | 'sell' | 'transfer'.
+// Which action tab is active inside the Trade panel: 'buy' | 'sell' | 'transfer' |
+// 'history' | 'profile'. 'profile' swaps the content area for the holder-profile view
+// (own profile + manage card, or another member's showcase via profileViewSlug).
 let tradeTab = 'buy';
+// Whose profile the 'profile' view shows: a slug, or null for the signed-in member's
+// own setup/manage state before a profile exists.
+let profileViewSlug = null;
 
 // Offers state. tokenOffers = bids on the open modal's token; collOffers = standing
 // collection-wide ("floor") offers, best first; myOffers = the user's own active offers.
@@ -1420,9 +1438,20 @@ async function loadBrowse(reset = true, quiet = false) {
     browseIndexing = !!data.indexing;
     browseOwner = data.owner || null;
     browseOwnedTotal = data.ownedTotal ?? null;
+    browseOwnerProfile = data.ownerProfile || null;
     browseHadFilters = hadFilters;
     if (data.facets) browseFacets = data.facets;
     if (data.priceRange) browsePriceRange = data.priceRange;
+    // A profile-username match defaults to their WHOLE collection ("show all their NFTs"),
+    // so flip to scope=all once per query, then let the toggle take over. Guard by query
+    // string so it never loops (the reloaded 'all' response no longer trips the condition).
+    if (browseOwnerProfile && flt.scope !== 'all' && browseProfileExpandedFor !== flt.q) {
+      browseProfileExpandedFor = flt.q;
+      flt.scope = 'all';
+      patchFilters();
+      loadBrowse(true);
+      return;
+    }
   } catch (err) {
     if (rid !== browseReqId) return;
     console.error('Browse load failed:', err);
@@ -3524,10 +3553,10 @@ function walletBarHtml() {
   // Live on-chain balances straight from the RPC — the user's ground truth when a
   // wallet UI mis-reports (e.g. MetaMask's phantom "insufficient IMX" on custom nets).
   const bal = coll === 'land'
-    ? `<span class="trade-bar-bal" title="${esc(t('trade.balance.landLabel'))}">🗺️ <b id="trade-bal">—</b></span>
+    ? `<span class="trade-bar-bal" title="${esc(t('trade.balance.landLabel'))}"><img class="trade-bal-ico" src="${COLL_ICONS.land}" alt="" aria-hidden="true" /> <b id="trade-bal">—</b></span>
        <span class="trade-bar-bal">ETH <b id="trade-bal-eth">—</b></span>`
     : (onZk()
-        ? `<span class="trade-bar-bal" title="${esc(t('trade.balance.label'))}">🐾 <b id="trade-bal">—</b></span>
+        ? `<span class="trade-bar-bal" title="${esc(t('trade.balance.label'))}"><img class="trade-bal-ico" src="${COLL_ICONS.creatures}" alt="" aria-hidden="true" /> <b id="trade-bal">—</b></span>
            <span class="trade-bar-bal">ETH <b id="trade-bal-eth">—</b></span>
            <span class="trade-bar-bal">IMX <b id="trade-bal-imx">—</b></span>`
         : '');
@@ -3648,7 +3677,7 @@ function countLineHtml() {
   // Everything here is response-time state (browse*) — mixing in live flt state mid-
   // fetch produced nonsense like "103 in the collection". Dim it while a fetch runs.
   const ds = browseDataset();
-  if (browseOwner) {
+  if (browseOwner || browseOwnerProfile) {
     if (browseTotal == null || browseOwnedTotal == null) return '';
     const key = extraFiltersActive() ? 'trade.wallet.countFiltered' : 'trade.wallet.count';
     return `<span class="trade-flt-count ${listingsLoading ? 'is-stale' : ''}" role="status">${esc(t(key)
@@ -3666,8 +3695,9 @@ function countLineHtml() {
 
 function activeChipsHtml() {
   const chips = [];
-  // A wallet address isn't a text filter — the owner banner represents it instead.
-  if (flt.q && !isWalletQuery(flt.q)) chips.push({ k: 'q', label: `“${flt.q}”` });
+  // A wallet address (or a matched profile username) isn't a text filter — the owner
+  // banner represents it instead.
+  if (flt.q && !isWalletQuery(flt.q) && !browseOwnerProfile) chips.push({ k: 'q', label: `“${flt.q}”` });
   if (flt.min) chips.push({ k: 'min', label: `≥ ${flt.min} ETH` });
   if (flt.max) chips.push({ k: 'max', label: `≤ ${flt.max} ETH` });
   for (const [type, vals] of flt.traits) for (const v of vals) chips.push({ k: 't', type, v, label: `${type}: ${v}` });
@@ -3684,6 +3714,20 @@ function activeChipsHtml() {
 // The "you're looking at one wallet's holdings" banner — shown whenever a wallet address
 // resolved. Carries the count, the (copyable) address, and a one-tap way back to browsing.
 function walletBannerHtml() {
+  // Profile-username match: show whose collection this is + a link to their full profile.
+  if (browseOwnerProfile) {
+    const noun = t(coll === 'land' ? 'trade.wallet.nounLand' : 'trade.wallet.noun');
+    const n = (browseOwnedTotal ?? 0).toLocaleString();
+    return `<div class="trade-wallet-banner is-profile" role="status">
+      <svg class="trade-wallet-ico" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M4 20c1.4-3.6 4.4-5.5 8-5.5s6.6 1.9 8 5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <span class="trade-wallet-txt">${esc(t('trade.profileSearch.showing').replace('{name}', browseOwnerProfile.name).replace('{n}', n).replace('{noun}', noun))}</span>
+      <button type="button" class="trade-wallet-addr trade-profile-link" data-act="open-profile" data-slug="${esc(browseOwnerProfile.slug)}">${esc(t('trade.profileSearch.view'))}</button>
+      <button type="button" class="trade-wallet-clear" data-act="flt-rm" data-kind="q">${esc(t('trade.wallet.clear'))}</button>
+    </div>`;
+  }
   if (!browseOwner) return '';
   const noun = t(coll === 'land' ? 'trade.wallet.nounLand' : 'trade.wallet.noun');
   const n = (browseOwnedTotal ?? 0).toLocaleString();
@@ -4275,7 +4319,7 @@ function collSwitcherHtml() {
   return `<div class="seg trade-coll-switch" role="tablist" aria-label="${esc(t('trade.coll.aria'))}">
     ${Object.entries(COLLECTIONS).map(([id, c]) => `
       <button type="button" role="tab" class="seg-btn ${coll === id ? 'is-active' : ''}"
-        aria-selected="${coll === id}" data-act="coll" data-coll="${id}">${c.ico} ${esc(t(c.labelKey))}</button>`).join('')}
+        aria-selected="${coll === id}" data-act="coll" data-coll="${id}">${collIco(id)} ${esc(t(c.labelKey))}</button>`).join('')}
   </div>`;
 }
 
@@ -4330,6 +4374,369 @@ function skey(base) {
   if (coll !== 'land') return base;
   const k = `${base}.land`;
   return t(k) === k ? base : k;
+}
+
+// --- Public holder profile (opt-in showcase) ---
+// The profile lives INSIDE the marketplace: a compact pill at the right end of the
+// action-tab row opens the 'profile' view (manage card + live preview) in the content
+// area, and other members' profiles render the same way (search banner, /profile/{slug}
+// deep links). Identity comes from the Discord session (/api/me), NOT from the connected
+// MetaMask account — the pill works even before MetaMask connects.
+let meState = null;      // /api/me payload, or null until fetched
+let meLoading = false;
+let hpBusy = false;      // enable/disable POST in flight
+let hpError = false;
+let hpLinkBusy = false;  // wallet link/unlink POST in flight
+let hpLinkError = null;  // i18n key for the last wallet-link failure, or null
+let hpWalletsOpen = false; // manage-strip wallet drawer expanded?
+
+async function fetchMeForProfile() {
+  if (meLoading || meState !== null) return;
+  meLoading = true;
+  try {
+    const res = await fetch('/api/me', { headers: { Accept: 'application/json' } });
+    meState = res.ok ? await res.json() : { authenticated: false };
+  } catch {
+    meState = { authenticated: false };
+  } finally {
+    meLoading = false;
+    patchProfileCard();
+    // If the session resolved while the setup view was open and a profile already
+    // exists, upgrade in place to the live preview (same view, now with a slug).
+    if (tradeTab === 'profile' && !profileViewSlug && meState?.holderProfile?.enabled) {
+      openProfileView(meState.holderProfile.slug, { replace: true });
+    }
+  }
+}
+
+async function setHolderProfile(enable) {
+  if (hpBusy) return;
+  hpBusy = true; hpError = false;
+  patchProfileCard();
+  try {
+    const res = await fetch(`/api/profile/${enable ? 'enable' : 'disable'}`, { method: 'POST', headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error('http ' + res.status);
+    const data = await res.json();
+    if (meState) {
+      // Seed the wallet list with the Highrise anchor (the server just added it) so the
+      // manage-wallets UI is populated immediately without a second round-trip.
+      const anchor = (meState.eligibility?.ethWallet || '').toLowerCase();
+      meState.holderProfile = data.enabled
+        ? { enabled: true, slug: data.slug, wallets: anchor ? [{ wallet: anchor, highriseLinked: true, verified: false }] : [] }
+        : { enabled: false };
+    }
+    // Keep the open profile view in step: enabling loads the fresh live preview,
+    // disabling drops back to the setup card (the public URL is gone either way).
+    if (tradeTab === 'profile') {
+      if (data.enabled) openProfileView(data.slug, { replace: true });
+      else openProfileView(null, { replace: true });
+    }
+  } catch (err) {
+    console.error('Holder profile toggle failed:', err);
+    hpError = true;
+  } finally {
+    hpBusy = false;
+    patchProfileCard();
+  }
+}
+
+// Prove control of the currently-connected MetaMask wallet and add it to the profile:
+// fetch a server nonce → personal_sign it → POST the signature. The server recovers the
+// signer and links THAT address, so we never trust a claimed address.
+async function linkConnectedWallet() {
+  if (hpLinkBusy) return;
+  if (!eth() || !account) { hpLinkError = 'trade.profile.linkNeedsWallet'; return patchProfileCard(); }
+  hpLinkBusy = true; hpLinkError = null;
+  patchProfileCard();
+  try {
+    const nres = await fetch('/api/profile/wallets/nonce', { method: 'POST', headers: { Accept: 'application/json' } });
+    if (!nres.ok) throw new Error('nonce ' + nres.status);
+    const { message } = await nres.json();
+    const signature = await eth().request({ method: 'personal_sign', params: [message, account] });
+    const lres = await fetch('/api/profile/wallets/link', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ signature }),
+    });
+    const data = await lres.json().catch(() => ({}));
+    if (!lres.ok) {
+      hpLinkError = data.error === 'wallet_taken' ? 'trade.profile.linkTaken'
+        : data.error === 'too_many' ? 'trade.profile.linkTooMany'
+        : 'trade.profile.linkFailed';
+    } else if (meState?.holderProfile) {
+      meState.holderProfile.wallets = data.wallets || meState.holderProfile.wallets;
+      refreshProfilePreview();
+    }
+  } catch (err) {
+    // 4001 = user rejected the signature in MetaMask — not an error to shout about.
+    hpLinkError = err?.code === 4001 ? null : 'trade.profile.linkFailed';
+    if (err?.code !== 4001) console.error('Wallet link failed:', err);
+  } finally {
+    hpLinkBusy = false;
+    patchProfileCard();
+  }
+}
+
+// The manage card and the live preview below it show the same wallet list — after a
+// link/verify/unlink the showcase must reflect the change too, not a cached copy.
+function refreshProfilePreview() {
+  if (tradeTab === 'profile' && profileViewSlug) loadProfile(profileViewSlug, { force: true });
+}
+
+async function unlinkProfileWallet(wallet) {
+  if (hpLinkBusy) return;
+  hpLinkBusy = true; hpLinkError = null;
+  patchProfileCard();
+  try {
+    const res = await fetch('/api/profile/wallets/unlink', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ wallet }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && meState?.holderProfile) {
+      meState.holderProfile.wallets = data.wallets || [];
+      refreshProfilePreview();
+    } else if (!res.ok) hpLinkError = 'trade.profile.linkFailed';
+  } catch (err) {
+    console.error('Wallet unlink failed:', err);
+    hpLinkError = 'trade.profile.linkFailed';
+  } finally {
+    hpLinkBusy = false;
+    patchProfileCard();
+  }
+}
+
+const PERSON_SVG = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" aria-hidden="true"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/><path d="M4 20c1.4-3.6 4.4-5.5 8-5.5s6.6 1.9 8 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+
+// The compact pill at the right end of the action-tab row — the persistent entry
+// point to your own profile. One word of state (My profile) + the live dot; the full
+// controls live in the in-view manage card. `is-live` tints it mint when public.
+function profileNavPillHtml() {
+  const enabled = !!meState?.holderProfile?.enabled;
+  const own = tradeTab === 'profile' && isOwnProfileView();
+  return `<button type="button" id="trade-hp-nav" class="trade-hp-pill ${enabled ? 'is-live' : ''} ${own ? 'is-active' : ''}"
+    data-act="hp-open" aria-pressed="${own}" title="${esc(t('trade.profile.sub'))}">
+    ${enabled ? '<span class="trade-hp-dot" aria-hidden="true"></span>' : PERSON_SVG}
+    <span class="trade-hp-pill-txt">${esc(t('trade.profile.nav'))}</span>
+  </button>`;
+}
+
+// Is the open profile view the signed-in member's own (their slug, or the pre-enable
+// setup state)? Drives the manage card + the nav pill's pressed state.
+function isOwnProfileView() {
+  if (!profileViewSlug) return true;
+  const mine = meState?.holderProfile?.slug;
+  return !!mine && mine === profileViewSlug;
+}
+
+// The profile content area: the manage card (own profile only) above the public
+// showcase (js/profile.js renders into #profile-app). Someone else's profile is the
+// showcase alone — same layout a visitor of the shared link gets.
+function profileViewHtml() {
+  const own = isOwnProfileView();
+  return `
+    <div id="trade-hp-manage" class="trade-hp-card" ${own ? '' : 'hidden'}>${own ? profileManageInnerHtml() : ''}</div>
+    <div id="profile-app" aria-live="polite" ${profileViewSlug ? '' : 'hidden'}></div>`;
+}
+
+// Manage-card contents. Pre-enable states pitch the feature (icon + why + one CTA on
+// a single row); once live it collapses to a slim strip — LIVE chip, the public link,
+// Copy, a wallet-drawer toggle, Turn off — so your own showcase starts right below.
+function profileManageInnerHtml() {
+  const head = `<div class="trade-hp-pop-head">
+    <span class="trade-hp-pop-ico" aria-hidden="true">${PERSON_SVG}</span>
+    <div>
+      <h4 class="trade-hp-h">${esc(t('trade.profile.h'))}</h4>
+      <p class="trade-hp-sub">${esc(t('trade.profile.sub'))}</p>
+    </div>
+  </div>`;
+  const err = hpError ? `<p class="trade-hp-err">${esc(t('trade.profile.error'))}</p>` : '';
+  // Discord disconnect (full logout, returns to /trade signed-out) — mirrors the plain-link
+  // logout used on Apply/Polls. Shown wherever a Discord session exists.
+  const disc = `<a class="trade-hp-disc" href="/api/auth/logout?return=%2Ftrade">${esc(t('trade.profile.disconnect'))}</a>`;
+  const pitchRow = (cta, showDisc = false) =>
+    `<div class="trade-hp-pitchrow">${head}<div class="trade-hp-pitch-cta">${cta}${showDisc ? disc : ''}</div></div>${err}`;
+
+  if (meState === null) {
+    return pitchRow(`<p class="trade-hp-hint">${esc(t('trade.profile.loading'))}</p>`);
+  }
+  if (!meState.authenticated) {
+    return pitchRow(`
+      <a class="apply-discord-btn is-sm trade-hp-signin" href="/api/auth/discord/login?return=/trade">
+        <span class="apply-discord-logo">${DISCORD_SVG}</span>
+        <span class="apply-discord-label">${esc(t('trade.profile.signin'))}</span>
+      </a>`);
+  }
+  if (!meState.eligibility?.linked) {
+    return pitchRow(`<p class="trade-hp-hint">${esc(t('trade.profile.noWallet'))}</p>`, true);
+  }
+  const hp = meState.holderProfile || { enabled: false };
+  if (!hp.enabled) {
+    return pitchRow(`
+      <button type="button" class="trade-send trade-hp-btn" data-act="hp-enable" ${hpBusy ? 'disabled' : ''}>
+        ${esc(t(hpBusy ? 'trade.profile.working' : 'trade.profile.enable'))}</button>`, true);
+  }
+  const url = `/profile/${hp.slug}`;
+  const nWallets = (hp.wallets || []).length || 1;
+  return `
+    <div class="trade-hp-strip">
+      <span class="trade-hp-live"><span class="trade-hp-dot" aria-hidden="true"></span>${esc(t('trade.profile.live'))}</span>
+      <a class="trade-hp-link" href="${esc(url)}">${esc(url)}</a>
+      <button type="button" class="trade-send is-sm trade-hp-btn" data-act="copy" data-copy="${esc(location.origin + url)}">${esc(t('trade.profile.copy'))}</button>
+      <button type="button" class="trade-hp-wtoggle ${hpWalletsOpen ? 'is-open' : ''}" data-act="hp-wallets" aria-expanded="${hpWalletsOpen}">
+        ${esc(t('trade.profile.walletsBtn').replace('{n}', String(nWallets)))}
+        <svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <span class="trade-hp-strip-sep" aria-hidden="true"></span>
+      <button type="button" class="apply-logout trade-hp-btn trade-hp-off" data-act="hp-disable" ${hpBusy ? 'disabled' : ''}>
+        ${esc(t(hpBusy ? 'trade.profile.working' : 'trade.profile.disable'))}</button>
+      ${disc}
+    </div>
+    ${err}
+    ${hpWalletsOpen ? `<div class="trade-hp-wdrawer">${walletManagerHtml(hp)}</div>` : ''}`;
+}
+
+// The showcase-wallet list inside the popover. Each wallet shows its trust tier: the
+// Highrise anchor is "Highrise-linked" until signed, "Verified" once signed (and can then
+// carry a Verify prompt); standalone signed wallets are removable. Signing the anchor is
+// now offered (it upgrades to Verified and persists the proof).
+function walletManagerHtml(hp) {
+  const wallets = hp.wallets || [];
+  const connected = (account || '').toLowerCase();
+  const rows = wallets.map(w => {
+    const label = w.highriseLinked ? t('trade.profile.walletHighrise') : t('trade.profile.walletLinked');
+    const badge = w.verified
+      ? `<span class="trade-hp-wtag is-verified">${esc(t('trade.profile.tagVerified'))}</span>`
+      : `<span class="trade-hp-wtag is-linked">${esc(t('trade.profile.tagLinked'))}</span>`;
+    // A Verify button appears for an unverified wallet when it's the one currently connected.
+    const canVerifyHere = !w.verified && connected && connected === w.wallet && eth();
+    const action = w.verified && w.highriseLinked
+      ? `<span class="trade-hp-wlock" title="${esc(t('trade.profile.walletLockedTip'))}" aria-label="${esc(t('trade.profile.walletLockedTip'))}">🔒</span>`
+      : canVerifyHere
+        ? `<button type="button" class="trade-hp-wverify" data-act="hp-link" ${hpLinkBusy ? 'disabled' : ''}>${esc(hpLinkBusy ? t('trade.profile.linkWorking') : t('trade.profile.verifyBtn'))}</button>`
+        : w.highriseLinked
+          ? `<span class="trade-hp-wlock" title="${esc(t('trade.profile.walletLockedTip'))}" aria-label="${esc(t('trade.profile.walletLockedTip'))}">🔒</span>`
+          : `<button type="button" class="trade-hp-wx" data-act="hp-unlink" data-wallet="${esc(w.wallet)}" ${hpLinkBusy ? 'disabled' : ''} aria-label="${esc(t('trade.profile.walletRemove'))}">×</button>`;
+    return `<li class="trade-hp-wrow">
+      <span class="trade-hp-wsrc ${w.highriseLinked ? 'is-anchor' : ''}">${esc(label)}</span>
+      ${badge}
+      <code class="trade-hp-waddr">${esc(shortWallet(w.wallet))}</code>
+      ${action}
+    </li>`;
+  }).join('');
+
+  // Offer to verify/add the currently-connected MetaMask wallet when it isn't already listed
+  // as verified. (If it's the unverified anchor, its own row shows the Verify button above.)
+  const listed = connected && wallets.find(w => w.wallet === connected);
+  let addRow = '';
+  if (!eth() || !connected) {
+    addRow = `<p class="trade-hp-whint">${esc(t('trade.profile.linkConnectHint'))}</p>`;
+  } else if (listed && listed.verified) {
+    addRow = `<p class="trade-hp-whint">${esc(t('trade.profile.linkAlready'))}</p>`;
+  } else if (!listed) {
+    addRow = `<button type="button" class="apply-btn-ghost is-sm trade-hp-btn trade-hp-linkbtn" data-act="hp-link" ${hpLinkBusy ? 'disabled' : ''}>
+      ${esc(hpLinkBusy ? t('trade.profile.linkWorking') : t('trade.profile.linkBtn').replace('{addr}', shortWallet(connected)))}</button>`;
+  } // else: the connected wallet is the unverified anchor — its row already offers Verify.
+
+  return `<div class="trade-hp-wallets">
+    <h5 class="trade-hp-wtitle">${esc(t('trade.profile.walletsTitle'))}</h5>
+    <ul class="trade-hp-wlist">${rows}</ul>
+    ${hpLinkError ? `<p class="trade-hp-err">${esc(t(hpLinkError))}</p>` : ''}
+    ${addRow}
+  </div>`;
+}
+
+// Repaint the nav pill + manage card in place (survives enable/disable, wallet
+// link/unlink, and the /api/me fetch resolving) without re-rendering the whole panel.
+function patchProfileCard() {
+  const nav = root()?.querySelector('#trade-hp-nav');
+  if (nav) nav.outerHTML = profileNavPillHtml();
+  if (tradeTab !== 'profile') return;
+  const card = root()?.querySelector('#trade-hp-manage');
+  if (!card) return;
+  const own = isOwnProfileView();
+  card.hidden = !own;
+  card.innerHTML = own ? profileManageInnerHtml() : '';
+}
+
+// Open the in-marketplace profile view. slug=null shows the signed-in member's own
+// setup/manage state; a slug shows that member's public showcase (plus the manage card
+// when it's your own). Keeps /profile/{slug} shareable: opening a profile pushes its
+// canonical URL, so copy/share and refresh land on the same view.
+export function openProfileView(slug, opts = {}) {
+  tradeTab = 'profile';
+  profileViewSlug = (slug || '').toLowerCase() || null;
+  hpLinkError = null;
+  hpWalletsOpen = false;
+  setFltSheet(false);
+  openFacet = null;
+  if (opts.updateUrl !== false) {
+    const url = profileViewSlug ? `/profile/${profileViewSlug}` : '/trade';
+    if (location.pathname !== url) history[opts.replace ? 'replaceState' : 'pushState'](null, '', url);
+  }
+  // A shared /profile link (or an in-page profile jump) should land ON the profile —
+  // the marketplace sits below the page hero, so ask the next render to scroll there.
+  hpScrollPending = true;
+  if (loadedOnce && root()) render();
+}
+// One-shot: render() consumes it (deep links render via loadMarketplace, not the
+// openProfileView call above, so the flag has to survive until whichever comes first).
+let hpScrollPending = false;
+
+// Open a specific token's marketplace view (its buy/offer modal), switching the active
+// collection if needed. Called from a profile tile's "view in market" — it leaves the
+// profile view, lands on /trade?coll=…&token=… (shareable), and deep-links the modal.
+export function openTokenInMarket(collKind, tokenId) {
+  if (!loadedOnce) return;
+  const tk = String(tokenId || '').trim();
+  if (!/^\d{1,80}$/.test(tk)) return;
+  if (COLLECTIONS[collKind] && collKind !== coll) {
+    coll = collKind;
+    try { localStorage.setItem('hcc-trade-coll', coll); } catch { /* fine */ }
+    tokenOffers = null;
+    resetBrowseForView();
+    resetSellerState();
+    autoSwitchNetwork();
+  }
+  tradeTab = 'buy';
+  profileViewSlug = null;
+  hpWalletsOpen = false;
+  setFltSheet(false);
+  openFacet = null;
+  history.pushState(null, '', `/trade?coll=${coll}&token=${encodeURIComponent(tk)}`);
+  if (root()) render();
+  loadListings(true);
+  if (coll === 'creatures') loadCollOffers(); else if (coll === 'land') loadLandCollOffers();
+  openDeepLink(tk);
+}
+
+// Leave the profile view (route change back to /trade, or the main nav Trade tab).
+// URL is the caller's business — this only restores the browse content.
+export function closeProfileView() {
+  if (!loadedOnce || tradeTab !== 'profile') return;
+  tradeTab = 'buy';
+  profileViewSlug = null;
+  if (root()) render();
+}
+
+// profile.js is rendered inside this panel but can't import us (module cycle), so its
+// in-view navigation — the "true owner" link on the rental warning, the browse CTA on
+// a 404 — arrives as custom events. Wired once.
+let hpEventsWired = false;
+function wireProfileEvents() {
+  if (hpEventsWired) return; hpEventsWired = true;
+  window.addEventListener('hcc:open-profile', e => {
+    if (loadedOnce && e.detail?.slug) openProfileView(e.detail.slug);
+  });
+  window.addEventListener('hcc:browse-trade', () => {
+    if (!loadedOnce) return;
+    if (location.pathname.startsWith('/profile')) history.pushState(null, '', '/trade');
+    tradeTab = 'buy';
+    profileViewSlug = null;
+    render();
+  });
+  window.addEventListener('hcc:open-token', e => {
+    if (e.detail?.tokenId) openTokenInMarket(e.detail.coll, e.detail.tokenId);
+  });
 }
 
 function sellViewHtml() {
@@ -4545,6 +4952,7 @@ function viewHtml() {
   if (tradeTab === 'sell')     return `<section class="trade-actions" id="trade-view">${sellViewHtml()}</section>`;
   if (tradeTab === 'transfer') return `<section class="trade-actions" id="trade-view">${transferViewHtml()}</section>`;
   if (tradeTab === 'history') return `<section class="trade-actions" id="trade-view">${historyViewHtml()}</section>`;
+  if (tradeTab === 'profile') return `<section class="trade-profile-view" id="trade-view">${profileViewHtml()}</section>`;
   return `<div id="trade-view">${browseHtml()}</div>`;
 }
 
@@ -4888,12 +5296,12 @@ function render() {
   el.setAttribute('aria-busy', 'false');
   // Command bar, two deliberate tiers so it never wraps awkwardly: the top row pairs the
   // collection switcher (left) with the wallet bar (right) — context + identity on opposite
-  // ends — and the action tabs (+ safety pill) sit on their own row below. One flat wrapping
-  // row used to suffice, but four action tabs pushed the wallet onto a stray second line.
+  // ends — and the action tabs (+ safety pill) sit on their own row below, with the
+  // holder-profile pill anchored at that row's far right (it opens the in-view profile).
   el.innerHTML = `${flashBanner()}
     <div class="trade-command">
       <div class="trade-command-top">${collSwitcherHtml()}${walletBarHtml()}</div>
-      <div class="trade-command-nav">${tradeTabsHtml()}</div>
+      <div class="trade-command-nav">${tradeTabsHtml()}${profileNavPillHtml()}</div>
     </div>
     <div id="trade-mmwarn-slot">${walletNoticeHtml()}</div>
     <div id="trade-bridgebar-slot">${bridgeBannerHtml()}</div>
@@ -4907,6 +5315,16 @@ function render() {
   }
   // History is read-only by address — load it even when the wallet isn't on the right chain.
   if (account && tradeTab === 'history') maybeLoadHistory();
+  // The holder-profile pill shows on every tab, so fetch the Discord session state once.
+  wireProfileEvents();
+  fetchMeForProfile();
+  // The profile view's showcase renders itself into #profile-app (js/profile.js);
+  // repeat renders with the same slug reuse its cached state.
+  if (tradeTab === 'profile' && profileViewSlug) loadProfile(profileViewSlug);
+  if (hpScrollPending && tradeTab === 'profile') {
+    hpScrollPending = false;
+    el.querySelector('.trade-command')?.scrollIntoView({ block: 'start' });
+  }
 }
 
 // Copy a full value (owner wallet, token id) to the clipboard and flash "Copied!" on
@@ -4949,6 +5367,12 @@ function onClick(e) {
     case 'buy':        return handleBuy(target.dataset.listing);
     case 'trade-tab':
       if (tradeTab === target.dataset.tab) return;
+      // Leaving the profile view: its URL is /profile/{slug} — step back to /trade so
+      // the address bar matches the browse content again.
+      if (tradeTab === 'profile') {
+        profileViewSlug = null;
+        if (location.pathname.startsWith('/profile')) history.pushState(null, '', '/trade');
+      }
       tradeTab = target.dataset.tab;
       setFltSheet(false);
       openFacet = null; // browse + inventory share the popover state; don't carry it across
@@ -4983,6 +5407,13 @@ function onClick(e) {
     case 'transfer-pick':
       transferSel = String(transferSel) === String(target.dataset.token) ? null : target.dataset.token;
       return patchTransferView();
+    case 'hp-open':        return openProfileView(meState?.holderProfile?.enabled ? meState.holderProfile.slug : null);
+    case 'open-profile':   return openProfileView(target.dataset.slug);
+    case 'hp-wallets':     hpWalletsOpen = !hpWalletsOpen; hpLinkError = null; return patchProfileCard();
+    case 'hp-enable':      return setHolderProfile(true);
+    case 'hp-disable':     return setHolderProfile(false);
+    case 'hp-link':        return linkConnectedWallet();
+    case 'hp-unlink':      return unlinkProfileWallet(target.dataset.wallet);
     case 'cancel-listing': return handleCancelListing(target.dataset.listing);
     case 'history-refresh':
       if (historyLoading) return;

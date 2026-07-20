@@ -11,6 +11,7 @@ try { process.loadEnvFile(); } catch { /* no .env — fine */ }
 
 const db = require('./lib/db');
 const auth = require('./lib/auth');
+const { recoverPersonalSignAddress } = require('./lib/eth-verify');
 const mktOrderbook = require('./lib/marketplace-orderbook');
 const squidBridge = require('./lib/squid-bridge');
 const landMarket = require('./lib/land-market');
@@ -393,6 +394,19 @@ async function estateLandOwnedBy(address) {
 // feeds the Sell/Transfer pickers: authoritative and current the block after a buy, unlike
 // OpenSea's owner index, which lags a mined buy by minutes. Estate-locked parcels are owned
 // by the estate contract on-chain, so they're naturally absent — right for trading surfaces.
+// Highrise LAND token ids pack the parcel coordinates as (x << 16) | y — verified across
+// the whole live collection (x,y are the grid coords, both well under 16 bits). Decoding
+// them means every owned parcel gets coords straight from its id, so its Slime pet renders
+// even when the background slime sweep hasn't catalogued that parcel (the join miss that
+// otherwise left wallet/profile LAND tiles on the plain map placeholder).
+function coordsFromLandTokenId(tokenId) {
+  let tid;
+  try { tid = BigInt(tokenId); } catch { return null; }
+  if (tid <= 0n || tid >= (1n << 32n)) return null; // not a coord-packed id — don't guess
+  const n = Number(tid);
+  return { x: n >>> 16, y: n & 0xffff };
+}
+
 async function landOwnedOnChain(address) {
   const raw = await ethCall(ETH_RPC_URL, LAND_CONTRACT, SEL_OWNER_TOKENS + padUint(BigInt(address)));
   if (!raw || raw.length < 2 + 128) return [];
@@ -401,9 +415,11 @@ async function landOwnedOnChain(address) {
   const len = parseInt(word(1), 16) || 0;
   return Array.from({ length: len }, (_, k) => {
     const tokenId = BigInt('0x' + word(2 + k)).toString();
-    // Placeholder name/image — the slime-index join downstream adds coords (→ the "(x, y)"
-    // name and the pet render the pickers actually use).
-    return { tokenId, name: `Highrise LAND #${tokenId}`, image: null, coords: null };
+    // Coords come from the id itself; the slime-index join downstream still refines with
+    // the slime's traits/rank when the parcel is catalogued.
+    const coords = coordsFromLandTokenId(tokenId);
+    const name = coords ? `Highrise LAND (${coords.x}, ${coords.y})` : `Highrise LAND #${tokenId}`;
+    return { tokenId, name, image: null, coords };
   });
 }
 
@@ -1601,6 +1617,12 @@ async function getCreatureBrowse(searchParams) {
   const f = parseBrowseQuery(searchParams);
   // A full wallet address in the search box switches Browse into "this wallet's holdings".
   if (HEX_ADDRESS.test(f.q)) return getWalletBrowse('creatures', f);
+  // An exact public-profile username/slug switches Browse into that profile's collection
+  // (union of all their showcase wallets). Exact match only, so it rarely shadows a name search.
+  const profMatch = f.q ? await db.findEnabledProfileByQuery(f.q).catch(() => null) : null;
+  if (profMatch && profMatch.wallets.length) {
+    return getWalletBrowse('creatures', f, { wallets: profMatch.wallets, profile: { name: profMatch.profile.display_name, slug: profMatch.profile.slug } });
+  }
   const [listIdx, fx] = await Promise.all([getBrowseIndex(), getMarketplaceFx()]);
   const coll = getCollectionIndex(); // null until the first build lands
   const wantAll = f.scope === 'all';
@@ -1689,6 +1711,10 @@ const listingRowOf = (tokenId, L) => landRowOf({
 async function getLandBrowse(searchParams) {
   const f = parseBrowseQuery(searchParams);
   if (HEX_ADDRESS.test(f.q)) return getWalletBrowse('land', f);
+  const profMatch = f.q ? await db.findEnabledProfileByQuery(f.q).catch(() => null) : null;
+  if (profMatch && profMatch.wallets.length) {
+    return getWalletBrowse('land', f, { wallets: profMatch.wallets, profile: { name: profMatch.profile.display_name, slug: profMatch.profile.slug } });
+  }
   const [fx, listings] = await Promise.all([getMarketplaceFx(), landListingsByToken()]);
   const index = slimeIndex.getSlimeIndex(); // null while the first sweep runs
 
@@ -1802,20 +1828,38 @@ async function ownedLandRows(addr) {
   });
 }
 
-async function getWalletBrowse(collKind, f) {
-  const addr = f.q; // full address, already lowercased + validated by parseBrowseQuery/HEX_ADDRESS
+// One wallet's owned rows, cached per address (so paging + multi-wallet unions don't
+// re-hit the indexer). The cached rows are untagged; callers add wallet/source.
+async function ownedRowsFor(collKind, addr) {
   const cacheKey = `${collKind}:${addr}`;
   const hit = ownedPoolCache.get(cacheKey);
-  let rows;
-  if (hit && Date.now() - hit.at < OWNED_POOL_TTL_MS) {
-    rows = hit.rows;
-  } else {
-    rows = collKind === 'land' ? await ownedLandRows(addr) : await ownedCreatureRows(addr);
-    if (ownedPoolCache.size > 300) ownedPoolCache.clear(); // bound memory from many distinct addresses
-    ownedPoolCache.set(cacheKey, { at: Date.now(), rows });
-  }
+  if (hit && Date.now() - hit.at < OWNED_POOL_TTL_MS) return hit.rows;
+  const rows = collKind === 'land' ? await ownedLandRows(addr) : await ownedCreatureRows(addr);
+  if (ownedPoolCache.size > 300) ownedPoolCache.clear(); // bound memory from many distinct addresses
+  ownedPoolCache.set(cacheKey, { at: Date.now(), rows });
+  return rows;
+}
+
+// Holdings browse for ONE or MANY wallets. `opts.wallets` is [{wallet, source}] — the
+// union is shown as one grid, each row tagged with its wallet + source so the client can
+// badge/filter by "which wallet". Defaults to the single raw address typed in the search
+// box. `opts.profile` (when a search matched a public profile) rides back as `ownerProfile`.
+async function getWalletBrowse(collKind, f, opts = {}) {
+  let walletSpec = (opts.wallets && opts.wallets.length)
+    ? opts.wallets
+    : [{ wallet: f.q, source: 'wallet' }];
+  // De-dupe by address so a wallet listed twice can never fetch (and duplicate) its NFTs.
+  const byAddr = new Map();
+  for (const w of walletSpec) { const a = String(w.wallet).toLowerCase(); if (!byAddr.has(a)) byAddr.set(a, { ...w, wallet: a }); }
+  walletSpec = [...byAddr.values()];
+  const perWallet = await Promise.all(walletSpec.map(async w => {
+    const owned = await ownedRowsFor(collKind, w.wallet);
+    // Tag each row with its wallet + trust tier so the client can badge per tile.
+    return owned.map(r => ({ ...r, wallet: w.wallet, verified: !!w.verified, highriseLinked: !!w.highriseLinked }));
+  }));
+  const rows = perWallet.flat();
   const fx = await getMarketplaceFx();
-  const fq = { ...f, q: '' }; // the address selects the pool; it's not a name substring to match
+  const fq = { ...f, q: '' }; // the wallet(s) select the pool; q is not a name substring here
   const pool = f.scope === 'listed' ? rows.filter(r => r.listed) : rows;
   const matched = pool.filter(it => browseMatch(it, fq)).sort(BROWSE_SORTS[f.sort]);
   const start = f.page * BROWSE_PAGE_SIZE;
@@ -1823,7 +1867,8 @@ async function getWalletBrowse(collKind, f) {
   for (const r of rows) { const p = r.totalEth; if (p == null) continue; if (lo === null || p < lo) lo = p; if (hi === null || p > hi) hi = p; }
   const listedCount = rows.reduce((n, r) => n + (r.listed ? 1 : 0), 0);
   // Match each collection's existing wire shape: LAND keeps `traits` on the row (its modal
-  // reads them); Creatures strip them (their modal refetches token detail).
+  // reads them); Creatures strip them (their modal refetches token detail). Both keep the
+  // new wallet/source tags via the spread.
   const strip = collKind === 'land'
     ? ({ search, listedAt, ...pub }) => pub
     : ({ traits, listedAt, ...pub }) => pub;
@@ -1833,7 +1878,9 @@ async function getWalletBrowse(collKind, f) {
     page: f.page,
     hasMore: start + BROWSE_PAGE_SIZE < matched.length,
     scope: f.scope,
-    owner: addr,
+    owner: walletSpec.length === 1 && walletSpec[0].source === 'wallet' ? walletSpec[0].wallet : null,
+    ownerProfile: opts.profile || null,
+    walletCount: walletSpec.length,
     ownedTotal: rows.length,
     ownedListed: listedCount,
     indexing: false,
@@ -2884,7 +2931,7 @@ function rateLimited(key, max, windowMs) {
 // remembers which one started the flow in a short-lived cookie — allowlisted paths
 // only, so a crafted link can never turn the callback into an open redirect.
 const RETURN_COOKIE = 'hcc_return';
-const RETURN_PATHS = new Set(['/council/vote', '/polls']);
+const RETURN_PATHS = new Set(['/council/vote', '/polls', '/trade']);
 // Validate an untrusted return target against the allowlist; anything else falls back
 // to the Council vote page. Shared by login (reads it from the round-trip cookie) and
 // logout (reads it straight from the ?return= query param).
@@ -3071,6 +3118,29 @@ async function handleAuthApi(request, response, url) {
       // Self-heal a candidate's stored avatar on every login (best-effort, no await).
       db.updateApplicationAvatar(profile.id, safeIconUrl(sessionProfile.highriseIcon));
 
+      // Self-heal an opted-in holder profile too: the Highrise name, icon and linked
+      // wallet can all change between visits, and the public page must track them. A
+      // wallet that's been UNLINKED removes the page outright — with no wallet there's
+      // nothing to show, and keeping the old one public would misattribute whoever
+      // holds that wallet next. Best-effort, off the response path.
+      (async () => {
+        try {
+          const hp = await db.getHolderProfileByDiscord(profile.id);
+          if (!hp) return;
+          if (!wallet.linked || !wallet.ethWallet) { await db.deleteHolderProfile(profile.id); return; }
+          const anchor = String(wallet.ethWallet).toLowerCase();
+          await db.upsertHolderProfile({
+            discordId: profile.id,
+            slug: await holderProfileSlug(sessionProfile, profile.id),
+            displayName: holderDisplayName(sessionProfile),
+            avatar: safeIconUrl(sessionProfile.highriseIcon),
+            ethWallet: anchor,
+          });
+          // Keep the Highrise wallet anchored in the showcase wallet set too.
+          db.setHighriseAnchor(profile.id, anchor).catch(() => {});
+        } catch (err) { console.error('Holder profile self-heal failed:', err.message); }
+      })();
+
       db.recordEvent({
         event: 'auth.login',
         discordId: profile.id,
@@ -3114,6 +3184,14 @@ async function handleAuthApi(request, response, url) {
     const sid = cookies[auth.SESSION_COOKIE];
     const session = await db.getSession(sid);
     if (!session) { sendJson(response, 200, { authenticated: false }); return; }
+    // Own holder-profile state (enabled + slug only) so the marketplace toggle can
+    // render without a second round-trip. Never anyone else's row.
+    const holderProfile = await db.getHolderProfileByDiscord(session.discord_id).catch(() => null);
+    // The caller's own showcase wallets, so the marketplace manage-wallets UI renders without
+    // a second round-trip. Own data only — never anyone else's linked wallets.
+    const linkedWallets = holderProfile
+      ? await db.getLinkedWallets(session.discord_id, session.eligibility?.ethWallet).catch(() => [])
+      : [];
     sendJson(response, 200, {
       authenticated: true,
       profile: publicProfile(session.profile),
@@ -3123,6 +3201,9 @@ async function handleAuthApi(request, response, url) {
       phase: { applicationsOpen: APPLICATIONS_OPEN, votingOpen: VOTING_OPEN, resultsOpen: RESULTS_OPEN },
       // Recompute against current holdings so the panel reflects buys/sells without re-login.
       eligibility: await refreshEligibility(session, sid),
+      holderProfile: holderProfile
+        ? { enabled: true, slug: holderProfile.slug, wallets: linkedWallets }
+        : { enabled: false },
     });
     return;
   }
@@ -3150,6 +3231,207 @@ async function handleAuthApi(request, response, url) {
       'Cache-Control': 'no-store',
     });
     response.end();
+    return;
+  }
+
+  sendJson(response, 404, { error: 'Not found' });
+}
+
+// --- Public holder profiles (opt-in showcase pages) ---
+// The ONE place the site ever links a wallet to an off-chain identity in public —
+// and only because the holder explicitly turned it on. Everything here is derived
+// server-side from the session (never client-supplied), the public payload carries
+// no Discord id / Highrise user_id (same rule as publicProfile), and disabling
+// hard-deletes the row (see lib/db.js).
+
+// Display name mirrors the ballot-name precedence: Highrise username →
+// Highrise-guild nickname → Discord username.
+function holderDisplayName(p) {
+  return String(p?.highriseName || p?.serverName || p?.username || '').slice(0, 40);
+}
+
+// URL slug from the display name: lowercase, runs of anything outside [a-z0-9]
+// collapse to '-'. Must satisfy the clean-route charset (see TAB_ROUTES serving) so
+// /profile/{slug} serves the app shell. A name that slugs to nothing (e.g. an
+// all-emoji name) falls back to a short stable hash of the Discord id, same trick
+// as candidateId — the hash reveals nothing.
+function slugifyHolderName(name, discordId) {
+  const s = String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32);
+  return s || crypto.createHash('sha256').update(`hp:${discordId}`).digest('hex').slice(0, 8);
+}
+
+// Final slug: distinct names can collapse to the same slug ("a.b" and "a_b" → "a-b"),
+// so a clash owned by ANOTHER account gets a short stable suffix instead of failing.
+async function holderProfileSlug(sessionProfile, discordId) {
+  const base = slugifyHolderName(holderDisplayName(sessionProfile), discordId);
+  const clash = await db.getHolderProfileBySlug(base);
+  if (!clash || clash.discord_id === discordId) return base;
+  return `${base}-${crypto.createHash('sha256').update(`hp:${discordId}`).digest('hex').slice(0, 6)}`;
+}
+
+const PROFILE_SLUG_RE = /^[a-z0-9-]{1,40}$/;
+const HEX_ADDR_RE = /^0x[0-9a-f]{40}$/;
+
+// Wallet-link challenges: one single-use, short-lived nonce per member. The FULL message
+// is minted and stored server-side and verified against the stored copy, so the client
+// can't tamper with what was signed. Signing proves control; it never authorizes a
+// transaction. The message names the claiming Discord account on purpose: if a scammer
+// tries to phish someone else into signing their challenge, the victim's wallet prompt
+// spells out whose profile would claim the wallet — and even a successfully phished
+// signature only squats until the true owner re-signs (verifyWallet is latest-proof-wins).
+const walletNonces = new Map(); // discord_id -> { message, exp }
+const WALLET_NONCE_TTL_MS = 5 * 60 * 1000;
+const MAX_LINKED_WALLETS = 10;
+
+function walletLinkMessage(nonce, accountName, discordId) {
+  return 'Highrise Creature Club\n\n'
+    + 'Link this wallet to your public holder profile.\n'
+    + 'Signing proves you control this wallet. It does NOT approve any transaction or spend.\n\n'
+    + `Discord account: ${accountName || 'unknown'} (${discordId})\n`
+    + `Nonce: ${nonce}`;
+}
+
+// Sum authoritative holdings across a profile's showcase wallets. SHOWCASE ONLY — this
+// never feeds Council eligibility or voting, which stay bound to the single Highrise wallet.
+async function aggregateWalletHoldings(wallets) {
+  const results = await Promise.all((wallets || []).map(w => getWalletHoldings(w.wallet).catch(() => null)));
+  let creatureCount = 0, landCount = 0;
+  for (const h of results) { if (h) { creatureCount += h.creatureCount || 0; landCount += h.landCount || 0; } }
+  return { creatureCount, landCount };
+}
+
+async function handleProfileApi(request, response, url) {
+  const { pathname } = url;
+  const ip = (request.headers['x-forwarded-for'] || '').split(',')[0].trim()
+    || request.socket.remoteAddress || 'unknown';
+
+  // Turn the caller's OWN profile on. Requires a session with a linked Highrise
+  // wallet — the wallet is what the page shows, so without one there's no profile.
+  if ((pathname === '/api/profile/enable' || pathname === '/api/profile/disable') && request.method === 'POST') {
+    const cookies = auth.parseCookies(request);
+    const session = await db.getSession(cookies[auth.SESSION_COOKIE]);
+    if (!session) { sendJson(response, 401, { error: 'not_signed_in' }); return; }
+
+    if (pathname === '/api/profile/disable') {
+      await db.deleteHolderProfile(session.discord_id);
+      db.recordEvent({ event: 'profile.disabled', discordId: session.discord_id });
+      sendJson(response, 200, { enabled: false }, { 'Cache-Control': 'no-store' });
+      return;
+    }
+
+    const elig = session.eligibility || {};
+    if (!elig.linked || !elig.ethWallet) { sendJson(response, 400, { error: 'no_wallet' }); return; }
+    const slug = await holderProfileSlug(session.profile, session.discord_id);
+    const highriseWallet = String(elig.ethWallet).toLowerCase();
+    await db.upsertHolderProfile({
+      discordId: session.discord_id,
+      slug,
+      displayName: holderDisplayName(session.profile),
+      avatar: safeIconUrl(session.profile?.highriseIcon),
+      ethWallet: highriseWallet,
+    });
+    // Anchor the Highrise wallet in linked_wallets so it's the always-present, non-removable
+    // first wallet on the showcase (best-effort — the profile works from eth_wallet regardless).
+    db.setHighriseAnchor(session.discord_id, highriseWallet).catch(() => {});
+    db.recordEvent({ event: 'profile.enabled', discordId: session.discord_id, detail: { slug } });
+    sendJson(response, 200, { enabled: true, slug }, { 'Cache-Control': 'no-store' });
+    return;
+  }
+
+  // --- Manage the showcase wallets (session required throughout) ---
+
+  // Issue a single-use challenge for the caller to sign with the wallet they want to add.
+  if (pathname === '/api/profile/wallets/nonce' && request.method === 'POST') {
+    const cookies = auth.parseCookies(request);
+    const session = await db.getSession(cookies[auth.SESSION_COOKIE]);
+    if (!session) { sendJson(response, 401, { error: 'not_signed_in' }); return; }
+    const wait = rateLimited(`wnonce:${session.discord_id}`, 20, 60 * 1000);
+    if (wait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(wait) }); return; }
+    const nonce = crypto.randomBytes(16).toString('hex');
+    const message = walletLinkMessage(nonce, holderDisplayName(session.profile), session.discord_id);
+    walletNonces.set(session.discord_id, { message, exp: Date.now() + WALLET_NONCE_TTL_MS });
+    sendJson(response, 200, { message }, { 'Cache-Control': 'no-store' });
+    return;
+  }
+
+  // Verify a wallet by proving control: the recovered signer IS the wallet we verify — we
+  // never trust a client-supplied address. Signing the Highrise wallet is allowed and simply
+  // upgrades it to verified (true ownership). Nonce is single-use and rebuilt server-side.
+  if (pathname === '/api/profile/wallets/link' && request.method === 'POST') {
+    const cookies = auth.parseCookies(request);
+    const session = await db.getSession(cookies[auth.SESSION_COOKIE]);
+    if (!session) { sendJson(response, 401, { error: 'not_signed_in' }); return; }
+    // Bad signatures don't consume the nonce (a fumbled wallet prompt shouldn't force a
+    // re-mint), so cap attempts per member — keeps ecrecover from being hammered for free.
+    const wait = rateLimited(`wlink:${session.discord_id}`, 20, 60 * 1000);
+    if (wait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(wait) }); return; }
+    const challenge = walletNonces.get(session.discord_id);
+    if (!challenge || challenge.exp < Date.now()) { sendJson(response, 400, { error: 'nonce_expired' }); return; }
+    const body = await readJsonBody(request, 4 * 1024).catch(() => null);
+    const signature = body && typeof body.signature === 'string' ? body.signature : '';
+    const signer = recoverPersonalSignAddress(challenge.message, signature);
+    if (!signer || !HEX_ADDR_RE.test(signer)) { sendJson(response, 400, { error: 'bad_signature' }); return; }
+    walletNonces.delete(session.discord_id); // single-use, win or lose
+    const anchor = String(session.eligibility?.ethWallet || '').toLowerCase();
+    const existing = await db.getLinkedWallets(session.discord_id, anchor);
+    if (existing.length >= MAX_LINKED_WALLETS && !existing.some(w => w.wallet === signer)) {
+      sendJson(response, 400, { error: 'too_many' }); return;
+    }
+    const res = await db.verifyWallet(session.discord_id, signer);
+    if (!res.ok) { sendJson(response, 409, { error: 'wallet_taken' }); return; } // concurrent-verify backstop
+    db.recordEvent({ event: 'profile.wallet_verified', discordId: session.discord_id, detail: { wallet: maskWallet(signer) } });
+    // A transfer means the previous holder just lost the badge to a fresh key proof —
+    // log both sides so any squatting/reclaim dispute has a server-side trail.
+    if (res.reclaimedFrom) {
+      db.recordEvent({
+        event: 'profile.wallet_reclaimed', discordId: session.discord_id,
+        detail: { wallet: maskWallet(signer), from: res.reclaimedFrom },
+      });
+    }
+    sendJson(response, 200, { linked: true, wallets: await db.getLinkedWallets(session.discord_id, anchor) }, { 'Cache-Control': 'no-store' });
+    return;
+  }
+
+  // Remove a connected wallet (the Highrise anchor is protected in the DB layer).
+  if (pathname === '/api/profile/wallets/unlink' && request.method === 'POST') {
+    const cookies = auth.parseCookies(request);
+    const session = await db.getSession(cookies[auth.SESSION_COOKIE]);
+    if (!session) { sendJson(response, 401, { error: 'not_signed_in' }); return; }
+    const body = await readJsonBody(request, 4 * 1024).catch(() => null);
+    const wallet = body && typeof body.wallet === 'string' ? body.wallet.toLowerCase() : '';
+    if (!HEX_ADDR_RE.test(wallet)) { sendJson(response, 400, { error: 'bad_wallet' }); return; }
+    await db.unlinkWallet(session.discord_id, wallet);
+    db.recordEvent({ event: 'profile.wallet_unlinked', discordId: session.discord_id, detail: { wallet: maskWallet(wallet) } });
+    sendJson(response, 200, { wallets: await db.getLinkedWallets(session.discord_id, session.eligibility?.ethWallet) }, { 'Cache-Control': 'no-store' });
+    return;
+  }
+
+  // Public read — the payload behind /profile/{slug}. Only rows that exist (= holders
+  // who opted in), only display fields + the wallet they chose to showcase. Counts
+  // come from the same authoritative per-wallet read the Council eligibility uses
+  // (includes estate-locked LAND, which the browse feed deliberately omits).
+  const m = pathname.match(/^\/api\/profile\/([a-z0-9-]{1,40})$/);
+  if (m && request.method === 'GET') {
+    const wait = rateLimited(`profile:${ip}`, 60, 60 * 1000);
+    if (wait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(wait) }); return; }
+    if (!PROFILE_SLUG_RE.test(m[1])) { sendJson(response, 404, { error: 'not_found' }); return; }
+    const resolved = await db.getProfileWalletsBySlug(m[1]);
+    // no-store both ways: a just-disabled profile must 404 on the very next load.
+    if (!resolved) { sendJson(response, 404, { error: 'not_found' }, { 'Cache-Control': 'no-store' }); return; }
+    const { profile: row, wallets } = resolved;
+    const holdings = await aggregateWalletHoldings(wallets);
+    sendJson(response, 200, {
+      slug: row.slug,
+      name: row.display_name,
+      avatar: row.avatar || null,
+      wallet: row.eth_wallet,                                   // primary (Highrise anchor) — hero display
+      // All showcase wallets, public by consent, with trust tiers. `verifiedElsewhere` names the
+      // profile that signature-owns a wallet this profile only Highrise-links (the anti-scam flag).
+      wallets: wallets.map(w => ({ wallet: w.wallet, highriseLinked: w.highriseLinked, verified: w.verified, verifiedElsewhere: w.verifiedElsewhere || null })),
+      creatureCount: holdings.creatureCount,                    // summed across wallets
+      landCount: holdings.landCount,
+      since: row.created_at || null,
+    }, { 'Cache-Control': 'no-store' });
     return;
   }
 
@@ -3609,10 +3891,46 @@ async function refreshCandidateAvatars() {
     avatarRefreshRunning = false;
   }
 }
+
+// Same staleness problem, same cure, for public holder profiles: their avatar is a
+// versioned Highrise icon URL captured at enable/login time, so restyles 404 it.
+// Shares the schedule below; separate run-guard so one loop can't starve the other.
+let holderAvatarRefreshRunning = false;
+async function refreshHolderProfileAvatars() {
+  if (holderAvatarRefreshRunning) return;
+  holderAvatarRefreshRunning = true;
+  let updated = 0;
+  try {
+    const profiles = await db.getHolderProfiles();
+    for (const p of profiles) {
+      try {
+        let userId = (typeof p.avatar === 'string' && (p.avatar.match(/\/user\/([0-9a-f]+)\//i) || [])[1]) || null;
+        if (!userId) {
+          const wallet = await auth.fetchHighriseWallet(p.discord_id).catch(() => null);
+          userId = wallet?.userId || null;
+        }
+        if (!userId) continue;
+        const profile = await auth.fetchHighriseProfile(userId);
+        const icon = safeIconUrl(profile?.iconUrl);
+        if (icon && icon !== p.avatar) {
+          await db.updateHolderProfileAvatar(p.discord_id, icon);
+          updated++;
+        }
+        await new Promise(r => setTimeout(r, 150)); // gentle on the Highrise API
+      } catch { /* skip this profile; keep the others going */ }
+    }
+    if (updated) console.log(`[avatars] refreshed ${updated} holder profile avatar(s)`);
+  } catch (err) {
+    console.error('[avatars] holder profile refresh failed:', err.message);
+  } finally {
+    holderAvatarRefreshRunning = false;
+  }
+}
+
 // Warm shortly after boot (backfills stale/empty avatars on deploy) then hourly, so
 // avatars stay current as candidates keep restyling through the election.
-setTimeout(() => { refreshCandidateAvatars(); }, 15 * 1000).unref();
-setInterval(() => { refreshCandidateAvatars(); }, 60 * 60 * 1000).unref();
+setTimeout(() => { refreshCandidateAvatars(); refreshHolderProfileAvatars(); }, 15 * 1000).unref();
+setInterval(() => { refreshCandidateAvatars(); refreshHolderProfileAvatars(); }, 60 * 60 * 1000).unref();
 
 // A single candidate's public profile for the click-through detail view. Consented
 // fields only — never wallet or Discord id. During the CANDIDACY phase it's an
@@ -4462,7 +4780,7 @@ const gzipCache = new Map(); // filePath → { etag, body } — one gzipped copy
 // legacy alias — the old Apply & Vote tab now lives at /council/vote and the client
 // router rewrites it — kept so bookmarks and old OAuth redirects keep working.
 const TAB_ROUTES = new Set(['club', 'announcements', 'council', 'apply', 'polls', 'roadmap', 'guides', 'perks',
-  'holders', 'market', 'trade', 'changelog', 'contribute', 'terms', 'privacy']);
+  'holders', 'market', 'trade', 'profile', 'changelog', 'contribute', 'terms', 'privacy']);
 const SERVABLE_EXT = new Set([
   '.html', '.css', '.js', '.json',
   '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp',
@@ -4582,6 +4900,16 @@ const server = http.createServer((request, response) => {
         if (url.pathname === '/api/me') sendJson(response, 200, { authenticated: false });
         else redirectToApp(request, response, 'failed');
       }
+    });
+    return;
+  }
+
+  if (request.url.startsWith('/api/profile')) {
+    const url = parseRequestUrl(request);
+    if (!url) { sendJson(response, 400, { error: 'Bad request.' }); return; }
+    handleProfileApi(request, response, url).catch(err => {
+      console.error('Profile API error:', err.message);
+      if (!response.headersSent) sendJson(response, 500, { error: 'Something went wrong.' });
     });
     return;
   }

@@ -6,13 +6,14 @@ import { loadApply, rerenderApply } from './apply.js';
 import { loadElection, rerenderElection } from './election.js';
 import { loadBallot, rerenderBallot } from './ballot.js';
 import { loadVote, rerenderVote } from './vote.js';
-import { loadMarketplace, rerenderMarketplace } from './marketplace.js';
+import { loadMarketplace, rerenderMarketplace, openProfileView, closeProfileView } from './marketplace.js';
 import { loadPolls, rerenderPolls } from './polls.js';
 import { loadAnnouncements, rerenderAnnouncements } from './announcements.js';
 import { loadGen2, rerenderGen2 } from './gen2.js';
 import { initGuideDemos, rerenderGuideDemos } from './guide-demos.js';
 import { initPerks, rerenderPerks } from './perks.js';
 import { initSafety, rerenderSafety } from './safety.js';
+import { rerenderProfile } from './profile.js';
 
 // Language switcher — re-render dynamic views after language change
 document.querySelectorAll('.lang-btn').forEach(btn => {
@@ -30,6 +31,7 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
     rerenderGuideDemos();
     rerenderPerks();
     rerenderSafety();
+    rerenderProfile();
   }));
 });
 
@@ -98,6 +100,10 @@ function selectTab(name, updateUrl = true) {
   if (name === 'polls'     && !pollsLoaded)     { pollsLoaded     = true; loadPolls(); }
   if (name === 'announcements' && !announcementsLoaded) { announcementsLoaded = true; loadAnnouncements(); }
   if (name === 'trade'     && !tradeLoaded)     { tradeLoaded     = true; loadMarketplace(); }
+  // Re-selecting Trade (nav click, or a popstate back to /trade) while its profile
+  // view is open should land on the marketplace, not a stale profile. route()'s
+  // /profile/{slug} path re-opens the view right after, so deep links still work.
+  else if (name === 'trade') closeProfileView();
   if (name === 'roadmap'   && !roadmapLoaded)   { roadmapLoaded   = true; loadGen2(); }
   if (updateUrl && location.pathname !== urlFor(name)) history.pushState(null, '', urlFor(name));
 }
@@ -238,7 +244,7 @@ initSafety();
 // and in-page anchors (#terms, #council) still work and get normalized to paths.
 // 'apply' is a legacy alias: the old Apply & Vote tab now lives at /council/vote,
 // and route() rewrites it so bookmarks and old OAuth redirects keep working.
-const ROUTE_TABS = ['club', 'announcements', 'council', 'apply', 'polls', 'roadmap', 'guides', 'perks', 'holders', 'market', 'trade', 'changelog', 'contribute', 'terms', 'privacy'];
+const ROUTE_TABS = ['club', 'announcements', 'council', 'apply', 'polls', 'roadmap', 'guides', 'perks', 'holders', 'market', 'trade', 'profile', 'changelog', 'contribute', 'terms', 'privacy'];
 
 function urlFor(name, sub) {
   return name === 'club' && !sub ? '/' : `/${name}${sub ? `/${sub}` : ''}`;
@@ -253,6 +259,14 @@ function route(pathname) {
     tab = 'council';
     sub = 'vote';
     history.replaceState(null, '', '/council/vote' + location.search);
+  }
+  // Holder profiles (/profile/{slug}) live inside the marketplace: open the Trade
+  // panel with its profile view (no nav tab of their own). route() owns the URL here,
+  // so openProfileView must not push another history entry.
+  if (tab === 'profile') {
+    selectTab('trade', false);
+    openProfileView(sub, { updateUrl: false });
+    return;
   }
   selectTab(tab, false);
   if (sub) {
@@ -307,6 +321,7 @@ initI18n().then(() => {
   rerenderGuideDemos();
   rerenderPerks();
   rerenderSafety();
+  rerenderProfile();
 });
 
 // Jump animation on hover / click / tap
