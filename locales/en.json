@@ -1835,6 +1835,8 @@
   "profile.retry": "Try again",
   "profile.empty": "No assets in this collection yet.",
   "profile.emptyListed": "Nothing listed for sale right now.",
+  "profile.emptyFiltered": "No assets match these filters.",
+  "profile.indexing": "Cataloguing traits and names — this page fills in on its own in a minute.",
   "profile.loading": "Loading…",
   "profile.loadMore": "Load more",
   "profile.notFoundH": "This profile isn't public",

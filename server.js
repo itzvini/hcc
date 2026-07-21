@@ -1132,8 +1132,8 @@ async function getOwnedCreatures(address) {
       // (statistical rank) isn't warm yet; the catalogue overlay below refines them.
       const traits = {};
       for (const a of (n.attributes ?? [])) {
-        const type = a.trait_type || a.trait || a.name;
-        if (type && a.value != null && a.value !== '') traits[String(type)] = String(a.value);
+        const type = normalizeTraitType(a.trait_type || a.trait || a.name);
+        if (type && a.value != null && a.value !== '' && !(type in traits)) traits[type] = String(a.value);
       }
       items.push({ tokenId, name: n.name || `Highrise Creature #${tokenId}`, image: n.image || null, traits });
     }
@@ -1784,7 +1784,12 @@ async function ownedCreatureRows(addr) {
     const id = String(o.tokenId);
     const L = byListing.get(id);
     const known = coll?.byId.get(id);
-    const traits = Object.keys(o.traits || {}).length ? o.traits : (L?.traits || known?.traits || {});
+    // Prefer the collection/listing index's NORMALIZED traits (the same clean, title-cased
+    // set collection-mode browse uses) over the raw owned-metadata `o.traits`, which carries
+    // duplicate lower-cased keys + an `attributes` blob and would pollute the facet list with
+    // "aura"+"Aura" style dupes. Traits are immutable, so the index is authoritative; raw
+    // metadata is only a last resort for a token the index hasn't catalogued yet.
+    const traits = known?.traits || L?.traits || (Object.keys(o.traits || {}).length ? o.traits : {});
     return {
       tokenId: id,
       name: o.name || L?.name || known?.name || `Highrise Creature #${id}`,
@@ -1833,10 +1838,14 @@ async function ownedLandRows(addr) {
 async function ownedRowsFor(collKind, addr) {
   const cacheKey = `${collKind}:${addr}`;
   const hit = ownedPoolCache.get(cacheKey);
-  if (hit && Date.now() - hit.at < OWNED_POOL_TTL_MS) return hit.rows;
+  // Rows built while the enriching catalogue was cold carry degraded traits/names.
+  // Once the catalogue warms, such an entry is stale regardless of TTL — rebuild it,
+  // or the client's "indexing" re-poll would keep seeing the degraded copy.
+  const warm = collKind === 'land' ? !!slimeIndex.getSlimeIndex() : !!getCollectionIndex();
+  if (hit && Date.now() - hit.at < OWNED_POOL_TTL_MS && !(warm && hit.degraded)) return hit.rows;
   const rows = collKind === 'land' ? await ownedLandRows(addr) : await ownedCreatureRows(addr);
   if (ownedPoolCache.size > 300) ownedPoolCache.clear(); // bound memory from many distinct addresses
-  ownedPoolCache.set(cacheKey, { at: Date.now(), rows });
+  ownedPoolCache.set(cacheKey, { at: Date.now(), rows, degraded: !warm });
   return rows;
 }
 
@@ -1883,7 +1892,10 @@ async function getWalletBrowse(collKind, f, opts = {}) {
     walletCount: walletSpec.length,
     ownedTotal: rows.length,
     ownedListed: listedCount,
-    indexing: false,
+    // Traits/ranks (and LAND slime names) come from the background catalogues — until
+    // they're warm this response degrades (raw/absent traits, parcel-only names), so
+    // tell the client it's worth a quiet re-poll, same as collection-mode browse.
+    indexing: collKind === 'land' ? !slimeIndex.getSlimeIndex() : !getCollectionIndex(),
     facets: computeBrowseFacets(pool, fq),
     priceRange: lo === null ? null : { min: lo, max: hi },
     listedTotal: listedCount,

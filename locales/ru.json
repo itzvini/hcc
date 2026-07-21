@@ -611,6 +611,8 @@
   "profile.retry": "Попробовать снова",
   "profile.empty": "В этой коллекции пока нет активов.",
   "profile.emptyListed": "Сейчас ничего не продаётся.",
+  "profile.emptyFiltered": "Ни один актив не подходит под эти фильтры.",
+  "profile.indexing": "Каталогизируем трейты и имена — страница дополнится сама через минуту.",
   "profile.loading": "Загрузка…",
   "profile.loadMore": "Показать ещё",
   "profile.notFoundH": "Этот профиль не публичный",

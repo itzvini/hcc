@@ -5441,7 +5441,17 @@ span.hp-statchip-ico { font-size: 17px; line-height: 22px; text-align: center; c
 
 /* One toolbar row: collection + scope + wallet segs left, result meta right. */
 .hp-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0 12px; }
-.hp-meta { font-size: 12.5px; color: var(--hr-fg-2); margin: 0 2px 0 auto; min-height: 1.2em; }
+/* Sort + filter toggle pinned to the right of the controls row. */
+.hp-controls-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.hp-controls-right .trade-flt-sort { margin: 0; }
+
+/* Filter sidebar + grid share the marketplace's .trade-browse/.trade-side layout. */
+.hp-browse { margin-top: 2px; }
+/* Result meta + active-filter chips row above the grid. */
+.hp-active { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; min-height: 1.2em; }
+.hp-active:empty { display: none; }
+.hp-meta { font-size: 12.5px; color: var(--hr-fg-2); margin: 0; }
+.hp-meta-note { margin-left: 6px; color: var(--hr-fg-3); font-style: italic; }
 
 .hp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 14px; }
 .hp-tile {
@@ -5579,8 +5589,10 @@ span.hp-statchip-ico { font-size: 17px; line-height: 22px; text-align: center; c
 }
 .trade-hp-pill.is-active .trade-hp-dot { background: var(--hr-on-primary); box-shadow: none; }
 
-/* The profile view stacks manage card over showcase in the marketplace content area. */
-.trade-profile-view { display: flex; flex-direction: column; gap: 18px; }
+/* The profile view stacks manage card over showcase in the marketplace content area.
+   padding:0 beats the site-wide `section { padding: 40px 0 }` — the command bar above
+   already provides the 14px .trade-box gap, so the view sits snug beneath it. */
+.trade-profile-view { display: flex; flex-direction: column; gap: 18px; padding: 0; }
 #profile-app[hidden] { display: none; }
 
 /* Manage card. Pre-enable: pitch + one CTA on a single row. Live: a slim strip

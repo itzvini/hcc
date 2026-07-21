@@ -611,6 +611,8 @@
   "profile.retry": "Tekrar dene",
   "profile.empty": "Bu koleksiyonda henüz varlık yok.",
   "profile.emptyListed": "Şu anda satışta bir şey yok.",
+  "profile.emptyFiltered": "Bu filtrelere uyan varlık yok.",
+  "profile.indexing": "Trait'ler ve adlar kataloglanıyor — sayfa bir dakika içinde kendiliğinden dolar.",
   "profile.loading": "Yükleniyor…",
   "profile.loadMore": "Daha fazla yükle",
   "profile.notFoundH": "Bu profil herkese açık değil",

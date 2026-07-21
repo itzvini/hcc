@@ -35,8 +35,48 @@ let ownedTotal = null;  // total holdings in this collection (pre-filter, across
 let ownedListed = null; // how many of those are listed for sale
 let gridLoading = false;
 let gridError = false;
+let gridIndexing = false; // server catalogues still warming (traits/names incomplete)
+let indexingTimer = null; // quiet re-poll while gridIndexing
 let reqId = 0;          // guards a slow stale response against a newer view
 let delegated = false;
+
+// --- filters (mirror the marketplace Browse filters; same server params + facets) ---
+// The profile hits the same /browse endpoint, which already accepts min/max/t/sort and
+// returns facets + priceRange — the showcase just filters within one holder's collection.
+let flt = { min: '', max: '', traits: new Map(), sort: 'rarity' };
+let facets = null;       // [{type, values:[{v,n,pct}]}] from the last response, or null
+let priceRange = null;   // {min,max} across the shown selection
+let openFacet = null;    // which trait dropdown is expanded
+let fltSheetOpen = false; // mobile filter sheet
+let fltDebounce = null;
+
+// Creatures only come in two tiers — Legendary and Epic. (Rare/Uncommon/Common never
+// existed in the collection; listing them just showed permanently-disabled chips.)
+const RARITY_TIERS = ['Legendary', 'Epic'];
+const TIER_VALUES = ['Standard', 'Premium'];
+
+function fmtTraitPct(p) {
+  if (p == null || !Number.isFinite(Number(p))) return '';
+  const v = Number(p) * 100;
+  if (v > 0 && v < 0.1) return '<0.1%';
+  return `${v < 10 ? v.toFixed(1) : Math.round(v)}%`;
+}
+function traitSelected(type, v) { return flt.traits.get(type)?.has(v) || false; }
+function toggleTrait(type, v) {
+  const cur = flt.traits.get(type) || new Set();
+  if (cur.has(v)) cur.delete(v); else cur.add(v);
+  if (cur.size) flt.traits.set(type, cur); else flt.traits.delete(type);
+}
+function fltActive() { return !!(flt.min || flt.max || flt.traits.size); }
+function fltCount() {
+  let n = (flt.min ? 1 : 0) + (flt.max ? 1 : 0);
+  for (const vals of flt.traits.values()) n += vals.size;
+  return n;
+}
+function resetFilters() {
+  flt.min = ''; flt.max = ''; flt.traits = new Map();
+  openFacet = null;
+}
 
 // Every showcase wallet the profile exposes, [{wallet, highriseLinked, verified, verifiedElsewhere}].
 // Falls back to the single primary wallet for profiles created before multi-wallet shipped.
@@ -77,11 +117,13 @@ async function fetchIdentity() {
   if (data && data !== 'notfound') loadHoldings(true);
 }
 
-async function loadHoldings(reset = true) {
+async function loadHoldings(reset = true, opts = {}) {
   if (!data || data === 'notfound' || !profileWallets().length) return;
   if (!reset && (!hasMore || gridLoading)) return;
   const p = reset ? 0 : page + 1;
-  if (reset) { items = []; page = 0; hasMore = false; gridError = false; }
+  // quiet: refresh in place (the indexing re-poll) — keep the current tiles up instead
+  // of flashing skeletons; the response replaces them wholesale.
+  if (reset) { page = 0; hasMore = false; gridError = false; if (!opts.quiet) items = []; }
   const rid = ++reqId;
   gridLoading = true;
   patchGrid();
@@ -93,7 +135,10 @@ async function loadHoldings(reset = true) {
     // Rarity sort: with scope=all most rows have no price, so a price sort would just dump
     // the unlisted majority at the end — rank reads better on a showcase.
     const target = walletFilter === 'all' ? slug : walletFilter;
-    const qs = new URLSearchParams({ q: target, scope, page: String(p), sort: 'rarity' });
+    const qs = new URLSearchParams({ q: target, scope, page: String(p), sort: flt.sort });
+    if (flt.min) qs.set('min', flt.min);
+    if (flt.max) qs.set('max', flt.max);
+    for (const [type, vals] of flt.traits) for (const v of vals) qs.append('t', `${type}:${v}`);
     const res = await fetch(`${api}?${qs}`, { headers: { Accept: 'application/json' } });
     if (!res.ok) throw new Error('http ' + res.status);
     const d = await res.json();
@@ -103,12 +148,26 @@ async function loadHoldings(reset = true) {
     hasMore = !!d.hasMore;
     ownedTotal = d.ownedTotal ?? null;
     ownedListed = d.ownedListed ?? null;
+    // Facets/priceRange are computed over the whole owned pool (scope-filtered, NOT
+    // trait-filtered) — so they stay populated while a trait/price filter narrows the
+    // grid, and only go empty when the collection/scope itself is empty. Take them
+    // verbatim on a reset load; keep the last set while paging (page>0 omits them).
+    if (reset && Array.isArray(d.facets)) facets = d.facets;
+    if (reset) priceRange = d.priceRange || null;
+    // Server catalogues still warming (creature traits / LAND slimes): traits, names and
+    // facets are incomplete — quietly re-poll until they're not. The rid guard drops the
+    // timer the moment any newer request (filter change, coll switch) supersedes it.
+    gridIndexing = !!d.indexing;
+    clearTimeout(indexingTimer);
+    if (gridIndexing) {
+      indexingTimer = setTimeout(() => { if (rid === reqId) loadHoldings(true, { quiet: true }); }, 5000);
+    }
   } catch (err) {
     if (rid !== reqId) return;
     console.error('Profile holdings load failed:', err);
     if (reset) gridError = true;
   } finally {
-    if (rid === reqId) { gridLoading = false; patchGrid(); }
+    if (rid === reqId) { gridLoading = false; patchGrid(); patchFilters(); }
   }
 }
 
@@ -171,9 +230,8 @@ function heroHtml() {
 }
 
 function controlsHtml() {
-  const collBtn = (id, key) => `
-    <button type="button" role="tab" class="seg-btn ${coll === id ? 'is-active' : ''}"
-      aria-selected="${coll === id}" data-act="hp-coll" data-coll="${id}">${esc(t(key))}</button>`;
+  // No collection seg here — the marketplace command bar's Creatures⟷LAND switcher is
+  // the single switcher and drives this grid (loadProfile receives its coll).
   const scopeBtn = (id, key) => `
     <button type="button" role="tab" class="seg-btn ${scope === id ? 'is-active' : ''}"
       aria-selected="${scope === id}" data-act="hp-scope" data-scope="${id}">${esc(t(key))}</button>`;
@@ -187,17 +245,23 @@ function controlsHtml() {
       ${walletChip('all', t('profile.walletAll'))}
       ${wallets.map(w => walletChip(w.wallet, sourceLabel(w))).join('')}
     </div>` : '';
-  // The result meta rides the same row (pushed right) so the toolbar is one line.
+  // Sort + filter toggle sit on the right; the sidebar (rarity/tier, price, traits) opens
+  // beside the grid on desktop and as a sheet on mobile — same controls as the marketplace.
+  const sorts = [['price-asc', 'sortPriceAsc'], ['price-desc', 'sortPriceDesc'], ['rarity', 'sortRarity'], ['newest', 'sortNewest']];
   return `
   <div class="hp-controls">
-    <div class="seg hp-seg" role="tablist" aria-label="${esc(t('profile.collAria'))}">
-      ${collBtn('creatures', 'profile.collCreatures')}${collBtn('land', 'profile.collLand')}
-    </div>
     <div class="seg hp-seg" role="tablist" aria-label="${esc(t('profile.scopeAria'))}">
       ${scopeBtn('all', 'profile.scopeAll')}${scopeBtn('listed', 'profile.scopeListed')}
     </div>
     ${walletSeg}
-    <p class="hp-meta" id="hp-meta">${metaHtml()}</p>
+    <div class="hp-controls-right">
+      <select id="hp-sort" class="seg-select trade-flt-sort" aria-label="${esc(t('trade.filter.sortAria'))}">
+        ${sorts.map(([v, k]) => `<option value="${v}" ${flt.sort === v ? 'selected' : ''}>${esc(t('trade.filter.' + k))}</option>`).join('')}
+      </select>
+      <button type="button" class="apply-btn-ghost trade-flt-toggle hp-flt-toggle" data-act="hpf-drawer" aria-expanded="${fltSheetOpen}" aria-controls="hp-side">
+        ${esc(t('trade.filter.toggle'))}${fltCount() ? `<span class="trade-flt-badge">${fltCount()}</span>` : ''}
+      </button>
+    </div>
   </div>`;
 }
 
@@ -207,7 +271,123 @@ function metaHtml() {
   const total = (scope === 'listed' ? (ownedListed ?? 0) : ownedTotal).toLocaleString();
   const listed = (ownedListed ?? 0).toLocaleString();
   return `${t('profile.meta').replace('{shown}', shown).replace('{total}', total)}
-    ${ownedListed != null ? ` · ${t('profile.metaListed').replace('{n}', listed)}` : ''}`;
+    ${ownedListed != null ? ` · ${t('profile.metaListed').replace('{n}', listed)}` : ''}
+    ${gridIndexing ? `<span class="hp-meta-note">${esc(t('profile.indexing'))}</span>` : ''}`;
+}
+
+// --- filter UI (same server params + facets as the marketplace Browse, same .trade-flt-*
+// / .trade-side styling; the handlers are hpf-* so they don't collide with the marketplace's
+// own flt-* delegation). Rarity (creatures) and Tier (LAND) are just trait facets. ---
+
+function rarityFacet() {
+  const f = (facets || []).find(x => /rarity/i.test(x.type));
+  return { type: f?.type || 'Rarity', counts: new Map((f?.values || []).map(({ v, n }) => [v, n])) };
+}
+function rarityChipsHtml() {
+  const { type, counts } = rarityFacet();
+  return RARITY_TIERS.map(tier => {
+    const sel = traitSelected(type, tier);
+    const n = facets ? (counts.get(tier) ?? 0) : null; // unknown before first response → enabled
+    return `<button type="button" class="trade-flt-rchip ${sel ? 'is-on' : ''}" data-r="${tier.toLowerCase()}"
+      data-act="hpf-val" data-type="${esc(type)}" data-val="${esc(tier)}" aria-pressed="${sel}" ${n === 0 && !sel ? 'disabled' : ''}>
+      <span class="trade-flt-rdot" aria-hidden="true"></span>${esc(tier)}${n != null ? `<span class="trade-flt-n">${n}</span>` : ''}
+    </button>`;
+  }).join('');
+}
+function tierFacet() { return (facets || []).find(x => x.type === 'Tier') || null; }
+// Plot-type chips carry the holder's COUNT per tier (how many Standard / Premium plots
+// this profile has) — same treatment as the Creature rarity chips beside them.
+function tierChipsHtml() {
+  const vals = new Map((tierFacet()?.values || []).map(o => [o.v, o]));
+  return TIER_VALUES.map(name => {
+    const o = vals.get(name);
+    const sel = traitSelected('Tier', name);
+    const n = facets ? (o?.n ?? 0) : null;
+    return `<button type="button" class="trade-flt-rchip ${sel ? 'is-on' : ''}" data-tier="${esc(name.toLowerCase())}"
+      data-act="hpf-val" data-type="Tier" data-val="${esc(name)}" aria-pressed="${sel}" ${n === 0 && !sel ? 'disabled' : ''}>
+      <span class="trade-flt-rdot" aria-hidden="true"></span>${esc(name)}${n != null ? `<span class="trade-flt-n">${n}</span>` : ''}
+    </button>`;
+  }).join('');
+}
+function fTraitPopHtml(f) {
+  return `<div class="trade-flt-pop" role="listbox" aria-label="${esc(f.type)}">
+    ${f.values.map(({ v, n, pct }) => {
+      const sel = traitSelected(f.type, v);
+      const pctStr = fmtTraitPct(pct);
+      return `<button type="button" class="trade-flt-opt ${sel ? 'is-on' : ''}" role="option" aria-selected="${sel}"
+        data-act="hpf-val" data-type="${esc(f.type)}" data-val="${esc(v)}" ${n === 0 && !sel ? 'disabled' : ''}>
+        <span class="trade-flt-check" aria-hidden="true">${sel ? '✓' : ''}</span>
+        <span class="trade-flt-optv">${esc(v)}</span>${pctStr ? `<span class="trade-flt-pct" title="${esc(t('trade.filter.rarityPct'))}">${esc(pctStr)}</span>` : ''}<span class="trade-flt-n">${n}</span>
+      </button>`;
+    }).join('')}
+  </div>`;
+}
+function traitDropsHtml() {
+  if (!facets) return `<span class="trade-flt-loading">${esc(t('trade.filter.loading'))}</span>`;
+  return facets.filter(f => !/rarity/i.test(f.type) && f.type !== 'Tier').map(f => {
+    const selCount = flt.traits.get(f.type)?.size || 0;
+    const open = openFacet === f.type;
+    return `
+    <div class="trade-flt-dd ${open ? 'is-open' : ''}">
+      <button type="button" class="trade-flt-ddbtn ${selCount ? 'has-sel' : ''}" data-act="hpf-open" data-type="${esc(f.type)}"
+        aria-expanded="${open}" aria-haspopup="listbox">
+        ${esc(f.type)}${selCount ? `<span class="trade-flt-badge">${selCount}</span>` : ''}<span class="trade-flt-caret" aria-hidden="true">▾</span>
+      </button>
+      ${open ? fTraitPopHtml(f) : ''}
+    </div>`;
+  }).join('');
+}
+function filterSideHtml() {
+  const pr = priceRange;
+  return `
+  <aside class="trade-side ${fltSheetOpen ? 'is-open' : ''}" id="hp-side" aria-label="${esc(t('trade.filter.toggle'))}">
+    <div class="trade-side-backdrop" data-act="hpf-drawer"></div>
+    <div class="trade-side-card">
+      <div class="trade-side-head">
+        <h3 class="trade-side-title">${esc(t('trade.filter.toggle'))}</h3>
+        <button type="button" class="trade-flt-clearall" data-act="hpf-clear">${esc(t('trade.filter.clear'))}</button>
+        <button type="button" class="trade-side-x" data-act="hpf-drawer" aria-label="${esc(t('trade.modal.close'))}">×</button>
+      </div>
+      ${coll === 'creatures' ? `<div class="trade-side-sec">
+        <h4 class="trade-side-h">${esc(t('trade.filter.rarityH'))}</h4>
+        <div class="trade-flt-rar" id="hp-flt-rar" role="group" aria-label="${esc(t('trade.filter.rarityAria'))}">${rarityChipsHtml()}</div>
+      </div>` : ''}
+      ${coll === 'land' ? `<div class="trade-side-sec">
+        <h4 class="trade-side-h">${esc(t('trade.filter.tierH'))}</h4>
+        <div class="trade-flt-rar" id="hp-flt-tier" role="group" aria-label="${esc(t('trade.filter.tierAria'))}">${tierChipsHtml()}</div>
+      </div>` : ''}
+      <div class="trade-side-sec">
+        <h4 class="trade-side-h">${esc(t('trade.filter.priceH'))}</h4>
+        <div class="trade-flt-price" role="group" aria-label="${esc(t('trade.filter.priceAria'))}">
+          <input id="hp-flt-min" inputmode="decimal" autocomplete="off" placeholder="${pr ? esc(String(pr.min)) : 'min'}" value="${esc(flt.min)}" aria-label="${esc(t('trade.filter.minAria'))}" />
+          <span class="trade-flt-dash" aria-hidden="true">–</span>
+          <input id="hp-flt-max" inputmode="decimal" autocomplete="off" placeholder="${pr ? esc(String(pr.max)) : 'max'}" value="${esc(flt.max)}" aria-label="${esc(t('trade.filter.maxAria'))}" />
+          <span class="trade-flt-eth" aria-hidden="true">ETH</span>
+        </div>
+      </div>
+      <div class="trade-side-sec">
+        <h4 class="trade-side-h">${esc(t('trade.filter.traitsH'))}</h4>
+        <div class="trade-flt-traits" id="hp-flt-traits">${traitDropsHtml()}</div>
+      </div>
+      <button type="button" class="trade-send trade-side-done" data-act="hpf-drawer">${esc(t('trade.filter.done'))}</button>
+    </div>
+  </aside>`;
+}
+// Result meta + active-filter chips, above the grid (mirrors the marketplace toolbar's
+// active row). The count meta always shows; chips + clear appear once a filter is on.
+function activeRowHtml() {
+  const chips = [];
+  if (flt.min) chips.push({ k: 'min', label: `≥ ${flt.min} ETH` });
+  if (flt.max) chips.push({ k: 'max', label: `≤ ${flt.max} ETH` });
+  for (const [type, vals] of flt.traits) for (const v of vals) chips.push({ k: 't', type, v, label: `${type}: ${v}` });
+  const meta = `<span class="hp-meta" id="hp-meta">${metaHtml()}</span>`;
+  if (!chips.length) return meta;
+  return `${meta}${chips.map(c => `
+    <button type="button" class="trade-flt-chip" data-act="hpf-rm" data-kind="${c.k}"
+      ${c.type ? `data-type="${esc(c.type)}" data-val="${esc(c.v)}"` : ''} aria-label="${esc(t('trade.filter.removeAria').replace('{f}', c.label))}">
+      ${esc(c.label)}<span class="trade-flt-x" aria-hidden="true">×</span>
+    </button>`).join('')}
+    <button type="button" class="trade-flt-clearall" data-act="hpf-clear">${esc(t('trade.filter.clear'))}</button>`;
 }
 
 function tileHtml(it, i) {
@@ -244,7 +424,7 @@ function tileHtml(it, i) {
       ${img ? `<img src="${esc(img)}" alt="${esc(name)}" loading="lazy" />` : `<span class="hp-tile-noimg" aria-hidden="true">✦</span>`}
       ${status}
       ${badge}
-      <button type="button" class="hp-tile-view" data-act="hp-view" data-token="${esc(it.tokenId)}" data-coll="${coll}" aria-label="${esc(label)}">
+      <button type="button" class="hp-tile-view" data-act="hp-view" data-token="${esc(it.tokenId)}" data-coll="${coll}" data-listed="${it.listed ? '1' : '0'}" aria-label="${esc(label)}">
         <span class="hp-tile-view-hint">${esc(t('profile.viewInMarketShort'))} <span aria-hidden="true">→</span></span>
       </button>
     </div>
@@ -268,6 +448,12 @@ function gridInnerHtml() {
       `<div class="hp-tile hp-skel" aria-hidden="true"><div class="hp-tile-media"></div><div class="hp-tile-body"><span></span><span></span></div></div>`).join('');
   }
   if (!items.length) {
+    // A live filter emptied the grid → say so and offer a one-tap clear (distinct from a
+    // genuinely empty collection/listed set).
+    if (fltActive()) {
+      return `<div class="hp-state"><p>${esc(t('profile.emptyFiltered'))}</p>
+        <button type="button" class="apply-btn-ghost" data-act="hpf-clear">${esc(t('trade.filter.clear'))}</button></div>`;
+    }
     return `<div class="hp-state"><p>${esc(t(scope === 'listed' ? 'profile.emptyListed' : 'profile.empty'))}</p></div>`;
   }
   return items.map(tileHtml).join('');
@@ -324,8 +510,14 @@ function render() {
     ${heroHtml()}
     <div id="hp-warn-slot">${walletWarningHtml()}</div>
     ${controlsHtml()}
-    <div class="hp-grid" id="hp-grid">${gridInnerHtml()}</div>
-    <div class="hp-loadmore" id="hp-loadmore">${loadMoreHtml()}</div>
+    <section class="trade-browse has-side hp-browse">
+      ${filterSideHtml()}
+      <div class="trade-main">
+        <div class="hp-active" id="hp-active">${activeRowHtml()}</div>
+        <div class="hp-grid" id="hp-grid">${gridInnerHtml()}</div>
+        <div class="hp-loadmore" id="hp-loadmore">${loadMoreHtml()}</div>
+      </div>
+    </section>
     <p class="apply-fineprint hp-fineprint">${esc(t('profile.fineprint'))}</p>`;
   ensureDelegation();
   animateCounts(el);
@@ -339,8 +531,47 @@ function patchGrid() {
   if (grid) grid.innerHTML = gridInnerHtml();
   const more = el.querySelector('#hp-loadmore');
   if (more) more.innerHTML = loadMoreHtml();
-  const meta = el.querySelector('#hp-meta');
-  if (meta) meta.innerHTML = metaHtml();
+  const act = el.querySelector('#hp-active');
+  if (act) act.innerHTML = activeRowHtml();
+}
+
+// Repaint the sidebar's dynamic bits (facet counts, chips, toggle badge, price placeholder)
+// WITHOUT touching the price inputs — focus + caret must survive typing. Mirrors the
+// marketplace's patchFilters.
+function patchFilters() {
+  const el = root();
+  if (!el || !data || data === 'notfound') return;
+  const rar = el.querySelector('#hp-flt-rar'); if (rar) rar.innerHTML = rarityChipsHtml();
+  const tier = el.querySelector('#hp-flt-tier'); if (tier) tier.innerHTML = tierChipsHtml();
+  const tr = el.querySelector('#hp-flt-traits'); if (tr) tr.innerHTML = traitDropsHtml();
+  const act = el.querySelector('#hp-active'); if (act) act.innerHTML = activeRowHtml();
+  const tog = el.querySelector('.hp-flt-toggle');
+  if (tog) tog.innerHTML = `${esc(t('trade.filter.toggle'))}${fltCount() ? `<span class="trade-flt-badge">${fltCount()}</span>` : ''}`;
+  if (priceRange) {
+    const mn = el.querySelector('#hp-flt-min'); if (mn) mn.placeholder = String(priceRange.min);
+    const mx = el.querySelector('#hp-flt-max'); if (mx) mx.placeholder = String(priceRange.max);
+  }
+}
+// Push filter state back into the price inputs after a programmatic change (chip ×, clear).
+function syncFilterInputs() {
+  const el = root(); if (!el) return;
+  const mn = el.querySelector('#hp-flt-min'); if (mn) mn.value = flt.min;
+  const mx = el.querySelector('#hp-flt-max'); if (mx) mx.value = flt.max;
+}
+// Apply a filter change: repaint the controls, then reload the grid (debounced for typing).
+function applyFilters(debounceMs = 0) {
+  clearTimeout(fltDebounce);
+  const run = () => { patchFilters(); loadHoldings(true); };
+  if (debounceMs) fltDebounce = setTimeout(run, debounceMs);
+  else run();
+}
+// Mobile filter sheet open/close — owns the class + body scroll lock (same as the marketplace).
+function setFltSheet(open) {
+  fltSheetOpen = open;
+  document.body.classList.toggle('trade-sheet-open', open);
+  const el = root();
+  el?.querySelector('#hp-side')?.classList.toggle('is-open', open);
+  el?.querySelector('.hp-flt-toggle')?.setAttribute('aria-expanded', String(open));
 }
 
 // Count-up on the hero stats — skipped under reduced motion (values render directly).
@@ -407,11 +638,6 @@ function ensureDelegation() {
     const btn = e.target.closest('[data-act]');
     if (!btn || !btn.closest('#profile-app')) return;
     switch (btn.dataset.act) {
-      case 'hp-coll':
-        if (coll === btn.dataset.coll) return;
-        coll = btn.dataset.coll;
-        render();
-        return loadHoldings(true);
       case 'hp-scope':
         if (scope === btn.dataset.scope) return;
         scope = btn.dataset.scope;
@@ -429,28 +655,86 @@ function ensureDelegation() {
       case 'hp-browse':
         return window.dispatchEvent(new CustomEvent('hcc:browse-trade'));
       case 'hp-view':
-        // Hand off to the marketplace: open this token's buy/offer view (listed or not).
+        // Hand off to the marketplace: open this token's detail/buy view. Pass the known
+        // listed state so an unlisted item skips the "brand-new listing, syncing…" hunt
+        // and the backdrop is the full collection, not just the on-sale grid.
         return window.dispatchEvent(new CustomEvent('hcc:open-token', {
-          detail: { coll: btn.dataset.coll, tokenId: btn.dataset.token },
+          detail: { coll: btn.dataset.coll, tokenId: btn.dataset.token, listed: btn.dataset.listed === '1' },
         }));
+      // --- filters (mirror the marketplace's flt-* handlers) ---
+      case 'hpf-val':
+        toggleTrait(btn.dataset.type, btn.dataset.val);
+        return applyFilters();
+      case 'hpf-open':
+        openFacet = openFacet === btn.dataset.type ? null : btn.dataset.type;
+        return patchFilters();
+      case 'hpf-clear':
+        resetFilters();
+        syncFilterInputs();
+        return applyFilters();
+      case 'hpf-rm': {
+        const { kind, type, val } = btn.dataset;
+        if (kind === 'min') flt.min = '';
+        else if (kind === 'max') flt.max = '';
+        else if (kind === 't') toggleTrait(type, val);
+        syncFilterInputs();
+        return applyFilters();
+      }
+      case 'hpf-drawer':
+        return setFltSheet(!fltSheetOpen);
     }
+  });
+  // Sort (change) + price inputs (debounced), scoped to the profile panel.
+  document.addEventListener('change', e => {
+    if (e.target?.id !== 'hp-sort' || !e.target.closest('#profile-app')) return;
+    flt.sort = e.target.value;
+    applyFilters();
+  });
+  document.addEventListener('input', e => {
+    if ((e.target?.id !== 'hp-flt-min' && e.target?.id !== 'hp-flt-max') || !e.target.closest('#profile-app')) return;
+    const v = e.target.value.trim().replace(',', '.');
+    if (v === '' || /^\d*\.?\d*$/.test(v)) flt[e.target.id === 'hp-flt-min' ? 'min' : 'max'] = v;
+    applyFilters(400);
   });
 }
 
 // --- public API (wired in app.js) ---
 
+// The collection shown is driven by the marketplace command bar's switcher (the one and
+// only switcher) — it arrives as opts.coll on every call.
+const wantColl = c => (c === 'land' || c === 'creatures') ? c : null;
+
 export function loadProfile(theSlug, opts = {}) {
   const next = (theSlug || '').toLowerCase();
-  // Same slug with data in hand: repaint into the (possibly re-created) container.
-  // force refetches instead — the wallet list just changed under us.
-  if (!opts.force && next && next === slug && data && data !== 'notfound') { render(); return; }
+  const optColl = wantColl(opts.coll);
+  // Already fetching this very profile (the marketplace renders more than once while it
+  // boots, and every render calls us) — don't restart the identity+holdings round-trip.
+  if (!opts.force && next && next === slug && identityLoading) return;
+  // Same slug with data in hand: repaint into the (possibly re-created) container —
+  // or, if the command bar switched collection, swap the grid to it. force refetches
+  // instead (the wallet list just changed under us).
+  if (!opts.force && next && next === slug && data && data !== 'notfound') {
+    if (optColl && optColl !== coll) {
+      coll = optColl;
+      // Traits/rarity are collection-specific — the new collection starts unfiltered.
+      resetFilters(); facets = null; priceRange = null;
+      render();
+      loadHoldings(true);
+    } else {
+      render();
+    }
+    return;
+  }
   slug = next;
   data = null;
-  coll = 'creatures';
+  coll = optColl || 'creatures';
   scope = 'all';
   walletFilter = 'all';
   items = []; page = 0; hasMore = false; ownedTotal = null; ownedListed = null;
   gridError = false;
+  gridIndexing = false; clearTimeout(indexingTimer);
+  resetFilters(); facets = null; priceRange = null; flt.sort = 'rarity';
+  setFltSheet(false);
   reqId++;
   if (!slug) { identityLoading = false; data = 'notfound'; render(); return; }
   fetchIdentity();

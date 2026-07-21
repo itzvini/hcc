@@ -611,6 +611,8 @@
   "profile.retry": "Nochmal versuchen",
   "profile.empty": "Noch keine Assets in dieser Sammlung.",
   "profile.emptyListed": "Gerade nichts zum Verkauf.",
+  "profile.emptyFiltered": "Keine Assets passen zu diesen Filtern.",
+  "profile.indexing": "Traits und Namen werden katalogisiert — die Seite füllt sich in einer Minute von selbst.",
   "profile.loading": "Lädt…",
   "profile.loadMore": "Mehr laden",
   "profile.notFoundH": "Dieses Profil ist nicht öffentlich",

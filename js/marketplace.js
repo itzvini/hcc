@@ -162,7 +162,9 @@ let browseOwnerProfile = null;
 let browseProfileExpandedFor = null; // query we've already auto-expanded to scope=all
 const WALLET_RE = /^0x[0-9a-fA-F]{40}$/;
 const isWalletQuery = s => WALLET_RE.test((s || '').trim());
-const RARITY_TIERS = ['Legendary', 'Epic', 'Rare', 'Uncommon', 'Common'];
+// Creatures only come in two tiers — Legendary and Epic. (Rare/Uncommon/Common never
+// existed in the collection; listing them just showed permanently-disabled chips.)
+const RARITY_TIERS = ['Legendary', 'Epic'];
 // LAND plot tiers — a parcel attribute (the "Tier" facet), shown as their own always-
 // visible chip group rather than buried in the trait dropdowns. Ordered common → premium.
 const TIER_VALUES = ['Standard', 'Premium'];
@@ -1369,10 +1371,23 @@ async function switchAccount() {
 
 // Switch to whatever chain the ACTIVE collection needs (zkEVM gets added if absent;
 // Ethereum mainnet always exists in the wallet).
+// Chain WE just asked the wallet to switch to. Its `chainChanged` echo is handled in
+// place by the initiating flow — without this flag the echo triggered a third full
+// re-render on every collection switch (after the switch flow's own two), which is
+// what made the wallet bar / profile / filters / grid visibly blink twice.
+let expectedChainHex = null;
+
 async function switchToChain(hex) {
-  if (hex === ZK_CHAIN_ID_HEX) { await ensureNetwork(); return; }
-  await eth().request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] });
-  chainId = await eth().request({ method: 'eth_chainId' });
+  const want = String(hex).toLowerCase();
+  expectedChainHex = want; // the coming chainChanged event is ours
+  try {
+    if (hex === ZK_CHAIN_ID_HEX) { await ensureNetwork(); return; }
+    await eth().request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] });
+    chainId = await eth().request({ method: 'eth_chainId' });
+  } catch (err) {
+    if (expectedChainHex === want) expectedChainHex = null; // declined — future events are external
+    throw err;
+  }
 }
 
 async function switchNetwork(btn) {
@@ -1391,9 +1406,25 @@ async function switchNetwork(btn) {
 async function autoSwitchNetwork() {
   if (!account || onRightChain() || busy) return;
   busy = true;
-  try { await switchToChain(C().chainHex); }
+  let switched = false;
+  try { await switchToChain(C().chainHex); switched = true; }
   catch (err) { console.error('Auto network switch declined:', err); /* pill remains */ }
-  finally { busy = false; render(); }
+  finally { busy = false; }
+  if (!switched) return; // declined — the view already shows the wrong-network pill
+  // The chain settled under an already-rendered view. Patch only what the chain touches
+  // — wallet bar, the sell/transfer network gates, the seller loads those gates blocked —
+  // instead of a full re-render (the second whole-panel blink on collection switches).
+  patchWalletBar();
+  patchSellView();
+  patchTransferView();
+  maybeLoadSeller();
+}
+
+// Repaint just the wallet bar (network pill, balances, action pills) in place.
+function patchWalletBar() {
+  const bar = root()?.querySelector('.trade-command .trade-bar');
+  if (bar) bar.outerHTML = walletBarHtml();
+  if (account && (coll === 'land' || onZk())) refreshBalance();
 }
 
 async function sendTransfer(contract, tokenId, to) {
@@ -1680,8 +1711,12 @@ async function fetchListingFor(tokenId) {
 // moment the user moves on — closes the modal, opens another token, switches worlds.
 const LINK_RETRY_MS = [0, 10000, 25000];
 
-async function openDeepLink(tokenId) {
+async function openDeepLink(tokenId, opts = {}) {
   const wantColl = coll;
+  // Known-unlisted (a profile tile told us): don't enter the "brand-new listing, syncing…"
+  // hunt — that message is for a listing that may still be propagating, not for an item
+  // the owner simply hasn't listed. Open the detail modal straight to "Not listed".
+  if (opts.knownListed === false) { linkSync = null; openModal(tokenId); return; }
   linkSync = tokenId;
   openModal(tokenId);
   const moved = () => coll !== wantColl || String(modalToken) !== String(tokenId);
@@ -1697,13 +1732,32 @@ async function openDeepLink(tokenId) {
   patchModal();
 }
 
+// Highrise LAND token ids pack the parcel coords as (x<<16)|y — decode them so the
+// slime portrait can render even when neither the listing feed nor the token metadata
+// carries coords (e.g. a profile-opened unlisted parcel).
+function coordsFromLandId(tokenId) {
+  const n = Number(tokenId);
+  if (!Number.isInteger(n) || n <= 0 || n > 0xffffffff) return null;
+  const x = n >>> 16, y = n & 0xffff;
+  return x > 0 && y > 0 ? { x, y } : null;
+}
+
 function modalCardHtml() {
   const it = listingForToken(modalToken) || {};
   const meta = modalMeta || {};
-  const image = meta.image || it.image;
+  let image = meta.image || it.image;
+  let imgFallback = '';
+  // LAND leads with its slime portrait (same as the tiles), keeping the plot render as
+  // the on-error fallback — the token endpoint's image is the plot, which reads wrong
+  // next to a grid full of slimes.
+  if (coll === 'land') {
+    const c = meta.coords || it.coords || coordsFromLandId(modalToken);
+    const pet = Number.isInteger(c?.x) && Number.isInteger(c?.y) ? `/api/market/land/pet/${c.x}/${c.y}` : null;
+    if (pet && image !== pet) { imgFallback = image || ''; image = pet; }
+  }
   const name = meta.name || it.name || `Highrise Creature #${modalToken}`;
   const img = image
-    ? `<img class="trade-modal-img" src="${esc(image)}" alt="${esc(name)}" />`
+    ? `<img class="trade-modal-img" src="${esc(image)}"${imgFallback ? ` data-fallback="${esc(imgFallback)}"` : ''} alt="${esc(name)}" />`
     : `<div class="trade-modal-img trade-tile-noimg" aria-hidden="true">🐾</div>`;
 
   const allIn = it.totalEth ?? it.priceEth;
@@ -3552,13 +3606,16 @@ function walletBarHtml() {
     : `<button class="trade-net is-bad" data-act="switch" type="button" title="${esc(t('trade.net.switch'))}">${esc(t('trade.net.bad'))}</button>`;
   // Live on-chain balances straight from the RPC — the user's ground truth when a
   // wallet UI mis-reports (e.g. MetaMask's phantom "insufficient IMX" on custom nets).
+  // Seed from the last-known values so a re-render doesn't flash '—' while the async
+  // reads run; refreshBalance() overwrites (and re-caches) right after.
+  const seed = balCache.get(`${account}|${coll}`) || {};
   const bal = coll === 'land'
-    ? `<span class="trade-bar-bal" title="${esc(t('trade.balance.landLabel'))}"><img class="trade-bal-ico" src="${COLL_ICONS.land}" alt="" aria-hidden="true" /> <b id="trade-bal">—</b></span>
-       <span class="trade-bar-bal">ETH <b id="trade-bal-eth">—</b></span>`
+    ? `<span class="trade-bar-bal" title="${esc(t('trade.balance.landLabel'))}"><img class="trade-bal-ico" src="${COLL_ICONS.land}" alt="" aria-hidden="true" /> <b id="trade-bal">${esc(seed.count ?? '—')}</b></span>
+       <span class="trade-bar-bal">ETH <b id="trade-bal-eth">${esc(seed.eth ?? '—')}</b></span>`
     : (onZk()
-        ? `<span class="trade-bar-bal" title="${esc(t('trade.balance.label'))}"><img class="trade-bal-ico" src="${COLL_ICONS.creatures}" alt="" aria-hidden="true" /> <b id="trade-bal">—</b></span>
-           <span class="trade-bar-bal">ETH <b id="trade-bal-eth">—</b></span>
-           <span class="trade-bar-bal">IMX <b id="trade-bal-imx">—</b></span>`
+        ? `<span class="trade-bar-bal" title="${esc(t('trade.balance.label'))}"><img class="trade-bal-ico" src="${COLL_ICONS.creatures}" alt="" aria-hidden="true" /> <b id="trade-bal">${esc(seed.count ?? '—')}</b></span>
+           <span class="trade-bar-bal">ETH <b id="trade-bal-eth">${esc(seed.eth ?? '—')}</b></span>
+           <span class="trade-bar-bal">IMX <b id="trade-bal-imx">${esc(seed.imx ?? '—')}</b></span>`
         : '');
   return `<div class="trade-bar is-connected">
     <img class="trade-mm-dot" src="${METAMASK_IMG}" alt="" />
@@ -3619,10 +3676,12 @@ function tierChipsHtml() {
     const o = vals.get(name);
     const sel = traitSelected('Tier', name);
     const n = browseFacets ? (o?.n ?? 0) : null; // unknown before first response → enabled
-    const pctStr = o ? fmtTraitPct(o.pct) : '';
+    // Collection browse shows each tier's collection-wide rarity %; wallet/profile
+    // views have no % (facets are per-holder) — show the holder's plot COUNT instead.
+    const tag = (o ? fmtTraitPct(o.pct) : '') || (n != null ? String(n) : '');
     return `<button type="button" class="trade-flt-rchip ${sel ? 'is-on' : ''}" data-tier="${esc(name.toLowerCase())}"
       data-act="flt-val" data-type="Tier" data-val="${esc(name)}" aria-pressed="${sel}" ${n === 0 && !sel ? 'disabled' : ''}>
-      <span class="trade-flt-rdot" aria-hidden="true"></span>${esc(name)}${pctStr ? `<span class="trade-flt-n">${esc(pctStr)}</span>` : ''}
+      <span class="trade-flt-rdot" aria-hidden="true"></span>${esc(name)}${tag ? `<span class="trade-flt-n">${esc(tag)}</span>` : ''}
     </button>`;
   }).join('');
 }
@@ -4685,11 +4744,12 @@ let hpScrollPending = false;
 // Open a specific token's marketplace view (its buy/offer modal), switching the active
 // collection if needed. Called from a profile tile's "view in market" — it leaves the
 // profile view, lands on /trade?coll=…&token=… (shareable), and deep-links the modal.
-export function openTokenInMarket(collKind, tokenId) {
+export function openTokenInMarket(collKind, tokenId, opts = {}) {
   if (!loadedOnce) return;
   const tk = String(tokenId || '').trim();
   if (!/^\d{1,80}$/.test(tk)) return;
-  if (COLLECTIONS[collKind] && collKind !== coll) {
+  const switching = COLLECTIONS[collKind] && collKind !== coll;
+  if (switching) {
     coll = collKind;
     try { localStorage.setItem('hcc-trade-coll', coll); } catch { /* fine */ }
     tokenOffers = null;
@@ -4697,16 +4757,31 @@ export function openTokenInMarket(collKind, tokenId) {
     resetSellerState();
     autoSwitchNetwork();
   }
+  // From the profile view, the token detail opens as an OVERLAY — the profile stays put
+  // behind it (URL included), so closing the modal lands you exactly where you were.
+  // The modal is rendered on every tab, so no tab/view change is needed.
+  if (tradeTab === 'profile') {
+    if (switching) {
+      loadListings(true);
+      if (coll === 'creatures') loadCollOffers(); else if (coll === 'land') loadLandCollOffers();
+    }
+    openDeepLink(tk, { knownListed: opts.listed });
+    return;
+  }
   tradeTab = 'buy';
   profileViewSlug = null;
   hpWalletsOpen = false;
   setFltSheet(false);
   openFacet = null;
+  // A token we already know is UNLISTED isn't on the On-sale grid — showing that grid
+  // behind its modal reads as "it dumped me into all the listed ones". Flip the backdrop
+  // to the whole-collection scope so the item sits in context.
+  if (opts.listed === false) flt.scope = 'all';
   history.pushState(null, '', `/trade?coll=${coll}&token=${encodeURIComponent(tk)}`);
   if (root()) render();
   loadListings(true);
   if (coll === 'creatures') loadCollOffers(); else if (coll === 'land') loadLandCollOffers();
-  openDeepLink(tk);
+  openDeepLink(tk, { knownListed: opts.listed });
 }
 
 // Leave the profile view (route change back to /trade, or the main nav Trade tab).
@@ -4735,7 +4810,7 @@ function wireProfileEvents() {
     render();
   });
   window.addEventListener('hcc:open-token', e => {
-    if (e.detail?.tokenId) openTokenInMarket(e.detail.coll, e.detail.tokenId);
+    if (e.detail?.tokenId) openTokenInMarket(e.detail.coll, e.detail.tokenId, { listed: e.detail.listed });
   });
 }
 
@@ -5262,31 +5337,46 @@ async function handleTransferSubmit(form) {
   }
 }
 
+// Last-known wallet-bar balances per account+collection — re-renders seed from this
+// instead of flashing '—' while the fresh async reads run.
+const balCache = new Map(); // `${account}|${coll}` -> { count, eth, imx }
+
 async function refreshBalance() {
   const el = root()?.querySelector('#trade-bal');
   if (!el) return;
+  const key = `${account}|${coll}`; // drop stale writes if the user moved on mid-read
   if (coll === 'land') {
-    el.textContent = Array.isArray(owned) ? String(owned.length) : '—';
-    const ethEl = root()?.querySelector('#trade-bal-eth');
+    const count = Array.isArray(owned) ? String(owned.length) : '—';
+    el.textContent = count;
+    let ethTxt = null;
     // On mainnet, read straight from the wallet (authoritative — matches MetaMask exactly).
     // Off mainnet, fall back to the server (it can read mainnet whatever chain the wallet
     // sits on). A third-party RPC can lag a recent top-up, so prefer the wallet when we can.
     if (onRightChain()) {
-      if (ethEl) ethEl.textContent = fmtWeiEth(await readNative(account));
+      ethTxt = fmtWeiEth(await readNative(account));
     } else {
       try {
         const ee = await fetch(`/api/market/creatures/eth-elsewhere/${account}`).then(r => r.ok ? r.json() : null);
-        if (ethEl) ethEl.textContent = ee?.mainnetEthWei != null ? fmtWeiEth(BigInt(ee.mainnetEthWei)) : '—';
+        ethTxt = ee?.mainnetEthWei != null ? fmtWeiEth(BigInt(ee.mainnetEthWei)) : '—';
       } catch { /* leave em-dash */ }
     }
+    if (key !== `${account}|${coll}`) return;
+    const ethEl = root()?.querySelector('#trade-bal-eth');
+    if (ethEl && ethTxt != null) ethEl.textContent = ethTxt;
+    balCache.set(key, { count, eth: ethTxt ?? balCache.get(key)?.eth });
     return;
   }
   const [bal, zkEth, imx] = await Promise.all([readBalance(), readErc20(IMX_ETH_TOKEN, account), readNative(account)]);
-  el.textContent = bal == null ? '—' : String(bal);
+  if (key !== `${account}|${coll}`) return;
+  const count = bal == null ? '—' : String(bal);
+  const ethTxt = fmtWeiEth(zkEth);
+  const imxTxt = fmtWeiEth(imx);
+  el.textContent = count;
   const ethEl = root()?.querySelector('#trade-bal-eth');
-  if (ethEl) ethEl.textContent = fmtWeiEth(zkEth);
+  if (ethEl) ethEl.textContent = ethTxt;
   const imxEl = root()?.querySelector('#trade-bal-imx');
-  if (imxEl) imxEl.textContent = fmtWeiEth(imx);
+  if (imxEl) imxEl.textContent = imxTxt;
+  balCache.set(key, { count, eth: ethTxt, imx: imxTxt });
 }
 
 // --- Render + events ---
@@ -5319,8 +5409,9 @@ function render() {
   wireProfileEvents();
   fetchMeForProfile();
   // The profile view's showcase renders itself into #profile-app (js/profile.js);
-  // repeat renders with the same slug reuse its cached state.
-  if (tradeTab === 'profile' && profileViewSlug) loadProfile(profileViewSlug);
+  // repeat renders with the same slug reuse its cached state. The command bar's
+  // collection switcher is the ONLY switcher — the profile grid mirrors it via `coll`.
+  if (tradeTab === 'profile' && profileViewSlug) loadProfile(profileViewSlug, { coll });
   if (hpScrollPending && tradeTab === 'profile') {
     hpScrollPending = false;
     el.querySelector('.trade-command')?.scrollIntoView({ block: 'start' });
@@ -5715,7 +5806,15 @@ function wireProviderEvents() {
   if (!p || p._hccTradeWired) return;
   p._hccTradeWired = true;
   p.on?.('accountsChanged', accs => { account = (accs[0] || '').toLowerCase() || null; resetSellerState(); render(); });
-  p.on?.('chainChanged',   cid  => { chainId = cid; resetSellerState(); render(); });
+  p.on?.('chainChanged', cid => {
+    const c = String(cid || '').toLowerCase();
+    chainId = c;
+    // The echo of a switch WE initiated: the initiating flow patches the affected bits
+    // itself — skip the full re-render (and don't wipe the seller loads it just started).
+    if (expectedChainHex === c) { expectedChainHex = null; patchWalletBar(); return; }
+    resetSellerState();
+    render();
+  });
 }
 
 export async function loadMarketplace() {

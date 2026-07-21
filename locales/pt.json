@@ -611,6 +611,8 @@
   "profile.retry": "Tentar de novo",
   "profile.empty": "Nenhum ativo nesta coleção ainda.",
   "profile.emptyListed": "Nada à venda no momento.",
+  "profile.emptyFiltered": "Nenhum ativo corresponde a esses filtros.",
+  "profile.indexing": "Catalogando traits e nomes — a página se completa sozinha em um minuto.",
   "profile.loading": "Carregando…",
   "profile.loadMore": "Carregar mais",
   "profile.notFoundH": "Este perfil não é público",
