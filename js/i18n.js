@@ -22,6 +22,16 @@ function applyTranslations() {
   document.querySelectorAll('[data-i18n-html]').forEach(el => {
     el.innerHTML = t(el.dataset.i18nHtml);
   });
+  // Attribute translations — the hardcoded attribute stays as the pre-init fallback.
+  document.querySelectorAll('[data-i18n-aria]').forEach(el => {
+    el.setAttribute('aria-label', t(el.dataset.i18nAria));
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    el.setAttribute('title', t(el.dataset.i18nTitle));
+  });
+  document.querySelectorAll('[data-i18n-alt]').forEach(el => {
+    el.setAttribute('alt', t(el.dataset.i18nAlt));
+  });
 }
 
 export async function setLanguage(lang) {
@@ -42,6 +52,8 @@ export async function setLanguage(lang) {
   document.querySelectorAll('.lang-btn').forEach(btn => {
     btn.classList.toggle('is-active', btn.dataset.lang === lang);
   });
+  const langCur = document.getElementById('lang-current');
+  if (langCur) langCur.textContent = lang.toUpperCase();
 }
 
 export async function initI18n() {

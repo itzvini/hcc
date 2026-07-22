@@ -1324,60 +1324,77 @@ function makeSetupSpec(coll) {
             [t('gm.demo.w.network'), land ? netName : `+ ${netName}`],
           ], confirm: t('gm.demo.w.approve') });
     },
+    // endState = a CLEAN base (no transient overlay), so a loop reset never leaves a
+    // stale sheet from the previous step. Each step's own overlay is opened by its
+    // choreo; `settle` adds it for jumps / reduced motion where choreo doesn't run.
     endState(ctx, b) {
       const { stage } = ctx;
-      stage.classList.toggle('safety-open', b === 0);
-      stage.classList.toggle('w-open', b === 1);
+      stage.classList.remove('safety-open', 'w-open');
       const bar = stage.querySelector('[data-gd="bar"]');
-      bar.innerHTML = b >= 2
-        ? barOnHtml(coll, b >= 3 ? (land ? { eth: '0.31', count: 2 } : { eth: '0.084', imx: '12.4', count: 3 }) : {})
+      bar.innerHTML = b >= 3
+        ? barOnHtml(coll, land ? { eth: '0.31', count: 2 } : { eth: '0.084', imx: '12.4', count: 3 })
         : barOffHtml();
-      stage.querySelectorAll('.gdemo-tile').forEach(el => el.classList.toggle('is-dim', b < 2));
-      const sbar = stage.querySelector('[data-gd="sbar"]');
-      if (sbar) sbar.style.width = b >= 1 ? '100%' : '0%';
+      stage.querySelectorAll('.gdemo-tile').forEach(el => el.classList.toggle('is-dim', b < 3));
+      const sbar = stage.querySelector('[data-gd="sbar"]'); if (sbar) sbar.style.width = '0%';
       const sok = stage.querySelector('[data-gd="sok"]');
-      if (sok) { sok.disabled = b < 1; sok.textContent = b >= 1 ? t('trade.safety.ok') : `${t('trade.safety.ok')} · 30s`; }
+      if (sok) { sok.disabled = true; sok.textContent = `${t('trade.safety.ok')} · 30s`; }
       const panel = stage.querySelector('[data-gd="panel"]');
       panel.innerHTML = b >= 3 ? row.ok(t(land ? 'gm.demo.setup.doneLand' : 'gm.demo.setup.done')) : '';
     },
+    settle(ctx, b) {
+      this.endState(ctx, b);
+      const { stage } = ctx;
+      if (b === 1) {
+        stage.classList.add('safety-open');
+        const sbar = stage.querySelector('[data-gd="sbar"]'); if (sbar) sbar.style.width = '100%';
+        const sok = stage.querySelector('[data-gd="sok"]');
+        if (sok) { sok.disabled = false; sok.textContent = t('trade.safety.ok'); }
+      } else if (b === 2) {
+        stage.classList.add('w-open');
+      }
+    },
     async choreo(ctx, b) {
       const { stage, go, click, sleep, ok, tick, say } = ctx;
+      // Each step touches ONLY its own screen. The result of a tap (the NEXT screen)
+      // is never shown here — it's the next step's subject — so no play, first or
+      // looped, ever bleeds one step's UI into another.
       if (b === 0) {
+        // Connect screen: just tap Connect MetaMask.
         await say('gm.demo.n.connect');
         const btn = stage.querySelector('[data-gd="connect"]');
-        await sleep(400); if (!ok()) return;
-        await go(btn, 900); if (!ok()) return;
+        await sleep(300); if (!ok()) return;
+        await go(btn); if (!ok()) return;
         await click(btn); if (!ok()) return;
-        await say('gm.demo.n.safety');
-        stage.classList.add('safety-open');
-        await sleep(900);
+        await sleep(500);
       } else if (b === 1) {
-        await say('gm.demo.n.timer');
+        // Safety screen: the sheet is this step's subject — read the rules, wait out
+        // the timer, tap "I've got it". The wallet it unlocks belongs to step 3.
+        stage.classList.add('safety-open');
         const sbar = stage.querySelector('[data-gd="sbar"]');
         const sok = stage.querySelector('[data-gd="sok"]');
-        await sleep(400); if (!ok()) return;
+        if (sbar) sbar.style.width = '0%';
+        if (sok) { sok.disabled = true; }
+        await say('gm.demo.n.timer');
+        await sleep(300); if (!ok()) return;
         if (sbar) sbar.style.width = '100%'; // CSS transition sweeps it
         await tick(sok, ['3s', '2s', '1s'].map(s => `${t('trade.safety.ok')} · ${s}`), 600); if (!ok()) return;
         sok.textContent = t('trade.safety.ok');
         sok.disabled = false;
-        await go(sok, 800); if (!ok()) return;
+        await go(sok); if (!ok()) return;
         await click(sok); if (!ok()) return;
-        stage.classList.remove('safety-open');
-        await say('gm.demo.n.walletConnect');
-        stage.classList.add('w-open');
-        await sleep(700);
+        await sleep(500);
       } else if (b === 2) {
+        // Wallet screen: approve the connection + network. The bar coming online is
+        // the "Ready" screen — step 4's subject, not shown here.
+        stage.classList.add('w-open');
         await say('gm.demo.n.walletConnect');
         const wc = stage.querySelector('[data-gd="wconfirm"]');
-        await sleep(400); if (!ok()) return;
-        await go(wc, 850); if (!ok()) return;
+        await sleep(300); if (!ok()) return;
+        await go(wc); if (!ok()) return;
         await click(wc); if (!ok()) return;
-        stage.classList.remove('w-open');
-        await say('gm.demo.n.network');
-        stage.querySelector('[data-gd="bar"]').innerHTML = pop(barOnHtml(coll, {}));
-        stage.querySelectorAll('.gdemo-tile').forEach(el => el.classList.remove('is-dim'));
-        await sleep(900);
+        await sleep(500);
       } else if (b === 3) {
+        // A reveal step (no tap): balances stream in. Watch, don't loop.
         await say('gm.demo.n.balances');
         const bar = stage.querySelector('[data-gd="bar"]');
         await sleep(500); if (!ok()) return;
@@ -1515,7 +1532,6 @@ function frameHtml(spec) {
     <div class="gdemo-stagewrap">
       <div class="gdemo-stage" aria-hidden="true">${spec.stageHtml()}
         <div class="gdemo-cursor" data-gd="cursor" aria-hidden="true"></div>
-        <div class="gdemo-sub" data-gd="sub"></div>
         <div class="gdemo-intro" data-gd="intro">
           <span class="gdemo-intro-eye" data-gd="intro-eye"></span>
           <span class="gdemo-intro-h" data-gd="intro-h"></span>
@@ -1524,6 +1540,7 @@ function frameHtml(spec) {
       <button class="gdemo-nav is-prev" data-gd="navprev" type="button" aria-label="${t('gm.demo.back')}">${CHEVRON(-1)}</button>
       <button class="gdemo-nav is-next" data-gd="navnext" type="button" aria-label="${t('gm.demo.next')}">${CHEVRON(1)}</button>
     </div>
+    <div class="gdemo-substrip"><span class="gdemo-sub" data-gd="sub"></span></div>
     <div class="gdemo-rail">
       <div class="gdemo-railtop">
         <span class="gdemo-beats" data-gd="beats" role="group" aria-label="${t('gm.demo.beatsAria')}"></span>
@@ -1542,7 +1559,7 @@ function frameHtml(spec) {
 
 // `host` defaults to the mount; scenario demos pass an inner element so the scenario
 // bar above survives rebuilds. Visibility is always judged on the whole mount.
-function createDemo(mount, spec, host = mount) {
+function createDemo(mount, spec, host = mount, opts = {}) {
   // `auto` = first-visit guided tour: after each step settles, the next one starts on
   // its own — exactly once through. Any user interaction (pills, Next/Back, chevrons,
   // swipe, replay) or finishing the tour hands control over to the manual model for good.
@@ -1552,24 +1569,59 @@ function createDemo(mount, spec, host = mount) {
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+  let primed = false;   // has the cursor appeared at origin A yet this run?
+
+  // Origin A — a fixed lower-left spot, so every gesture reads as the same journey.
+  function originA() {
+    const s = stage.getBoundingClientRect();
+    return { x: s.width * 0.13, y: s.height * 0.84 };
+  }
+  function place(x, y, instant) {
+    if (!cursor) return;
+    if (instant) cursor.classList.add('is-instant');
+    cursor.style.transform = `translate(${x}px, ${y}px)`;
+    if (instant) { void cursor.offsetWidth; cursor.classList.remove('is-instant'); }
+  }
   function moveCursor(el) {
     if (!el || !cursor) return;
     const s = stage.getBoundingClientRect();
     const r = el.getBoundingClientRect();
-    cursor.style.transform =
-      `translate(${r.left - s.left + r.width / 2 - 11}px, ${r.top - s.top + r.height / 2 - 11}px)`;
+    place(r.left - s.left + r.width / 2 - 11, r.top - s.top + r.height / 2 - 11, false);
+  }
+  function hideCursor() { cursor?.classList.remove('is-shown'); primed = false; }
+  function tapPulse() {
+    if (!cursor) return;
+    cursor.classList.remove('is-click');
+    void cursor.offsetWidth;
+    cursor.classList.add('is-click');
   }
   const ctx = {
     get stage() { return stage; },
     sleep,
     ok: () => false, // replaced per run
-    go(el, ms = 950) { moveCursor(el); return sleep(ms); },
+    // Glide to a target. The FIRST go() of a run reveals the cursor at origin A and
+    // pauses a beat, so the move always reads as a clean A → B journey (~0.5s).
+    async go(el, ms = 520) {
+      if (!el || !cursor) return;
+      if (!primed) {
+        const a = originA();
+        place(a.x, a.y, true);
+        cursor.classList.add('is-shown');
+        primed = true;
+        await sleep(280); if (!ctx.ok()) return;
+      }
+      moveCursor(el);
+      await sleep(ms);
+    },
+    // Arrive, hold ~1s so the eye lands on the target, then one clean tap.
     async click(el) {
-      cursor?.classList.add('is-click');
+      ctx.clicked = true;
+      await sleep(950); if (!ctx.ok()) return;
+      tapPulse();
       el?.classList.add('is-press');
-      await sleep(300);
-      cursor?.classList.remove('is-click');
+      await sleep(220);
       el?.classList.remove('is-press');
+      await sleep(320);
     },
     // Typewriter into an input's value; chunked so long addresses stay quick.
     async type(el, text, msPerTick = 26) {
@@ -1582,8 +1634,10 @@ function createDemo(mount, spec, host = mount) {
       }
       el.value = text;
     },
-    // Sequential text updates (clocks, countdowns).
+    // Sequential text updates (clocks, countdowns). A step that ticks is a "watch"
+    // step — a timeline to observe, not a gesture — so it plays once and never loops.
     async tick(el, values, ms = 380) {
+      ctx.usedTick = true;
       for (const v of values) {
         if (!ctx.ok()) return;
         if (el) el.textContent = v;
@@ -1601,12 +1655,15 @@ function createDemo(mount, spec, host = mount) {
       if (remain > 0) { await sleep(remain); if (!ctx.ok()) return; }
       if (!key) { subEl.classList.remove('is-in'); subMinMs = 0; return; }
       const text = t(key);
+      // On a repeat loop the caption is already understood — keep it steady and don't
+      // block the tight gesture with a full re-read.
+      if (ctx.looping && subEl.textContent === text) { subShownAt = Date.now(); subMinMs = 500; return; }
       subEl.textContent = text;
       subEl.classList.remove('is-in');
       void subEl.offsetWidth; // restart the entrance so each new line visibly pops
       subEl.classList.add('is-in');
       subShownAt = Date.now();
-      subMinMs = Math.min(6800, Math.max(1800, 800 + text.split(/\s+/).length * 240));
+      subMinMs = ctx.looping ? 700 : Math.min(6800, Math.max(1800, 800 + text.split(/\s+/).length * 240));
     },
   };
   let subShownAt = 0, subMinMs = 0;
@@ -1615,6 +1672,26 @@ function createDemo(mount, spec, host = mount) {
     subEl?.classList.remove('is-in');
     subShownAt = 0;
     subMinMs = 0;
+  }
+
+  // The cursor never rests on an actionable step: after the first play it re-runs the
+  // step's own gesture on a loop — reset the scene, cursor back to origin A, glide to
+  // the target, hold, tap — so "where do I go and what do I press" is drilled by honest
+  // repetition. Watch steps (a timeline to observe) and pure reveals don't loop.
+  async function loopStep(g, b) {
+    ctx.looping = true;
+    while (g === inst.gen) {
+      await sleep(1100);                       // rest a beat on the finished result
+      if (g !== inst.gen) break;
+      spec.endState(ctx, b - 1);               // reset the scene to before this step
+      hideCursor();                            // cursor vanishes; next go() re-enters at A
+      await sleep(300);
+      if (g !== inst.gen) break;
+      ctx.ok = () => g === inst.gen;
+      ctx.clicked = false; ctx.usedTick = false;
+      await spec.choreo(ctx, b);               // replay the gesture from A
+    }
+    ctx.looping = false;
   }
 
   function syncRail() {
@@ -1665,7 +1742,9 @@ function createDemo(mount, spec, host = mount) {
     syncRail();
     if (motionOK() && inst.visible) {
       spec.endState(ctx, b - 1);
-      clearSub(); // fresh step starts clean under its title card
+      clearSub();                       // fresh step starts clean under its title card
+      hideCursor();                     // cursor is absent until the gesture calls go()
+      ctx.clicked = false; ctx.usedTick = false; ctx.looping = false;
       inst.dirty = true;
       ctx.ok = () => g === inst.gen;
       if (!await playIntro(b, g)) return;
@@ -1675,20 +1754,31 @@ function createDemo(mount, spec, host = mount) {
       // The last narration line PERSISTS on the settled scene — vanishing text was the
       // #1 readability complaint. The next step (or a jump) clears it.
     } else {
-      spec.endState(ctx, b);
+      // Reduced motion / off-screen: show the step's representative scene (settle opens
+      // the step's own overlay where endState is only a clean base).
+      (spec.settle ? spec.settle(ctx, b) : spec.endState(ctx, b));
       clearSub();
+      hideCursor();
       inst.dirty = false;
       inst.auto = false; // reduced motion / off-screen: never tour
     }
     setCue(true);
+    // A step that ended in a tap (and isn't a watch/timeline step) keeps demonstrating
+    // its gesture on a loop until the user moves on. Recorded during the choreo above.
+    const loopable = motionOK() && inst.visible && ctx.clicked && !ctx.usedTick;
     // First-visit tour: linger on the settled scene — at least 1.6s, and never less
     // than the final narration line still needs to be read — then continue on its own.
     if (inst.auto && motionOK() && inst.visible) {
-      if (b >= spec.steps.length - 1) { inst.auto = false; return; }
-      await sleep(Math.max(1600, subShownAt + subMinMs - Date.now()));
-      if (g !== inst.gen || !inst.auto) return;
-      enterStep(b + 1);
+      if (b < spec.steps.length - 1) {
+        await sleep(Math.max(1600, subShownAt + subMinMs - Date.now()));
+        if (g !== inst.gen || !inst.auto) return;
+        enterStep(b + 1);
+        return;
+      }
+      inst.auto = false; // tour done — fall through and loop the last step in place
     }
+    if (loopable) loopStep(g, b);
+    else hideCursor(); // a non-looping settled step shows no stray cursor
   }
 
   function build() {
@@ -1752,6 +1842,22 @@ function createDemo(mount, spec, host = mount) {
     // scene of the current step.
     spec.endState(ctx, inst.started ? inst.step : inst.step - 1);
     syncRail();
+
+    // "Next guide" button, dropped beside the demo's own controls so "Watch again" and
+    // "Up next" sit together. It proxies the card's real footer CTA (already wired by
+    // app.js), so all step navigation stays in one place. Re-created on every build, so
+    // it survives scenario switches and language rebuilds.
+    if (opts.nextBtn) {
+      const ctrl = host.querySelector('.gdemo-ctrl');
+      if (ctrl) {
+        const proxy = document.createElement('button');
+        proxy.type = 'button';
+        proxy.className = 'gdemo-nextguide';
+        proxy.innerHTML = opts.nextBtn.innerHTML;
+        proxy.addEventListener('click', () => opts.nextBtn.click());
+        ctrl.appendChild(proxy);
+      }
+    }
   }
   build();
 
@@ -1781,7 +1887,12 @@ function createDemo(mount, spec, host = mount) {
   inst.rerender = () => {
     inst.gen++;
     build();
-    // Rebuild rests on the settled scene; no animation replay on language switch.
+    // If the first-visit tour is still meant to be running — on screen and not yet taken
+    // over by the user — (re)start it. The initial i18n rerender fires just as the observer
+    // kicks off step one, so without this the freshly-started tour is torn down and the demo
+    // sits frozen until Next/Replay (the deep-link/reload freeze). A settled or user-driven
+    // demo (auto=false) rebuilds rested, so a mid-read language switch still never replays.
+    if (inst.auto && inst.visible && motionOK()) enterStep(inst.step);
   };
   inst.destroy = () => {
     inst.gen++;
@@ -1793,7 +1904,7 @@ function createDemo(mount, spec, host = mount) {
 // A demo with a "pick your situation" bar: each scenario is a full spec played in the
 // same frame. Selecting one is an explicit "show me this" — it auto-tours once, then
 // the manual model applies as usual.
-function createScenarioDemo(mount, multi) {
+function createScenarioDemo(mount, multi, opts = {}) {
   const outer = { active: 0, inner: null };
 
   function build() {
@@ -1827,7 +1938,7 @@ function createScenarioDemo(mount, multi) {
     outer.inner?.destroy();
     const host = mount.querySelector('.gdemo-scenhost');
     host.innerHTML = '';
-    outer.inner = createDemo(mount, multi.scenarios[i].spec, host);
+    outer.inner = createDemo(mount, multi.scenarios[i].spec, host, opts);
   }
   build();
   select(0);
@@ -1857,7 +1968,19 @@ export function initGuideDemos() {
       holder.innerHTML = kind === 'slime' ? slimeSvg(color, Number(seed)) : creatureSvg(color, Number(seed));
       img.replaceWith(holder.firstElementChild);
     }, true);
-    instances.push(spec.scenarios ? createScenarioDemo(mount, spec) : createDemo(mount, spec));
+    // Give the demo its card's forward CTA so it can show an "up next" button beside its
+    // own "Watch again" control; then hide the original footer button it proxies. (Two
+    // demos per card share one footer, so each just proxies the same wired button.)
+    const card = mount.closest('.wt-panel');
+    const nextBtn = card && card.querySelector('.gm-cardfoot [data-wt-cta], .gm-cardfoot [data-goto]');
+    const opts = { nextBtn };
+    instances.push(spec.scenarios ? createScenarioDemo(mount, spec, opts) : createDemo(mount, spec, mount, opts));
+    if (nextBtn) {
+      nextBtn.style.display = 'none';
+      const foot = nextBtn.closest('.gm-cardfoot');
+      // The first card's footer held only this button — collapse the now-empty row.
+      if (foot && !foot.querySelector('[data-wt-cta-prev]')) foot.style.display = 'none';
+    }
   });
 }
 

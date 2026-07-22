@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Highrise Creature Club</title>
+<meta name="description" content="The member hub for the Highrise Creature Club. Live market prices, trading, guides, the roadmap, and the holder-elected Player Council.">
+<link rel="canonical" href="https://hcc.highrise.game/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Highrise Creature Club">
+<meta property="og:title" content="Highrise Creature Club">
+<meta property="og:description" content="The member hub for the Highrise Creature Club. Live market prices, trading, guides, the roadmap, and the holder-elected Player Council.">
+<meta property="og:url" content="https://hcc.highrise.game/">
+<meta property="og:image" content="https://hcc.highrise.game/img/brands/icon_hcc_apple.png">
+<meta name="twitter:card" content="summary">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="192x192" href="/img/brands/icon_hcc_favicon.png">
 <link rel="apple-touch-icon" href="/img/brands/icon_hcc_apple.png">
@@ -33,52 +42,97 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
     <span class="kicker" data-i18n="hero.kicker">Highrise Creature Club</span>
     <h1><span data-i18n="hero.h1">Creatures + LAND get a </span><span class="pop" data-i18n="hero.pop">voice.</span></h1>
     <div class="mascot-row">
-      <div class="pet-wrap"><img src="/assets/pets/bluluvey-composite.svg" alt="Bluluvey pet"></div>
-      <div class="pet-wrap"><img src="/assets/pets/snoozlepuff-composite.svg" alt="Snoozlepuff pet"></div>
-      <div class="pet-wrap"><img src="/assets/pets/purploofie-composite.svg" alt="Purploofie pet"></div>
-      <div class="pet-wrap"><img src="/assets/pets/oranchuplump-composite.svg" alt="Oranchuplump pet"></div>
+      <div class="pet-wrap"><img src="/assets/pets/bluluvey-composite.svg" alt="Bluluvey pet" data-i18n-alt="a11y.pet.bluluvey"></div>
+      <div class="pet-wrap"><img src="/assets/pets/snoozlepuff-composite.svg" alt="Snoozlepuff pet" data-i18n-alt="a11y.pet.snoozlepuff"></div>
+      <div class="pet-wrap"><img src="/assets/pets/purploofie-composite.svg" alt="Purploofie pet" data-i18n-alt="a11y.pet.purploofie"></div>
+      <div class="pet-wrap"><img src="/assets/pets/oranchuplump-composite.svg" alt="Oranchuplump pet" data-i18n-alt="a11y.pet.oranchuplump"></div>
     </div>
   </div>
 </header>
 
-<nav class="page-tabs" aria-label="Main page tabs">
-  <div class="wrap page-nav-bar">
-    <div class="nav-mobile-bar">
-      <span class="nav-brand" aria-hidden="true">HCC</span>
-      <span class="nav-current" id="nav-current" data-i18n="nav.club">The Club</span>
-      <button class="nav-toggle" type="button" id="nav-toggle" aria-expanded="false" aria-controls="nav-drawer" aria-label="Open navigation menu">
-        <span class="nav-toggle-bars"></span>
-      </button>
-    </div>
-    <div class="nav-drawer" id="nav-drawer">
-      <div class="tab-list" role="tablist" aria-label="Highrise Creature Club pages">
-        <button class="page-tab is-active" type="button" role="tab" id="tab-club" aria-selected="true" aria-controls="panel-club" data-tab="club" data-i18n="nav.club">The Club</button>
-        <button class="page-tab" type="button" role="tab" id="tab-announcements" aria-selected="false" aria-controls="panel-announcements" data-tab="announcements" data-i18n="nav.announcements">Announcements</button>
-        <button class="page-tab" type="button" role="tab" id="tab-council" aria-selected="false" aria-controls="panel-council" data-tab="council" data-i18n="nav.council">Council</button>
-        <button class="page-tab" type="button" role="tab" id="tab-polls" aria-selected="false" aria-controls="panel-polls" data-tab="polls" data-i18n="nav.polls">Polls &amp; Votes</button>
-        <button class="page-tab" type="button" role="tab" id="tab-roadmap" aria-selected="false" aria-controls="panel-roadmap" data-tab="roadmap" data-i18n="nav.roadmap">Roadmap</button>
-        <button class="page-tab" type="button" role="tab" id="tab-guides" aria-selected="false" aria-controls="panel-guides" data-tab="guides" data-i18n="nav.guides">Guides</button>
-        <button class="page-tab" type="button" role="tab" id="tab-perks" aria-selected="false" aria-controls="panel-perks" data-tab="perks" data-i18n="nav.perks">Perks</button>
-        <button class="page-tab" type="button" role="tab" id="tab-holders" aria-selected="false" aria-controls="panel-holders" data-tab="holders" data-i18n="nav.holders">Holders</button>
-        <button class="page-tab" type="button" role="tab" id="tab-market" aria-selected="false" aria-controls="panel-market" data-tab="market" data-i18n="nav.market">Market</button>
-        <button class="page-tab" type="button" role="tab" id="tab-trade" aria-selected="false" aria-controls="panel-trade" data-tab="trade" data-i18n="nav.trade">Trade</button>
-        <button class="page-tab" type="button" role="tab" id="tab-changelog" aria-selected="false" aria-controls="panel-changelog" data-tab="changelog" data-i18n="nav.changelog">Changelog</button>
-        <button class="page-tab" type="button" role="tab" id="tab-contribute" aria-selected="false" aria-controls="panel-contribute" data-tab="contribute" data-i18n="nav.contribute">Contribute</button>
-      </div>
-      <div class="lang-switcher" role="group" aria-label="Language">
-        <button class="lang-btn is-active" data-lang="en">EN</button>
-        <button class="lang-btn" data-lang="pt">PT</button>
-        <button class="lang-btn" data-lang="es">ES</button>
-        <button class="lang-btn" data-lang="ru">RU</button>
-        <button class="lang-btn" data-lang="fr">FR</button>
-        <button class="lang-btn" data-lang="de">DE</button>
-        <button class="lang-btn" data-lang="tr">TR</button>
+<nav class="page-tabs" aria-label="Main page tabs" data-i18n-aria="a11y.nav.tabs">
+  <div class="wrap nav-bar">
+    <!-- Brand mark doubles as the home link (The Club) -->
+    <button class="nav-logo" type="button" id="tab-club" data-tab="club" data-nav-label="nav.club" aria-controls="panel-club" aria-label="Creature Club home" data-i18n-aria="a11y.nav.home">
+      <img class="nav-logo-mark" src="/img/brands/icon_hcc.png" alt="" width="30" height="30">
+      <span class="nav-logo-word">Creature Club</span>
+    </button>
+
+    <!-- Compact bar extras — only shown on the mobile layout -->
+    <span class="nav-current" id="nav-current" data-i18n="nav.club">The Club</span>
+    <button class="nav-toggle" type="button" id="nav-toggle" aria-expanded="false" aria-controls="nav-menu" aria-label="Open navigation menu" data-i18n-aria="a11y.nav.open">
+      <span class="nav-toggle-bars"></span>
+    </button>
+
+    <!-- Menu: inline row on desktop, drop-down sheet on mobile -->
+    <div class="nav-menu" id="nav-menu">
+      <ul class="nav-links">
+        <li>
+          <button class="nav-link" type="button" id="tab-announcements" aria-controls="panel-announcements" data-tab="announcements" data-i18n="nav.announcements">Announcements</button>
+        </li>
+
+        <li class="nav-group">
+          <button class="nav-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="menu-council" data-i18n="nav.community">Community</button>
+          <div class="nav-dropdown" id="menu-council">
+            <span class="nav-drop-label" data-i18n="nav.grp.council">Governance</span>
+            <button class="nav-link" type="button" id="tab-polls" aria-controls="panel-polls" data-tab="polls" data-i18n="nav.polls">Polls &amp; Votes</button>
+            <button class="nav-link" type="button" id="tab-council" aria-controls="panel-council" data-tab="council" data-i18n="nav.council">Council</button>
+          </div>
+        </li>
+
+        <li>
+          <button class="nav-link" type="button" id="tab-roadmap" aria-controls="panel-roadmap" data-tab="roadmap" data-i18n="nav.roadmap">Roadmap</button>
+        </li>
+
+        <li class="nav-group">
+          <button class="nav-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="menu-market" data-i18n="nav.market">Market</button>
+          <div class="nav-dropdown" id="menu-market">
+            <span class="nav-drop-label" data-i18n="nav.grp.market">Trading &amp; data</span>
+            <button class="nav-link" type="button" id="tab-trade" aria-controls="panel-trade" data-tab="trade" data-i18n="nav.marketplace">Marketplace</button>
+            <button class="nav-link" type="button" id="tab-market" aria-controls="panel-market" data-tab="market" data-i18n="nav.data">Data</button>
+          </div>
+        </li>
+
+        <li class="nav-group">
+          <button class="nav-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="menu-guides" data-i18n="nav.guides">Guides</button>
+          <div class="nav-dropdown" id="menu-guides">
+            <span class="nav-drop-label" data-i18n="nav.grp.learn">Learn</span>
+            <button class="nav-link" type="button" id="tab-guides" aria-controls="panel-guides" data-tab="guides" data-i18n="nav.guides">Guides</button>
+            <button class="nav-link" type="button" id="tab-perks" aria-controls="panel-perks" data-tab="perks" data-i18n="nav.perks">Perks</button>
+          </div>
+        </li>
+
+        <li class="nav-group">
+          <button class="nav-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="menu-more" data-i18n="nav.more">More</button>
+          <div class="nav-dropdown" id="menu-more">
+            <span class="nav-drop-label" data-i18n="nav.more">More</span>
+            <button class="nav-link" type="button" id="tab-changelog" aria-controls="panel-changelog" data-tab="changelog" data-i18n="nav.changelog">Changelog</button>
+            <button class="nav-link" type="button" id="tab-contribute" aria-controls="panel-contribute" data-tab="contribute" data-i18n="nav.contribute">Contribute</button>
+          </div>
+        </li>
+      </ul>
+
+      <!-- Language: dropdown on desktop, expanded pill row on mobile -->
+      <div class="lang-switcher nav-group" role="group" aria-label="Language" data-i18n-aria="a11y.lang">
+        <button class="nav-trigger lang-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="menu-lang">
+          <span class="lang-globe" aria-hidden="true"></span>
+          <span class="lang-cur" id="lang-current">EN</span>
+        </button>
+        <div class="nav-dropdown lang-menu" id="menu-lang">
+          <button class="lang-btn is-active" type="button" data-lang="en"><b>EN</b><span>English</span></button>
+          <button class="lang-btn" type="button" data-lang="pt"><b>PT</b><span>Português</span></button>
+          <button class="lang-btn" type="button" data-lang="es"><b>ES</b><span>Español</span></button>
+          <button class="lang-btn" type="button" data-lang="ru"><b>RU</b><span>Русский</span></button>
+          <button class="lang-btn" type="button" data-lang="fr"><b>FR</b><span>Français</span></button>
+          <button class="lang-btn" type="button" data-lang="de"><b>DE</b><span>Deutsch</span></button>
+          <button class="lang-btn" type="button" data-lang="tr"><b>TR</b><span>Türkçe</span></button>
+        </div>
       </div>
     </div>
   </div>
 </nav>
 
-<main id="panel-club" class="tab-panel is-active" role="tabpanel" aria-labelledby="tab-club">
+<main id="panel-club" class="tab-panel is-active" role="region" aria-labelledby="tab-club">
 
 <section class="wrap" id="club-top">
   <div class="eyebrow" data-i18n="hub.eyebrow">Find your way around</div>
@@ -114,21 +168,15 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
       <span class="hub-d" data-i18n="hub.perks.d">Benefits of holding, and how Creature Coins work.</span>
       <span class="hub-arrow">→</span>
     </button>
-    <button class="hub-card" type="button" data-goto="holders">
-      <span class="hub-ico">📊</span>
-      <span class="hub-t" data-i18n="nav.holders">Holders</span>
-      <span class="hub-d" data-i18n="hub.holders.d">A live look at who holds what.</span>
-      <span class="hub-arrow">→</span>
-    </button>
     <button class="hub-card" type="button" data-goto="market">
-      <span class="hub-ico">📈</span>
-      <span class="hub-t" data-i18n="nav.market">Market</span>
-      <span class="hub-d" data-i18n="hub.market.d">Floor prices &amp; real sale history.</span>
+      <span class="hub-ico">📊</span>
+      <span class="hub-t" data-i18n="nav.data">Data</span>
+      <span class="hub-d" data-i18n="hub.data.d">Floor prices, sale history, and who holds what.</span>
       <span class="hub-arrow">→</span>
     </button>
     <button class="hub-card" type="button" data-goto="trade">
       <span class="hub-ico">🛒</span>
-      <span class="hub-t" data-i18n="nav.trade">Trade</span>
+      <span class="hub-t" data-i18n="nav.marketplace">Marketplace</span>
       <span class="hub-d" data-i18n="hub.trade.d">Buy, sell &amp; move Creatures from your wallet.</span>
       <span class="hub-arrow">→</span>
     </button>
@@ -141,7 +189,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
     <button class="hub-card" type="button" data-goto="contribute">
       <span class="hub-ico">🛠️</span>
       <span class="hub-t" data-i18n="nav.contribute">Contribute</span>
-      <span class="hub-d" data-i18n="hub.contribute.d">Help shape the site — it's open source on GitHub.</span>
+      <span class="hub-d" data-i18n="hub.contribute.d">Help shape the site. It's open source on GitHub.</span>
       <span class="hub-arrow">→</span>
     </button>
   </div>
@@ -150,30 +198,30 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 <section class="wrap">
   <div class="eyebrow" data-i18n="s1.eyebrow">Start here</div>
   <h2 data-i18n="s1.h2">So… what is the Creature Club?</h2>
-  <p class="lead" data-i18n-html="s1.lead">The Highrise Creature Club is built from two collectible NFT concepts: <strong>11,111 one-of-a-kind creature avatars</strong> and the <strong>Highrise LAND NFTs</strong> that were brought into the same club. Hold either one and you're a member, with perks woven right into Highrise.</p>
+  <p class="lead" data-i18n-html="s1.lead">The Highrise Creature Club is built from two collectible NFT concepts: <strong>11,111 one-of-a-kind creature avatars</strong> and the <strong>Highrise LAND NFTs</strong> we brought into the same club. Hold either one and you're a member, with perks built into Highrise.</p>
 
   <div class="info-grid">
     <article class="info-card g2-reveal" style="--accent:#FF5B95;--accent-soft:rgba(255,91,149,0.16);--d:.04s">
       <span class="topic-ico" style="--accent:#FF5B95;--accent-soft:rgba(255,91,149,0.2)"><img src="/assets/nft.png" alt="" loading="lazy" width="84" height="84"></span>
       <span class="info-q" data-i18n="s1.nft.q">The basics</span>
       <h3 data-i18n="s1.nft.h">So, what's an NFT?</h3>
-      <p data-i18n="s1.nft.p">Think of an NFT as a one-of-a-kind digital collectible that's genuinely yours — recorded on the blockchain, not just sitting inside an app. Your Creature is yours to keep, wear, sell, or gift, and no one can copy or take it.</p>
+      <p data-i18n="s1.nft.p">Think of an NFT as a one-of-a-kind digital collectible that's genuinely yours, recorded on the blockchain, not just sitting inside an app. Your Creature is yours to keep, wear, sell, or gift, and no one can copy or take it.</p>
     </article>
 
     <article class="info-card g2-reveal" style="--accent:#51FFA5;--accent-soft:rgba(81,255,165,0.16);--d:.12s">
       <span class="topic-ico" style="--accent:#51FFA5;--accent-soft:rgba(81,255,165,0.2)"><img src="/assets/creature-logo.png" alt="" loading="lazy" width="84" height="84"></span>
       <span class="info-q" data-i18n="s1.cc.q">The club</span>
       <h3 data-i18n="s1.cc.h">What's the Creature Club?</h3>
-      <p data-i18n="s1.cc.p">It's 11,111 unique creature avatars, plus the Highrise LAND parcels folded into the same family. Members unlock wearable looks, daily Creature Coins, exclusive drops, and members-only spaces woven right into Highrise.</p>
-      <p class="info-note" data-i18n-html="s1.cc.note"><strong>Gen 2 is on the way:</strong> every LAND will receive its own Creature, and every Gen 1 Creature its own pet — so Creatures and LAND end up equal in perks.</p>
+      <p data-i18n="s1.cc.p">It's 11,111 unique creature avatars, plus the Highrise LAND parcels folded into the same family. Members unlock wearable looks, daily Creature Coins, exclusive drops, and members-only spaces built into Highrise.</p>
+      <p class="info-note" data-i18n-html="s1.cc.note"><strong>Gen 2 is on the way:</strong> every LAND will receive its own Creature, and every Gen 1 Creature its own pet, so Creatures and LAND end up equal in perks.</p>
     </article>
 
     <article class="info-card g2-reveal" style="--accent:#8561FF;--accent-soft:rgba(133,97,255,0.16);--d:.2s">
       <span class="topic-ico" style="--accent:#8561FF;--accent-soft:rgba(133,97,255,0.2)"><img src="/assets/membership.png" alt="" loading="lazy" width="84" height="84"></span>
       <span class="info-q" data-i18n="s1.join.q">Membership</span>
       <h3 data-i18n="s1.join.h">How do I become a member?</h3>
-      <p data-i18n="s1.join.p">Just own a Creature or a LAND NFT — that's the whole requirement. Either one grants full Creature Club status: daily Creature Coins, exclusive drops, and the private community spaces.</p>
-      <p class="info-note" data-i18n-html="s1.join.note"><strong>Your Discord role is automatic.</strong> Once your NFT sits in a wallet linked to your Highrise account, your roles update on their own — usually within an hour. Nothing to claim on your side.</p>
+      <p data-i18n="s1.join.p">Just own a Creature or a LAND NFT. That's the whole requirement. Either one grants full Creature Club status: daily Creature Coins, exclusive drops, and the private community spaces.</p>
+      <p class="info-note" data-i18n-html="s1.join.note"><strong>Your Discord role is automatic.</strong> Once your NFT sits in a wallet linked to your Highrise account, your roles update on their own, usually within an hour. Nothing to claim on your side.</p>
     </article>
   </div>
 
@@ -188,7 +236,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
   <div style="margin-top:30px;padding-top:26px;border-top:1px solid var(--hr-line)">
     <div class="eyebrow" data-i18n="land.eyebrow">The other way in</div>
     <h3 style="font:700 17px/1.3 var(--hr-sans);color:var(--hr-fg-0);margin-bottom:10px">🗺️ <span data-i18n="land.h3">Highrise LAND NFTs</span></h3>
-    <p data-i18n-html="land.body">LAND NFTs are the club's collection of virtual parcels in the Highrise universe, in <strong>Standard</strong> and <strong>Premium</strong> tiers — and most LAND owners also have an adorable <strong>slime pet</strong> to go with their plot. LAND's original standalone plan changed, so the project was folded into the Creature Club family: owning LAND now makes you a member too.</p>
+    <p data-i18n-html="land.body">LAND NFTs are the club's collection of virtual parcels in the Highrise universe, in <strong>Standard</strong> and <strong>Premium</strong> tiers. Most LAND owners also have an adorable <strong>slime pet</strong> to go with their plot. LAND's original standalone plan changed, so we folded the project into the Creature Club family: owning LAND now makes you a member too.</p>
     <p style="margin-top:10px;font-size:13px;color:var(--hr-fg-2)" data-i18n="land.perks.summary">LAND owners earn Creature Coins (Premium plots at 3×), get room capacity boosts, keep their slime pets, and take part in the same drops and giveaways as Creature holders.</p>
   </div>
 </section>
@@ -198,42 +246,42 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 <section class="wrap">
   <div class="eyebrow" data-i18n="journey.eyebrow">The journey</div>
   <h2 data-i18n="journey.h2">How HCC got here</h2>
-  <p class="lead" data-i18n="journey.lead">No spin — just the honest arc of where the club has been and where it's headed.</p>
+  <p class="lead" data-i18n="journey.lead">No spin. Just an honest look at where the club has been and where it's headed.</p>
   <div class="timeline">
     <div class="tnode">
-      <div class="tyear" data-i18n="t1.year">2021 — THE MINT</div>
+      <div class="tyear" data-i18n="t1.year">2021 · THE MINT</div>
       <h4 data-i18n="t1.h">11,111 creatures are born</h4>
-      <p data-i18n="t1.p">HCC launches as Highrise's first collectible avatar project: programmatically generated creatures, each with a wearable set of items and a promise of perks for holders.</p>
+      <p data-i18n="t1.p">HCC launches as Highrise's first collectible avatar project: computer-generated creatures, each with a wearable set of items and a promise of perks for holders.</p>
     </div>
     <div class="tnode">
-      <div class="tyear" data-i18n="t2.year">2022 — LAND ARRIVES</div>
+      <div class="tyear" data-i18n="t2.year">2022 · LAND ARRIVES</div>
       <h4 data-i18n="t2.h">A second collectible: Highrise LAND</h4>
-      <p data-i18n="t2.p">LAND launches as virtual parcels of the Highrise universe, in Standard and Premium tiers — with daily Land Tokens, room capacity boosts, an exclusive shop, and slime pets. The original dream: custom, monetizable corners of Highrise you could run yourself.</p>
+      <p data-i18n="t2.p">LAND launches as virtual parcels of the Highrise universe, in Standard and Premium tiers, with daily Land Tokens, room capacity boosts, an exclusive shop, and slime pets. The original dream: custom, monetizable corners of Highrise you could run yourself.</p>
     </div>
     <div class="tnode">
-      <div class="tyear" data-i18n="t3.year">2022–2024 — THE WOBBLE</div>
+      <div class="tyear" data-i18n="t3.year">2022–2024 · THE WOBBLE</div>
       <h4 data-i18n="t3.h">Big ideas, uneven follow-through</h4>
-      <p data-i18n="t3.p">Lots of ambition across both projects, but consistency, communication and follow-through didn't meet the standard holders deserved. We heard the frustration loud and clear.</p>
+      <p data-i18n="t3.p">Lots of ambition across both projects, but consistency, communication and follow-through didn't meet the standard holders deserved. We heard the frustration.</p>
     </div>
     <div class="tnode">
-      <div class="tyear" data-i18n="t4.year">2023 — LAND JOINS THE CLUB</div>
+      <div class="tyear" data-i18n="t4.year">2023 · LAND JOINS THE CLUB</div>
       <h4 data-i18n="t4.h">One family, not two</h4>
-      <p data-i18n="t4.p">The original "custom monetizable Highrise" plan for LAND was wound down, and LAND owners were brought into Creature Club benefits. Land Tokens converted to Creature Coins, pets stayed with their owners, Premium LAND mirrored higher-tier Creature benefits at 3×, and a compensation path covered owners who did not want the new direction.</p>
+      <p data-i18n="t4.p">We wound down the original "custom monetizable Highrise" plan for LAND and brought LAND owners into Creature Club benefits. We converted Land Tokens to Creature Coins, pets stayed with their owners, Premium LAND mirrored higher-tier Creature benefits at 3×, and a compensation path covered owners who didn't want the new direction.</p>
     </div>
     <div class="tnode">
-      <div class="tyear" data-i18n="t5.year">2024 — THE MERGE SHIPS</div>
+      <div class="tyear" data-i18n="t5.year">2024 · THE MERGE SHIPS</div>
       <h4 data-i18n="t5.h">LAND benefits become real HCC benefits</h4>
       <p data-i18n="t5.p">Regular updates confirmed the practical merge: Discord access opened to LAND owners, Highrise+ eligibility and Creature Coins applied to eligible players, exclusive LAND and Creature giveaways continued, and Gen 2 / shop work moved forward under one HCC update rhythm.</p>
     </div>
     <div class="tnode">
-      <div class="tyear" data-i18n="t6.year">DEC 2025 — THE DELIVERY RESET</div>
+      <div class="tyear" data-i18n="t6.year">DEC 2025 · THE DELIVERY RESET</div>
       <h4 data-i18n="t6.h">Back to visible follow-through</h4>
-      <p data-i18n="t6.p">A dedicated artist put permanently on finishing Gen 1 &amp; Gen 2. Bi-weekly updates. Monthly shop refreshes. Quarterly drops. A clear commitment to communication, delivery, and rebuilding trust one update at a time.</p>
+      <p data-i18n="t6.p">A dedicated artist put permanently on finishing Gen 1 &amp; Gen 2. Updates every two weeks. Monthly shop refreshes. Quarterly drops. A clear commitment to communication, delivery, and rebuilding trust.</p>
     </div>
     <div class="tnode now">
-      <div class="tyear" data-i18n="t7.year">NOW — THE COUNCIL</div>
+      <div class="tyear" data-i18n="t7.year">NOW · THE COUNCIL</div>
       <h4 data-i18n="t7.h">Holders get a real voice</h4>
-      <p data-i18n="t7.p">The next step: a holder-led Player Council that helps shape what gets made — across Creatures and LAND alike. Head to the Council page to see how it works.</p>
+      <p data-i18n="t7.p">The next step: a holder-led Player Council that helps shape what gets made, across Creatures and LAND alike. Head to the Council page to see how it works.</p>
     </div>
   </div>
   <div style="text-align:center;margin-top:34px">
@@ -244,16 +292,16 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 <section class="wrap">
   <div class="eyebrow" data-i18n="faq.eyebrow">Quick answers</div>
   <h2 data-i18n="faq.h2">Questions you might have</h2>
-  <details><summary data-i18n="faq.q4">I own LAND, not a Creature — am I in the club?</summary><p data-i18n="faq.a4">Yes. LAND owners are full Creature Club members. Your Land Tokens became Creature Coins, you earn daily Coins (Premium plots at 3×), and you take part in club drops and giveaways. Your plot and your slime pet stay exactly as they are.</p></details>
-  <details><summary data-i18n="faq.q5">Is my creature's ownership safe?</summary><p data-i18n="faq.a5">Yes. Plans to migrate creatures off the blockchain have been cancelled following Steam approval. If that ever needs to change, we'll tell you early and clearly — no surprises.</p></details>
-  <details><summary data-i18n="faq.q7">How much does a Creature cost — and what if I can't afford one yet?</summary><p data-i18n-html="faq.a7">Prices are set by holders, so they range widely — from a few hundred dollars to several thousand, depending on rarity and traits. For live numbers, the <a href="/market">Market page</a> shows the current floor and real sale history. Can't buy in yet? Keep an eye on the Highrise Discord — there are regular giveaways and contests where you can win one for free.</p></details>
-  <details><summary data-i18n="faq.q8">I bought a Creature but don't see my role or perks yet — what gives?</summary><p data-i18n="faq.a8">First, make sure the wallet holding it is linked to your Highrise account — that's what connects your NFTs to the club. Once it's linked, your Discord roles and perks sync on their own, usually within an hour. If it's been longer, double-check you linked the right wallet, then ask in the public Highrise Discord.</p></details>
-  <details><summary data-i18n="faq.q9">Which marketplace do I use — and how do I avoid fakes?</summary><p data-i18n-html="faq.a9">Gen 1 Creatures trade on <strong>Token Trove</strong> (Immutable zkEVM). LAND and Gen 2 live on <strong>OpenSea</strong>, under the "Highrise LAND" collection. Important: Gen 1 Creatures are <strong>not</strong> on OpenSea — any "Highrise Creature" or "Highrise Creature Club" collection you see there is a fake scam. Always reach a marketplace through the official links in the Highrise Discord, never a random DM.</p></details>
+  <details><summary data-i18n="faq.q4">I own LAND, not a Creature. Am I in the club?</summary><p data-i18n="faq.a4">Yes. LAND owners are full Creature Club members. Your Land Tokens became Creature Coins, you earn daily Coins (Premium plots at 3×), and you take part in club drops and giveaways. Your plot and your slime pet stay exactly as they are.</p></details>
+  <details><summary data-i18n="faq.q5">Is my creature's ownership safe?</summary><p data-i18n="faq.a5">Yes. Plans to migrate creatures off the blockchain have been canceled following Steam approval. If that ever needs to change, we'll tell you early and clearly. No surprises.</p></details>
+  <details><summary data-i18n="faq.q7">How much does a Creature cost, and what if I can't afford one yet?</summary><p data-i18n-html="faq.a7">Prices are set by holders, so they range widely: from a few hundred dollars to several thousand, depending on rarity and traits. For live numbers, the <a href="/market">Market page</a> shows the current floor and real sale history. Can't buy in yet? Keep an eye on the Highrise Discord. There are regular giveaways and contests where you can win one for free.</p></details>
+  <details><summary data-i18n="faq.q8">I bought a Creature but don't see my role or perks yet. What gives?</summary><p data-i18n="faq.a8">First, make sure the wallet holding it is linked to your Highrise account. That's what connects your NFTs to the club. Once it's linked, your Discord roles and perks sync on their own, usually within an hour. If it's been longer, double-check you linked the right wallet, then ask in the public Highrise Discord.</p></details>
+  <details><summary data-i18n="faq.q9">Which marketplace do I use, and how do I avoid fakes?</summary><p data-i18n-html="faq.a9">Gen 1 Creatures trade on <strong>Token Trove</strong> (Immutable zkEVM). LAND and Gen 2 live on <strong>OpenSea</strong>, under the "Highrise LAND" collection. Important: Gen 1 Creatures are <strong>not</strong> on OpenSea. Any "Highrise Creature" or "Highrise Creature Club" collection you see there is a fake scam. Always reach a marketplace through the official links in the Highrise Discord, never a random DM.</p></details>
 </section>
 
 </main>
 
-<main id="panel-announcements" class="tab-panel" role="tabpanel" aria-labelledby="tab-announcements" hidden>
+<main id="panel-announcements" class="tab-panel" role="region" aria-labelledby="tab-announcements" hidden>
 <section class="wrap">
   <div class="eyebrow" data-i18n="ann.eyebrow">Straight from Discord</div>
   <h2 data-i18n="ann.h2">Announcements</h2>
@@ -267,7 +315,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 </section>
 </main>
 
-<main id="panel-council" class="tab-panel" role="tabpanel" aria-labelledby="tab-council" hidden>
+<main id="panel-council" class="tab-panel" role="region" aria-labelledby="tab-council" hidden>
 
 <section class="wrap subnav-top" id="council-top">
   <div class="eyebrow" data-i18n="council.top.eyebrow">Holder-led</div>
@@ -275,7 +323,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
   <p class="lead" data-i18n="council.top.lead">What the Council is, how it works, and your part in it: eligibility, candidacy, and the official ballot.</p>
 </section>
 
-<nav class="guide-subnav wrap" role="tablist" aria-label="Council sections">
+<nav class="guide-subnav wrap" role="tablist" aria-label="Council sections" data-i18n-aria="a11y.council.sections">
   <button class="guide-subtab is-active" type="button" role="tab" aria-selected="true" data-subtab="about" data-i18n="council.sub.about">The Council</button>
   <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="vote" data-i18n="council.sub.vote">Apply &amp; Vote</button>
 </nav>
@@ -285,29 +333,29 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
   <div class="honest">
     <div class="eyebrow" data-i18n="honest.eyebrow">Straight talk</div>
     <h2 data-i18n="honest.h2">Why we're doing this</h2>
-    <p data-i18n-html="honest.p">Trust doesn't come back from promises — it comes from consistent delivery <em>and</em> from actually listening. The Council exists so HCC holders aren't just told what's coming next, but help decide it. It's a sounding board with real teeth on creative direction, run alongside the team that builds.</p>
+    <p data-i18n-html="honest.p">Trust doesn't come back from promises. It comes from consistent delivery <em>and</em> from actually listening. The Council exists so HCC holders aren't just told what's coming next, but help decide it. It's a sounding board with real influence on creative direction, run alongside the team that builds.</p>
   </div>
 </section>
 
 <section class="wrap">
   <div class="eyebrow" data-i18n="council.eyebrow">The big idea</div>
   <h2 data-i18n="council.h2">Meet the Player Council</h2>
-  <p class="lead" data-i18n-html="council.lead">A small, holder-led group that works with a dedicated PM and the art team to finish Gen 2 and run the steady drops. It's <strong>advisory with teeth</strong> — a real say on creative, not a vote on the business.</p>
+  <p class="lead" data-i18n-html="council.lead">A small, holder-led group that works with a dedicated PM and the art team to finish Gen 2 and run the steady drops. It's <strong>advisory with real influence</strong>: a say on creative, not a vote on the business.</p>
 
-  <p style="margin-top:16px;font-size:15px;color:var(--hr-fg-2)" data-i18n="council.member.note">Every HCC holder — Creature or LAND — is a member; hold for 3 months and you can vote. A Council "seat" is a formal elected role on top of that: only 7 exist, and you vote on who fills 4 of them.</p>
+  <p style="margin-top:16px;font-size:15px;color:var(--hr-fg-2)" data-i18n="council.member.note">Every HCC holder, Creature or LAND, is a member. Hold for 3 months and you can vote. A Council "seat" is a formal elected role on top of that: only 7 exist, and you vote on who fills 4 of them.</p>
 
   <div class="council-vis">
     <div class="seat elected"><span class="big">4</span><span class="seat-label" data-i18n="council.seat.elected">ELECTED BY HOLDERS</span></div>
     <div class="seat appointed"><span class="big">3</span><span class="seat-label" data-i18n="council.seat.appointed">APPOINTED FOR CONTINUITY</span></div>
   </div>
   <div class="legend">
-    <span><span class="dot e"></span><span data-i18n="council.legend.elected"> Elected — chosen by a holder vote</span></span>
-    <span><span class="dot a"></span><span data-i18n="council.legend.appointed"> Appointed — 2 from Pocket Worlds + 1 trusted holder</span></span>
+    <span><span class="dot e"></span><span data-i18n="council.legend.elected"> Elected: chosen by a holder vote</span></span>
+    <span><span class="dot a"></span><span data-i18n="council.legend.appointed"> Appointed: 2 from Pocket Worlds + 1 trusted holder</span></span>
   </div>
 
   <div class="facts">
     <div class="fact"><div class="n">7</div><div class="l" data-i18n="council.fact1">seats, kept small on purpose</div></div>
-    <div class="fact"><div class="n">1 = 1</div><div class="l" data-i18n="council.fact2">one holder, one vote per seat — never whale-weighted</div></div>
+    <div class="fact"><div class="n">1 = 1</div><div class="l" data-i18n="council.fact2">one holder, one vote per seat, never whale-weighted</div></div>
     <div class="fact"><div class="n">6 mo</div><div class="l" data-i18n="council.fact3">terms, so it stays fresh</div></div>
   </div>
 </section>
@@ -317,13 +365,13 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
   <h2 data-i18n="brackets.h2">4 elected seats, across 3 brackets</h2>
   <p class="lead" data-i18n="brackets.lead">Your bracket is set by how many HCC assets you hold (Creatures + LAND combined) when the candidacy window opens. Every holder size has a path to run.</p>
   <div class="facts">
-    <div class="fact"><div class="n">2</div><div class="l" data-i18n="brackets.b1">seats — hold 1–4 NFTs</div></div>
-    <div class="fact"><div class="n">1</div><div class="l" data-i18n="brackets.b2">seat — hold 5–14 NFTs</div></div>
-    <div class="fact"><div class="n">1</div><div class="l" data-i18n="brackets.b3">seat — hold 15+ NFTs</div></div>
+    <div class="fact"><div class="n">2</div><div class="l" data-i18n="brackets.b1">seats: hold 1–4 NFTs</div></div>
+    <div class="fact"><div class="n">1</div><div class="l" data-i18n="brackets.b2">seat: hold 5–14 NFTs</div></div>
+    <div class="fact"><div class="n">1</div><div class="l" data-i18n="brackets.b3">seat: hold 15+ NFTs</div></div>
   </div>
   <div class="perks" style="margin-top:26px">
-    <div class="perk"><span class="ico">⚖️</span><h4 data-i18n="brackets.why.h">Why brackets?</h4><p data-i18n="brackets.why.p">So the Council can't be dominated by the largest holders. Every tier of the community has at least one seat reserved for someone who actually lives in it — a holder with a single Creature has a real shot, not just in theory.</p></div>
-    <div class="perk"><span class="ico">📝</span><h4 data-i18n="brackets.run.h">What it takes to run</h4><p data-i18n="brackets.run.p">Meet your bracket's asset count at the snapshot, have held at least 1 HCC asset continuously for 3 months (same bar as voters), and self-nominate during the open window by answering the application's open questions on your positions. Brackets gate running, not voting — every eligible holder votes on all 4 races.</p></div>
+    <div class="perk"><span class="ico">⚖️</span><h4 data-i18n="brackets.why.h">Why brackets?</h4><p data-i18n="brackets.why.p">So the largest holders can't dominate the Council. Every tier of the community has at least one seat reserved for someone who actually lives in it. A holder with a single Creature has a real shot, not just in theory.</p></div>
+    <div class="perk"><span class="ico">📝</span><h4 data-i18n="brackets.run.h">What it takes to run</h4><p data-i18n="brackets.run.p">Meet your bracket's asset count at the snapshot, have held at least 1 HCC asset continuously for 3 months (same bar as voters), and self-nominate during the open window by answering the application's open questions on your positions. Brackets gate running, not voting. Every eligible holder votes on all 4 races.</p></div>
   </div>
 </section>
 
@@ -332,7 +380,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 <section class="wrap">
   <div class="eyebrow" data-i18n="power.eyebrow">Who decides what</div>
   <h2 data-i18n="power.h2">Where the Council has real power</h2>
-  <p class="lead" data-i18n="power.lead">Some calls the Council makes. Some it advises on. A few it's simply kept in the loop on — and that scope grows as it proves out.</p>
+  <p class="lead" data-i18n="power.lead">Some calls the Council makes. Some it advises on. A few it's kept in the loop on. That scope grows as it earns trust.</p>
   <div class="rights">
     <div class="right-row"><span data-i18n="power.row1">Theme &amp; aesthetic of upcoming drops</span><span class="tag decides" data-i18n="power.decides">Decides</span></div>
     <div class="right-row"><span data-i18n="power.row2">Which creatures &amp; variants make a Gen 2 set</span><span class="tag decides" data-i18n="power.decides">Decides</span></div>
@@ -342,7 +390,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
     <div class="right-row"><span data-i18n="power.row6">Pricing &amp; value framing</span><span class="tag advises" data-i18n="power.advises">Advises</span></div>
     <div class="right-row"><span data-i18n="power.row7">Economy, Gold distribution, brand &amp; safety</span><span class="tag informed" data-i18n="power.informed">Informed</span></div>
   </div>
-  <p style="margin-top:18px;font-size:.92rem" data-i18n="power.note">Pocket Worlds stays the executor and keeps final say on anything touching the economy, brand or legal guardrails — so the things that protect the whole club stay protected.</p>
+  <p style="margin-top:18px;font-size:.92rem" data-i18n="power.note">Pocket Worlds stays the executor and keeps final say on anything touching the economy, brand, or legal guardrails. That protects the whole club.</p>
 </section>
 
 <div class="divider">• • •</div>
@@ -352,10 +400,10 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
     <div class="eyebrow" data-i18n="seat.eyebrow">How a seat works</div>
     <h2 style="font-size:1.8rem" data-i18n="seat.h2">Fair, simple, and yours</h2>
     <div class="perks" style="margin-top:18px">
-      <div class="perk"><span class="ico">🎟️</span><h4 data-i18n="seat.p1h">Hold to vote</h4><p data-i18n="seat.p1p">Hold at least 1 HCC asset (Creature or LAND) continuously for 3 months to vote. To run: 2 seats are open to holders of 1–4 assets, 1 is reserved for holders of 5–14 assets, and 1 for holders of 15+ — so every holder size has a voice.</p></div>
-      <div class="perk"><span class="ico">🔒</span><h4 data-i18n="seat.p2h">Seats can't be sold</h4><p data-i18n="seat.p2p">A Council seat is tied to you — never bought or traded, same spirit as the club itself.</p></div>
-      <div class="perk"><span class="ico">🗳️</span><h4 data-i18n="seat.p3h">You nominate, you vote</h4><p data-i18n="seat.p3p">A self-nomination window opens — you answer a few open questions on your positions — then holders vote. Clean and open.</p></div>
-      <div class="perk"><span class="ico">🔄</span><h4 data-i18n="seat.p4h">Fresh blood</h4><p data-i18n="seat.p4p">Six-month terms, max two in a row for elected seats. No entrenchment.</p></div>
+      <div class="perk"><span class="ico">🎟️</span><h4 data-i18n="seat.p1h">Hold to vote</h4><p data-i18n="seat.p1p">Hold at least 1 HCC asset (Creature or LAND) continuously for 3 months to vote. To run: 2 seats are open to holders of 1–4 assets, 1 is reserved for holders of 5–14 assets, and 1 for holders of 15+. That way every holder size has a voice.</p></div>
+      <div class="perk"><span class="ico">🔒</span><h4 data-i18n="seat.p2h">Seats can't be sold</h4><p data-i18n="seat.p2p">A Council seat is tied to you: never bought or traded, same spirit as the club itself.</p></div>
+      <div class="perk"><span class="ico">🗳️</span><h4 data-i18n="seat.p3h">You nominate, you vote</h4><p data-i18n="seat.p3p">A self-nomination window opens (you answer a few open questions on your positions), then holders vote. Clean and open.</p></div>
+      <div class="perk"><span class="ico">🔄</span><h4 data-i18n="seat.p4h">New voices</h4><p data-i18n="seat.p4p">Six-month terms, max two in a row for elected seats. Nobody gets stuck in.</p></div>
     </div>
   </div>
 </section>
@@ -365,12 +413,12 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 <section class="wrap">
   <div class="eyebrow" data-i18n="vote.eyebrow">At the ballot</div>
   <h2 data-i18n="vote.h2">How voting works</h2>
-  <p class="lead" data-i18n="vote.lead">For each of the 4 seat races you pick one candidate. The candidate with the most votes wins that seat. One holder, one vote per seat — never weighted by how much you hold.</p>
+  <p class="lead" data-i18n="vote.lead">You vote in every seat race, with one vote per seat. The Member race elects two, so you pick two candidates there. The candidates with the most votes win. One holder's vote is never weighted by how much you hold.</p>
   <div class="perks">
-    <div class="perk"><span class="ico">🔐</span><h4 data-i18n="vote.p1h">Sign in to vote</h4><p data-i18n="vote.p1p">Vote here on the site — sign in with Discord (linked to your Highrise account) so we can confirm you're an eligible holder.</p></div>
-    <div class="perk"><span class="ico">🧾</span><h4 data-i18n="vote.p2h">Private &amp; verifiable</h4><p data-i18n="vote.p2p">Individual votes are never published — only per-seat tallies. You get a private receipt to confirm your vote was counted.</p></div>
-    <div class="perk"><span class="ico">📊</span><h4 data-i18n="vote.p3h">Final &amp; transparent</h4><p data-i18n="vote.p3p">Votes are final once cast, and most election statistics are published right here on the site.</p></div>
-    <div class="perk"><span class="ico">🪑</span><h4 data-i18n="vote.p4h">Unopposed? You still decide</h4><p data-i18n="vote.p4p">If a race has no more candidates than seats, you vote to seat them or to reopen nominations. If reopening wins but nobody new steps up, the original candidate is seated — a seat can be contested, never blocked into a vacancy.</p></div>
+    <div class="perk"><span class="ico">🔐</span><h4 data-i18n="vote.p1h">Sign in to vote</h4><p data-i18n="vote.p1p">Vote here on the site. Sign in with Discord (linked to your Highrise account) so we can confirm you're an eligible holder.</p></div>
+    <div class="perk"><span class="ico">🧾</span><h4 data-i18n="vote.p2h">Private &amp; verifiable</h4><p data-i18n="vote.p2p">Individual votes are never published, only per-seat tallies. You get a private receipt to confirm your vote was counted.</p></div>
+    <div class="perk"><span class="ico">📊</span><h4 data-i18n="vote.p3h">Final &amp; transparent</h4><p data-i18n="vote.p3p">Votes are final once cast, and most election statistics are published here on the site.</p></div>
+    <div class="perk"><span class="ico">🪑</span><h4 data-i18n="vote.p4h">Unopposed? You still decide</h4><p data-i18n="vote.p4p">If a race has no more candidates than seats, you vote to seat them or to reopen nominations. If reopening wins but nobody new steps up, the original candidate is seated. A seat can be contested, never blocked into a vacancy.</p></div>
   </div>
 </section>
 
@@ -379,21 +427,21 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 <section class="wrap">
   <div class="eyebrow" data-i18n="vaa.eyebrow">Vote on merit</div>
   <h2 data-i18n="vaa.h2">Find your candidate</h2>
-  <p class="lead" data-i18n="vaa.lead">To help you vote on substance rather than name recognition, the site includes a Voting Advice Application.</p>
+  <p class="lead" data-i18n="vaa.lead">So you can vote on substance, not name recognition, the site includes a Voting Advice Application.</p>
   <div class="perks">
     <div class="perk"><span class="ico">🗣️</span><h4 data-i18n="vaa.p1h">Candidates take positions</h4><p data-i18n="vaa.p1p">Candidates answer a set of open questions in their own words. The tool turns each answer into a clear position the candidate reviews and confirms.</p></div>
     <div class="perk"><span class="ico">✅</span><h4 data-i18n="vaa.p2h">You answer too</h4><p data-i18n="vaa.p2p">You answer the same questions, then see a ranked affinity score for every candidate.</p></div>
-    <div class="perk"><span class="ico">🧭</span><h4 data-i18n="vaa.p3h">You decide</h4><p data-i18n="vaa.p3p">It never casts a vote for you — it's advice. The full methodology is published.</p></div>
+    <div class="perk"><span class="ico">🧭</span><h4 data-i18n="vaa.p3h">You decide</h4><p data-i18n="vaa.p3p">It never casts a vote for you: it's advice. The full methodology is published.</p></div>
   </div>
 </section>
 
 <section class="wrap">
   <div class="eyebrow" data-i18n="faq.eyebrow">Quick answers</div>
   <h2 data-i18n="faq.h2">Questions you might have</h2>
-  <details><summary data-i18n="faq.q1">Is this a DAO? Do I own part of the company now?</summary><p data-i18n="faq.a1">No. The Council is advisory — a powerful sounding board on creative and roadmap decisions. Pocket Worlds remains the executor and keeps final say on the business, the economy and the brand.</p></details>
-  <details><summary data-i18n="faq.q2">Will big holders just take over?</summary><p data-i18n="faq.a2">No. It's one holder, one vote in every seat — never weighted by how many Creature or LAND assets you own. How many you hold only affects which seat you can run for — we reserve seats for different holder sizes so everyone is represented — never how much your vote counts. And 4 of the 7 seats are elected directly by holders, with 3 appointed for continuity and competence. We're stating that split openly rather than pretending it's purely democratic.</p></details>
-  <details><summary data-i18n="faq.q3">What about Gen 1 and Gen 2?</summary><p data-i18n="faq.a3">A dedicated artist is on finishing them, and the Council helps decide which creatures and variants make each Gen 2 set — picking from the options the art team can actually build.</p></details>
-  <details><summary data-i18n="faq.q6">What does the Council actually start with?</summary><p data-i18n="faq.a6">It starts advisory-leaning, and its "Decides" power grows release by release as it proves out. Think training wheels that come off over time, not everything on day one.</p></details>
+  <details><summary data-i18n="faq.q1">Is this a DAO? Do I own part of the company now?</summary><p data-i18n="faq.a1">No. The Council is advisory: a powerful sounding board on creative and roadmap decisions. Pocket Worlds remains the executor and keeps final say on the business, the economy and the brand.</p></details>
+  <details><summary data-i18n="faq.q2">Will big holders just take over?</summary><p data-i18n="faq.a2">No. It's one holder, one vote in every seat, never weighted by how many Creature or LAND assets you own. How many you hold only affects which seat you can run for, never how much your vote counts. We reserve seats for different holder sizes so everyone gets a voice. Four of the seven seats are elected directly by holders; three are appointed for continuity and competence. We'd rather say that split openly than pretend it's purely democratic.</p></details>
+  <details><summary data-i18n="faq.q3">What about Gen 1 and Gen 2?</summary><p data-i18n="faq.a3">A dedicated artist is on finishing them, and the Council helps decide which creatures and variants make each Gen 2 set, picking from the options the art team can build.</p></details>
+  <details><summary data-i18n="faq.q6">What does the Council start with?</summary><p data-i18n="faq.a6">It starts advisory-leaning, and its "Decides" power grows release by release as it earns trust, not everything on day one.</p></details>
 </section>
 </div>
 
@@ -415,13 +463,13 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 
   <div id="ballot-app" class="ballot-box" aria-live="polite"></div>
 
-  <p class="apply-fineprint" data-i18n="apply.fineprint">We only read your Discord identity and your linked wallet's public holdings. The 3-month continuous-holding rule for voting is verified against the official snapshot when the candidacy window opens.</p>
+  <p class="apply-fineprint" data-i18n="apply.fineprint">We only read your Discord identity and your linked wallet's public holdings. For voting, the rule that you've held for 3 months straight is checked against the official snapshot when the candidacy window opens.</p>
 </section>
 </div>
 
 </main>
 
-<main id="panel-polls" class="tab-panel" role="tabpanel" aria-labelledby="tab-polls" hidden>
+<main id="panel-polls" class="tab-panel" role="region" aria-labelledby="tab-polls" hidden>
 <section class="wrap">
   <div class="eyebrow" data-i18n="polls.eyebrow">Your say</div>
   <h2 data-i18n="polls.h2">Polls &amp; Votes</h2>
@@ -435,14 +483,8 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 </section>
 </main>
 
-<main id="panel-roadmap" class="tab-panel roadmap-panel" role="tabpanel" aria-labelledby="tab-roadmap" hidden>
-  <section class="wrap subnav-top" id="roadmap-top">
-    <div class="eyebrow" data-i18n="roadmap.eyebrow">What's coming</div>
-    <h2 data-i18n="roadmap.h2">The path ahead</h2>
-    <p class="lead" data-i18n="roadmap.lead">From the next drop to Gen 2 — every milestone we're working toward, in order.</p>
-  </section>
-
-  <nav class="guide-subnav wrap" role="tablist" aria-label="Roadmap sections">
+<main id="panel-roadmap" class="tab-panel roadmap-panel" role="region" aria-labelledby="tab-roadmap" hidden>
+  <nav class="guide-subnav wrap" role="tablist" aria-label="Roadmap sections" data-i18n-aria="a11y.roadmap.sections">
     <button class="guide-subtab is-active" type="button" role="tab" aria-selected="true" data-subtab="milestones" data-i18n="roadmap.sub.milestones">Milestones</button>
     <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="gen2" data-i18n="roadmap.sub.gen2">Gen 2</button>
   </nav>
@@ -466,7 +508,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
               <span class="rm-cat rm-cat-content" data-i18n="rm.cat.content">Content</span>
             </div>
             <h4 class="rm-title" data-i18n="rm.m1.h">Pink Anniversary Drop</h4>
-            <p class="rm-desc" data-i18n="rm.m1.p">The 4th anniversary recolour grab is dropping next — pink and white recolours, exclusive to HCC members.</p>
+            <p class="rm-desc" data-i18n="rm.m1.p">The 4th anniversary recolor grab is dropping next: pink and white recolors, exclusive to HCC members.</p>
           </article>
 
           <article class="rm-tile">
@@ -475,7 +517,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
               <span class="rm-cat rm-cat-content" data-i18n="rm.cat.content">Content</span>
             </div>
             <h4 class="rm-title" data-i18n="rm.medu.h">Educational NFT Content</h4>
-            <p class="rm-desc" data-i18n="rm.medu.p">Clear, accessible content explaining what HCC NFTs are, how they work, and what holding one actually means — lowering the barrier for new and existing members alike.</p>
+            <p class="rm-desc" data-i18n="rm.medu.p">Clear, accessible content explaining what HCC NFTs are, how they work, and what holding one means, so new and existing members alike can get up to speed.</p>
           </article>
 
           <article class="rm-tile">
@@ -484,7 +526,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
               <span class="rm-cat rm-cat-governance" data-i18n="rm.cat.governance">Governance</span>
             </div>
             <h4 class="rm-title" data-i18n="rm.m2.h">Council Final Definition</h4>
-            <p class="rm-desc" data-i18n="rm.m2.p">Finalising the council rules: candidacy eligibility, the appointed seat process, and anti-gaming guardrails. The structure needs to be right before the clock starts.</p>
+            <p class="rm-desc" data-i18n="rm.m2.p">Finalizing the council rules: candidacy eligibility, the appointed seat process, and anti-gaming guardrails. The structure needs to be right before the clock starts.</p>
           </article>
 
           <article class="rm-tile">
@@ -493,7 +535,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
               <span class="rm-cat rm-cat-governance" data-i18n="rm.cat.governance">Governance</span>
             </div>
             <h4 class="rm-title" data-i18n="rm.m3.h">Council Timelines Published</h4>
-            <p class="rm-desc" data-i18n="rm.m3.p">Application window, campaign period, and voting date — all locked in and published here. No more guessing when.</p>
+            <p class="rm-desc" data-i18n="rm.m3.p">Application window, campaign period, and voting date: all locked in and published here. No more guessing when.</p>
           </article>
 
           <article class="rm-tile">
@@ -511,7 +553,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
               <span class="rm-cat rm-cat-product" data-i18n="rm.cat.product">Product</span>
             </div>
             <h4 class="rm-title" data-i18n="rm.mmkt.h">Marketplace Launch</h4>
-            <p class="rm-desc" data-i18n="rm.mmkt.p">The non-custodial marketplace went live. Browse, buy, sell and trade creatures right on the site, with 0% fees and a card on-ramp.</p>
+            <p class="rm-desc" data-i18n="rm.mmkt.p">The marketplace went live. Browse, buy, sell and trade creatures right on the site, from your own wallet, with 0% fees and a card on-ramp.</p>
           </article>
 
           <article class="rm-tile">
@@ -619,9 +661,9 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 
     </div>
 
-    <p class="rm-note" data-i18n="rm.note">Milestones in approximate order — dates announced as confirmed</p>
+    <p class="rm-note" data-i18n="rm.note">Milestones in rough order. We'll announce dates as we confirm them.</p>
     <div style="text-align:center;margin-top:30px">
-      <button type="button" data-subgoto="gen2" style="display:inline-block;padding:13px 28px;border-radius:999px;background:var(--hr-primary);color:var(--hr-on-primary);font:700 15px/1 var(--hr-sans);border:0;cursor:pointer" data-i18n="rm.gen2cta">Dive into the Gen 2 roadmap →</button>
+      <button type="button" data-subgoto="gen2" style="display:inline-block;padding:13px 28px;border-radius:999px;background:var(--hr-primary);color:var(--hr-on-primary);font:700 15px/1 var(--hr-sans);border:0;cursor:pointer" data-i18n="rm.gen2cta">See the Gen 2 roadmap →</button>
     </div>
   </section>
   </div><!-- /milestones -->
@@ -629,8 +671,8 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
   <div class="guide-subpanel" data-subpanel="gen2" hidden>
   <section class="wrap" id="gen2">
     <div class="eyebrow" data-i18n="g2.eyebrow">The big one</div>
-    <h2 data-i18n="g2.h2">Gen 2 — the full picture</h2>
-    <p class="lead" data-i18n="g2.lead">Six full creature sets are being built right now — the biggest content push in club history. Follow the road, stop by stop, to see exactly where each set stands.</p>
+    <h2 data-i18n="g2.h2">Gen 2: the full picture</h2>
+    <p class="lead" data-i18n="g2.lead">Six full creature sets are being built right now: the biggest content push in club history. Follow the road, stop by stop, to see exactly where each set stands.</p>
 
     <div class="facts g2-reveal">
       <div class="fact"><div class="n" data-countup="6">6</div><div class="l" data-i18n="g2.fact1">creature sets in the works</div></div>
@@ -642,7 +684,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
   <section class="wrap">
     <div class="eyebrow" data-i18n="g2.sets.eyebrow">The roadmap</div>
     <h2 data-i18n="g2.sets.h2">Six stops to Gen 2</h2>
-    <p class="lead" data-i18n="g2.sets.lead">Follow the line — one stop per set, in production order. Each stop shows the four phases a set walks before it lands in Highrise.</p>
+    <p class="lead" data-i18n="g2.sets.lead">Follow the line: one stop per set, in production order. Each stop shows the four phases a set walks before it lands in Highrise.</p>
 
     <div class="g2-road g2-reveal" id="g2-road">
       <div class="g2-stop is-live" style="--accent:var(--hr-primary);--accent-soft:var(--hr-primary-25)">
@@ -732,7 +774,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
     </div>
 
     <div class="g2-pipe-wrap">
-      <div class="eyebrow" data-i18n="g2.pipe.eyebrow">Behind the curtain</div>
+      <div class="eyebrow" data-i18n="g2.pipe.eyebrow">In progress</div>
       <h3 class="g2-pipe-h" data-i18n="g2.pipe.h3">How a set gets made</h3>
       <p class="lead" data-i18n="g2.pipe.lead">Every set walks the same four steps. So when an update says "final art", you'll know exactly where that set stands.</p>
       <ol class="g2-pipe g2-reveal">
@@ -750,7 +792,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         </li>
         <li class="g2-stage">
           <h5 data-i18n="g2.pipe.s4.h">Final art</h5>
-          <p data-i18n="g2.pipe.s4.p">Every item is cleaned and finished — front and back.</p>
+          <p data-i18n="g2.pipe.s4.p">Every item is cleaned and finished, front and back.</p>
         </li>
       </ol>
 
@@ -767,27 +809,20 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
     <div class="eyebrow" data-i18n="g2.word.eyebrow">Hold us to it</div>
     <h2 data-i18n="g2.word.h2">Our word on Gen 2</h2>
     <div class="perks g2-reveal">
-      <div class="perk"><span class="ico">📡</span><h4 data-i18n="g2.word.c1h">Proof every two weeks</h4><p data-i18n="g2.word.c1p">A work-in-progress update every two weeks — even when it's not pretty or finished. Silence is the one thing you'll never get.</p></div>
-      <div class="perk"><span class="ico">🎯</span><h4 data-i18n="g2.word.c3h">Quality over deadlines</h4><p data-i18n="g2.word.c3p">If a date has to move, you'll hear it from us early — with the why. We won't rush a set out broken.</p></div>
+      <div class="perk"><span class="ico">📡</span><h4 data-i18n="g2.word.c1h">Proof every two weeks</h4><p data-i18n="g2.word.c1p">A work-in-progress update every two weeks, even when it's not pretty or finished. Silence is the one thing you'll never get.</p></div>
+      <div class="perk"><span class="ico">🎯</span><h4 data-i18n="g2.word.c3h">Quality over deadlines</h4><p data-i18n="g2.word.c3p">If a date has to move, you'll hear it from us early, with the why. We won't rush a set out broken.</p></div>
     </div>
-    <p class="rm-note" data-i18n="g2.note">Set order and pacing can shift as the Council weighs in — every change gets explained in the bi-weekly updates.</p>
+    <p class="rm-note" data-i18n="g2.note">Set order and pacing can shift as the Council weighs in. We'll explain every change in the updates every two weeks.</p>
   </section>
   </div><!-- /gen2 -->
 </main>
 
-<main id="panel-guides" class="tab-panel" role="tabpanel" aria-labelledby="tab-guides" hidden>
-  <section class="wrap subnav-top" id="guides-top">
-    <div class="eyebrow" data-i18n="guide.eyebrow">New here?</div>
-    <h2 data-i18n="guide.h2">Owning your creature, made simple</h2>
-    <p class="lead" data-i18n="guide.lead">Everything you need to buy, sell, move, and protect your HCC NFTs — step by step. Put together with the community.</p>
-  </section>
-
-  <nav class="guide-subnav wrap" role="tablist" aria-label="Guides sections">
+<main id="panel-guides" class="tab-panel" role="region" aria-labelledby="tab-guides" hidden>
+  <nav class="guide-subnav wrap subnav-top" id="guides-top" role="tablist" aria-label="Guides sections" data-i18n-aria="a11y.guides.sections">
     <button class="guide-subtab is-active" type="button" role="tab" aria-selected="true" data-subtab="basics" data-i18n="guide.sub.basics">Basics</button>
     <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="walkthroughs" data-i18n="guide.sub.walkthroughs">Walkthroughs</button>
     <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="marketplace" data-i18n="guide.sub.marketplace">Marketplace</button>
-    <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="safety" data-i18n="guide.sub.safety">Stay safe</button>
-    <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="scams" data-i18n="guide.sub.scams">Scam Watch</button>
+    <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="safety" data-i18n="guide.sub.safety">Security</button>
     <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="links" data-i18n="guide.sub.links">Links</button>
   </nav>
 
@@ -795,10 +830,10 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
   <section class="wrap">
     <div class="eyebrow" data-i18n="guide.what.eyebrow">The basics</div>
     <h2 data-i18n="guide.what.h2">What you actually own</h2>
-    <p class="lead" data-i18n="guide.what.lead">Your creature and your LAND are NFTs — items you truly own on the blockchain, not just inside an app. Here's what that means.</p>
+    <p class="lead" data-i18n="guide.what.lead">Your creature and your LAND are NFTs: items you truly own on the blockchain, not just inside an app. Here's what that means.</p>
     <div class="perks">
       <div class="perk"><span class="ico">🪪</span><h4 data-i18n="guide.what.c1h">Truly yours</h4><p data-i18n="guide.what.c1p">An NFT is a one-of-a-kind item recorded on the blockchain. Your creature is yours to keep, wear, sell, or gift.</p></div>
-      <div class="perk"><span class="ico">⚡</span><h4 data-i18n="guide.what.c2h">Lives on Immutable</h4><p data-i18n="guide.what.c2p">HCC creatures live on the Immutable zkEVM network — a fast, low-fee blockchain built for game items.</p></div>
+      <div class="perk"><span class="ico">⚡</span><h4 data-i18n="guide.what.c2h">Lives on Immutable</h4><p data-i18n="guide.what.c2p">HCC creatures live on the Immutable zkEVM network, a fast, low-fee blockchain built for game items.</p></div>
       <div class="perk"><span class="ico">🔑</span><h4 data-i18n="guide.what.c3h">You hold the keys</h4><p data-i18n="guide.what.c3p">Your wallet, like MetaMask, is how you prove ownership and move your assets. Guard it like your house keys.</p></div>
       <div class="perk"><span class="ico">🛒</span><h4 data-i18n="guide.what.c4h">Trade on Token Trove</h4><p data-i18n="guide.what.c4p">Token Trove is the marketplace where you buy, sell, and transfer your creatures.</p></div>
     </div>
@@ -811,39 +846,40 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
     <h2 data-i18n="guide.kit.h2">Your toolkit</h2>
     <p class="lead" data-i18n="guide.kit.lead">Four things you'll meet again and again. Get familiar and the rest is easy.</p>
     <div class="perks">
-      <div class="perk"><span class="brand-ico"><img src="/img/brands/metamask.svg" alt="MetaMask logo"></span><h4 data-i18n="guide.kit.c1h">MetaMask</h4><p data-i18n="guide.kit.c1p">Your crypto wallet. Holds your funds and creatures, and signs every action. Get it as a browser extension or mobile app.</p></div>
-      <div class="perk"><span class="brand-ico"><img src="/img/brands/tokentrove.svg" alt="Token Trove logo"></span><h4 data-i18n="guide.kit.c2h">Token Trove</h4><p data-i18n="guide.kit.c2p">The official HCC marketplace. Find the link in the Highrise Discord under official links — never from a random DM.</p></div>
-      <div class="perk"><span class="brand-ico"><img src="/img/brands/eth.png" alt="Ethereum logo"></span><h4 data-i18n="guide.kit.c3h">ETH</h4><p data-i18n="guide.kit.c3p">Ethereum is the currency you buy creatures with.</p></div>
-      <div class="perk"><span class="brand-ico"><img src="/img/brands/imx.png" alt="Immutable X logo"></span><h4 data-i18n="guide.kit.c4h">IMX</h4><p data-i18n="guide.kit.c4p">Immutable X covers the tiny network fee ("gas") on every action. Keep a little on hand.</p></div>
+      <div class="perk"><span class="brand-ico"><img src="/img/brands/metamask.svg" alt=""></span><h4 data-i18n="guide.kit.c1h">MetaMask</h4><p data-i18n="guide.kit.c1p">Your crypto wallet. Holds your funds and creatures, and signs every action. Get it as a browser extension or mobile app.</p></div>
+      <div class="perk"><span class="brand-ico"><img src="/img/brands/tokentrove.svg" alt=""></span><h4 data-i18n="guide.kit.c2h">Token Trove</h4><p data-i18n="guide.kit.c2p">The official HCC marketplace. Find the link in the Highrise Discord under official links, never from a random DM.</p></div>
+      <div class="perk"><span class="brand-ico"><img src="/img/brands/eth.png" alt=""></span><h4 data-i18n="guide.kit.c3h">ETH</h4><p data-i18n="guide.kit.c3p">Ethereum is the currency you buy creatures with.</p></div>
+      <div class="perk"><span class="brand-ico"><img src="/img/brands/imx.png" alt=""></span><h4 data-i18n="guide.kit.c4h">IMX</h4><p data-i18n="guide.kit.c4p">IMX covers the tiny network fee ("gas") on every action. Keep a little on hand.</p></div>
     </div>
     <div class="honest" style="margin-top:24px">
       <div class="eyebrow" data-i18n="guide.kit.netEyebrow">One thing to know</div>
-      <p data-i18n="guide.kit.network">Creatures live on the Immutable zkEVM network. You'll switch your wallet to it when buying or moving creatures — Token Trove walks you through it each time.</p>
+      <p data-i18n="guide.kit.network">Creatures live on the Immutable zkEVM network. You'll switch your wallet to it when buying or moving creatures. Token Trove walks you through it each time.</p>
     </div>
   </section>
   </div><!-- /basics -->
 
   <div class="guide-subpanel" data-subpanel="walkthroughs" hidden>
-  <section class="wrap">
-    <div class="section-head">
-      <span class="topic-ico" style="--accent:#8561FF;--accent-soft:rgba(133,97,255,0.2)"><img src="/assets/receipt.png" alt="" loading="lazy" width="84" height="84"></span>
-      <div class="section-head-t">
-        <div class="eyebrow" data-i18n="guide.steps.eyebrow">Step by step</div>
-        <h2 data-i18n="guide.steps.h2">The walkthroughs</h2>
-        <p class="lead" data-i18n="guide.steps.lead">Six short guides, in the order you'll likely need them — most with a community video to follow along.</p>
-      </div>
-    </div>
+  <section class="gm-shell">
+    <div class="gm-cockpit">
 
-    <div class="wt-nav" role="tablist" aria-label="Walkthroughs" data-wt-key="walkthroughs">
-      <button class="wt-tab is-active" id="wt-tab-1" type="button" role="tab" aria-selected="true" aria-controls="wt-panel-1" data-wt="1" data-wt-slug="setup"><span class="wt-tab-num">1</span><span data-i18n="guide.g1.tag">Setup</span></button>
-      <button class="wt-tab" id="wt-tab-2" type="button" role="tab" aria-selected="false" aria-controls="wt-panel-2" data-wt="2" data-wt-slug="funding" tabindex="-1"><span class="wt-tab-num">2</span><span data-i18n="guide.g2.tag">Funding</span></button>
-      <button class="wt-tab" id="wt-tab-3" type="button" role="tab" aria-selected="false" aria-controls="wt-panel-3" data-wt="3" data-wt-slug="trading" tabindex="-1"><span class="wt-tab-num">3</span><span data-i18n="guide.g3.tag">Trading</span></button>
-      <button class="wt-tab" id="wt-tab-4" type="button" role="tab" aria-selected="false" aria-controls="wt-panel-4" data-wt="4" data-wt-slug="moving" tabindex="-1"><span class="wt-tab-num">4</span><span data-i18n="guide.g4.tag">Moving</span></button>
-      <button class="wt-tab" id="wt-tab-5" type="button" role="tab" aria-selected="false" aria-controls="wt-panel-5" data-wt="5" data-wt-slug="in-game" tabindex="-1"><span class="wt-tab-num">5</span><span data-i18n="guide.g5.tag">In-game</span></button>
-      <button class="wt-tab" id="wt-tab-6" type="button" role="tab" aria-selected="false" aria-controls="wt-panel-6" data-wt="6" data-wt-slug="land" tabindex="-1"><span class="wt-tab-num">6</span><span data-i18n="guide.g6.tag">LAND</span></button>
-    </div>
+      <!-- Mission control — a compact tour summary: the vertical step spine -->
+      <aside class="gm-rail">
+        <div class="gm-spine-head">
+          <span class="gm-spine-eye" data-i18n="guide.steps.eyebrow">Step by step</span>
+          <span class="gm-rail-prog"><span data-i18n="gm.rail.step">Step</span> <b data-wt-count aria-live="polite">1 / 6</b></span>
+        </div>
 
-    <div class="wt-panels">
+        <div class="wt-nav is-mkt" role="tablist" aria-label="Walkthroughs" data-i18n-aria="a11y.walkthroughs" data-wt-key="walkthroughs">
+          <button class="wt-tab is-active" id="wt-tab-1" type="button" role="tab" aria-selected="true" aria-controls="wt-panel-1" data-wt="1" data-wt-slug="setup"><span class="wt-tab-num">1</span><span class="wt-tab-txt"><span class="wt-tab-name" data-i18n="guide.g1.tag">Setup</span><span class="wt-tab-sub" data-i18n="guide.g1.sub">Reach Token Trove, connect</span></span></button>
+          <button class="wt-tab" id="wt-tab-2" type="button" role="tab" aria-selected="false" aria-controls="wt-panel-2" data-wt="2" data-wt-slug="funding" tabindex="-1"><span class="wt-tab-num">2</span><span class="wt-tab-txt"><span class="wt-tab-name" data-i18n="guide.g2.tag">Funding</span><span class="wt-tab-sub" data-i18n="guide.g2.sub">Bridge ETH &amp; IMX over</span></span></button>
+          <button class="wt-tab" id="wt-tab-3" type="button" role="tab" aria-selected="false" aria-controls="wt-panel-3" data-wt="3" data-wt-slug="trading" tabindex="-1"><span class="wt-tab-num">3</span><span class="wt-tab-txt"><span class="wt-tab-name" data-i18n="guide.g3.tag">Trading</span><span class="wt-tab-sub" data-i18n="guide.g3.sub">Buy &amp; sell creatures</span></span></button>
+          <button class="wt-tab" id="wt-tab-4" type="button" role="tab" aria-selected="false" aria-controls="wt-panel-4" data-wt="4" data-wt-slug="moving" tabindex="-1"><span class="wt-tab-num">4</span><span class="wt-tab-txt"><span class="wt-tab-name" data-i18n="guide.g4.tag">Moving</span><span class="wt-tab-sub" data-i18n="guide.g4.sub">Send to another wallet</span></span></button>
+          <button class="wt-tab" id="wt-tab-5" type="button" role="tab" aria-selected="false" aria-controls="wt-panel-5" data-wt="5" data-wt-slug="in-game" tabindex="-1"><span class="wt-tab-num">5</span><span class="wt-tab-txt"><span class="wt-tab-name" data-i18n="guide.g5.tag">In-game</span><span class="wt-tab-sub" data-i18n="guide.g5.sub">Show them in Highrise</span></span></button>
+          <button class="wt-tab" id="wt-tab-6" type="button" role="tab" aria-selected="false" aria-controls="wt-panel-6" data-wt="6" data-wt-slug="land" tabindex="-1"><span class="wt-tab-num">6</span><span class="wt-tab-txt"><span class="wt-tab-name" data-i18n="guide.g6.tag">LAND</span><span class="wt-tab-sub" data-i18n="guide.g6.sub">Mint LAND from Deeds</span></span></button>
+        </div>
+      </aside>
+
+      <div class="wt-panels gm-stagecol">
 
       <article class="guide-card wt-panel" id="wt-panel-1" data-wt-panel="1" role="tabpanel" aria-labelledby="wt-tab-1">
         <div class="guide-head">
@@ -855,13 +891,13 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         </div>
         <p class="guide-intro" data-i18n="guide.g1.p">Get to the official marketplace and connect MetaMask so you can see your balances and creatures.</p>
         <div class="guide-video">
-          <iframe src="https://www.youtube.com/embed/U3mLtAnAHmc" title="Find Token Trove &amp; link your wallet" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>
+          <iframe src="https://www.youtube.com/embed/U3mLtAnAHmc" title="Find Token Trove &amp; link your wallet" data-i18n-title="a11y.video.tokentrove" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>
         </div>
         <ol class="guide-steps">
-          <li data-i18n="guide.g1.s1">Open the Highrise Discord and go to the official links channel. Find the link to buy Highrise creatures — it takes you straight to Token Trove.</li>
-          <li data-i18n="guide.g1.s2">Have your MetaMask wallet ready — extension or mobile app — and make sure you're logged in.</li>
+          <li data-i18n="guide.g1.s1">Open the Highrise Discord and go to the official links channel. Find the link to buy Highrise creatures. It takes you straight to Token Trove.</li>
+          <li data-i18n="guide.g1.s2">Have your MetaMask wallet ready (extension or mobile app) and make sure you're logged in.</li>
           <li data-i18n="guide.g1.s3">On Token Trove, click Connect Wallet. Choose Immutable zkEVM, then pick MetaMask.</li>
-          <li data-i18n="guide.g1.s4">Approve the connection in MetaMask. Token Trove now shows your balances — ETH, IMX, USDC — and your creatures under My NFTs.</li>
+          <li data-i18n="guide.g1.s4">Approve the connection in MetaMask. Token Trove now shows your balances (ETH, IMX, USDC) and your creatures under My NFTs.</li>
         </ol>
       </article>
 
@@ -873,19 +909,19 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
             <h3 class="guide-title" data-i18n="guide.g2.h">Bridge ETH &amp; IMX to Immutable</h3>
           </div>
         </div>
-        <p class="guide-intro" data-i18n="guide.g2.p">Your wallet and Token Trove sit on different networks. Bridging moves your funds over so you can spend them. Balances can take 20–40 minutes to update.</p>
+        <p class="guide-intro" data-i18n="guide.g2.p">Bridging moves your crypto from Ethereum mainnet to the Immutable zkEVM network where creatures live. Before bridging, you'll need a small amount of $IMX: every action on Immutable requires it as a network fee. Balances can take 20–40 minutes to appear.</p>
         <div class="guide-video">
-          <iframe src="https://www.youtube.com/embed/Qm0uZnUv1k0" title="Bridge ETH &amp; IMX to Immutable" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>
+          <iframe src="https://www.youtube.com/embed/Qm0uZnUv1k0" title="Bridge ETH &amp; IMX to Immutable" data-i18n-title="a11y.video.bridge" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>
         </div>
         <ol class="guide-steps">
-          <li data-i18n="guide.g2.s1">First, make sure you have a little IMX — it pays the gas. In MetaMask, swap a small amount of ETH to IMX (around 0.0025 ETH is plenty for most people).</li>
+          <li data-i18n="guide.g2.s1">Before anything else, swap a little $ETH to $IMX in MetaMask. $IMX is the fee currency for every action on Immutable zkEVM (buying, selling, transferring). Around 0.0025 $ETH worth is plenty to start. Do this swap before bridging.</li>
           <li data-i18n="guide.g2.s2">On Token Trove, confirm you're connected and logged in, and that you can see the Bridge button. Click Bridge.</li>
           <li data-i18n="guide.g2.s3">Bridge IMX first. Pick IMX as the token, enter an amount (e.g. 20 IMX), check the small fee, and confirm.</li>
-          <li data-i18n="guide.g2.s4">Your wallet switches to Ethereum mainnet automatically. Confirm the two MetaMask pop-ups — the network fee, then the transfer itself.</li>
-          <li data-i18n="guide.g2.s5">Now bridge your ETH the same way — this is what you'll buy creatures with. Pick ETH, enter an amount (e.g. 0.025), and confirm the single request.</li>
+          <li data-i18n="guide.g2.s4">Your wallet switches to Ethereum mainnet automatically. Confirm the two MetaMask pop-ups: the network fee, then the transfer itself.</li>
+          <li data-i18n="guide.g2.s5">Now bridge your ETH the same way. This is what you'll buy creatures with. Pick ETH, enter an amount (e.g. 0.025), and confirm the single request.</li>
           <li data-i18n="guide.g2.s6">Wait roughly 20–40 minutes. When it's done, your ETH and IMX balances appear on Token Trove, ready to use.</li>
         </ol>
-        <p class="guide-note" data-i18n="guide.g2.note">Remember: ETH buys creatures, IMX pays the gas. You need a little IMX for anything you do on the network.</p>
+        <p class="guide-note" data-i18n="guide.g2.note">Remember: $ETH buys creatures, $IMX pays the gas. You need a little $IMX for anything you do on Immutable: buying, selling, or transferring.</p>
       </article>
 
       <article class="guide-card wt-panel" id="wt-panel-3" data-wt-panel="3" role="tabpanel" aria-labelledby="wt-tab-3" hidden>
@@ -898,16 +934,16 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         </div>
         <p class="guide-intro" data-i18n="guide.g3.p">With funds bridged over, you're ready to shop the collection or list one of your own.</p>
         <div class="guide-video">
-          <iframe src="https://www.youtube.com/embed/7_4vDsdW8QA" title="Buy &amp; sell creatures" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>
+          <iframe src="https://www.youtube.com/embed/7_4vDsdW8QA" title="Buy &amp; sell creatures" data-i18n-title="a11y.video.trade" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>
         </div>
         <ol class="guide-steps">
           <li data-i18n="guide.g3.s1">Browse the collection and pick the creature you want. Before buying, switch your wallet to the Immutable zkEVM network: open MetaMask, select Immutable zkEVM, then refresh the page.</li>
           <li data-i18n="guide.g3.s2">Click Buy Now. Review the small network fee (this is what IMX is for) and click Confirm.</li>
           <li data-i18n="guide.g3.s3">Once the blockchain confirms, the creature is yours. Refresh your balances and check My NFTs to see it.</li>
           <li data-i18n="guide.g3.s4">To sell, open one of your creatures and click List Now. Set your price and confirm the signature request in MetaMask.</li>
-          <li data-i18n="guide.g3.s5">Your creature is now listed. Anyone can buy it directly — you don't have to do anything else until it sells.</li>
+          <li data-i18n="guide.g3.s5">Your creature is now listed. Anyone can buy it directly. You don't have to do anything else until it sells.</li>
         </ol>
-        <p class="guide-note" data-i18n="guide.g3.note">When a creature sells, a 5% creator royalty is built into the smart contract and comes out of the sale price automatically — worth factoring into the price you set.</p>
+        <p class="guide-note" data-i18n="guide.g3.note">When a creature sells, a 5% creator royalty is built into the smart contract and comes out of the sale price automatically. Worth factoring into the price you set.</p>
       </article>
 
       <article class="guide-card wt-panel" id="wt-panel-4" data-wt-panel="4" role="tabpanel" aria-labelledby="wt-tab-4" hidden>
@@ -918,13 +954,13 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
             <h3 class="guide-title" data-i18n="guide.g4.h">Transfer a creature to another wallet</h3>
           </div>
         </div>
-        <p class="guide-intro" data-i18n="guide.g4.p">Send a creature straight to another wallet — handy for moving between your own wallets or gifting.</p>
+        <p class="guide-intro" data-i18n="guide.g4.p">Send a creature straight to another wallet, handy for moving between your own wallets or gifting.</p>
         <div class="guide-video">
-          <iframe src="https://www.youtube.com/embed/CCeM8ol5ONU" title="Transfer a creature to another wallet" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>
+          <iframe src="https://www.youtube.com/embed/CCeM8ol5ONU" title="Transfer a creature to another wallet" data-i18n-title="a11y.video.transfer" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>
         </div>
         <ol class="guide-steps">
-          <li data-i18n="guide.g4.s1">Open the creature you want to send and click the Transfer button — the little paper-airplane icon.</li>
-          <li data-i18n="guide.g4.s2">Paste the destination wallet address. Double-check it — transfers can't be undone.</li>
+          <li data-i18n="guide.g4.s1">Open the creature you want to send and click the Transfer button, the little paper-airplane icon.</li>
+          <li data-i18n="guide.g4.s2">Paste the destination wallet address. Double-check it: transfers can't be undone.</li>
           <li data-i18n="guide.g4.s3">Review the small gas fee and click Confirm. The Immutable zkEVM network confirms the transfer.</li>
           <li data-i18n="guide.g4.s4">After a few seconds, refresh My NFTs. The creature leaves your wallet and lands in the new one. A full page refresh helps if it lingers.</li>
         </ol>
@@ -941,13 +977,13 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         </div>
         <p class="guide-intro" data-i18n="guide.g5.p">Connect your wallet to your Highrise account so your creatures, items, and perks show up in the app.</p>
         <div class="guide-video">
-          <iframe src="https://www.youtube.com/embed/5Eb8dCt3W9c" title="Link your creatures to Highrise" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>
+          <iframe src="https://www.youtube.com/embed/5Eb8dCt3W9c" title="Link your creatures to Highrise" data-i18n-title="a11y.video.link" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>
         </div>
         <ol class="guide-steps">
-          <li data-i18n="guide.g5.s1">Open the Highrise Discord, go to official links, and click the top one — the Highrise website. Log into your account.</li>
+          <li data-i18n="guide.g5.s1">Open the Highrise Discord, go to official links, and click the top one, the Highrise website. Log into your account.</li>
           <li data-i18n="guide.g5.s2">Go to your account Settings and scroll to the bottom, to Connect MetaMask Wallet. Make sure you're logged into the MetaMask wallet you want to link.</li>
           <li data-i18n="guide.g5.s3">Click Connect MetaMask Wallet. When highrise.game asks to connect, click Connect.</li>
-          <li data-i18n="guide.g5.s4">Confirm the signature request — it just lets Highrise read your wallet. You're linked, and your creatures now show up in Highrise under Your Collections.</li>
+          <li data-i18n="guide.g5.s4">Confirm the signature request. It just lets Highrise read your wallet. You're linked, and your creatures now show up in Highrise under Your Collections.</li>
         </ol>
       </article>
 
@@ -961,52 +997,54 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         </div>
         <p class="guide-intro" data-i18n="guide.g6.p">Bought a parcel during an in-app LAND Deeds sale? It lives inside Highrise until you mint it onto the blockchain. Minting is what lets you sell, transfer, or trade it on OpenSea.</p>
         <figure class="guide-gif">
-          <img src="/assets/gifs/land-deeds-mint.gif" alt="Withdrawing a LAND plot from the Highrise app to mint it onto the blockchain" loading="lazy" width="452" height="368">
+          <img src="/assets/gifs/land-deeds-mint.gif" alt="" loading="lazy" width="452" height="368">
         </figure>
         <figcaption class="guide-cap" data-i18n="guide.g6.cap">Withdrawing a plot from your Highrise inventory</figcaption>
         <ol class="guide-steps">
           <li data-i18n="guide.g6.s1">Go to highrise.game and log in with the Highrise account that holds your plot. Make sure your MetaMask wallet is ready.</li>
           <li data-i18n="guide.g6.s2">Click your avatar in the top-right corner, then open Inventory. Your plot (or plots) shows up there.</li>
           <li data-i18n="guide.g6.s3">Click the specific plot you want to put on-chain, then press Withdraw.</li>
-          <li data-i18n="guide.g6.s4">MetaMask pops up — Confirm and Sign the transaction. Keep a little ETH in your wallet to cover the gas fee.</li>
+          <li data-i18n="guide.g6.s4">MetaMask pops up. Confirm and Sign the transaction. Keep a little ETH in your wallet to cover the gas fee.</li>
           <li data-i18n="guide.g6.s5">Once it confirms, your parcel is minted onto the blockchain and ready to trade, sell, or transfer on OpenSea.</li>
         </ol>
-        <p class="guide-note" data-i18n="guide.g6.note">Until you mint it, the plot stays tied to the Highrise account it was bought with — it can't move between accounts or wallets until it's on-chain.</p>
+        <p class="guide-note" data-i18n="guide.g6.note">Until you mint it, the plot stays tied to the Highrise account it was bought with. It can't move between accounts or wallets until it's on-chain.</p>
       </article>
 
-    </div>
+        <div class="wt-foot">
+          <button class="wt-prev" type="button" data-wt-prev disabled><span aria-hidden="true">←</span> <span data-i18n="guide.wt.prev">Previous</span></button>
+          <span class="wt-count" data-wt-count aria-live="polite">1 / 6</span>
+          <button class="wt-next" type="button" data-wt-next><span data-i18n="guide.wt.next">Next</span> <span aria-hidden="true">→</span></button>
+        </div>
 
-    <div class="wt-foot">
-      <button class="wt-prev" type="button" data-wt-prev disabled><span aria-hidden="true">←</span> <span data-i18n="guide.wt.prev">Previous</span></button>
-      <span class="wt-count" data-wt-count aria-live="polite">1 / 6</span>
-      <button class="wt-next" type="button" data-wt-next><span data-i18n="guide.wt.next">Next</span> <span aria-hidden="true">→</span></button>
-    </div>
+      </div><!-- /wt-panels gm-stagecol -->
+    </div><!-- /gm-cockpit -->
   </section>
   </div><!-- /walkthroughs -->
 
   <div class="guide-subpanel" data-subpanel="marketplace" hidden>
-  <section class="wrap">
-    <div class="section-head">
-      <span class="topic-ico" style="--accent:#0DA6FC;--accent-soft:rgba(13,166,252,0.2)"><img src="/assets/pricetag.png" alt="" loading="lazy" width="84" height="84"></span>
-      <div class="section-head-t">
-        <div class="eyebrow" data-i18n="gm.eyebrow">Our marketplace</div>
-        <h2 data-i18n="gm.h2">Trade right here, step by step</h2>
-        <p class="lead" data-i18n="gm.lead">A full walkthrough of the in-site marketplace — non-custodial, 0% marketplace fee, and every action signed by your own wallet. Flip each step between Creatures and LAND. It's in Beta, so trades are real — start small.</p>
-      </div>
-    </div>
+  <section class="gm-shell">
+    <div class="gm-cockpit">
 
-    <div class="wt-nav" role="tablist" aria-label="Marketplace walkthrough" data-wt-key="market">
-      <button class="wt-tab is-active" id="gm-tab-1" type="button" role="tab" aria-selected="true" aria-controls="gm-panel-1" data-wt="1" data-wt-slug="setup"><span class="wt-tab-num">1</span><span data-i18n="gm.setup.tag">Setup</span></button>
-      <button class="wt-tab" id="gm-tab-2" type="button" role="tab" aria-selected="false" aria-controls="gm-panel-2" data-wt="2" data-wt-slug="funding" tabindex="-1"><span class="wt-tab-num">2</span><span data-i18n="gm.fund.tag">Funding</span></button>
-      <button class="wt-tab" id="gm-tab-3" type="button" role="tab" aria-selected="false" aria-controls="gm-panel-3" data-wt="3" data-wt-slug="trading" tabindex="-1"><span class="wt-tab-num">3</span><span data-i18n="gm.trade.tag">Trading</span></button>
-      <button class="wt-tab" id="gm-tab-4" type="button" role="tab" aria-selected="false" aria-controls="gm-panel-4" data-wt="4" data-wt-slug="moving" tabindex="-1"><span class="wt-tab-num">4</span><span data-i18n="gm.move.tag">Moving</span></button>
-      <button class="wt-tab" id="gm-tab-5" type="button" role="tab" aria-selected="false" aria-controls="gm-panel-5" data-wt="5" data-wt-slug="in-game" tabindex="-1"><span class="wt-tab-num">5</span><span data-i18n="gm.game.tag">In-game</span></button>
-      <button class="wt-tab" id="gm-tab-6" type="button" role="tab" aria-selected="false" aria-controls="gm-panel-6" data-wt="6" data-wt-slug="cashout" tabindex="-1"><span class="wt-tab-num">6</span><span data-i18n="gm.cash.tag">Cash out</span></button>
-    </div>
+      <!-- Mission control — a compact tour summary: the vertical step spine -->
+      <aside class="gm-rail">
+        <div class="gm-spine-head">
+          <span class="gm-spine-eye" data-i18n="gm.rail.tour">The tour</span>
+          <span class="gm-rail-prog"><span data-i18n="gm.rail.step">Step</span> <b data-wt-count aria-live="polite">1 / 6</b></span>
+        </div>
 
-    <div class="wt-panels">
+        <div class="wt-nav is-mkt" role="tablist" aria-label="Marketplace walkthrough" data-i18n-aria="a11y.mkt.walkthrough" data-wt-key="market">
+          <button class="wt-tab is-active" id="gm-tab-1" type="button" role="tab" aria-selected="true" aria-controls="gm-panel-1" data-wt="1" data-wt-slug="setup"><span class="wt-tab-num">1</span><span class="wt-tab-txt"><span class="wt-tab-name" data-i18n="gm.setup.tag">Setup</span><span class="wt-tab-sub" data-i18n="gm.setup.h">Connect &amp; switch network</span></span></button>
+          <button class="wt-tab" id="gm-tab-2" type="button" role="tab" aria-selected="false" aria-controls="gm-panel-2" data-wt="2" data-wt-slug="funding" tabindex="-1"><span class="wt-tab-num">2</span><span class="wt-tab-txt"><span class="wt-tab-name" data-i18n="gm.fund.tag">Funding</span><span class="wt-tab-sub" data-i18n="gm.fund.h">Get funds on the right network</span></span></button>
+          <button class="wt-tab" id="gm-tab-3" type="button" role="tab" aria-selected="false" aria-controls="gm-panel-3" data-wt="3" data-wt-slug="trading" tabindex="-1"><span class="wt-tab-num">3</span><span class="wt-tab-txt"><span class="wt-tab-name" data-i18n="gm.trade.tag">Trading</span><span class="wt-tab-sub" data-i18n="gm.trade.h">Browse, buy &amp; sell</span></span></button>
+          <button class="wt-tab" id="gm-tab-4" type="button" role="tab" aria-selected="false" aria-controls="gm-panel-4" data-wt="4" data-wt-slug="moving" tabindex="-1"><span class="wt-tab-num">4</span><span class="wt-tab-txt"><span class="wt-tab-name" data-i18n="gm.move.tag">Moving</span><span class="wt-tab-sub" data-i18n="gm.move.h">Transfer to another wallet</span></span></button>
+          <button class="wt-tab" id="gm-tab-5" type="button" role="tab" aria-selected="false" aria-controls="gm-panel-5" data-wt="5" data-wt-slug="in-game" tabindex="-1"><span class="wt-tab-num">5</span><span class="wt-tab-txt"><span class="wt-tab-name" data-i18n="gm.game.tag">In-game</span><span class="wt-tab-sub" data-i18n="gm.game.h">See it inside Highrise</span></span></button>
+          <button class="wt-tab" id="gm-tab-6" type="button" role="tab" aria-selected="false" aria-controls="gm-panel-6" data-wt="6" data-wt-slug="cashout" tabindex="-1"><span class="wt-tab-num">6</span><span class="wt-tab-txt"><span class="wt-tab-name" data-i18n="gm.cash.tag">Cash out</span><span class="wt-tab-sub" data-i18n="gm.cash.h">Turn your sale into money in your bank</span></span></button>
+        </div>
+      </aside>
 
-      <article class="guide-card wt-panel" id="gm-panel-1" data-wt-panel="1" role="tabpanel" aria-labelledby="gm-tab-1">
+      <div class="wt-panels gm-stagecol">
+
+      <article class="guide-card wt-panel gm-card" id="gm-panel-1" data-wt-panel="1" role="tabpanel" aria-labelledby="gm-tab-1">
         <div class="guide-head">
           <span class="guide-num">1</span>
           <div>
@@ -1016,7 +1054,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         </div>
         <p class="guide-intro" data-i18n="gm.setup.p">Open the Trade tab and connect your wallet. A quick safety check appears first, then your balances show in the bar up top.</p>
         <div class="wt-mkt-toggle">
-          <div class="seg" role="tablist" data-mkt-toggle aria-label="Choose a collection">
+          <div class="seg" role="tablist" data-mkt-toggle aria-label="Choose a collection" data-i18n-aria="a11y.collection.choose">
             <button class="seg-btn is-active" id="gm-setup-cr" type="button" role="tab" aria-selected="true" aria-controls="gm-setup-cr-p" data-mkt-btn="creatures" data-i18n="trade.coll.creatures">Creatures</button>
             <button class="seg-btn" id="gm-setup-la" type="button" role="tab" aria-selected="false" aria-controls="gm-setup-la-p" data-mkt-btn="land" tabindex="-1" data-i18n="trade.coll.land">LAND</button>
           </div>
@@ -1029,11 +1067,18 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         <div class="wt-mkt" id="gm-setup-la-p" data-mkt="land" role="tabpanel" aria-labelledby="gm-setup-la" style="--accent:#0DA6FC;--accent-soft:rgba(13,166,252,0.12)" hidden>
           <p class="wt-mkt-where" data-i18n="gm.setup.la.where">LAND lives on Ethereum mainnet.</p>
           <div class="gdemo" data-gdemo="setup-land"></div>
-          <p class="guide-note" data-i18n="gm.setup.la.note">LAND trades settle on Ethereum mainnet — there's no network to add, just switch MetaMask to Ethereum.</p>
+          <p class="guide-note" data-i18n="gm.setup.la.note">LAND trades settle on Ethereum mainnet. There's no network to add; just switch MetaMask to Ethereum.</p>
+        </div>
+        <div class="gm-cardfoot is-first">
+          <button class="gm-nextguide" type="button" data-wt-cta>
+            <span class="gm-nextguide-lead" data-i18n="gm.next.eyebrow">Up next</span>
+            <span data-i18n="gm.fund.tag">Funding</span>
+            <span class="gm-nextguide-arrow" aria-hidden="true">→</span>
+          </button>
         </div>
       </article>
 
-      <article class="guide-card wt-panel" id="gm-panel-2" data-wt-panel="2" role="tabpanel" aria-labelledby="gm-tab-2" hidden>
+      <article class="guide-card wt-panel gm-card" id="gm-panel-2" data-wt-panel="2" role="tabpanel" aria-labelledby="gm-tab-2" hidden>
         <div class="guide-head">
           <span class="guide-num">2</span>
           <div>
@@ -1041,26 +1086,36 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
             <h3 class="guide-title" data-i18n="gm.fund.h">Get funds on the right network</h3>
           </div>
         </div>
-        <p class="guide-intro" data-i18n="gm.fund.p">Money is the hardest part the first time — so pick the situation that matches yours and watch exactly what happens, click by click. No crypto knowledge needed: getting coins, moving them between networks and gas fees are all covered. (Sold something and want your money out? That has its own step — see Cash out at the end.)</p>
+        <p class="guide-intro" data-i18n="gm.fund.p">Pick the situation that matches yours and watch exactly what happens, click by click. No crypto knowledge needed: getting coins, moving them between networks, and gas fees are all covered. Sold something and want your money out? That has its own step: see Cash out at the end.</p>
         <div class="wt-mkt-toggle">
-          <div class="seg" role="tablist" data-mkt-toggle aria-label="Choose a collection">
+          <div class="seg" role="tablist" data-mkt-toggle aria-label="Choose a collection" data-i18n-aria="a11y.collection.choose">
             <button class="seg-btn is-active" id="gm-fund-cr" type="button" role="tab" aria-selected="true" aria-controls="gm-fund-cr-p" data-mkt-btn="creatures" data-i18n="trade.coll.creatures">Creatures</button>
             <button class="seg-btn" id="gm-fund-la" type="button" role="tab" aria-selected="false" aria-controls="gm-fund-la-p" data-mkt-btn="land" tabindex="-1" data-i18n="trade.coll.land">LAND</button>
           </div>
         </div>
         <div class="wt-mkt" id="gm-fund-cr-p" data-mkt="creatures" role="tabpanel" aria-labelledby="gm-fund-cr" style="--accent:#51FFA5;--accent-soft:rgba(81,255,165,0.12)">
-          <p class="wt-mkt-where" data-i18n="gm.fund.cr.where">Creatures need ETH for the price and a little IMX for gas — both on Immutable zkEVM.</p>
+          <p class="wt-mkt-where" data-i18n="gm.fund.cr.where">Creatures need ETH for the price and a little IMX for gas, both on Immutable zkEVM.</p>
           <div class="gdemo" data-gdemo="funding-creatures"></div>
-          <p class="guide-note" data-i18n="gm.fund.cr.note">ETH pays the price, IMX pays the gas — and both must be on Immutable zkEVM, not Ethereum mainnet.</p>
+          <p class="guide-note" data-i18n="gm.fund.cr.note">ETH pays the price, IMX pays the gas, and both must be on Immutable zkEVM, not Ethereum mainnet.</p>
         </div>
         <div class="wt-mkt" id="gm-fund-la-p" data-mkt="land" role="tabpanel" aria-labelledby="gm-fund-la" style="--accent:#0DA6FC;--accent-soft:rgba(13,166,252,0.12)" hidden>
-          <p class="wt-mkt-where" data-i18n="gm.fund.la.where">LAND is bought with plain ETH on Ethereum mainnet — no bridging, no IMX.</p>
+          <p class="wt-mkt-where" data-i18n="gm.fund.la.where">You buy LAND with plain ETH on Ethereum mainnet. No bridging, no IMX.</p>
           <div class="gdemo" data-gdemo="funding-land"></div>
-          <p class="guide-note" data-i18n="gm.fund.la.note">LAND uses mainnet ETH for both the price and gas — there's nothing to bridge and no IMX needed.</p>
+          <p class="guide-note" data-i18n="gm.fund.la.note">LAND uses mainnet ETH for both the price and gas. There's nothing to bridge and no IMX needed.</p>
+        </div>
+        <div class="gm-cardfoot">
+          <button class="gm-foot-prev" type="button" data-wt-cta-prev>
+            <span aria-hidden="true">←</span> <span data-i18n="guide.wt.prev">Previous</span>
+          </button>
+          <button class="gm-nextguide" type="button" data-wt-cta>
+            <span class="gm-nextguide-lead" data-i18n="gm.next.eyebrow">Up next</span>
+            <span data-i18n="gm.trade.tag">Trading</span>
+            <span class="gm-nextguide-arrow" aria-hidden="true">→</span>
+          </button>
         </div>
       </article>
 
-      <article class="guide-card wt-panel" id="gm-panel-3" data-wt-panel="3" role="tabpanel" aria-labelledby="gm-tab-3" hidden>
+      <article class="guide-card wt-panel gm-card" id="gm-panel-3" data-wt-panel="3" role="tabpanel" aria-labelledby="gm-tab-3" hidden>
         <div class="guide-head">
           <span class="guide-num">3</span>
           <div>
@@ -1068,9 +1123,9 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
             <h3 class="guide-title" data-i18n="gm.trade.h">Browse, buy &amp; sell</h3>
           </div>
         </div>
-        <p class="guide-intro" data-i18n="gm.trade.p">The heart of the marketplace — find what you want, buy it, or list your own. We charge 0% marketplace fee.</p>
+        <p class="guide-intro" data-i18n="gm.trade.p">Find what you want, buy it, or list your own. We charge 0% marketplace fee.</p>
         <div class="wt-mkt-toggle">
-          <div class="seg" role="tablist" data-mkt-toggle aria-label="Choose a collection">
+          <div class="seg" role="tablist" data-mkt-toggle aria-label="Choose a collection" data-i18n-aria="a11y.collection.choose">
             <button class="seg-btn is-active" id="gm-trade-cr" type="button" role="tab" aria-selected="true" aria-controls="gm-trade-cr-p" data-mkt-btn="creatures" data-i18n="trade.coll.creatures">Creatures</button>
             <button class="seg-btn" id="gm-trade-la" type="button" role="tab" aria-selected="false" aria-controls="gm-trade-la-p" data-mkt-btn="land" tabindex="-1" data-i18n="trade.coll.land">LAND</button>
           </div>
@@ -1078,16 +1133,26 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         <div class="wt-mkt" id="gm-trade-cr-p" data-mkt="creatures" role="tabpanel" aria-labelledby="gm-trade-cr" style="--accent:#51FFA5;--accent-soft:rgba(81,255,165,0.12)">
           <p class="wt-mkt-where" data-i18n="gm.trade.cr.where">Creatures: Immutable zkEVM, with offers and instant-sell.</p>
           <div class="gdemo" data-gdemo="trading-creatures"></div>
-          <p class="guide-note" data-i18n="gm.trade.cr.note">0% marketplace fee. Buyers pay the 5% creator royalty, and listings and offers are free to create — just a signature.</p>
+          <p class="guide-note" data-i18n="gm.trade.cr.note">0% marketplace fee. Buyers pay the 5% creator royalty, and listings and offers are free to create, just a signature.</p>
         </div>
         <div class="wt-mkt" id="gm-trade-la-p" data-mkt="land" role="tabpanel" aria-labelledby="gm-trade-la" style="--accent:#0DA6FC;--accent-soft:rgba(13,166,252,0.12)" hidden>
           <p class="wt-mkt-where" data-i18n="gm.trade.la.where">LAND: Ethereum mainnet via OpenSea. No offers yet.</p>
           <div class="gdemo" data-gdemo="trading-land"></div>
           <p class="guide-note" data-i18n="gm.trade.la.note">A LAND sale costs 1% OpenSea + 5% creator royalty. Offers aren't available for LAND yet.</p>
         </div>
+        <div class="gm-cardfoot">
+          <button class="gm-foot-prev" type="button" data-wt-cta-prev>
+            <span aria-hidden="true">←</span> <span data-i18n="guide.wt.prev">Previous</span>
+          </button>
+          <button class="gm-nextguide" type="button" data-wt-cta>
+            <span class="gm-nextguide-lead" data-i18n="gm.next.eyebrow">Up next</span>
+            <span data-i18n="gm.move.tag">Moving</span>
+            <span class="gm-nextguide-arrow" aria-hidden="true">→</span>
+          </button>
+        </div>
       </article>
 
-      <article class="guide-card wt-panel" id="gm-panel-4" data-wt-panel="4" role="tabpanel" aria-labelledby="gm-tab-4" hidden>
+      <article class="guide-card wt-panel gm-card" id="gm-panel-4" data-wt-panel="4" role="tabpanel" aria-labelledby="gm-tab-4" hidden>
         <div class="guide-head">
           <span class="guide-num">4</span>
           <div>
@@ -1095,9 +1160,9 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
             <h3 class="guide-title" data-i18n="gm.move.h">Transfer to another wallet</h3>
           </div>
         </div>
-        <p class="guide-intro" data-i18n="gm.move.p">Send an asset straight to another wallet — your own or a friend's. Transfers can't be undone, so we help you check the address.</p>
+        <p class="guide-intro" data-i18n="gm.move.p">Send an asset straight to another wallet, your own or a friend's. Transfers can't be undone, so we help you check the address.</p>
         <div class="wt-mkt-toggle">
-          <div class="seg" role="tablist" data-mkt-toggle aria-label="Choose a collection">
+          <div class="seg" role="tablist" data-mkt-toggle aria-label="Choose a collection" data-i18n-aria="a11y.collection.choose">
             <button class="seg-btn is-active" id="gm-move-cr" type="button" role="tab" aria-selected="true" aria-controls="gm-move-cr-p" data-mkt-btn="creatures" data-i18n="trade.coll.creatures">Creatures</button>
             <button class="seg-btn" id="gm-move-la" type="button" role="tab" aria-selected="false" aria-controls="gm-move-la-p" data-mkt-btn="land" tabindex="-1" data-i18n="trade.coll.land">LAND</button>
           </div>
@@ -1105,16 +1170,26 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         <div class="wt-mkt" id="gm-move-cr-p" data-mkt="creatures" role="tabpanel" aria-labelledby="gm-move-cr" style="--accent:#51FFA5;--accent-soft:rgba(81,255,165,0.12)">
           <p class="wt-mkt-where" data-i18n="gm.move.cr.where">Send Creatures on Immutable zkEVM.</p>
           <div class="gdemo" data-gdemo="moving-creatures"></div>
-          <p class="guide-note" data-i18n="gm.move.cr.note">Transfers are permanent — a little IMX covers gas, and no one can reverse a send to the wrong wallet, so double-check the address.</p>
+          <p class="guide-note" data-i18n="gm.move.cr.note">Transfers are permanent. A little IMX covers gas, and no one can reverse a send to the wrong wallet, so double-check the address.</p>
         </div>
         <div class="wt-mkt" id="gm-move-la-p" data-mkt="land" role="tabpanel" aria-labelledby="gm-move-la" style="--accent:#0DA6FC;--accent-soft:rgba(13,166,252,0.12)" hidden>
           <p class="wt-mkt-where" data-i18n="gm.move.la.where">Send LAND on Ethereum mainnet.</p>
           <div class="gdemo" data-gdemo="moving-land"></div>
           <p class="guide-note" data-i18n="gm.move.la.note">LAND transfers settle on Ethereum mainnet and pay mainnet gas.</p>
         </div>
+        <div class="gm-cardfoot">
+          <button class="gm-foot-prev" type="button" data-wt-cta-prev>
+            <span aria-hidden="true">←</span> <span data-i18n="guide.wt.prev">Previous</span>
+          </button>
+          <button class="gm-nextguide" type="button" data-wt-cta>
+            <span class="gm-nextguide-lead" data-i18n="gm.next.eyebrow">Up next</span>
+            <span data-i18n="gm.game.tag">In-game</span>
+            <span class="gm-nextguide-arrow" aria-hidden="true">→</span>
+          </button>
+        </div>
       </article>
 
-      <article class="guide-card wt-panel" id="gm-panel-5" data-wt-panel="5" role="tabpanel" aria-labelledby="gm-tab-5" hidden>
+      <article class="guide-card wt-panel gm-card" id="gm-panel-5" data-wt-panel="5" role="tabpanel" aria-labelledby="gm-tab-5" hidden>
         <div class="guide-head">
           <span class="guide-num">5</span>
           <div>
@@ -1122,9 +1197,9 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
             <h3 class="guide-title" data-i18n="gm.game.h">See it inside Highrise</h3>
           </div>
         </div>
-        <p class="guide-intro" data-i18n="gm.game.p">Owning the NFT is half the fun — link your wallet to Highrise so it shows up and unlocks its perks in the app.</p>
+        <p class="guide-intro" data-i18n="gm.game.p">Owning the NFT is only part of it. Link your wallet to Highrise so it shows up and unlocks its perks in the app.</p>
         <div class="wt-mkt-toggle">
-          <div class="seg" role="tablist" data-mkt-toggle aria-label="Choose a collection">
+          <div class="seg" role="tablist" data-mkt-toggle aria-label="Choose a collection" data-i18n-aria="a11y.collection.choose">
             <button class="seg-btn is-active" id="gm-game-cr" type="button" role="tab" aria-selected="true" aria-controls="gm-game-cr-p" data-mkt-btn="creatures" data-i18n="trade.coll.creatures">Creatures</button>
             <button class="seg-btn" id="gm-game-la" type="button" role="tab" aria-selected="false" aria-controls="gm-game-la-p" data-mkt-btn="land" tabindex="-1" data-i18n="trade.coll.land">LAND</button>
           </div>
@@ -1132,16 +1207,26 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         <div class="wt-mkt" id="gm-game-cr-p" data-mkt="creatures" role="tabpanel" aria-labelledby="gm-game-cr" style="--accent:#51FFA5;--accent-soft:rgba(81,255,165,0.12)">
           <p class="wt-mkt-where" data-i18n="gm.game.cr.where">Creatures appear in your Highrise clothing inventory.</p>
           <div class="gdemo" data-gdemo="ingame-creatures"></div>
-          <p class="guide-note" data-i18n="gm.game.cr.note">Linking is read-only — it just lets Highrise see your wallet. Your keys never leave MetaMask.</p>
+          <p class="guide-note" data-i18n="gm.game.cr.note">Linking is read-only: it just lets Highrise see your wallet. Your keys never leave MetaMask.</p>
         </div>
         <div class="wt-mkt" id="gm-game-la-p" data-mkt="land" role="tabpanel" aria-labelledby="gm-game-la" style="--accent:#0DA6FC;--accent-soft:rgba(13,166,252,0.12)" hidden>
           <p class="wt-mkt-where" data-i18n="gm.game.la.where">LAND brings its Slime pet and perks into Highrise.</p>
           <div class="gdemo" data-gdemo="ingame-land"></div>
-          <p class="guide-note" data-i18n="gm.game.la.note">LAND owners are full Creature Club members — the same drops, giveaways and Coins as Creature holders.</p>
+          <p class="guide-note" data-i18n="gm.game.la.note">LAND owners are full Creature Club members: the same drops, giveaways and Coins as Creature holders.</p>
+        </div>
+        <div class="gm-cardfoot">
+          <button class="gm-foot-prev" type="button" data-wt-cta-prev>
+            <span aria-hidden="true">←</span> <span data-i18n="guide.wt.prev">Previous</span>
+          </button>
+          <button class="gm-nextguide" type="button" data-wt-cta>
+            <span class="gm-nextguide-lead" data-i18n="gm.next.eyebrow">Up next</span>
+            <span data-i18n="gm.cash.tag">Cash out</span>
+            <span class="gm-nextguide-arrow" aria-hidden="true">→</span>
+          </button>
         </div>
       </article>
 
-      <article class="guide-card wt-panel" id="gm-panel-6" data-wt-panel="6" role="tabpanel" aria-labelledby="gm-tab-6" hidden>
+      <article class="guide-card wt-panel gm-card" id="gm-panel-6" data-wt-panel="6" role="tabpanel" aria-labelledby="gm-tab-6" hidden>
         <div class="guide-head">
           <span class="guide-num">6</span>
           <div>
@@ -1149,84 +1234,56 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
             <h3 class="guide-title" data-i18n="gm.cash.h">Turn your sale into money in your bank</h3>
           </div>
         </div>
-        <p class="guide-intro" data-i18n="gm.cash.p">You sold — congratulations! Now let's get that money to you, calmly. There's no deadline and no way to "miss" anything: your ETH sits safely in your own wallet until you decide to move it. The whole cash-out happens right here on this site, and the walkthrough below shows every single tap before you make it for real.</p>
+        <p class="guide-intro" data-i18n="gm.cash.p">You sold, congratulations! Your ETH sits safely in your own wallet until you move it. The whole cash-out happens on this page, and the walkthrough below shows every tap before you make it.</p>
         <div class="gm-calm" role="list">
-          <div class="gm-calm-card" role="listitem" style="--calm:#51FFA5"><span class="gm-calm-ico" aria-hidden="true">🔒</span><b data-i18n="gm.cash.calm1h">Always in your wallet</b><p data-i18n="gm.cash.calm1p">Your ETH never passes through us or anyone else — it moves between networks inside the same wallet, same address, and only you can approve each step.</p></div>
-          <div class="gm-calm-card" role="listitem" style="--calm:#8561FF"><span class="gm-calm-ico" aria-hidden="true">☕</span><b data-i18n="gm.cash.calm2h">No rush, ever</b><p data-i18n="gm.cash.calm2p">The move usually lands in just a few minutes and runs on its own. Close the page, make a coffee — the tracker keeps going and picks up right where it was.</p></div>
-          <div class="gm-calm-card" role="listitem" style="--calm:#FFF95F"><span class="gm-calm-ico" aria-hidden="true">💬</span><b data-i18n="gm.cash.calm3h">We're one message away</b><p data-i18n="gm.cash.calm3p">Unsure at any step? Stop — nothing happens without your confirmation — and ask in the Highrise Discord. A real person will walk you through it.</p></div>
+          <div class="gm-calm-card" role="listitem" style="--calm:#51FFA5"><span class="gm-calm-ico" aria-hidden="true">🔒</span><b data-i18n="gm.cash.calm1h">Always in your wallet</b><p data-i18n="gm.cash.calm1p">Your ETH never passes through us or anyone else. It moves between networks inside the same wallet, same address, and only you can approve each step.</p></div>
+          <div class="gm-calm-card" role="listitem" style="--calm:#8561FF"><span class="gm-calm-ico" aria-hidden="true">☕</span><b data-i18n="gm.cash.calm2h">No rush, ever</b><p data-i18n="gm.cash.calm2p">The move usually lands in a few minutes and runs on its own. Close the page if you like. The tracker keeps going and picks up right where it was.</p></div>
+          <div class="gm-calm-card" role="listitem" style="--calm:#FFF95F"><span class="gm-calm-ico" aria-hidden="true">💬</span><b data-i18n="gm.cash.calm3h">We're one message away</b><p data-i18n="gm.cash.calm3p">Unsure at any step? Stop. Nothing happens without your confirmation. Ask in the Highrise Discord and a real person will help.</p></div>
         </div>
         <div class="wt-mkt-toggle">
-          <div class="seg" role="tablist" data-mkt-toggle aria-label="Choose a collection">
+          <div class="seg" role="tablist" data-mkt-toggle aria-label="Choose a collection" data-i18n-aria="a11y.collection.choose">
             <button class="seg-btn is-active" id="gm-cash-cr" type="button" role="tab" aria-selected="true" aria-controls="gm-cash-cr-p" data-mkt-btn="creatures" data-i18n="trade.coll.creatures">Creatures</button>
             <button class="seg-btn" id="gm-cash-la" type="button" role="tab" aria-selected="false" aria-controls="gm-cash-la-p" data-mkt-btn="land" tabindex="-1" data-i18n="trade.coll.land">LAND</button>
           </div>
         </div>
         <div class="wt-mkt" id="gm-cash-cr-p" data-mkt="creatures" role="tabpanel" aria-labelledby="gm-cash-cr" style="--accent:#51FFA5;--accent-soft:rgba(81,255,165,0.12)">
-          <p class="wt-mkt-where" data-i18n="gm.cash.cr.where">Creature sales pay you in ETH on Immutable zkEVM — we move it to Ethereum for you, right here.</p>
+          <p class="wt-mkt-where" data-i18n="gm.cash.cr.where">Creature sales pay you in ETH on Immutable zkEVM. We move it to Ethereum for you on this page.</p>
           <div class="gdemo" data-gdemo="cashout-creatures"></div>
-          <p class="guide-note" data-i18n="gm.cash.cr.note">The one golden rule: don't send this ETH straight from Immutable zkEVM to an exchange — most exchanges only understand the Ethereum network. That's the entire reason the Cash out button exists: it puts your ETH on Ethereum first, and from there everything works the way you're used to.</p>
-          <p class="guide-note" data-i18n="gm.cash.cr.note2">After it lands: open MetaMask, switch the network picker to Ethereum, and your ETH is right there (the site's "Show it in MetaMask" button does the switch for you). Sending it to Coinbase, Kraken or any exchange is then a normal transfer — copy the exchange's ETH deposit address, double-check it, send.</p>
+          <p class="guide-note" data-i18n="gm.cash.cr.note">Don't send this ETH straight from Immutable zkEVM to an exchange. Most exchanges only accept ETH on Ethereum. That's what the Cash out button does: it moves your ETH to Ethereum first.</p>
+          <p class="guide-note" data-i18n="gm.cash.cr.note2">After it lands: open MetaMask, switch the network picker to Ethereum, and your ETH is right there (the site's "Show it in MetaMask" button does the switch for you). Sending it to Coinbase, Kraken or any exchange is then a normal transfer: copy the exchange's ETH deposit address, double-check it, send.</p>
         </div>
         <div class="wt-mkt" id="gm-cash-la-p" data-mkt="land" role="tabpanel" aria-labelledby="gm-cash-la" style="--accent:#0DA6FC;--accent-soft:rgba(13,166,252,0.12)" hidden>
-          <p class="wt-mkt-where" data-i18n="gm.cash.la.where">LAND sales pay you in WETH on Ethereum — one tap unwraps it to plain ETH, no bridging needed.</p>
+          <p class="wt-mkt-where" data-i18n="gm.cash.la.where">LAND sales pay you in WETH on Ethereum. One tap unwraps it to plain ETH, no bridging needed.</p>
           <div class="gdemo" data-gdemo="cashout-land"></div>
-          <p class="guide-note" data-i18n="gm.cash.la.note">WETH ("wrapped ETH") is worth exactly the same as ETH — it's just a different token under the hood, and some exchanges won't recognise a WETH deposit. The unwrap is a 1:1 swap back to plain ETH that costs only gas. After that, send to your exchange as you always would.</p>
+          <p class="guide-note" data-i18n="gm.cash.la.note">WETH ("wrapped ETH") is worth exactly the same as ETH. It's just a different token, and some exchanges won't accept a WETH deposit. The unwrap is a 1:1 swap back to plain ETH that costs only gas. After that, send to your exchange as you always would.</p>
+        </div>
+        <div class="gm-cardfoot">
+          <button class="gm-foot-prev" type="button" data-wt-cta-prev>
+            <span aria-hidden="true">←</span> <span data-i18n="guide.wt.prev">Previous</span>
+          </button>
+          <button class="gm-nextguide is-finish" type="button" data-goto="trade">
+            <span class="gm-nextguide-lead" data-i18n="gm.next.doneEyebrow">That's the whole tour</span>
+            <span data-i18n="gm.next.finish">Open the marketplace</span>
+            <span class="gm-nextguide-arrow" aria-hidden="true">→</span>
+          </button>
         </div>
       </article>
 
-    </div>
-
-    <div class="wt-foot">
-      <button class="wt-prev" type="button" data-wt-prev disabled><span aria-hidden="true">←</span> <span data-i18n="guide.wt.prev">Previous</span></button>
-      <span class="wt-count" data-wt-count aria-live="polite">1 / 6</span>
-      <button class="wt-next" type="button" data-wt-next><span data-i18n="guide.wt.next">Next</span> <span aria-hidden="true">→</span></button>
-    </div>
+    </div><!-- /stage -->
+    </div><!-- /cockpit -->
   </section>
   </div><!-- /marketplace -->
 
   <div class="guide-subpanel" data-subpanel="safety" hidden>
-  <section class="wrap">
-    <div class="eyebrow" data-i18n="guide.safe.eyebrow">Stay safe</div>
-    <h2 data-i18n="guide.safe.h2">Protect your assets</h2>
-    <p class="lead" data-i18n="guide.safe.lead">Your creatures are valuable and ownership is final. A few habits keep them safe.</p>
-    <div class="perks">
-      <div class="perk"><span class="ico">🤫</span><h4 data-i18n="guide.safe.c1h">Never share your seed phrase</h4><p data-i18n="guide.safe.c1p">Your seed phrase is the 12 random words shown once when you created your wallet — it's the master key. Whoever has it controls your wallet completely. No one — not Highrise, not support — will ever need it.</p></div>
-      <div class="perk"><span class="ico">🔗</span><h4 data-i18n="guide.safe.c2h">Use official links only</h4><p data-i18n="guide.safe.c2p">Only use links from the Highrise Discord's official links channel. Never trust marketplace or wallet links sent via DMs, social media comments, or sites you didn't find yourself.</p></div>
-      <div class="perk"><span class="ico">📋</span><h4 data-i18n="guide.safe.c3h">Check the address twice</h4><p data-i18n="guide.safe.c3p">Before any transfer, paste and re-read the destination address. Transfers are permanent and can't be reversed.</p></div>
-      <div class="perk"><span class="ico">⛽</span><h4 data-i18n="guide.safe.c4h">Keep a little $IMX</h4><p data-i18n="guide.safe.c4p">Every action on Immutable needs a tiny $IMX fee. Keep a small balance so you're never stuck mid-transaction.</p></div>
-      <div class="perk"><span class="ico">🚫</span><h4 data-i18n="guide.safe.c5h">Beware fake support</h4><p data-i18n="guide.safe.c5p">Real staff won't DM you first asking for wallet access, payments, or your phrase. When in doubt, ask in the public Discord.</p></div>
-      <div class="perk"><span class="ico">✍️</span><h4 data-i18n="guide.safe.c6h">Read before you sign</h4><p data-i18n="guide.safe.c6p">Every wallet popup spends or approves something. Slow down and read what it does. Sites asking you to "validate", "sync" or "migrate" your wallet are scams — no real app needs that.</p></div>
-      <div class="perk"><span class="ico">🌐</span><h4 data-i18n="guide.safe.c7h">Stay on Immutable zkEVM</h4><p data-i18n="guide.safe.c7p">Your Creatures live on the Immutable zkEVM network. Only transfer them to wallets on that same network, and don't use a marketplace's "withdraw" option to move a Creature off it unless you're certain what it does — sending to the wrong network means permanent, unrecoverable loss.</p></div>
-      <div class="perk"><span class="ico">🛒</span><h4 data-i18n="guide.safe.c8h">Know the real marketplaces</h4><p data-i18n="guide.safe.c8p">Gen 1 Creatures only trade on Token Trove. Any "Highrise Creature" or "Highrise Creature Club" collection on OpenSea is a fake — Gen 1 isn't listed there. Only LAND and Gen 2 are on OpenSea. Reach every marketplace through the official Discord links.</p></div>
-    </div>
-    <div class="guide-note" style="margin-top:20px">
-      <p data-i18n="guide.safe.alert">HCC staff and support will never message you first. If anyone DMs you claiming to be from the team — asking for wallet access, your seed phrase, or any payment — it's a scam. Ask publicly in the Highrise Discord instead.</p>
-    </div>
-    <div class="honest" style="margin-top:20px">
-      <div class="eyebrow" data-i18n="guide.safe.hacked.eyebrow">If something feels wrong</div>
-      <p data-i18n="guide.safe.hacked.p">Clicked a bad link or signed something suspicious? Act fast: move your Creatures and funds to a fresh wallet first, then revoke old approvals from the compromised one, and tell the team in the public Discord so others get warned. Speed matters more than embarrassment — everyone has a close call eventually.</p>
-    </div>
-    <button class="scam-jump" type="button" data-subgoto="scams">
-      <span class="scam-jump-ico" aria-hidden="true">🎭</span>
-      <span class="scam-jump-t">
-        <span class="scam-jump-h" data-i18n="guide.safe.more.h">See the full scam playbook</span>
-        <span class="scam-jump-p" data-i18n="guide.safe.more.p">Fake airdrops, drainer signatures, impostor DMs and more, with the red flags for each.</span>
-      </span>
-      <span class="scam-jump-arrow" aria-hidden="true">→</span>
-    </button>
-  </section>
-  </div><!-- /safety -->
-
-  <div class="guide-subpanel" data-subpanel="scams" hidden>
 
     <!-- Hero -->
     <section class="wrap">
       <div class="scam-hero g2-reveal">
         <div class="apply-aurora" aria-hidden="true"></div>
         <div class="apply-sparkles" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-        <span class="apply-pill" data-i18n="guide.scam.pill">Scam Watch</span>
-        <h2 class="scam-hero-h" data-i18n="guide.scam.h2">Know the tricks before they find you</h2>
-        <p class="scam-hero-p" data-i18n="guide.scam.lead">Scammers target Creature and LAND holders because the assets are worth real money. Here's the full playbook they run, the red flags that give it away, and what to do if you slip. This is the club's living safety reference, so bookmark it.</p>
+        <span class="apply-pill" data-i18n="guide.safe.eyebrow">Security</span>
+        <h2 class="scam-hero-h" data-i18n="guide.safe.h2">Protect your assets</h2>
+        <p class="scam-hero-p" data-i18n="guide.safe.lead">Your creatures and LAND are worth real money, and on-chain ownership is final. Here are the habits that keep them safe, the scams to know, and exactly what to do if you slip. This is the club's living safety reference, so bookmark it.</p>
       </div>
     </section>
 
@@ -1240,6 +1297,34 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         </div>
       </div>
     </section>
+
+    <div class="divider">• • •</div>
+
+    <!-- Good habits — the practical daily basics -->
+    <section class="wrap">
+      <div class="section-head">
+        <span class="topic-ico" style="--accent:#51FFA5;--accent-soft:rgba(81,255,165,0.22)" aria-hidden="true">🛡️</span>
+        <div class="section-head-t">
+          <div class="eyebrow" data-i18n="guide.safe.habits.eyebrow">Good habits</div>
+          <h2 data-i18n="guide.safe.habits.h2">The basics that keep you safe</h2>
+        </div>
+      </div>
+      <div class="perks">
+        <div class="perk"><span class="ico">🤫</span><h4 data-i18n="guide.safe.c1h">Never share your seed phrase</h4><p data-i18n="guide.safe.c1p">Your seed phrase is the 12 random words shown once when you created your wallet. It's the master key: whoever has it controls your wallet completely. No one, not Highrise and not support, will ever need it.</p></div>
+        <div class="perk"><span class="ico">🔗</span><h4 data-i18n="guide.safe.c2h">Use official links only</h4><p data-i18n="guide.safe.c2p">Only use links from the Highrise Discord's official links channel. Never trust marketplace or wallet links sent via DMs, social media comments, or sites you didn't find yourself.</p></div>
+        <div class="perk"><span class="ico">📋</span><h4 data-i18n="guide.safe.c3h">Check the address twice</h4><p data-i18n="guide.safe.c3p">Before any transfer, paste and re-read the destination address. Transfers are permanent and can't be reversed.</p></div>
+        <div class="perk"><span class="ico">⛽</span><h4 data-i18n="guide.safe.c4h">Keep a little $IMX</h4><p data-i18n="guide.safe.c4p">Every action on Immutable needs a tiny $IMX fee. Keep a small balance so you're never stuck mid-transaction.</p></div>
+        <div class="perk"><span class="ico">🚫</span><h4 data-i18n="guide.safe.c5h">Beware fake support</h4><p data-i18n="guide.safe.c5p">Real staff won't DM you first asking for wallet access, payments, or your phrase. When in doubt, ask in the public Discord.</p></div>
+        <div class="perk"><span class="ico">✍️</span><h4 data-i18n="guide.safe.c6h">Read before you sign</h4><p data-i18n="guide.safe.c6p">Every wallet popup spends or approves something. Slow down and read what it does. Sites asking you to "validate", "sync" or "migrate" your wallet are scams. No real app needs that.</p></div>
+        <div class="perk"><span class="ico">🌐</span><h4 data-i18n="guide.safe.c7h">Stay on Immutable zkEVM</h4><p data-i18n="guide.safe.c7p">Your Creatures live on the Immutable zkEVM network. Only transfer them to wallets on that same network, and don't use a marketplace's "withdraw" option to move a Creature off it unless you're certain what it does. Send to the wrong network and it's gone for good.</p></div>
+        <div class="perk"><span class="ico">🛒</span><h4 data-i18n="guide.safe.c8h">Know the real marketplaces</h4><p data-i18n="guide.safe.c8p">Gen 1 Creatures only trade on Token Trove. Any "Highrise Creature" or "Highrise Creature Club" collection on OpenSea is a fake. Gen 1 isn't listed there. Only LAND and Gen 2 are on OpenSea. Reach every marketplace through the official Discord links.</p></div>
+      </div>
+      <div class="guide-note" style="margin-top:20px">
+        <p data-i18n="guide.safe.alert">HCC staff and support will never message you first. If anyone DMs you claiming to be from the team and asks for wallet access, your seed phrase, or any payment, it's a scam. Ask publicly in the Highrise Discord instead.</p>
+      </div>
+    </section>
+
+    <div class="divider">• • •</div>
 
     <!-- Common tactics -->
     <section class="wrap">
@@ -1385,7 +1470,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
             <div class="scam-block scam-flags">
               <h5 data-i18n="guide.scam.l.flags">Red flags</h5>
               <ul>
-                <li data-i18n="guide.scam.t5.f1">A web address with an extra letter, dash or odd ending you don't recognise.</li>
+                <li data-i18n="guide.scam.t5.f1">A web address with an extra letter, dash or odd ending you don't recognize.</li>
                 <li data-i18n="guide.scam.t5.f2">A "Highrise Creature" Gen 1 listing anywhere but Token Trove.</li>
               </ul>
             </div>
@@ -1438,7 +1523,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
           <div class="scam-card-body">
             <div class="scam-block scam-how">
               <h5 data-i18n="guide.scam.l.how">How it works</h5>
-              <p data-i18n="guide.scam.t7.how">A hacked friend's account sends you a link, or a fake bot tells you to "re-verify" by scanning a QR code or authorising an app. Scanning a Discord login QR from a stranger hands them your account. Malicious links can also install software that reads your wallet.</p>
+              <p data-i18n="guide.scam.t7.how">A hacked friend's account sends you a link, or a fake bot tells you to "re-verify" by scanning a QR code or authorizing an app. Scanning a Discord login QR from a stranger hands them your account. Malicious links can also install software that reads your wallet.</p>
             </div>
             <div class="scam-block scam-flags">
               <h5 data-i18n="guide.scam.l.flags">Red flags</h5>
@@ -1548,12 +1633,12 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
       </div>
 
       <div class="scam-spot" id="scam-spot">
-        <div class="scam-dm" role="group" aria-label="Example scam direct message">
+        <div class="scam-dm" role="group" aria-label="Example scam direct message" data-i18n-aria="a11y.scam.example">
           <div class="scam-dm-head">
             <span class="scam-dm-av" aria-hidden="true">HR</span>
             <div class="scam-dm-id">
               <span class="scam-dm-name">
-                <span class="scam-flag" data-flag data-i18n-tip="guide.scam.spot.tip.name" tabindex="0" role="button" aria-label="Red flag" data-i18n="guide.scam.spot.dm.name">Hlghrise Support</span>
+                <span class="scam-flag" data-flag data-i18n-tip="guide.scam.spot.tip.name" tabindex="0" role="button" aria-label="Red flag" data-i18n-aria="a11y.scam.flag" data-i18n="guide.scam.spot.dm.name">Hlghrise Support</span>
                 <span class="scam-dm-badge" data-i18n="guide.scam.spot.dm.badge">MOD</span>
               </span>
               <span class="scam-dm-handle" data-i18n="guide.scam.spot.dm.handle">@highrise-support-team</span>
@@ -1563,16 +1648,16 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
           <div class="scam-dm-body">
             <p data-i18n="guide.scam.spot.dm.l1">Hey! This is the official Highrise team.</p>
             <p>
-              <span class="scam-flag" data-flag data-i18n-tip="guide.scam.spot.tip.first" tabindex="0" role="button" aria-label="Red flag" data-i18n="guide.scam.spot.dm.l2">We noticed suspicious activity on your wallet and need to secure it right away.</span>
+              <span class="scam-flag" data-flag data-i18n-tip="guide.scam.spot.tip.first" tabindex="0" role="button" aria-label="Red flag" data-i18n-aria="a11y.scam.flag" data-i18n="guide.scam.spot.dm.l2">We noticed suspicious activity on your wallet and need to secure it right away.</span>
             </p>
             <p>
-              <span data-i18n="guide.scam.spot.dm.l3a">Please verify your wallet here within </span><span class="scam-flag" data-flag data-i18n-tip="guide.scam.spot.tip.urgency" tabindex="0" role="button" aria-label="Red flag" data-i18n="guide.scam.spot.dm.l3b">10 minutes</span><span data-i18n="guide.scam.spot.dm.l3c"> or it will be locked:</span>
+              <span data-i18n="guide.scam.spot.dm.l3a">Please verify your wallet here within </span><span class="scam-flag" data-flag data-i18n-tip="guide.scam.spot.tip.urgency" tabindex="0" role="button" aria-label="Red flag" data-i18n-aria="a11y.scam.flag" data-i18n="guide.scam.spot.dm.l3b">10 minutes</span><span data-i18n="guide.scam.spot.dm.l3c"> or it will be locked:</span>
             </p>
             <p>
-              <span class="scam-flag scam-flag-link" data-flag data-i18n-tip="guide.scam.spot.tip.link" tabindex="0" role="button" aria-label="Red flag" data-i18n="guide.scam.spot.dm.link">highrise-verify.app/secure</span>
+              <span class="scam-flag scam-flag-link" data-flag data-i18n-tip="guide.scam.spot.tip.link" tabindex="0" role="button" aria-label="Red flag" data-i18n-aria="a11y.scam.flag" data-i18n="guide.scam.spot.dm.link">highrise-verify.app/secure</span>
             </p>
             <p>
-              <span class="scam-flag" data-flag data-i18n-tip="guide.scam.spot.tip.seed" tabindex="0" role="button" aria-label="Red flag" data-i18n="guide.scam.spot.dm.l4">Have your 12-word secret phrase ready to confirm ownership.</span>
+              <span class="scam-flag" data-flag data-i18n-tip="guide.scam.spot.tip.seed" tabindex="0" role="button" aria-label="Red flag" data-i18n-aria="a11y.scam.flag" data-i18n="guide.scam.spot.dm.l4">Have your 12-word secret phrase ready to confirm ownership.</span>
             </p>
           </div>
         </div>
@@ -1602,7 +1687,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         <div class="section-head-t">
           <div class="eyebrow" data-i18n="guide.scam.check.eyebrow">Lock it in</div>
           <h2 data-i18n="guide.scam.check.h2">Your safety checklist</h2>
-          <p class="lead" data-i18n="guide.scam.check.lead">Tick these off once and they become second nature. Your progress is saved on this device.</p>
+          <p class="lead" data-i18n="guide.scam.check.lead">Tick these off once and they'll stick. Your progress is saved on this device.</p>
         </div>
       </div>
 
@@ -1617,7 +1702,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
           <li><label class="scam-check-item"><input type="checkbox" data-check-item><span class="scam-check-box" aria-hidden="true"></span><span class="scam-check-text" data-i18n="guide.scam.check.c5">I never interact with NFTs I didn't buy. I just hide them.</span></label></li>
           <li><label class="scam-check-item"><input type="checkbox" data-check-item><span class="scam-check-box" aria-hidden="true"></span><span class="scam-check-text" data-i18n="guide.scam.check.c6">I have 2FA on Discord and I've reviewed my wallet's token approvals.</span></label></li>
         </ul>
-        <p class="scam-check-done" data-check-done hidden data-i18n="guide.scam.check.done">You're dialed in. Come back any time to refresh.</p>
+        <p class="scam-check-done" data-check-done hidden data-i18n="guide.scam.check.done">You're all set. Come back any time to refresh.</p>
       </div>
     </section>
 
@@ -1650,11 +1735,11 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
       <div class="card tilt" style="text-align:center">
         <div class="eyebrow" data-i18n="guide.scam.report.eyebrow">See something?</div>
         <h2 style="font-size:1.8rem" data-i18n="guide.scam.report.h">Report it, protect the club</h2>
-        <p style="margin-top:10px;color:var(--hr-fg-2)" data-i18n="guide.scam.report.p">Spotted a fake site, a scam DM or a suspicious airdrop? Post it in the Highrise Discord so the team can warn everyone. Members watching out for each other is our best defence.</p>
+        <p style="margin-top:10px;color:var(--hr-fg-2)" data-i18n="guide.scam.report.p">Spotted a fake site, a scam DM or a suspicious airdrop? Post it in the Highrise Discord so the team can warn everyone. Members watching out for each other is our best defense.</p>
       </div>
     </section>
 
-  </div><!-- /scams -->
+  </div><!-- /safety -->
 
   <div class="guide-subpanel" data-subpanel="links" hidden>
   <section class="wrap">
@@ -1663,32 +1748,32 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
     <p class="lead" data-i18n="guide.links.lead">Official places to buy, explore, and manage your HCC assets.</p>
     <div class="links-grid">
       <a class="link-card" href="https://highrise.game/land" target="_blank" rel="noopener noreferrer">
-        <span class="brand-ico"><img src="/img/brands/highrise.png" alt="Highrise logo"></span>
+        <span class="brand-ico"><img src="/img/brands/highrise.png" alt=""></span>
         <span class="link-text"><span class="link-title">Highrise LAND</span><span class="link-desc" data-i18n="guide.links.land.d">Browse and claim virtual LAND parcels.</span></span>
         <span class="link-arrow">↗</span>
       </a>
       <a class="link-card" href="https://tokentrove.com/collection/Highrise" target="_blank" rel="noopener noreferrer">
-        <span class="brand-ico"><img src="/img/brands/tokentrove.svg" alt="Token Trove logo"></span>
-        <span class="link-text"><span class="link-title">TokenTrove</span><span class="link-desc" data-i18n="guide.links.tokentrove.d">The official marketplace to buy &amp; sell creatures.</span></span>
+        <span class="brand-ico"><img src="/img/brands/tokentrove.svg" alt=""></span>
+        <span class="link-text"><span class="link-title">Token Trove</span><span class="link-desc" data-i18n="guide.links.tokentrove.d">The official marketplace to buy &amp; sell creatures.</span></span>
         <span class="link-arrow">↗</span>
       </a>
       <a class="link-card" href="https://opensea.io/collection/highrise-land" target="_blank" rel="noopener noreferrer">
-        <span class="brand-ico"><img src="/img/brands/opensea.png" alt="OpenSea logo"></span>
-        <span class="link-text"><span class="link-title">OpenSea</span><span class="link-desc" data-i18n="guide.links.opensea.d">LAND &amp; Gen 2 only — Gen 1 Creatures aren't sold here.</span></span>
+        <span class="brand-ico"><img src="/img/brands/opensea.png" alt=""></span>
+        <span class="link-text"><span class="link-title">OpenSea</span><span class="link-desc" data-i18n="guide.links.opensea.d">LAND &amp; Gen 2 only. Gen 1 Creatures aren't sold here.</span></span>
         <span class="link-arrow">↗</span>
       </a>
       <a class="link-card" href="https://highrise.game/land" target="_blank" rel="noopener noreferrer">
-        <span class="brand-ico"><img src="/img/brands/highrise.png" alt="Highrise logo"></span>
+        <span class="brand-ico"><img src="/img/brands/highrise.png" alt=""></span>
         <span class="link-text"><span class="link-title" data-i18n="guide.links.slime.t">Slime Pet Map</span><span class="link-desc" data-i18n="guide.links.slime.d">See which slime pet is assigned to each LAND plot.</span></span>
         <span class="link-arrow">↗</span>
       </a>
       <a class="link-card" href="https://explorer.immutable.com/" target="_blank" rel="noopener noreferrer">
-        <span class="brand-ico"><img src="/img/brands/immutable.png" alt="Immutable logo"></span>
-        <span class="link-text"><span class="link-title">Immutable X Explorer</span><span class="link-desc" data-i18n="guide.links.explorer.d">Track transactions on Immutable zkEVM.</span></span>
+        <span class="brand-ico"><img src="/img/brands/immutable.png" alt=""></span>
+        <span class="link-text"><span class="link-title">Immutable Explorer</span><span class="link-desc" data-i18n="guide.links.explorer.d">Track transactions on Immutable zkEVM.</span></span>
         <span class="link-arrow">↗</span>
       </a>
       <a class="link-card" href="https://www.metamask.io/" target="_blank" rel="noopener noreferrer">
-        <span class="brand-ico"><img src="/img/brands/metamask.svg" alt="MetaMask logo"></span>
+        <span class="brand-ico"><img src="/img/brands/metamask.svg" alt=""></span>
         <span class="link-text"><span class="link-title">MetaMask</span><span class="link-desc" data-i18n="guide.links.metamask.d">Get the wallet that holds your assets.</span></span>
         <span class="link-arrow">↗</span>
       </a>
@@ -1700,12 +1785,12 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
     <div class="card tilt" style="text-align:center">
       <div class="eyebrow" data-i18n="guide.cta.eyebrow">Need a hand?</div>
       <h2 style="font-size:1.8rem" data-i18n="guide.cta.h">Still stuck?</h2>
-      <p style="margin-top:10px;color:var(--hr-fg-2)" data-i18n="guide.cta.p">Hop into the Highrise Discord and ask — the community and team are happy to help you get set up.</p>
+      <p style="margin-top:10px;color:var(--hr-fg-2)" data-i18n="guide.cta.p">Hop into the Highrise Discord and ask. The community and team are happy to help you get set up.</p>
     </div>
   </section>
 </main>
 
-<main id="panel-perks" class="tab-panel" role="tabpanel" aria-labelledby="tab-perks" hidden>
+<main id="panel-perks" class="tab-panel" role="region" aria-labelledby="tab-perks" hidden>
 
   <!-- Hero — the walk-into-the-club moment -->
   <section class="wrap" id="perks-top">
@@ -1717,7 +1802,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
       <img class="perx-float perx-float-gift" src="/assets/membership.png" alt="" width="68" height="68" loading="lazy">
       <span class="apply-pill" data-i18n="perks.pill">Members only</span>
       <h2 class="perx-hero-h" data-i18n="perks.h2">Hold one. Unlock the whole club.</h2>
-      <p class="perx-hero-p" data-i18n="perks.lead">One Creature or LAND plot makes you a member — daily Creature Coins, Highrise+ every month, members-only spaces and surprise airdrops, woven right into Highrise.</p>
+      <p class="perx-hero-p" data-i18n="perks.lead">One Creature or LAND plot makes you a member: daily Creature Coins, Highrise+ every month, members-only spaces and surprise airdrops, built into Highrise.</p>
     </div>
   </section>
 
@@ -1729,7 +1814,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         <div class="perx-card-glow" aria-hidden="true"></div>
         <span class="perx-ico"><img src="/assets/creature-coin.png" alt="" width="38" height="38" loading="lazy"></span>
         <h3 data-i18n="perks.p3h">Daily Creature Coins</h3>
-        <p data-i18n="perks.coins.p">Every Creature and every LAND plot pays out Creature Coins each day — fuel for grabs only members can spin.</p>
+        <p data-i18n="perks.coins.p">Every Creature and every LAND plot pays out Creature Coins each day: fuel for grabs only members can spin.</p>
         <div class="perx-chips">
           <span class="perx-chip"><b><span data-countup="25">25</span></b><i data-i18n="coins.perDay">/ day</i><span data-i18n="coins.rate.epic">Epic Creature</span></span>
           <span class="perx-chip"><b><span data-countup="75">75</span></b><i data-i18n="coins.perDay">/ day</i><span data-i18n="coins.rate.legendary">Legendary Creature</span></span>
@@ -1765,10 +1850,10 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 
       <article class="perx-card perx-card-land g2-reveal" data-accent="mint" style="--d:.33s">
         <div class="perx-card-glow" aria-hidden="true"></div>
-        <div class="pet-wrap perx-land-pet"><img src="/assets/pets/slime-composite.svg" alt="Slime pet"></div>
+        <div class="pet-wrap perx-land-pet"><img src="/assets/pets/slime-composite.svg" alt="Slime pet" data-i18n-alt="a11y.slimepet"></div>
         <h3 data-i18n="perks.land.h">LAND counts too</h3>
         <p data-i18n="perks.land.p">LAND owners earn daily coins (Premium plots at 3×), get room capacity boosts, keep their Slime pets, and join every drop and giveaway.</p>
-        <p class="perx-land-g2" data-i18n="perks.land.g2">And Gen 2 gives every LAND its own Creature — full parity is the promise.</p>
+        <p class="perx-land-g2" data-i18n="perks.land.g2">And Gen 2 gives every LAND its own Creature. Full parity is the promise.</p>
       </article>
     </div>
 
@@ -1780,14 +1865,14 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         <div>
           <div class="eyebrow" data-i18n="perks.plus.eyebrow">Monthly membership</div>
           <h3 data-i18n="perks.p4h">Highrise+ each month</h3>
-          <p data-i18n="perks.plus.p">Keep a Creature or LAND linked and stay active — the club covers your Highrise+ Tier 1, renewed on the first day of every month.</p>
+          <p data-i18n="perks.plus.p">Keep a Creature or LAND linked and stay active, and the club covers your Highrise+ Tier 1, renewed on the first day of every month.</p>
         </div>
       </div>
       <ol class="perx-rail">
         <li class="perx-step">
           <span class="perx-step-n"><span data-countup="30">30</span></span>
           <h4 data-i18n="perks.plus.s1h">Days linked</h4>
-          <p data-i18n="perks.plus.s1p">Keep an HCC NFT linked to your Highrise account for the full 30 days before renewal — no gaps.</p>
+          <p data-i18n="perks.plus.s1p">Keep an HCC NFT linked to your Highrise account for the full 30 days before renewal. No gaps.</p>
         </li>
         <li class="perx-step">
           <span class="perx-step-n"><span data-countup="7">7</span></span>
@@ -1797,7 +1882,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         <li class="perx-step">
           <span class="perx-step-n">★</span>
           <h4 data-i18n="perks.plus.s3h">Renewed on the 1st</h4>
-          <p data-i18n="perks.plus.s3p">Highrise+ Tier 1 lands on the first day of the month — subscriptions renew only then.</p>
+          <p data-i18n="perks.plus.s3p">Highrise+ Tier 1 lands on the first day of the month. Subscriptions renew only then.</p>
         </li>
       </ol>
     </article>
@@ -1811,7 +1896,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
       <div class="section-head-t">
         <div class="eyebrow" data-i18n="coins.eyebrow">Creature Coins</div>
         <h2 data-i18n="coins.h2">What are Creature Coins?</h2>
-        <p class="lead" data-i18n="coins.lead">Creature Coins are special tokens awarded daily to all owners of a Creature or LAND, to spin exclusive grabs within the Highrise app.</p>
+        <p class="lead" data-i18n="coins.lead">Creature Coins are tokens you earn every day for holding a Creature or LAND. Spend them on exclusive grabs inside the Highrise app.</p>
       </div>
     </div>
 
@@ -1848,7 +1933,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         <div class="perx-calc-left">
           <div class="eyebrow" data-i18n="coins.calc.eyebrow">Your daily haul</div>
           <h3 data-i18n="coins.calc.h">Count your coins</h3>
-          <p data-i18n="coins.calc.p">Set what you hold — watch what it earns.</p>
+          <p data-i18n="coins.calc.p">Set what you hold and watch what it earns.</p>
           <div class="perx-calc-rows">
             <div class="perx-crow" data-accent="mint">
               <div>
@@ -1918,11 +2003,18 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
   </section>
 </main>
 
-<main id="panel-holders" class="tab-panel" role="tabpanel" aria-labelledby="tab-holders" hidden>
+<main id="panel-market" class="tab-panel" role="region" aria-labelledby="tab-market" hidden>
+
+<nav class="guide-subnav wrap" role="tablist" aria-label="Data sections" data-i18n-aria="a11y.data.sections">
+  <button class="guide-subtab is-active" type="button" role="tab" aria-selected="true" data-subtab="prices" data-i18n="data.sub.prices">Prices</button>
+  <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="holders" data-i18n="data.sub.holders">Holders</button>
+</nav>
+
+<div class="guide-subpanel" data-subpanel="holders" hidden>
   <section class="wrap">
     <div class="eyebrow" data-i18n="holders.eyebrow">Community snapshot</div>
     <h2 data-i18n="holders.h2">Who holds what</h2>
-    <p class="lead" data-i18n="holders.lead">A live look at current HCC wallets — how many hold Creatures, LAND, or both collections.</p>
+    <p class="lead" data-i18n="holders.lead">A live look at current HCC wallets: how many hold Creatures, LAND, or both collections.</p>
 
     <div id="holders-loading" class="holders-state">
       <div class="holders-spinner"></div>
@@ -1945,7 +2037,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 
       <div class="divider" style="padding:24px 0 8px">• • •</div>
       <div class="eyebrow" style="text-align:center;margin-bottom:4px" data-i18n="holders.dist.eyebrow">Holding distribution</div>
-      <p style="text-align:center;font-size:.95rem;margin-bottom:0" data-i18n="holders.dist.lead">How many NFTs each wallet holds — broken down by collection.</p>
+      <p style="text-align:center;font-size:.95rem;margin-bottom:0" data-i18n="holders.dist.lead">How many NFTs each wallet holds, broken down by collection.</p>
 
       <div class="dist-grid">
         <div class="dist-card">
@@ -1965,9 +2057,9 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
       <p class="holders-updated" id="holders-updated"></p>
     </div>
   </section>
-</main>
+</div>
 
-<main id="panel-market" class="tab-panel" role="tabpanel" aria-labelledby="tab-market" hidden>
+<div class="guide-subpanel" data-subpanel="prices">
   <section class="wrap">
     <div class="section-head">
       <span class="topic-ico" style="--accent:#0DA6FC;--accent-soft:rgba(13,166,252,0.2)"><img src="/assets/pricetag.png" alt="" loading="lazy" width="84" height="84"></span>
@@ -1999,17 +2091,17 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         <div class="market-chart-head">
           <div>
             <div class="eyebrow" data-i18n="market.chart.eyebrow">📈 Price history</div>
-            <p style="font-size:.92rem;color:var(--hr-fg-2);margin:0" data-i18n="market.chart.lead">Pick a metric and interval — floor, lowest or highest sale, averaged by day, week or month — for Creatures and LAND.</p>
+            <p style="font-size:.92rem;color:var(--hr-fg-2);margin:0" data-i18n="market.chart.lead">Pick a metric (floor, volume, sales count, or low/high sale) and an interval (day, week or month) for Creatures and LAND.</p>
           </div>
           <div class="market-controls">
-            <div class="seg" id="market-metric" role="group" aria-label="Metric">
+            <div class="seg" id="market-metric" role="group" aria-label="Metric" data-i18n-aria="a11y.market.metric">
               <button type="button" class="seg-btn is-active" data-metric="low" data-i18n="market.metric.low">Low sale</button>
               <button type="button" class="seg-btn" data-metric="high" data-i18n="market.metric.high">High sale</button>
               <button type="button" class="seg-btn" data-metric="floor" data-i18n="market.metric.floor">Floor</button>
               <button type="button" class="seg-btn" data-metric="volume" data-i18n="market.metric.volume">Volume</button>
               <button type="button" class="seg-btn" data-metric="count" data-i18n="market.metric.count">Sales</button>
             </div>
-            <select class="seg-select" id="market-currency" aria-label="Currency">
+            <select class="seg-select" id="market-currency" aria-label="Currency" data-i18n-aria="a11y.market.currency">
               <option value="usd" selected>USD</option>
               <option value="eth">ETH</option>
               <option value="eur">EUR</option>
@@ -2021,20 +2113,20 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
               <option value="cad">CAD</option>
               <option value="aud">AUD</option>
             </select>
-            <div class="seg" id="market-interval" role="group" aria-label="Interval">
+            <div class="seg" id="market-interval" role="group" aria-label="Interval" data-i18n-aria="a11y.market.interval">
               <button type="button" class="seg-btn is-active" data-interval="daily" data-i18n="market.interval.daily">Daily</button>
               <button type="button" class="seg-btn" data-interval="weekly" data-i18n="market.interval.weekly">Weekly</button>
               <button type="button" class="seg-btn" data-interval="biweekly" data-i18n="market.interval.biweekly">Bi-weekly</button>
               <button type="button" class="seg-btn" data-interval="monthly" data-i18n="market.interval.monthly">Monthly</button>
             </div>
-            <div class="seg" id="market-range" role="group" aria-label="Time range">
-              <button type="button" class="seg-btn" data-range="1m">1M</button>
-              <button type="button" class="seg-btn" data-range="3m">3M</button>
-              <button type="button" class="seg-btn" data-range="6m">6M</button>
-              <button type="button" class="seg-btn" data-range="1y">1Y</button>
+            <div class="seg" id="market-range" role="group" aria-label="Time range" data-i18n-aria="a11y.market.range">
+              <button type="button" class="seg-btn" data-range="1m" data-i18n="market.range.1m">1M</button>
+              <button type="button" class="seg-btn" data-range="3m" data-i18n="market.range.3m">3M</button>
+              <button type="button" class="seg-btn" data-range="6m" data-i18n="market.range.6m">6M</button>
+              <button type="button" class="seg-btn" data-range="1y" data-i18n="market.range.1y">1Y</button>
               <button type="button" class="seg-btn is-active" data-range="all" data-i18n="market.range.all">All</button>
             </div>
-            <div class="seg market-dates" id="market-dates" role="group" aria-label="Custom timeframe">
+            <div class="seg market-dates" id="market-dates" role="group" aria-label="Custom timeframe" data-i18n-aria="a11y.market.custom">
               <label class="date-field">
                 <span data-i18n="market.range.from">From</span>
                 <input type="date" id="market-from">
@@ -2055,43 +2147,30 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         <p class="market-zoom-hint" data-i18n="market.zoom.hint">Scroll or pinch to zoom · drag to pan</p>
       </div>
 
-      <div class="guide-note market-land-note" id="market-land-note" data-i18n="market.land.note">🗺️ LAND price history is on the way. For now, here's LAND's current floor from OpenSea — its full sale history will light up here soon.</div>
+      <div class="guide-note market-land-note" id="market-land-note" data-i18n="market.land.note">🗺️ LAND price history is coming soon. For now, here's LAND's current floor from OpenSea. Full sale history will appear here later.</div>
 
       <p class="holders-updated" id="market-updated"></p>
       <p class="holders-updated" style="margin-top:6px;opacity:.7" data-i18n="market.source">Creatures via Immutable · LAND via OpenSea</p>
     </div>
   </section>
+</div>
+
 </main>
 
-<main id="panel-trade" class="tab-panel" role="tabpanel" aria-labelledby="tab-trade" hidden>
+<main id="panel-trade" class="tab-panel" role="region" aria-labelledby="tab-trade" hidden>
   <section class="wrap trade-wrap">
-    <header class="trade-hero">
-      <div class="trade-hero-glow" aria-hidden="true"></div>
-      <div class="trade-hero-text">
-        <div class="eyebrow" data-i18n="trade.eyebrow">Marketplace</div>
-        <h2 class="trade-h2"><span data-i18n="trade.h2">Trade your Creatures</span> <span class="trade-beta-chip">Beta</span></h2>
-        <p class="lead trade-lead" data-i18n="trade.lead">Browse Creatures for sale, then buy, sell or move them straight from your own wallet — no middleman, no custody.</p>
-      </div>
-      <div class="trade-hero-risk" role="note">
-        <span class="trade-beta-chip" aria-hidden="true">Beta</span>
-        <p><span data-i18n="trade.beta.short">Trades are real and at your own risk — start small.</span>
-          <span class="trade-tip"><button type="button" class="trade-tip-btn" aria-label="More info">i</button><span class="trade-tip-pop" role="tooltip" data-i18n="trade.beta.note">This marketplace is brand new and still being tested. Transactions are real and move real money — use it at your own risk, start small, and double-check every confirmation in your wallet. Spotted something odd? Tell us on Discord.</span></span>
-        </p>
-      </div>
-    </header>
-
     <div id="trade-app" class="trade-box" aria-live="polite" aria-busy="true">
       <div class="apply-loading"><div class="apply-spinner"></div></div>
     </div>
 
-    <p class="apply-fineprint" data-i18n="trade.fineprint">This marketplace is non-custodial and open source: every transaction is signed by your own wallet on Immutable zkEVM, and this site never holds your Creatures or funds. Only Creatures in a self-custody wallet like MetaMask can be traded — if yours are in Immutable Passport, withdraw them first. You'll need a little IMX for network gas.</p>
+    <p class="apply-fineprint" data-i18n="trade.fineprint">You keep custody the whole time: your own wallet signs every transaction on Immutable zkEVM, and this site never holds your Creatures or funds. It's open source, and you can only trade Creatures held in a self-custody wallet like MetaMask. If yours are in Immutable Passport, withdraw them first. You'll need a little IMX for network gas.</p>
   </section>
 </main>
 
 <!-- Holder profiles (/profile/{slug}) render inside the Trade panel's profile view:
      js/marketplace.js owns the #profile-app container, js/profile.js the showcase. -->
 
-<main id="panel-changelog" class="tab-panel" role="tabpanel" aria-labelledby="tab-changelog" hidden>
+<main id="panel-changelog" class="tab-panel" role="region" aria-labelledby="tab-changelog" hidden>
   <section class="wrap">
     <div class="eyebrow" data-i18n="changelog.eyebrow">Track record</div>
     <h2 data-i18n="changelog.h2">What's changed</h2>
@@ -2111,7 +2190,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
   </section>
 </main>
 
-<main id="panel-contribute" class="tab-panel" role="tabpanel" aria-labelledby="tab-contribute" hidden>
+<main id="panel-contribute" class="tab-panel" role="region" aria-labelledby="tab-contribute" hidden>
 
   <!-- Open-source showcase / hero -->
   <section class="wrap">
@@ -2123,7 +2202,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         <span data-i18n="contrib.badge">Open source</span>
       </span>
       <h3 class="apply-gate-h" data-i18n="contrib.gate.h">This site is yours to shape</h3>
-      <p class="apply-gate-p" data-i18n="contrib.gate.p">Every line of this site is public on GitHub — the pages, the styles, even the election logic. Spot a typo, have an idea, or want to ship a fix? You're welcome to. No NFT required.</p>
+      <p class="apply-gate-p" data-i18n="contrib.gate.p">Every line of this site is public on GitHub: the pages, the styles, even the election logic. Spot a typo, have an idea, or want to ship a fix? You're welcome to. No NFT required.</p>
       <div class="contrib-actions">
         <a class="contrib-gh-btn" href="https://github.com/itzvini/hcc" target="_blank" rel="noopener noreferrer">
           <span class="contrib-gh-logo">
@@ -2146,11 +2225,11 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
   <section class="wrap">
     <div class="eyebrow" data-i18n="contrib.why.eyebrow">Why it matters</div>
     <h2 data-i18n="contrib.why.h2">Why your contribution counts</h2>
-    <p class="lead" data-i18n="contrib.why.lead">The Council gives holders a voice in what gets made. Keeping this site open is the same idea, in code — a place where anyone can check the work and help make it better.</p>
+    <p class="lead" data-i18n="contrib.why.lead">The Council gives holders a voice in what gets made. Keeping this site open is the same idea, in code: a place where anyone can check the work and help make it better.</p>
     <div class="perks">
-      <div class="perk"><span class="ico">🔍</span><h4 data-i18n="contrib.why.c1h">Transparency you can verify</h4><p data-i18n="contrib.why.c1p">The election logic and the whole site are open to read. You don't have to take our word for how votes are counted — you can check it yourself.</p></div>
-      <div class="perk"><span class="ico">🗣️</span><h4 data-i18n="contrib.why.c2h">A real say, in code too</h4><p data-i18n="contrib.why.c2p">Beyond voting, this is another way to leave your mark on the club — propose a change, and it can become part of the live site.</p></div>
-      <div class="perk"><span class="ico">✨</span><h4 data-i18n="contrib.why.c3h">Better for every member</h4><p data-i18n="contrib.why.c3p">A fixed typo, a clearer guide, a smoother mobile layout — small improvements add up for everyone who visits.</p></div>
+      <div class="perk"><span class="ico">🔍</span><h4 data-i18n="contrib.why.c1h">Transparency you can verify</h4><p data-i18n="contrib.why.c1p">The election logic and the whole site are open to read. You don't have to take our word for how votes are counted. You can check it yourself.</p></div>
+      <div class="perk"><span class="ico">🗣️</span><h4 data-i18n="contrib.why.c2h">A real say, in code too</h4><p data-i18n="contrib.why.c2p">Beyond voting, this is another way to shape the club: propose a change, and it can become part of the live site.</p></div>
+      <div class="perk"><span class="ico">✨</span><h4 data-i18n="contrib.why.c3h">Better for every member</h4><p data-i18n="contrib.why.c3p">A fixed typo, a clearer guide, a smoother mobile layout: small improvements add up for everyone who visits.</p></div>
       <div class="perk"><span class="ico">🤝</span><h4 data-i18n="contrib.why.c4h">Built with the club</h4><p data-i18n="contrib.why.c4p">This site is built with the community, for the community. Your fixes and ideas are how that promise stays real.</p></div>
     </div>
   </section>
@@ -2159,12 +2238,12 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 
   <!-- Ways to contribute -->
   <section class="wrap">
-    <div class="eyebrow" data-i18n="contrib.ways.eyebrow">Pick a lane</div>
+    <div class="eyebrow" data-i18n="contrib.ways.eyebrow">Ways to help</div>
     <h2 data-i18n="contrib.ways.h2">Ways to pitch in</h2>
-    <p class="lead" data-i18n="contrib.ways.lead">You don't have to write code to help. Every one of these makes the site better — pick whatever fits you.</p>
+    <p class="lead" data-i18n="contrib.ways.lead">You don't have to write code to help. Every one of these makes the site better. Pick whatever fits you.</p>
     <div class="perks">
       <div class="perk"><span class="ico">🐛</span><h4 data-i18n="contrib.ways.c1h">Report a bug</h4><p data-i18n="contrib.ways.c1p">Something broken, misaligned, or showing the wrong info? Open an issue and tell us what you saw.</p></div>
-      <div class="perk"><span class="ico">💡</span><h4 data-i18n="contrib.ways.c2h">Suggest an idea</h4><p data-i18n="contrib.ways.c2p">A new section, a clearer flow, a feature you'd love — float it as an issue and let's talk it through.</p></div>
+      <div class="perk"><span class="ico">💡</span><h4 data-i18n="contrib.ways.c2h">Suggest an idea</h4><p data-i18n="contrib.ways.c2p">A new section, a clearer flow, a feature you'd love? Open an issue and let's talk it through.</p></div>
       <div class="perk"><span class="ico">✏️</span><h4 data-i18n="contrib.ways.c3h">Polish the copy</h4><p data-i18n="contrib.ways.c3p">Catch a typo or confusing wording? Even a one-word fix is a welcome pull request.</p></div>
       <div class="perk"><span class="ico">🌍</span><h4 data-i18n="contrib.ways.c4h">Help translate</h4><p data-i18n-html="contrib.ways.c4p">The site speaks 7 languages from files in <code>locales/</code>. Improve a translation, or help fill the gaps that fall back to English.</p></div>
       <div class="perk"><span class="ico">🔧</span><h4 data-i18n="contrib.ways.c5h">Submit a fix</h4><p data-i18n="contrib.ways.c5p">Comfortable with HTML, CSS, or vanilla JS? Fork the repo and open a pull request with your change.</p></div>
@@ -2178,9 +2257,9 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
   <section class="wrap">
     <div class="eyebrow" data-i18n="contrib.how.eyebrow">Step by step</div>
     <h2 data-i18n="contrib.how.h2">How to submit a change</h2>
-    <p class="lead" data-i18n="contrib.how.lead">Four steps from idea to pull request. There's no build step and no framework — just plain HTML, CSS, and vanilla JS.</p>
+    <p class="lead" data-i18n="contrib.how.lead">Four steps from idea to pull request. There's no build step and no framework: just plain HTML, CSS, and vanilla JS.</p>
 
-    <div class="wt-nav" role="tablist" aria-label="How to submit a change" data-wt-key="contribute">
+    <div class="wt-nav" role="tablist" aria-label="How to submit a change" data-i18n-aria="a11y.contrib.how" data-wt-key="contribute">
       <button class="wt-tab is-active" id="ctb-tab-1" type="button" role="tab" aria-selected="true" aria-controls="ctb-panel-1" data-wt="1"><span class="wt-tab-num">1</span><span data-i18n="contrib.how.s1tag">Fork</span></button>
       <button class="wt-tab" id="ctb-tab-2" type="button" role="tab" aria-selected="false" aria-controls="ctb-panel-2" data-wt="2" tabindex="-1"><span class="wt-tab-num">2</span><span data-i18n="contrib.how.s2tag">Run it</span></button>
       <button class="wt-tab" id="ctb-tab-3" type="button" role="tab" aria-selected="false" aria-controls="ctb-panel-3" data-wt="3" tabindex="-1"><span class="wt-tab-num">3</span><span data-i18n="contrib.how.s3tag">Build it</span></button>
@@ -2219,7 +2298,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
             <h3 class="guide-title" data-i18n="contrib.how.s3h">Make your change on a branch</h3>
           </div>
         </div>
-        <p class="guide-intro" data-i18n-html="contrib.how.s3p">Create a branch named for what you're doing — like <code>fix/mobile-layout</code> or <code>feat/faq-entry</code> — then make and test your edit. New copy goes through the i18n keys in <code>locales/en.json</code>.</p>
+        <p class="guide-intro" data-i18n-html="contrib.how.s3p">Create a branch named for what you're doing, like <code>fix/mobile-layout</code> or <code>feat/faq-entry</code>, then make and test your edit. New copy goes through the i18n keys in <code>locales/en.json</code>.</p>
       </article>
 
       <article class="guide-card wt-panel" id="ctb-panel-4" data-wt-panel="4" role="tabpanel" aria-labelledby="ctb-tab-4" hidden>
@@ -2240,7 +2319,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
       <button class="wt-next" type="button" data-wt-next><span data-i18n="guide.wt.next">Next</span> <span aria-hidden="true">→</span></button>
     </div>
 
-    <p class="guide-note" data-i18n="contrib.how.note">Keep each pull request focused on one thing — a single fix or a single feature. It makes review faster and the history cleaner.</p>
+    <p class="guide-note" data-i18n="contrib.how.note">Keep each pull request focused on one thing: a single fix or a single feature. It makes review faster and the history cleaner.</p>
   </section>
 
   <div class="divider">• • •</div>
@@ -2249,7 +2328,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
   <section class="wrap">
     <div class="eyebrow" data-i18n="contrib.merged.eyebrow">The bar</div>
     <h2 data-i18n="contrib.merged.h2">What gets merged</h2>
-    <p class="lead" data-i18n="contrib.merged.lead">Nothing goes live without review. Here's the kind of change that sails through.</p>
+    <p class="lead" data-i18n="contrib.merged.lead">Nothing goes live without review. Here's the kind of change that gets merged fast.</p>
     <div class="contrib-checks">
       <div class="contrib-check"><span class="contrib-check-ico" aria-hidden="true">✓</span><span data-i18n="contrib.merged.i1">Bug fixes that are accurate and tested</span></div>
       <div class="contrib-check"><span class="contrib-check-ico" aria-hidden="true">✓</span><span data-i18n="contrib.merged.i2">Content that's factually correct about HCC</span></div>
@@ -2257,7 +2336,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
       <div class="contrib-check"><span class="contrib-check-ico" aria-hidden="true">✓</span><span data-i18n="contrib.merged.i4">Accessibility and translation improvements</span></div>
     </div>
     <div class="guide-note" style="margin-top:18px;background:var(--hr-secondary-25);border-left-color:var(--hr-secondary)">
-      <p data-i18n="contrib.merged.note">Changes to the Council rules, the election process, or Pocket Worlds commitments need a sign-off from the team — no worries, just open the pull request and we'll discuss it there.</p>
+      <p data-i18n="contrib.merged.note">Changes to the Council rules, the election process, or Pocket Worlds commitments need sign-off from the team. Just open the pull request and we'll discuss it there.</p>
     </div>
   </section>
 
@@ -2282,7 +2361,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
   </section>
 </main>
 
-<main id="panel-terms" class="tab-panel" role="tabpanel" aria-labelledby="tab-terms" hidden>
+<main id="panel-terms" class="tab-panel" role="region" aria-labelledby="tab-terms" hidden>
   <section class="wrap legal-page">
     <div class="eyebrow" data-i18n="terms.eyebrow">Player Council</div>
     <h2 data-i18n="terms.h2">Terms of Participation</h2>
@@ -2291,21 +2370,21 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
       <h3 data-i18n="terms.s1.h">1. Nature of the Council</h3>
       <p data-i18n-html="terms.s1.p">The Council is <strong>advisory only</strong>; Pocket Worlds keeps final say on business, economy, brand and legal. A seat is <strong>not</strong> ownership, equity, a security, a token right, employment, or any financial entitlement, and is <strong>not</strong> a DAO membership.</p>
       <h3 data-i18n="terms.s2.h">2. Volunteer / no compensation</h3>
-      <p data-i18n-html="terms.s2.p">Participation is voluntary and <strong>unpaid</strong>. There is no employment, contractor, or partnership relationship. Any perks are discretionary, revocable gifts — never payment or a right.</p>
+      <p data-i18n-html="terms.s2.p">Participation is voluntary and <strong>unpaid</strong>. There is no employment, contractor, or partnership relationship. Any perks are gifts we can change or withdraw. They're never payment or a right.</p>
       <h3 data-i18n="terms.s3.h">3. Eligibility</h3>
       <p data-i18n-html="terms.s3.p">Holdings = combined Creatures + LAND at the published snapshot.<ul><li><strong>Voters:</strong> held at least 1 HCC NFT continuously for the 3 months ending at the snapshot.</li><li><strong>Candidates:</strong> meet the bracket asset count at the candidacy snapshot and the 3-month continuous-holding bar; self-nominate in the window by answering the application's open questions.</li><li>Eligibility is assessed against your Highrise account's <strong>current primary wallet</strong> (holdings across multiple wallets are not aggregated). Snapshots are final.</li></ul></p>
       <h3 data-i18n="terms.s4.h">4. Voting</h3>
-      <p data-i18n-html="terms.s4.p">One vote per elected seat (4 seats, plurality). You authenticate by <strong>logging in with Discord</strong>, which we match to your Highrise account to confirm eligibility — no wallet connection or signing is required, and we never move or spend your assets. Voting is per Highrise account (one person, one vote per seat). <strong>Votes are final once cast</strong> and cannot be changed. <strong>Vote privacy:</strong> individual votes are not published — only per-seat tallies are. Each voter gets a private, verifiable receipt to confirm their vote was recorded and counted; the receipt is yours alone and does not reveal your choice to others.</p>
-      <h3 data-i18n="terms.s5.h">5. Candidacy — submission, publication &amp; review</h3>
-      <p data-i18n-html="terms.s5.p">By self-nominating you grant Pocket Worlds a non-exclusive, worldwide, royalty-free license to <strong>publish, display, translate, and process</strong> your answers to the application's open questions for the election and the Voting Advice Application (VAA). The tool maps each written answer to a position, but <strong>your confirmed positions are authoritative</strong> — you review and edit them before voting opens, and your confirmed positions are published. You are responsible for the accuracy of your submission. The full VAA methodology will be published. <strong>All candidacies are subject to review</strong> of account background and any community reports; Pocket Worlds may decline or remove a candidacy at its discretion, and <strong>the reasons will be disclosed privately to the affected candidate</strong>.</p>
+      <p data-i18n-html="terms.s4.p">One vote per elected seat (4 seats, plurality). You authenticate by <strong>logging in with Discord</strong>, which we match to your Highrise account to confirm eligibility. No wallet connection or signing is required, and we never move or spend your assets. Voting is per Highrise account (one person, one vote per seat). <strong>Votes are final once cast</strong> and cannot be changed. <strong>Vote privacy:</strong> individual votes are not published. Only per-seat tallies are. Each voter gets a private, verifiable receipt to confirm their vote was recorded and counted; the receipt is yours alone and does not reveal your choice to others.</p>
+      <h3 data-i18n="terms.s5.h">5. Candidacy: submission, publication &amp; review</h3>
+      <p data-i18n-html="terms.s5.p">By self-nominating you grant Pocket Worlds a non-exclusive, worldwide, royalty-free license to <strong>publish, display, translate, and process</strong> your answers to the application's open questions for the election and the Voting Advice Application (VAA). The tool maps each written answer to a position, but <strong>your confirmed positions are authoritative</strong>: you review and edit them before voting opens, and your confirmed positions are published. You are responsible for the accuracy of your submission. The full VAA methodology will be published. <strong>All candidacies are subject to review</strong> of account background and any community reports; Pocket Worlds may decline or remove a candidacy at its discretion, and <strong>the reasons will be disclosed privately to the affected candidate</strong>.</p>
       <h3 data-i18n="terms.s6.h">6. Terms of service &amp; seats</h3>
-      <p data-i18n-html="terms.s6.p">Elected terms run <strong>6 months</strong>, max <strong>two consecutive</strong> for elected seats. Seats are <strong>personal and non-transferable</strong> — never sold, lent, or assigned. You may resign at any time. A seat left vacant mid-term stays <strong>empty until the next election</strong> — vacancies are not backfilled during a term.</p>
+      <p data-i18n-html="terms.s6.p">Elected terms run <strong>6 months</strong>, max <strong>two consecutive</strong> for elected seats. Seats are <strong>personal and non-transferable</strong>: never sold, lent, or assigned. You may resign at any time. A seat left vacant mid-term stays <strong>empty until the next election</strong>. Vacancies are not backfilled during a term.</p>
       <h3 data-i18n="terms.s7.h">7. Transparency / no confidentiality</h3>
-      <p data-i18n-html="terms.s7.p">The Council operates openly: members are under <strong>no confidentiality obligation</strong> and may discuss and share Council materials publicly. Accordingly, Pocket Worlds will share with the Council only materials it is comfortable being made public — nothing shared should be assumed secret or treated as a leak.</p>
+      <p data-i18n-html="terms.s7.p">The Council operates openly: members are under <strong>no confidentiality obligation</strong> and may discuss and share Council materials publicly. Accordingly, Pocket Worlds will share with the Council only materials it is comfortable being made public. Nothing shared should be assumed secret or treated as a leak.</p>
       <h3 data-i18n="terms.s8.h">8. Code of conduct</h3>
       <p data-i18n-html="terms.s8.p">No harassment, hate, threats, or doxxing. <strong>No vote-buying, bribery, or exchanging anything of value for votes.</strong> No impersonation, fraud, or material misrepresentation. No sybil/multi-account voting and no snapshot manipulation. Disclose conflicts of interest. Follow Highrise/HCC community guidelines and applicable law.</p>
       <h3 data-i18n="terms.s9.h">9. Integrity &amp; enforcement</h3>
-      <p data-i18n-html="terms.s9.p">One eligible account, one ballot per seat. Pocket Worlds may void votes, disqualify candidates, remove members, or bar future participation for breach — at its reasonable discretion, with reasons published where practical.</p>
+      <p data-i18n-html="terms.s9.p">One eligible account, one ballot per seat. Pocket Worlds may void votes, disqualify candidates, remove members, or bar future participation for breach, at its reasonable discretion, with reasons published where practical.</p>
       <h3 data-i18n="terms.s10.h">10. Data &amp; privacy</h3>
       <p data-i18n-html="terms.s10.p">To authenticate and check eligibility we process your <strong>Discord ID, Highrise ID, Person ID, linked wallet address(es) and wallet-change history</strong> (via Discord OAuth and Highrise's internal API), plus the holdings snapshot, vote records (kept private), candidate answers (public), and voter answers (private; used to compute your own affinity, not published per-user). Candidate answers are sent to <strong>Anthropic (Claude)</strong> so the tool can map each into a position the candidate confirms. On-chain/wallet data is inherently public. See the <a href="#privacy">Privacy Policy</a> for retention and deletion-request handling.</p>
       <h3 data-i18n="terms.s11.h">11. Disclaimers &amp; liability</h3>
@@ -2314,7 +2393,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
   </section>
 </main>
 
-<main id="panel-privacy" class="tab-panel" role="tabpanel" aria-labelledby="tab-privacy" hidden>
+<main id="panel-privacy" class="tab-panel" role="region" aria-labelledby="tab-privacy" hidden>
   <section class="wrap legal-page">
     <div class="eyebrow" data-i18n="privacy.eyebrow">Player Council</div>
     <h2 data-i18n="privacy.h2">Privacy Policy</h2>
@@ -2322,19 +2401,19 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
       <h3 data-i18n="privacy.who.h">Who we are</h3>
       <p data-i18n-html="privacy.who.p">The HCC Player Council election is operated by Pocket Worlds ("we", "us"). This policy explains what we collect, why, who we share it with, and your choices. Data requests/questions: <a href="https://discord.gg/highrise" target="_blank" rel="noopener noreferrer">Highrise Discord support channel</a>.</p>
       <h3 data-i18n="privacy.collect.h">What we collect</h3>
-      <p data-i18n-html="privacy.collect.p"><ul><li><strong>Account &amp; identity:</strong> via Discord OAuth — your Discord ID and the basic profile you authorize; via Highrise's internal API — your Highrise ID, Person ID, linked wallet address(es), and wallet-change history.</li><li><strong>Eligibility:</strong> HCC NFT holdings and transfer history for your current primary wallet, read from public blockchains.</li><li><strong>Participation:</strong> candidate answers and positions (public), voter answers (private), votes (private), and terms-acceptance records.</li><li><strong>Technical:</strong> a login session cookie and basic server logs (e.g., IP, timestamps) for security.</li></ul></p>
+      <p data-i18n-html="privacy.collect.p"><ul><li><strong>Account & identity:</strong> via Discord OAuth, your Discord ID and the basic profile you authorize; via Highrise's internal API, your Highrise ID, Person ID, linked wallet address(es), and wallet-change history.</li><li><strong>Eligibility:</strong> HCC NFT holdings and transfer history for your current primary wallet, read from public blockchains.</li><li><strong>Participation:</strong> candidate answers and positions (public), voter answers (private), votes (private), and terms-acceptance records.</li><li><strong>Technical:</strong> a login session cookie and basic server logs (e.g., IP, timestamps) for security.</li></ul></p>
       <h3 data-i18n="privacy.use.h">Why we use it</h3>
       <p data-i18n-html="privacy.use.p">To authenticate you; verify eligibility (3-month holding + bracket); run the VAA matching; record and tally votes and issue your private receipt; publish candidate answers/positions and aggregate results; review candidacies and enforce election integrity.</p>
       <h3 data-i18n="privacy.cookies.h">Cookies</h3>
       <p data-i18n-html="privacy.cookies.p">A single session cookie keeps you logged in after Discord OAuth. No third-party advertising or tracking cookies.</p>
       <h3 data-i18n="privacy.share.h">Who we share with</h3>
-      <p data-i18n-html="privacy.share.p"><ul><li><strong>Anthropic (Claude)</strong> — candidate <strong>answers</strong> are sent to Anthropic to map each written answer to a position the candidate then reviews and confirms. Voter data and individual votes are <strong>not</strong> sent to Anthropic.</li><li><strong>Discord</strong> — for OAuth login.</li><li><strong>Highrise / Pocket Worlds</strong> internal systems — identity and eligibility resolution.</li><li><strong>Public blockchain explorers</strong> (Immutable/Blockscout, etc.) — we query public chain data.</li><li><strong>Hosting/infrastructure</strong> — to run the site and store election data.</li></ul>We do <strong>not</strong> sell your personal data.</p>
+      <p data-i18n-html="privacy.share.p"><ul><li><strong>Anthropic (Claude)</strong>: candidate <strong>answers</strong> are sent to Anthropic to map each written answer to a position the candidate then reviews and confirms. Voter data and individual votes are <strong>not</strong> sent to Anthropic.</li><li><strong>Discord</strong>: for OAuth login.</li><li><strong>Highrise / Pocket Worlds</strong> internal systems: identity and eligibility resolution.</li><li><strong>Public blockchain explorers</strong> (Immutable/Blockscout, etc.): we query public chain data.</li><li><strong>Hosting/infrastructure</strong>: to run the site and store election data.</li></ul>We do <strong>not</strong> sell your personal data.</p>
       <h3 data-i18n="privacy.public.h">Public vs. private</h3>
-      <p data-i18n-html="privacy.public.p"><strong>Public:</strong> candidate answers, candidate positions, and aggregate election statistics — most election statistics (per-seat tallies, turnout, bracket breakdowns, etc.) are published on the website. <strong>Private:</strong> your individual vote (never published), your voter answers, and your vote receipt. Wallet/on-chain data is inherently public on the blockchain.</p>
+      <p data-i18n-html="privacy.public.p"><strong>Public:</strong> candidate answers, candidate positions, and aggregate election statistics. Most election statistics (per-seat tallies, turnout, bracket breakdowns, etc.) are published on the website. <strong>Private:</strong> your individual vote (never published), your voter answers, and your vote receipt. Wallet/on-chain data is inherently public on the blockchain.</p>
       <h3 data-i18n="privacy.retention.h">Retention</h3>
-      <p data-i18n-html="privacy.retention.p">We retain election data for an <strong>undetermined period</strong> — there is no fixed deletion schedule. You may still request deletion of your personal data as described below.</p>
+      <p data-i18n-html="privacy.retention.p">We keep election data with <strong>no fixed deletion date</strong>. You can still ask us to delete your personal data as described below.</p>
       <h3 data-i18n="privacy.rights.h">Your rights</h3>
-      <p data-i18n-html="privacy.rights.p">You may request access to or deletion of your personal data — subject to legal and election-integrity limits — by contacting <a href="https://discord.gg/highrise" target="_blank" rel="noopener noreferrer">Highrise Discord support channel</a>. Where applicable law (e.g., GDPR/CCPA) grants further rights, we honor them.</p>
+      <p data-i18n-html="privacy.rights.p">You may request access to or deletion of your personal data, subject to legal and election-integrity limits, by contacting <a href="https://discord.gg/highrise" target="_blank" rel="noopener noreferrer">Highrise Discord support channel</a>. Where applicable law (e.g., GDPR/CCPA) grants further rights, we honor them.</p>
       <h3 data-i18n="privacy.security.h">Security</h3>
       <p data-i18n-html="privacy.security.p">We use reasonable technical and organizational measures; no system is perfectly secure. The election algorithms and the website's structure are <strong>open-source and auditable by all users</strong>, so anyone can inspect how data is processed and how votes are counted.</p>
       <h3 data-i18n="privacy.children.h">Children</h3>
@@ -2349,12 +2428,12 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
   <div class="wrap">
     <div class="footer-creature"><div class="eyes"><span></span><span></span></div><div class="mouth"></div></div>
     <h2 style="font-size:1.6rem" data-i18n="footer.h2">Built with the club, for the club.</h2>
-    <p data-i18n="footer.p">This is the start of HCC holders having a real hand in what gets made. More to come — every two weeks, like we promised.</p>
-    <nav class="footer-links" aria-label="Footer links">
+    <p data-i18n="footer.p">This is the start of HCC holders having a real hand in what gets made. More to come, every two weeks, like we promised.</p>
+    <nav class="footer-links" aria-label="Footer links" data-i18n-aria="a11y.footer.links">
       <a href="#terms" data-i18n="footer.terms">Terms</a>
       <a href="#privacy" data-i18n="footer.privacy">Privacy</a>
       <a href="https://highrise.game/land" target="_blank" rel="noopener noreferrer">Highrise LAND</a>
-      <a href="https://tokentrove.com/collection/Highrise" target="_blank" rel="noopener noreferrer">TokenTrove</a>
+      <a href="https://tokentrove.com/collection/Highrise" target="_blank" rel="noopener noreferrer">Token Trove</a>
       <a href="https://opensea.io/collection/highrise-land" target="_blank" rel="noopener noreferrer">OpenSea</a>
       <a href="https://explorer.immutable.com/" target="_blank" rel="noopener noreferrer">Immutable Explorer</a>
       <a href="https://www.metamask.io/" target="_blank" rel="noopener noreferrer">MetaMask</a>

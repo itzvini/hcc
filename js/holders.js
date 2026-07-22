@@ -83,7 +83,7 @@ export async function loadHoldersChart() {
     const d = new Date(data.lastFetched);
     const dateStr = d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
     const updatedEl = document.getElementById('holders-updated');
-    updatedEl.innerHTML = `Data as of ${dateStr}${data.stale ? ` <span class="stale-badge">${t('stale.badge')}</span>` : ''}`;
+    updatedEl.innerHTML = `${t('holders.asOf').replace('{date}', dateStr)}${data.stale ? ` <span class="stale-badge">${t('stale.badge')}</span>` : ''}`;
 
     new Chart(document.getElementById('holders-chart'), {
       type: 'doughnut',

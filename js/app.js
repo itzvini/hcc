@@ -1,4 +1,4 @@
-import { initI18n, setLanguage } from './i18n.js';
+import { initI18n, setLanguage, t } from './i18n.js';
 import { loadHoldersChart } from './holders.js';
 import { loadMarketChart, rerenderMarket } from './market.js';
 import { loadChangelog, rerenderChangelog } from './changelog.js';
@@ -33,14 +33,16 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
     rerenderSafety();
     rerenderProfile();
   }));
+  btn.addEventListener('click', () => setDrawer(false));
 });
 
 // Tabs
 const tabButtons = document.querySelectorAll('[data-tab]');
 const tabPanels  = document.querySelectorAll('.tab-panel');
-const navDrawer  = document.getElementById('nav-drawer');
+const navMenu    = document.getElementById('nav-menu');
 const navToggle  = document.getElementById('nav-toggle');
 const navCurrent = document.getElementById('nav-current');
+const navGroups  = document.querySelectorAll('.nav-group');
 let holdersLoaded   = false;
 let marketLoaded    = false;
 let changelogLoaded = false;
@@ -50,16 +52,46 @@ let announcementsLoaded = false;
 let tradeLoaded     = false;
 let roadmapLoaded   = false;
 
-// Mobile drawer open/close
+// Mobile menu open/close (the whole menu sheet drops from under the bar)
 function setDrawer(open) {
-  navDrawer.classList.toggle('is-open', open);
+  navMenu.classList.toggle('is-open', open);
   navToggle.setAttribute('aria-expanded', String(open));
+  if (!open) closeGroups();
 }
-navToggle.addEventListener('click', () => setDrawer(!navDrawer.classList.contains('is-open')));
-document.addEventListener('keydown', e => { if (e.key === 'Escape') setDrawer(false); });
+navToggle.addEventListener('click', () => setDrawer(!navMenu.classList.contains('is-open')));
+
+// Grouped drop-downs (Council, Market, Guides, More, Language). Desktop reveals them
+// on hover/focus via CSS; a click/tap pins one open (and drives the mobile accordion).
+// Function declaration so selectTab() below can call it before this runs.
+function closeGroups(except) {
+  navGroups.forEach(g => {
+    if (g === except) return;
+    g.classList.remove('is-open');
+    g.querySelector('.nav-trigger')?.setAttribute('aria-expanded', 'false');
+  });
+}
+navGroups.forEach(group => {
+  const trigger = group.querySelector('.nav-trigger');
+  trigger?.addEventListener('click', () => {
+    const open = !group.classList.contains('is-open');
+    closeGroups(group);
+    group.classList.toggle('is-open', open);
+    trigger.setAttribute('aria-expanded', String(open));
+  });
+  // Close once keyboard focus leaves the group entirely (Tab past the last item)
+  group.addEventListener('focusout', e => {
+    if (!group.contains(e.relatedTarget)) {
+      group.classList.remove('is-open');
+      trigger?.setAttribute('aria-expanded', 'false');
+    }
+  });
+});
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { setDrawer(false); closeGroups(); } });
 document.addEventListener('click', e => {
-  if (navDrawer.classList.contains('is-open') &&
-      !navDrawer.contains(e.target) && !navToggle.contains(e.target)) setDrawer(false);
+  if (e.target.closest('.nav-bar')) return;   // clicks inside the bar are handled above
+  if (navMenu.classList.contains('is-open')) setDrawer(false);
+  closeGroups();
 });
 
 // Frost the tab bar only while it's actually pinned: a 1px sentinel sits right above
@@ -80,20 +112,33 @@ function selectTab(name, updateUrl = true) {
   tabButtons.forEach(btn => {
     const active = btn.dataset.tab === name;
     btn.classList.toggle('is-active', active);
-    btn.setAttribute('aria-selected', String(active));
-    // Mirror the active section into the compact mobile bar (keeps i18n in sync)
+    if (active) btn.setAttribute('aria-current', 'page');
+    else btn.removeAttribute('aria-current');
+    // Mirror the active section into the compact mobile bar (keeps i18n in sync).
+    // The logo carries data-nav-label so "The Club" shows there, not its brand word.
     if (active && navCurrent) {
-      navCurrent.textContent = btn.textContent;
-      if (btn.dataset.i18n) navCurrent.dataset.i18n = btn.dataset.i18n;
+      const key = btn.dataset.navLabel || btn.dataset.i18n;
+      const label = key ? t(key) : '';
+      navCurrent.textContent = (label && label !== key) ? label : btn.textContent.trim();
+      if (key) navCurrent.dataset.i18n = key;
     }
   });
+  // Light the parent group's trigger when one of its pages is the open one
+  navGroups.forEach(g => {
+    const owns = g.querySelector(`[data-tab="${name}"]`);
+    g.querySelector('.nav-trigger')?.classList.toggle('is-current', !!owns);
+  });
   setDrawer(false);
+  // On a pointer device, drop any hover-held menu the cursor still rests on; the
+  // block lifts the next time the pointer moves, so hovering keeps working.
+  navGroups.forEach(g => g.classList.add('is-dismissed'));
+  window.addEventListener('mousemove',
+    () => navGroups.forEach(g => g.classList.remove('is-dismissed')), { once: true });
   tabPanels.forEach(panel => {
     const active = panel.id === `panel-${name}`;
     panel.classList.toggle('is-active', active);
     panel.hidden = !active;
   });
-  if (name === 'holders'   && !holdersLoaded)   { holdersLoaded   = true; loadHoldersChart(); }
   if (name === 'market'    && !marketLoaded)    { marketLoaded    = true; loadMarketChart(); }
   if (name === 'changelog' && !changelogLoaded) { changelogLoaded = true; loadChangelog(); }
   if (name === 'council'   && !councilLoaded)   { councilLoaded   = true; loadApply(); loadElection(); loadBallot(); loadVote(); }
@@ -109,6 +154,18 @@ function selectTab(name, updateUrl = true) {
 }
 
 tabButtons.forEach(btn => btn.addEventListener('click', () => selectTab(btn.dataset.tab)));
+
+// Holders now lives as the "Holders" sub-tab of the Data (market) page. Load its
+// charts the first time that sub-tab is shown — the canvases must be visible to size.
+function ensureHoldersLoaded() {
+  if (!holdersLoaded) { holdersLoaded = true; loadHoldersChart(); }
+}
+document.querySelector('#panel-market [data-subtab="holders"]')?.addEventListener('click', ensureHoldersLoaded);
+
+// The brand mark opens The Club and returns to the top, like clicking a site logo
+document.querySelector('.nav-logo')?.addEventListener('click', () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
 
 // Landing hub cards — jump to a tab and return to the top
 document.querySelectorAll('[data-goto]').forEach(el => {
@@ -157,7 +214,7 @@ function initStepper(nav) {
   if (!total) return;
   const prevBtn  = scope.querySelector('[data-wt-prev]');
   const nextBtn  = scope.querySelector('[data-wt-next]');
-  const countEl  = scope.querySelector('[data-wt-count]');
+  const countEls = [...scope.querySelectorAll('[data-wt-count]')];  // rail + footer can both show it
   const syncKey  = subpanel ? subpanel.dataset.subpanel : null; // null → no URL sync
   let current    = 1;
 
@@ -173,23 +230,34 @@ function initStepper(nav) {
     }
     current = n;
     tabs.forEach(t => {
-      const active = Number(t.dataset.wt) === n;
+      const wt = Number(t.dataset.wt);
+      const active = wt === n;
       t.classList.toggle('is-active', active);
+      t.classList.toggle('is-done', wt < n);   // fills the spine's progress line
       t.setAttribute('aria-selected', String(active));
       t.tabIndex = active ? 0 : -1;
     });
     panels.forEach(p => { p.hidden = Number(p.dataset.wtPanel) !== n; });
     if (prevBtn) prevBtn.disabled = n === 1;
     if (nextBtn) nextBtn.disabled = n === total;
-    if (countEl) countEl.textContent = `${n} / ${total}`;
+    countEls.forEach(el => { el.textContent = `${n} / ${total}`; });
     if (syncKey && updateUrl) history.replaceState(null, '', `/guides/${syncKey}/${slugFor(n)}`);
-    if (scroll)   nav.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Re-anchor the whole cockpit (rail + stage) when present, so advancing a step
+    // keeps the brand hero in view; other steppers just scroll their nav as before.
+    if (scroll)   (nav.closest('.gm-cockpit') || nav).scrollIntoView({ behavior: 'smooth', block: 'start' });
     if (focusTab) tabs.find(t => Number(t.dataset.wt) === n)?.focus();
   }
 
   tabs.forEach(t => t.addEventListener('click', () => show(Number(t.dataset.wt), { scroll: true, updateUrl: true })));
   prevBtn?.addEventListener('click', () => show(current - 1, { scroll: true, updateUrl: true }));
   nextBtn?.addEventListener('click', () => show(current + 1, { scroll: true, updateUrl: true }));
+  // Per-card footer nav — only the visible panel's buttons are clickable, so stepping
+  // from `current` always lands on the neighbouring card. (The last card's forward
+  // button uses data-goto instead, handled by the tab-jump wiring.)
+  scope.querySelectorAll('[data-wt-cta]').forEach(btn =>
+    btn.addEventListener('click', () => show(current + 1, { scroll: true, updateUrl: true })));
+  scope.querySelectorAll('[data-wt-cta-prev]').forEach(btn =>
+    btn.addEventListener('click', () => show(current - 1, { scroll: true, updateUrl: true })));
   nav.addEventListener('keydown', e => {
     if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
     e.preventDefault();
@@ -260,6 +328,12 @@ function route(pathname) {
     sub = 'vote';
     history.replaceState(null, '', '/council/vote' + location.search);
   }
+  if (tab === 'holders') {
+    // Holders was merged into the Data page as a sub-tab; keep old /holders links working.
+    tab = 'market';
+    sub = 'holders';
+    history.replaceState(null, '', '/market/holders' + location.search);
+  }
   // Holder profiles (/profile/{slug}) live inside the marketplace: open the Trade
   // panel with its profile view (no nav tab of their own). route() owns the URL here,
   // so openProfileView must not push another history entry.
@@ -269,10 +343,13 @@ function route(pathname) {
     return;
   }
   selectTab(tab, false);
+  // Legacy guides subtab: Scam Watch was merged into Stay safe, so old /guides/scams links land there.
+  if (tab === 'guides' && sub === 'scams') sub = 'safety';
   if (sub) {
     const scope = document.getElementById(`panel-${tab}`);
     if (scope && scope.querySelector(`[data-subtab="${sub}"]`)) selectSubTab(scope, sub);
   }
+  if (tab === 'market' && sub === 'holders') ensureHoldersLoaded();
   // Deep link to a specific step, e.g. /guides/walkthroughs/funding or
   // /guides/marketplace/trading
   if (tab === 'guides' && sub && segs[2] && stepperRouters[sub]) {

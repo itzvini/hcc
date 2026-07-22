@@ -83,6 +83,11 @@
   --hr-space-4:  16px; --hr-space-5:  20px; --hr-space-6:  24px;
   --hr-space-8:  32px; --hr-space-10: 40px; --hr-space-12: 48px;
 
+  /* Layout — clearance below the sticky page nav (bar is ~65px tall + breathing room).
+     Every sticky rail and scroll-margin that must sit under the nav uses this, so a
+     change to the nav's height is a one-line edit here. */
+  --nav-clear: 80px;
+
   /* Type stacks */
   --hr-sans: "Museo Sans Rounded", "Nunito", system-ui, sans-serif;
   --hr-body: "Museo Sans", "Nunito Sans", system-ui, sans-serif;
@@ -115,6 +120,9 @@ section { padding: 40px 0; }
 /* `.wrap` (a class) out-specifies `section` and would zero the vertical padding
    on `<section class="wrap">`; restore it at matching specificity. */
 section.wrap { padding-top: 40px; padding-bottom: 40px; }
+/* The 40px rhythm is for gaps between sections, not the nav-to-content gap: the
+   first section of every tab sits close under the sticky nav. */
+.tab-panel > section.wrap:first-child { padding-top: 18px; }
 p + p { margin-top: 14px; }
 strong { font-weight: 700; color: var(--hr-fg-0); }
 a { color: var(--hr-primary); text-decoration: none; font-weight: 700; }
@@ -187,14 +195,15 @@ h1 .pop { color: var(--hr-primary); }
 @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
 @keyframes pet-jump{0%{transform:translateY(0)}20%{transform:translateY(-20px)}45%{transform:translateY(-24px)}68%{transform:translateY(3px)}82%{transform:translateY(-8px)}100%{transform:translateY(0)}}
 
-/* ---------- NAV TABS ---------- */
-/* At rest the tab bar is just pills sitting in the page — no strip, no edge. The
-   frosted band fades in only while the bar is actually pinned to the viewport top
-   (app.js toggles .is-stuck via a sentinel), where it needs a backdrop to stay
+/* ---------- NAV BAR ---------- */
+/* One clean row: the brand mark (home) sits left, a grouped menu with drop-downs
+   sits right, and a compact language picker rounds it off. At rest the bar is
+   transparent — the frosted band fades in only while it's pinned to the viewport
+   top (app.js toggles .is-stuck via a sentinel), where it needs a backdrop to stay
    legible over scrolling content. */
 .page-tabs {
-  position: sticky; top: 0; z-index: 20;
-  padding: 12px 0 14px;
+  position: sticky; top: 0; z-index: 40;
+  padding: 10px 0;
   background-color: transparent;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -208,64 +217,159 @@ h1 .pop { color: var(--hr-primary); }
 @media (prefers-reduced-motion: reduce) {
   .page-tabs { transition: none; }
 }
-.page-nav-bar { position: relative; }
-.nav-drawer { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.nav-mobile-bar { display: none; }
-.tab-list { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
-.page-tab {
-  min-width: 120px; min-height: 44px;
-  border: 1px solid var(--hr-line-strong);
-  border-radius: var(--hr-radius-pill);
-  background: var(--hr-bg-3); color: var(--hr-fg-2);
-  font: 700 13px/1 var(--hr-sans);
-  box-shadow: var(--hr-shadow-btn);
-  cursor: pointer;
-  transition: transform .15s cubic-bezier(.2,0,0,1), box-shadow .15s, background .12s, color .12s;
-}
-.page-tab:hover { background: var(--hr-bg-4); color: var(--hr-fg-0); }
-.page-tab:active { transform: scale(0.96); box-shadow: var(--hr-shadow-press); }
-.page-tab.is-active {
-  background: var(--hr-primary); color: var(--hr-on-primary);
-  border-color: transparent; font-weight: 900;
-  box-shadow: var(--hr-shadow-btn);
-  transform: scale(1.04);
-}
 .tab-panel[hidden] { display: none; }
-.roadmap-panel { padding: 18px 0 10px; }
+.roadmap-panel { padding: 6px 0 10px; }
 
-/* ---------- LANGUAGE SWITCHER ---------- */
-.lang-switcher { display: flex; gap: 4px; align-items: center; }
-.lang-btn {
-  font: 700 11px/1 var(--hr-sans);
-  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase;
-  padding: 5px 12px; min-height: 30px;
-  border: 1px solid var(--hr-line-strong); border-radius: var(--hr-radius-pill);
-  background: var(--hr-bg-3); color: var(--hr-fg-3);
-  cursor: pointer; transition: background .12s, color .12s;
+.nav-bar { position: relative; display: flex; align-items: center; gap: 14px; }
+
+/* Brand mark doubles as the home link */
+.nav-logo {
+  flex: none; display: inline-flex; align-items: center; gap: 9px;
+  padding: 6px 12px 6px 6px; margin-right: auto;
+  border: 1px solid transparent; border-radius: var(--hr-radius-pill);
+  background: transparent; cursor: pointer;
+  transition: transform .15s cubic-bezier(.2,0,0,1), background .12s;
 }
-.lang-btn:hover { background: var(--hr-bg-4); color: var(--hr-fg-0); }
-.lang-btn.is-active { background: var(--hr-secondary); color: #fff; border-color: transparent; }
+.nav-logo:hover { background: var(--hr-bg-3); transform: translateY(-1px); }
+.nav-logo:active { transform: translateY(0) scale(.98); }
+.nav-logo-mark { width: 30px; height: 30px; display: block; }
+.nav-logo-word {
+  font: 900 15px/1 var(--hr-sans); color: var(--hr-fg-0);
+  letter-spacing: var(--hr-tracking-tight); white-space: nowrap;
+}
 
-/* ---------- MOBILE NAV (hamburger drawer) ---------- */
-@media (max-width: 760px) {
-  /* Keep all slime pets on a single line, scaling to fit narrow screens */
-  .mascot-row { flex-wrap: nowrap; gap: 8px; }
-  .pet-wrap { width: clamp(56px, 21vw, 84px); height: auto; aspect-ratio: 84 / 100; }
+/* Inline menu (desktop) */
+.nav-menu { display: flex; align-items: center; gap: 8px; }
+.nav-links { display: flex; align-items: center; gap: 4px; list-style: none; }
+.nav-links > li { display: flex; }
 
-  .page-tabs { padding: 8px 0; }
+/* Shared pill for links and drop-down triggers */
+.nav-link, .nav-trigger {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 40px; padding: 0 14px;
+  border: 1px solid transparent; border-radius: var(--hr-radius-pill);
+  background: transparent; color: var(--hr-fg-2);
+  font: 800 13.5px/1 var(--hr-sans); white-space: nowrap; cursor: pointer;
+  transition: transform .15s cubic-bezier(.2,0,0,1), background .12s, color .12s;
+}
+.nav-link:hover, .nav-trigger:hover { background: var(--hr-bg-3); color: var(--hr-fg-0); }
+.nav-link:active, .nav-trigger:active { transform: scale(.96); }
+.nav-link:focus-visible, .nav-trigger:focus-visible,
+.nav-logo:focus-visible, .lang-btn:focus-visible {
+  outline: 2px solid var(--hr-primary); outline-offset: 2px;
+}
+.nav-link.is-active { background: var(--hr-primary); color: var(--hr-on-primary); font-weight: 900; }
+/* A trigger lights up when one of the pages inside it is the open one */
+.nav-trigger.is-current { color: var(--hr-fg-0); background: var(--hr-bg-3); }
 
-  /* Compact bar: brand · current section · menu toggle */
-  .nav-mobile-bar { display: flex; align-items: center; gap: 12px; width: 100%; }
-  .nav-brand {
-    flex: none; font: 900 13px/1 var(--hr-sans); letter-spacing: .04em;
-    color: var(--hr-fg-0); padding: 8px 11px;
-    border: 1px solid var(--hr-line-strong); border-radius: var(--hr-radius-sm);
-    background: var(--hr-bg-3);
+/* Caret — a rotated square corner, flips up when the menu opens */
+.nav-trigger::after {
+  content: ""; width: 6px; height: 6px; margin-left: 1px;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  border-radius: 1px; transform: translateY(-2px) rotate(45deg);
+  transition: transform .2s cubic-bezier(.2,0,0,1);
+}
+
+/* Drop-down groups */
+.nav-group { position: relative; }
+.nav-dropdown {
+  position: absolute; top: calc(100% + 7px); left: 0; z-index: 50;
+  min-width: 224px; display: flex; flex-direction: column; gap: 2px; padding: 8px;
+  background: rgba(30,28,36,0.9);
+  backdrop-filter: blur(24px) saturate(1.3); -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  border: 1px solid var(--hr-line-strong); border-radius: var(--hr-radius-lg);
+  box-shadow: var(--hr-shadow-3), inset 0 1px 0 rgba(255,255,255,0.06);
+  opacity: 0; visibility: hidden; transform: translateY(6px); pointer-events: none;
+  transition: opacity .18s ease, transform .18s ease, visibility .18s;
+}
+/* Invisible bridge across the gap so the pointer can reach the menu without it closing */
+.nav-dropdown::before { content: ""; position: absolute; left: 0; right: 0; top: -9px; height: 9px; }
+/* Reveal on hover, or a click/tap/Enter that pins it open. Focus alone doesn't open
+   it (that's the menu-button pattern), so activating an item closes the menu instead
+   of the focused item holding it open. */
+.nav-group:hover > .nav-dropdown,
+.nav-group.is-open > .nav-dropdown {
+  opacity: 1; visibility: visible; transform: translateY(0); pointer-events: auto;
+}
+.nav-group:hover > .nav-trigger::after,
+.nav-group.is-open > .nav-trigger::after { transform: translateY(1px) rotate(-135deg); }
+@media (hover: hover) {
+  /* Picking an item closes the menu even if the cursor still rests on it; app.js
+     lifts .is-dismissed on the next pointer move, so hovering keeps opening menus. */
+  .nav-group.is-dismissed:hover > .nav-dropdown {
+    opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(6px);
   }
+  .nav-group.is-dismissed:hover > .nav-trigger::after { transform: translateY(-2px) rotate(45deg); }
+}
+
+.nav-dropdown .nav-link {
+  justify-content: flex-start; width: 100%; min-height: 42px;
+  border-radius: var(--hr-radius-md); color: var(--hr-fg-1); font-weight: 700;
+}
+.nav-dropdown .nav-link:hover { background: var(--hr-bg-4); }
+/* Active item keeps the dark on-mint text (beats the fg-1 rule above on specificity) */
+.nav-dropdown .nav-link.is-active { color: var(--hr-on-primary); font-weight: 900; }
+.nav-dropdown .nav-link.is-active:hover { background: var(--hr-primary); }
+.nav-drop-label {
+  font: 800 10.5px/1 var(--hr-sans); text-transform: uppercase;
+  letter-spacing: var(--hr-tracking-caps); color: var(--hr-fg-4);
+  padding: 6px 12px 4px;
+}
+/* The two rightmost menus open toward the left so they never spill off-screen */
+.nav-links > li:nth-last-child(-n+2) > .nav-dropdown, .lang-menu { left: auto; right: 0; }
+
+
+/* Compact-bar extras — hidden until the mobile layout */
+.nav-current { display: none; }
+.nav-toggle { display: none; }
+
+/* ---------- LANGUAGE PICKER ---------- */
+.lang-switcher { flex: none; }
+.lang-trigger { padding: 0 12px; }
+.lang-globe {
+  position: relative; width: 15px; height: 15px; flex: none;
+  border: 1.5px solid currentColor; border-radius: 50%; opacity: .8;
+}
+.lang-globe::before {
+  content: ""; position: absolute; top: -1.5px; bottom: -1.5px; left: 50%;
+  width: 7px; transform: translateX(-50%);
+  border: 1.5px solid currentColor; border-radius: 50%;
+}
+.lang-globe::after {
+  content: ""; position: absolute; left: -1.5px; right: -1.5px; top: 50%;
+  transform: translateY(-50%); border-top: 1.5px solid currentColor;
+}
+.lang-cur { font-weight: 900; letter-spacing: .04em; }
+.lang-menu { min-width: 190px; }
+.lang-btn {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 9px 12px; border: 1px solid transparent; border-radius: var(--hr-radius-md);
+  background: transparent; color: var(--hr-fg-1); cursor: pointer;
+  font: 700 13px/1 var(--hr-sans); text-align: left;
+  transition: background .12s, color .12s;
+}
+.lang-btn b { font-weight: 900; color: var(--hr-fg-3); min-width: 24px; }
+.lang-btn:hover { background: var(--hr-bg-4); color: var(--hr-fg-0); }
+.lang-btn.is-active { background: var(--hr-secondary); color: #fff; }
+.lang-btn.is-active b { color: #fff; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-logo, .nav-link, .nav-trigger, .nav-trigger::after, .nav-dropdown { transition: none; }
+  .nav-logo:hover, .nav-link:active, .nav-trigger:active { transform: none; }
+}
+
+/* ---------- MOBILE NAV (hamburger + drop-down sheet) ---------- */
+@media (max-width: 880px) {
+  .page-tabs { padding: 8px 0; }
+  .nav-bar { gap: 10px; }
+
+  /* Brand: mark only, plus current-section label and the menu toggle */
+  .nav-logo { margin-right: 0; padding: 4px; }
+  .nav-logo-word { display: none; }
   .nav-current {
-    flex: 1 1 auto; min-width: 0;
+    display: block; flex: 1 1 auto; min-width: 0;
     font: 800 16px/1.2 var(--hr-sans); color: var(--hr-fg-0);
-    text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .nav-toggle {
     flex: none; position: relative; width: 44px; height: 44px;
@@ -289,37 +393,56 @@ h1 .pop { color: var(--hr-primary); }
   .nav-toggle[aria-expanded="true"] .nav-toggle-bars::before { transform: translateY(6px) rotate(45deg); }
   .nav-toggle[aria-expanded="true"] .nav-toggle-bars::after  { transform: translateY(-6px) rotate(-45deg); }
 
-  /* Drawer: dropdown sheet anchored under the sticky bar */
-  .nav-drawer {
-    position: absolute; top: calc(100% + 8px); left: 0; right: 0; z-index: 30;
-    align-items: stretch; gap: 4px; padding: 10px;
+  /* Menu becomes a sheet dropping from under the bar */
+  .nav-menu {
+    position: absolute; top: calc(100% + 8px); left: 0; right: 0; z-index: 60;
+    flex-direction: column; align-items: stretch; gap: 4px; padding: 10px;
     background: var(--hr-bg-2);
     border: 1px solid var(--hr-line-strong); border-radius: var(--hr-radius-lg);
-    box-shadow: var(--hr-shadow-2);
-    max-height: calc(100vh - 90px); overflow-y: auto;
+    box-shadow: var(--hr-shadow-3);
+    max-height: calc(100vh - 84px); overflow-y: auto;
     opacity: 0; visibility: hidden; transform: translateY(-8px); pointer-events: none;
     transition: opacity .18s ease, transform .18s ease, visibility .18s;
   }
-  .nav-drawer.is-open { opacity: 1; visibility: visible; transform: translateY(0); pointer-events: auto; }
+  .nav-menu.is-open { opacity: 1; visibility: visible; transform: translateY(0); pointer-events: auto; }
 
-  .nav-drawer .tab-list { flex-direction: column; gap: 4px; width: 100%; flex-wrap: nowrap; }
-  .nav-drawer .page-tab {
-    width: 100%; min-width: 0; min-height: 48px;
-    display: flex; align-items: center; justify-content: flex-start; text-align: left;
-    padding: 0 16px; font-weight: 800;
-    background: transparent; border-color: transparent; box-shadow: none;
-    border-radius: var(--hr-radius-md);
-  }
-  .nav-drawer .page-tab:active { transform: none; }
-  .nav-drawer .page-tab.is-active {
-    background: var(--hr-primary); color: var(--hr-on-primary);
-    transform: none; box-shadow: none;
-  }
+  .nav-links { flex-direction: column; align-items: stretch; gap: 2px; width: 100%; }
+  .nav-links > li { display: block; }
+  .nav-link, .nav-trigger { width: 100%; min-height: 46px; justify-content: flex-start; }
+  .nav-link:active, .nav-trigger:active { transform: none; }
 
-  .nav-drawer .lang-switcher {
-    flex-wrap: wrap; justify-content: center; gap: 6px; width: 100%;
-    margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--hr-line);
+  /* Groups become accordions: the trigger toggles its list open */
+  .nav-trigger { justify-content: space-between; }
+  .nav-group { position: static; }
+  .nav-drop-label { display: none; }
+  .nav-dropdown {
+    position: static; min-width: 0; padding: 0 0 4px 12px;
+    background: transparent; border: none; box-shadow: none;
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+    opacity: 1; visibility: visible; transform: none; pointer-events: auto;
+    max-height: 0; overflow: hidden;
+    transition: max-height .22s ease;
   }
+  .nav-dropdown::before { display: none; }
+  /* Don't let hover/focus expand the accordion on touch — only an explicit tap does.
+     The .is-open rule sits last so a tapped-open group wins over a lingering :hover. */
+  .nav-group:hover > .nav-dropdown,
+  .nav-group:focus-within > .nav-dropdown { max-height: 0; }
+  .nav-group.is-open > .nav-dropdown { max-height: 340px; }
+
+  /* Language: the trigger drops away and the codes lay out as a wrapped row */
+  .lang-switcher { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--hr-line); }
+  .lang-trigger { display: none; }
+  .lang-menu {
+    max-height: none; overflow: visible; position: static;
+    display: flex !important; flex-flow: row wrap; gap: 6px; padding: 0; min-width: 0;
+  }
+  .lang-btn { width: auto; padding: 8px 12px; border: 1px solid var(--hr-line-strong); border-radius: var(--hr-radius-pill); }
+  .lang-btn span { display: none; }
+
+  /* Keep all slime pets on a single line, scaling to fit narrow screens */
+  .mascot-row { flex-wrap: nowrap; gap: 8px; }
+  .pet-wrap { width: clamp(56px, 21vw, 84px); height: auto; aspect-ratio: 84 / 100; }
 }
 
 /* ---------- SECTIONS ---------- */
@@ -714,7 +837,7 @@ footer p  { color: var(--hr-fg-2); font-size: 14px; max-width: 420px; margin: 10
 }
 
 /* ---------- ROADMAP (phase board) ---------- */
-.rm-board { margin-top: 26px; display: flex; flex-direction: column; gap: 30px; }
+.rm-board { margin-top: 12px; display: flex; flex-direction: column; gap: 24px; }
 
 /* Phase group + per-phase accent — the accent cascades into the tiles inside.
    padding:0 overrides the site-wide `section { padding: 40px 0 }` that would otherwise
@@ -815,7 +938,7 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
 }
 
 @media (max-width: 560px) {
-  .rm-board { gap: 26px; }
+  .rm-board { gap: 20px; }
   .rm-grid { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1066,7 +1189,7 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
    Replaces the long single-scroll list. */
 .wt-nav {
   display: flex; gap: 8px; flex-wrap: wrap;
-  margin-top: 28px; scroll-margin-top: 130px;
+  margin-top: 28px; scroll-margin-top: var(--nav-clear);
 }
 .wt-tab {
   display: inline-flex; align-items: center; gap: 8px;
@@ -1109,6 +1232,203 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
 .wt-foot .wt-next { background: var(--hr-primary); color: var(--hr-on-primary); border-color: transparent; box-shadow: var(--hr-shadow-btn); }
 .wt-foot .wt-next:disabled { box-shadow: none; }
 .wt-count { font: 700 13px/1 var(--hr-sans); color: var(--hr-fg-3); letter-spacing: var(--hr-tracking-caps); white-space: nowrap; }
+
+/* ---------- MARKETPLACE GUIDE — "COCKPIT" LAYOUT ----------
+   A wide two-column mission control: a sticky left rail (brand hero + a vertical step
+   spine with a glowing progress line) beside a large demo stage. Fills the screen
+   instead of a narrow centred column and lifts the live demo up next to the nav, so
+   the interactive part is in view at once. Collapses to a single column with a
+   horizontal step scroller on phones. */
+.gm-shell { max-width: 1320px; margin: 0 auto; padding: 4px 22px 8px; }
+.gm-cockpit {
+  display: grid;
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+  gap: 30px; align-items: start;
+  scroll-margin-top: var(--nav-clear);    /* clears the sticky page nav */
+}
+/* Pull the cockpit up under the subtabs (overrides the generic first-section pad). */
+#panel-guides [data-subpanel="marketplace"] > .gm-shell,
+#panel-guides [data-subpanel="walkthroughs"] > .gm-shell { padding-top: 8px; }
+
+/* --- Left rail: sticky mission control --- */
+.gm-rail {
+  position: sticky; top: var(--nav-clear);
+  min-width: 0;                           /* let the grid track shrink; the chip
+                                             scroller inside handles its own overflow */
+  display: flex; flex-direction: column; gap: 16px;
+  padding: 20px 18px;
+  border-radius: var(--hr-radius-xl); border: 1px solid var(--hr-line);
+  background:
+    radial-gradient(360px 200px at 8% -12%, rgba(81,255,165,.10), transparent 68%),
+    linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.012));
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--hr-shadow-2), inset 0 1px 0 rgba(255,255,255,.06);
+}
+.gm-rail-ico {
+  width: 46px; height: 46px; display: grid; place-items: center; margin-bottom: 8px;
+  border-radius: 14px; background: var(--accent-soft, rgba(13,166,252,.16));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+}
+.gm-rail-ico img { width: 30px; height: 30px; display: block; }
+.gm-rail-intro .eyebrow { margin-bottom: 6px; }
+.gm-rail-intro h2 { font: 900 clamp(19px, 2.2vw, 23px)/1.16 var(--hr-sans); color: var(--hr-fg-0); margin: 0 0 8px; }
+.gm-rail-lead { font-size: 12.5px; line-height: 1.5; color: var(--hr-fg-2); margin: 0; }
+
+.gm-spine-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.gm-spine-eye, .gm-rail-prog {
+  font: 900 10px/1 var(--hr-sans); letter-spacing: var(--hr-tracking-caps); text-transform: uppercase;
+  color: var(--hr-fg-3);
+}
+.gm-rail-prog b { color: var(--hr-primary); font-size: 11px; }
+
+/* --- The spine: vertical stepper with a connecting progress line --- */
+.wt-nav.is-mkt { display: flex; flex-direction: column; flex-wrap: nowrap; gap: 0; margin: 0; scroll-margin-top: var(--nav-clear); }
+.wt-nav.is-mkt .wt-tab {
+  position: relative; width: 100%; min-height: 0;
+  display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: start; gap: 12px;
+  padding: 9px 10px; border: 0; border-radius: 12px; background: transparent; text-align: left;
+  transition: background .15s;
+}
+/* connector segment from this node up toward the previous one; mint once reached */
+.wt-nav.is-mkt .wt-tab::before {
+  content: ""; position: absolute; left: 21px; top: -7px; height: 16px; width: 2px;
+  background: var(--hr-line-strong); z-index: 0;
+}
+.wt-nav.is-mkt .wt-tab:first-child::before { display: none; }
+.wt-nav.is-mkt .wt-tab.is-active::before,
+.wt-nav.is-mkt .wt-tab.is-done::before { background: var(--hr-primary); }
+.wt-nav.is-mkt .wt-tab-num {
+  position: relative; z-index: 1; width: 30px; height: 30px; font-size: 12.5px;
+  background: var(--hr-bg-4); color: var(--hr-fg-2);
+  box-shadow: 0 0 0 4px var(--hr-bg-1);
+  transition: background .2s, color .2s, box-shadow .2s;
+}
+.wt-nav.is-mkt .wt-tab.is-done .wt-tab-num { background: var(--hr-primary-25); color: var(--hr-primary); }
+.wt-nav.is-mkt .wt-tab.is-active .wt-tab-num { background: var(--hr-primary); color: var(--hr-on-primary); box-shadow: 0 0 0 4px var(--hr-bg-1), var(--hr-glow-green); }
+.wt-nav.is-mkt .wt-tab-txt { display: flex; flex-direction: column; gap: 2px; padding-top: 3px; min-width: 0; }
+.wt-nav.is-mkt .wt-tab-name { font: 800 13.5px/1.15 var(--hr-sans); color: var(--hr-fg-2); transition: color .18s; }
+.wt-nav.is-mkt .wt-tab-sub { font: 600 11px/1.3 var(--hr-sans); color: var(--hr-fg-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wt-nav.is-mkt .wt-tab.is-done .wt-tab-name { color: var(--hr-fg-1); }
+.wt-nav.is-mkt .wt-tab.is-active .wt-tab-name { color: var(--hr-fg-0); }
+.wt-nav.is-mkt .wt-tab:hover { background: rgba(255,255,255,.03); }
+.wt-nav.is-mkt .wt-tab:hover .wt-tab-name { color: var(--hr-fg-0); }
+.wt-nav.is-mkt .wt-tab.is-active { background: rgba(81,255,165,.07); }
+.wt-nav.is-mkt .wt-tab:active { transform: none; }
+.wt-nav.is-mkt .wt-tab:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; }
+
+/* --- Right column: the stage. Frameless, and stripped to essentials. ---
+   The spine already names the step and the demo narrates itself with live captions, so
+   the duplicate heading, intro paragraph and "where" line are hidden. Only the collection
+   toggle and the demo stay on screen, so the whole demo fits in one viewport. The cash-out
+   reassurance cards are ordered BELOW the demo instead of pushing it down. */
+.gm-stagecol { margin: 0; min-width: 0; }
+.gm-card.guide-card { background: transparent; border: 0; box-shadow: none; padding: 0; }
+/* :not([hidden]) so this display never overrides `.wt-panel[hidden]{display:none}` (equal
+   specificity, later rule) and un-hides the inactive steps. */
+.gm-card.guide-card:not([hidden]) { display: flex; flex-direction: column; }
+.gm-card .guide-head,
+.gm-card .guide-intro,
+.gm-card .wt-mkt-where { display: none; }
+.gm-card .wt-mkt-toggle { order: 1; margin: 0 0 9px; }
+.gm-card .wt-mkt        { order: 2; }
+.gm-card .gm-calm       { order: 3; margin: 14px 0 0; }
+.gm-card .gm-cardfoot   { order: 4; }
+.gm-card .wt-mkt-toggle .seg-btn { padding: 7px 15px; font-size: 12px; }
+.gm-card .gdemo      { margin-bottom: 0; }
+.gm-card .guide-note { margin-top: 10px; font-size: 12.5px; padding: 10px 14px; }
+
+/* One column on tablets/phones; the spine becomes a horizontal step scroller. */
+@media (max-width: 960px) {
+  .gm-shell { padding-left: 16px; padding-right: 16px; }
+  .gm-cockpit { grid-template-columns: 1fr; gap: 14px; }
+  .gm-rail { position: static; top: auto; gap: 12px; padding: 16px; }
+  .gm-rail-ico { display: none; }
+  .gm-rail-intro h2 { font-size: 21px; }
+  .wt-nav.is-mkt {
+    flex-direction: row; flex-wrap: nowrap; gap: 8px; min-width: 0;
+    overflow-x: auto; padding-bottom: 4px; margin: 0 -2px;
+    scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch;
+  }
+  .wt-nav.is-mkt .wt-tab {
+    flex: 0 0 auto; width: auto; scroll-snap-align: start;
+    grid-template-columns: auto auto; align-items: center; gap: 8px;
+    padding: 7px 15px 7px 7px;
+    border: 1px solid var(--hr-line); border-radius: var(--hr-radius-pill);
+    background: var(--hr-bg-3);
+  }
+  .wt-nav.is-mkt .wt-tab::before { display: none; }
+  .wt-nav.is-mkt .wt-tab-num { box-shadow: none; width: 24px; height: 24px; font-size: 12px; }
+  .wt-nav.is-mkt .wt-tab.is-active .wt-tab-num { box-shadow: none; background: rgba(0,0,0,.24); color: var(--hr-on-primary); }
+  .wt-nav.is-mkt .wt-tab-txt { padding-top: 0; }
+  .wt-nav.is-mkt .wt-tab-sub { display: none; }
+  .wt-nav.is-mkt .wt-tab-name { font-size: 13px; }
+  .wt-nav.is-mkt .wt-tab.is-active { background: var(--hr-primary); border-color: transparent; }
+  .wt-nav.is-mkt .wt-tab.is-active .wt-tab-name { color: var(--hr-on-primary); }
+}
+
+/* ---------- GUIDES TAB — SHARED WIDE FRAME ----------
+   The subnav and the Basics grid spread into the cockpit's 1320px frame so they stop
+   wasting the sides. Walkthroughs and Marketplace bring their own cockpit shell (rail +
+   stage); the Stay safe and Links reference pages keep their own centred reading column. */
+#panel-guides .subnav-top,
+#panel-guides .guide-subnav { max-width: 1320px; justify-content: center; }
+
+@media (min-width: 900px) {
+  #panel-guides [data-subpanel="basics"] > section { max-width: 1320px; }
+
+  /* Four perks across, instead of a lonely 3 + 1 wrap in the old narrow column. */
+  #panel-guides [data-subpanel="basics"] .perks { grid-template-columns: repeat(4, 1fr); }
+
+  /* Keep long prose readable and aligned to the frame's left edge. */
+  #panel-guides [data-subpanel="basics"] > section > .lead,
+  #panel-guides [data-subpanel="basics"] .honest { max-width: 900px; }
+}
+
+/* Per-card footer — one row that carries the reader on to the next guide (a named,
+   primary CTA) with a quiet Previous on the left. Replaces the old shared stepper
+   footer + the tall centred CTA, so there's a single, tidy set of controls. */
+.gm-cardfoot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--hr-line);
+}
+.gm-cardfoot.is-first { justify-content: flex-end; }
+.gm-foot-prev {
+  display: inline-flex; align-items: center; gap: 7px;
+  min-height: 44px; padding: 10px 16px;
+  border: 1px solid var(--hr-line-strong); border-radius: var(--hr-radius-pill);
+  background: transparent; color: var(--hr-fg-2);
+  font: 700 13px/1 var(--hr-sans); cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.gm-foot-prev:hover { background: var(--hr-bg-3); color: var(--hr-fg-0); border-color: var(--hr-fg-4); }
+.gm-nextguide {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 44px; padding: 11px 22px;
+  border: 0; border-radius: var(--hr-radius-pill);
+  background: var(--hr-primary); color: var(--hr-on-primary);
+  font: 900 15px/1 var(--hr-sans); cursor: pointer;
+  box-shadow: var(--hr-shadow-btn);
+  transition: transform .15s cubic-bezier(.2,0,0,1), background .12s;
+}
+.gm-nextguide:hover { background: var(--hr-primary-press); transform: translateY(-1px); }
+.gm-nextguide:active { transform: scale(.98); }
+.gm-nextguide:focus-visible, .gm-foot-prev:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 3px; }
+.gm-nextguide-lead {
+  font: 800 9.5px/1 var(--hr-sans); letter-spacing: var(--hr-tracking-caps);
+  text-transform: uppercase; opacity: .72;
+}
+.gm-nextguide-arrow { font-size: 16px; transition: transform .2s cubic-bezier(.2,0,0,1); }
+.gm-nextguide:hover .gm-nextguide-arrow { transform: translateX(3px); }
+/* The finishing card sends the reader into the live marketplace — lavender to mark the
+   destination change (out of the guide, into the app). */
+.gm-nextguide.is-finish { background: var(--hr-secondary); color: #fff; box-shadow: var(--hr-shadow-btn), var(--hr-glow-purple); }
+.gm-nextguide.is-finish:hover { background: color-mix(in srgb, var(--hr-secondary) 85%, #000); }
+@media (prefers-reduced-motion: reduce) {
+  .gm-nextguide, .gm-nextguide:hover, .gm-nextguide-arrow, .gm-nextguide:hover .gm-nextguide-arrow { transition: none; transform: none; }
+}
+@media (max-width: 480px) {
+  .gm-nextguide-lead { display: none; } /* keep the button compact on phones */
+}
 
 /* In-walkthrough collection toggle (Creatures ⇄ LAND) for the marketplace guide */
 .wt-mkt-toggle { margin: 16px 0; }
@@ -1162,7 +1482,10 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
 }
 .gdemo-chrome {
   display: flex; align-items: center; gap: 10px; padding: 10px 14px;
-  border-bottom: 1px solid var(--hr-line); background: rgba(255,255,255,.025);
+  /* Window titlebar: lit a shade brighter than the frame body and capped by a crisp
+     edge, so the recessed screen below reads as a separate surface. */
+  border-bottom: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.02));
 }
 
 /* Scenario picker (funding deep dive) — "pick your situation" chips above the frame.
@@ -1204,10 +1527,25 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
 }
 .gdemo-stage {
   position: relative; padding: 14px; overflow: hidden;
+  /* One fixed window size across EVERY guide demo, so switching steps or cards never
+     resizes the frame. Tall overlays (safety/cash-out sheets) scroll inside it. Sized so
+     the whole demo clears a ~900px viewport under the sticky nav, and sparse beats look
+     less hollow. */
+  height: 450px; box-sizing: border-box;
+  /* The screen. A recessed near-black display set into the lighter frame, so it reads as
+     "the app we're demoing" and never blends into the tutorial chrome around it. The glows
+     sit on top of the solid base; the inset shadow + inner hairline sink it into the bezel. */
   background:
     radial-gradient(400px 200px at 88% -8%, var(--hr-secondary-25), transparent 72%),
-    radial-gradient(340px 190px at 4% 108%, rgba(81,255,165,.07), transparent 70%);
+    radial-gradient(340px 190px at 4% 108%, rgba(81,255,165,.07), transparent 70%),
+    var(--hr-bg-0);
+  box-shadow:
+    inset 0 2px 14px rgba(0,0,0,.7),
+    inset 0 0 0 1px rgba(255,255,255,.05);
 }
+/* Overlays never exceed the fixed stage — they scroll internally instead of clipping. */
+.gdemo-safety, .gdemo-perks { overflow-y: auto; }
+.gdemo-safety-card { max-height: calc(100% - 20px); overflow-y: auto; }
 
 /* Edge chevrons — previous/next indicators over the stage. Shown only when there is
    a step in that direction; the next one pulses once a step's animation settles. */
@@ -1246,6 +1584,13 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
 .gdemo-count { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--hr-fg-3); }
 /* Scoped selector: must out-rank the later .trade-grid auto-fill rule. */
 .gdemo-stage .trade-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+/* Cap tile art so two rows (6 tiles) fit inside the fixed 500px stage without clipping. */
+.gdemo-grid .trade-tile-media { aspect-ratio: auto; height: 116px; }
+.gdemo-grid .trade-tile-body { padding: 7px 11px 9px; gap: 1px; }
+.gdemo-grid .trade-tile-name { font-size: 12.5px; }
+.gdemo-grid .trade-tile-sub { font-size: 10.5px; }
+.gdemo-grid .trade-tile-price { font-size: 13px; margin-top: 2px; }
+.gdemo-grid .trade-tile-usd { font-size: 10.5px; }
 .gdemo-tile { pointer-events: none; }
 .gdemo-tile.is-hov {
   transform: translateY(-4px); border-color: var(--hr-line-strong);
@@ -1396,11 +1741,6 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
   border-radius: var(--hr-radius-lg);
   opacity: 0; pointer-events: none; transition: opacity .35s;
 }
-/* Cash-out scenarios: their stage is just a bar + status row, shorter than the
-   warning sheet — give it a floor so the sheet never clips. */
-.gdemo-stage:has(.trade-cashout-warn) { min-height: 470px; }
-/* The in-site Move mock (route hops + amount + quote) runs taller than the old step list */
-.gdemo-stage:has(.trade-cashout-route) { min-height: 620px; }
 .gdemo-safety-card .trade-cashout-warn { margin-bottom: 12px; }
 .gdemo-safety-card .trade-cashout-steps { margin-bottom: 14px; }
 .gdemo-safety-card .trade-cashout-route { margin-bottom: 12px; }
@@ -1468,9 +1808,6 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
   opacity: 0; pointer-events: none; transition: opacity .4s;
 }
 .gdemo-stage.perks-open .gdemo-perks { opacity: 1; }
-/* flex:none — the short in-game stage must not squash the medallion; the stage itself
-   gets a floor so the reveal never clips (sized for the 4-chip perk list). */
-.gdemo-stage:has(.gdemo-perks) { min-height: 370px; }
 .gdemo-perks .gdemo-success-art { flex: none; width: 76px; height: 76px; }
 .gdemo-perks h4 { font: 900 20px/1.2 var(--hr-sans); color: var(--hr-fg-0); margin: 6px 0 0; }
 .gdemo-perkchips { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
@@ -1506,28 +1843,36 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
 }
 .gdemo-intro.is-in .gdemo-intro-eye, .gdemo-intro.is-in .gdemo-intro-h { transform: none; }
 
-/* Live subtitle — narrates the current micro-action, like captions on a video. Sits
-   above the scene surfaces (modal 10, wallet 20) but under the cursor and title card. */
+/* Live subtitle — narrates the current micro-action, like captions on a video. Lives in
+   its own strip DIRECTLY BELOW the stage, so it can never cover an in-scene button. The
+   strip reserves height even when empty, so the frame never jumps as lines come and go. */
+.gdemo-substrip {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 54px; padding: 8px 16px;
+  border-top: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(81,255,165,.05), rgba(255,255,255,.015));
+}
 .gdemo-sub {
-  position: absolute; left: 50%; bottom: 12px; z-index: 30;
-  max-width: min(560px, 88%); text-align: center;
-  font: 700 12.5px/1.45 var(--hr-sans); color: var(--hr-fg-0);
-  background: rgba(1,1,4,.8); backdrop-filter: blur(6px);
-  border: 1px solid var(--hr-line-strong); border-radius: var(--hr-radius-md);
-  padding: 8px 15px; pointer-events: none;
-  opacity: 0; transform: translate(-50%, 8px);
+  text-align: center; font: 700 12.5px/1.45 var(--hr-sans); color: var(--hr-fg-0);
+  max-width: 78ch; opacity: 0; transform: translateY(5px);   /* wider = fewer lines for the longer instructions */
   transition: opacity .28s, transform .28s;
 }
-.gdemo-sub.is-in { opacity: 1; transform: translate(-50%, 0); }
+.gdemo-sub::before {
+  content: "▸"; color: var(--hr-primary); margin-right: 8px; font-size: 11px;
+  vertical-align: middle;
+}
+.gdemo-sub.is-in { opacity: 1; transform: none; }
 
 /* Ghost cursor — pure transform animation; the click pulse is a mint ring. */
 .gdemo-cursor {
   position: absolute; left: 0; top: 0; width: 22px; height: 22px; z-index: 40;
   border-radius: 50%; border: 2px solid #fff; background: rgba(255,255,255,.28);
   box-shadow: 0 3px 12px rgba(0,0,0,.55); pointer-events: none;
-  transform: translate(50%, 380px);
-  transition: transform .85s cubic-bezier(.35,.75,.25,1);
+  opacity: 0;   /* hidden until a gesture reveals it at origin A */
+  transition: transform .5s cubic-bezier(.4,.5,.2,1), opacity .25s ease;
 }
+.gdemo-cursor.is-shown { opacity: 1; }
+.gdemo-cursor.is-instant { transition: opacity .25s ease; }  /* snap home, no glide */
 .gdemo-cursor::after {
   content: ""; position: absolute; inset: -7px; border-radius: 50%;
   border: 2px solid var(--hr-primary); opacity: 0;
@@ -1542,7 +1887,7 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
    shows at a time: numbered pills track progress, Back/Next drive it; nothing
    advances on its own. */
 .gdemo-rail {
-  display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 14px;
+  display: flex; flex-direction: column; gap: 8px; padding: 10px 14px 11px;
   border-top: 1px solid var(--hr-line); background: rgba(255,255,255,.02);
 }
 .gdemo-railtop { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -1587,7 +1932,25 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
 }
 .gdemo-next:hover { background: var(--hr-primary-press); transform: translateY(-1px); }
 .gdemo-next:active { transform: translateY(1px); box-shadow: none; }
+/* "Up next" guide button injected beside the demo's Watch again control (js/guide-demos.js).
+   Lavender so it reads as "leave this demo, on to the next guide", distinct from the mint
+   beat controls. The eyebrow is dropped so it stays compact in the rail. */
+.gdemo-ctrl .gdemo-nextguide {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-left: 4px; padding: 9px 15px;
+  border: 0; border-radius: var(--hr-radius-pill);
+  background: var(--hr-secondary); color: #fff; cursor: pointer;
+  font: 900 12px/1 var(--hr-sans);
+  box-shadow: 0 4px 0 rgba(0,0,0,.25);
+  transition: transform .15s, filter .15s;
+}
+.gdemo-ctrl .gdemo-nextguide:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.gdemo-ctrl .gdemo-nextguide:active { transform: translateY(1px); box-shadow: none; }
+.gdemo-ctrl .gdemo-nextguide .gm-nextguide-lead { display: none; }
+.gdemo-ctrl .gdemo-nextguide .gm-nextguide-arrow { font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { .gdemo-ctrl .gdemo-nextguide { transition: none; } }
 .gdemo-replay:focus-visible, .gdemo-back:focus-visible, .gdemo-next:focus-visible,
+.gdemo-nextguide:focus-visible,
 .gdemo-beat:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; }
 .gdemo-steptext { display: flex; flex-direction: column; gap: 3px; }
 .gdemo-stepeye {
@@ -1620,8 +1983,8 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
   .gdemo-modal .trade-modal-card.gdemo-card { transition: none; }
 }
 
-/* anchors for smooth-scroll under the sticky (two-row) tab bar */
-#guides-top, #council-top, #roadmap-top, #perks-top, #coins-top { scroll-margin-top: 124px; }
+/* anchors for smooth-scroll under the sticky tab bar */
+#guides-top, #council-top, #roadmap-top, #perks-top, #coins-top, #market-top { scroll-margin-top: var(--nav-clear); }
 
 /* ---------- LANDING HUB ---------- */
 .hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-top: 22px; }
@@ -1659,6 +2022,8 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
 .guide-subtab.is-active { background: var(--hr-primary); color: var(--hr-on-primary); border-color: transparent; font-weight: 900; }
 .guide-subpanel[hidden] { display: none; }
 .guide-subpanel > section:first-child { padding-top: 26px; }
+#panel-roadmap .guide-subpanel > section:first-child,
+#panel-market .guide-subpanel > section:first-child { padding-top: 12px; }
 
 /* ---------- USEFUL LINKS ---------- */
 .links-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 24px; }
@@ -2266,8 +2631,8 @@ footer { margin-top: 28px; }
 }
 /* ---- Trade shell: the marketplace earns the full screen, not the 920px column ---- */
 #panel-trade {
-  /* sticky offset that clears the two-row sticky nav (tabs ×2 + language pills) */
-  --trade-nav-clear: 178px;
+  /* sticky offset that clears the sticky page nav */
+  --trade-nav-clear: var(--nav-clear);
 }
 /* overflow-x clip: the hero glow bleeds past the wrap edges for the aurora look —
    without the clip that bleed widens the page and shifts mobile layouts. (clip, not
@@ -2316,7 +2681,7 @@ footer { margin-top: 28px; }
 .trade-command {
   position: relative; z-index: 6; /* its ⓘ tips and net pill ride above the browse area */
   /* Profile deep links scrollIntoView here — clear the sticky nav bar above. */
-  scroll-margin-top: 170px;
+  scroll-margin-top: var(--nav-clear);
   display: flex; flex-direction: column; gap: 12px;
   padding: 12px 14px;
   border: 1px solid var(--hr-line-strong); border-radius: var(--hr-radius-xl);
@@ -2335,35 +2700,7 @@ footer { margin-top: 28px; }
 /* A hairline between the identity row and the action tabs, so the two tiers read as one bar. */
 .trade-command-nav { border-top: 1px solid var(--hr-line); padding-top: 12px; }
 
-/* Small BETA badge on the nav tab + landing hub card. Pseudo-elements stay out of
-   textContent, so the i18n textContent swaps and the mobile nav-current mirror
-   can't clobber or duplicate them. */
-#tab-trade::after,
-.hub-card[data-goto="trade"] .hub-t::after {
-  content: "BETA";
-  padding: 2.5px 5px; border-radius: var(--hr-radius-pill);
-  font-family: var(--hr-sans); font-weight: 900; font-size: 7.5px; line-height: 1;
-  letter-spacing: .05em;
-  color: var(--hr-on-primary);
-  background: linear-gradient(90deg, var(--hr-banana), var(--hr-tangerine));
-}
-/* Desktop nav: a tiny corner tag overlaid on the pill's top edge — takes no layout
-   space, so the Trade tab keeps exactly the same size as its neighbours. */
-#tab-trade { position: relative; }
-#tab-trade::after { position: absolute; top: -5px; right: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
-/* On the active (mint) pill, invert to a dark mini-tag so the colours don't fight. */
-#tab-trade.is-active::after { background: var(--hr-on-primary); color: var(--hr-banana); }
-/* Hub card: inline but vertically centred, so it can't stretch the title line. */
-.hub-card[data-goto="trade"] .hub-t::after {
-  display: inline-block; margin-left: 6px; vertical-align: middle; transform: translateY(-1px);
-}
-/* Drawer nav (mobile): tabs are full-width rows, so inline placement is natural
-   there — the corner overlay would hug the far edge instead of the label. */
-@media (max-width: 760px) {
-  .nav-drawer #tab-trade::after {
-    position: static; margin-left: 8px; vertical-align: middle; box-shadow: none;
-  }
-}
+/* (The Marketplace tab dropped its BETA badge once it left beta.) */
 
 /* ---- Phase 1: browse grid + wallet bar + token modal ---- */
 
@@ -2432,7 +2769,7 @@ button.trade-net:hover { box-shadow: 0 0 12px var(--hr-banana-25); }
 .trade-flt-scope { flex: 0 0 auto; }
 .trade-flt-scope .seg-btn { padding: 8px 14px; font-size: 12px; }
 
-/* Filter rail (desktop) — frosted card, sticky under the two-row nav */
+/* Filter rail (desktop) — frosted card, sticky under the nav */
 .trade-side { position: sticky; top: var(--trade-nav-clear); z-index: 5; }
 .trade-side-card {
   padding: 16px 16px 18px;
