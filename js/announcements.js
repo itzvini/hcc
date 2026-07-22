@@ -189,11 +189,14 @@ function renderContent(raw, mentions = {}, { stripLeadingPings = false } = {}) {
 // --- pieces ---
 
 function avatarNode(author) {
+  const fallback = '<span class="ann-avatar is-fallback" aria-hidden="true"><img src="/img/ui/megaphone.png" alt="" /></span>';
   if (author.avatar) {
-    return `<img class="ann-avatar" src="${esc(author.avatar)}" alt="" loading="lazy"
-      onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'ann-avatar is-fallback',textContent:'📣','ariaHidden':'true'}))" />`;
+    // onerror is a double-quoted attribute, so the JS string uses single quotes
+    // and every double quote in the fallback markup becomes &quot; for the parser.
+    const onerr = `this.outerHTML='${fallback.replace(/"/g, '&quot;')}'`;
+    return `<img class="ann-avatar" src="${esc(author.avatar)}" alt="" loading="lazy" onerror="${onerr}" />`;
   }
-  return '<span class="ann-avatar is-fallback" aria-hidden="true">📣</span>';
+  return fallback;
 }
 
 function attachmentsNode(atts) {
@@ -285,7 +288,7 @@ function listView(d) {
     return `
       <div class="ann-empty" data-reveal>
         <div class="apply-aurora" aria-hidden="true"></div>
-        <div class="ann-empty-ico" aria-hidden="true">📣</div>
+        <div class="ann-empty-ico" aria-hidden="true"><img src="/img/ui/megaphone.png" alt="" /></div>
         <h4>${esc(t('ann.empty.h'))}</h4>
         <p>${esc(t('ann.empty.p'))}</p>
         ${channelCta(d)}
