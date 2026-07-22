@@ -1,6 +1,120 @@
 {
   "club": [
     {
+      "date": "July 16, 2026",
+      "title": "Second Council meeting",
+      "body": "The second Player Council meeting wrapped, and the full recap is public. The headlines: Creature Coins stay holder-only, so earning them keeps meaning something. Gen 2's trait lineup is locked, and the team put a public 12-month timeline on finishing it, with pets first. Grabs stay hybrid too: every one still spins with Creature Coins, and gold is the pricier option. Full notes are in the Discord announcements.",
+      "tag": "council",
+      "i18n": {
+        "pt": {
+          "date": "16 de jul. de 2026",
+          "title": "Segunda reunião do Conselho",
+          "body": "A segunda reunião do Player Council terminou, e o resumo completo está público. Os destaques: as Creature Coins continuam exclusivas para holders, então ganhá-las continua valendo a pena. A lista de traits do Gen 2 está fechada, e o time colocou um prazo público de 12 meses para terminá-lo, com os pets primeiro. Os grabs seguem híbridos: cada um ainda gira com Creature Coins, e o gold é a opção mais cara. As notas completas estão nos anúncios do Discord."
+        },
+        "es": {
+          "date": "16 jul. 2026",
+          "title": "Segunda reunión del Consejo",
+          "body": "La segunda reunión del Player Council terminó, y el resumen completo es público. Lo más destacado: las Creature Coins siguen siendo exclusivas de holders, así que ganarlas sigue valiendo la pena. La lista de traits de Gen 2 está cerrada, y el equipo puso un plazo público de 12 meses para terminarlo, con los pets primero. Los grabs siguen siendo híbridos: cada uno todavía gira con Creature Coins, y el gold es la opción más cara. Las notas completas están en los anuncios de Discord."
+        },
+        "fr": {
+          "date": "16 juil. 2026",
+          "title": "Deuxième réunion du Conseil",
+          "body": "La deuxième réunion du Player Council est terminée, et le récapitulatif complet est public. Les points clés : les Creature Coins restent réservées aux holders, donc les gagner garde tout son sens. La liste des traits de Gen 2 est verrouillée, et l'équipe a fixé un délai public de 12 mois pour la finir, avec les pets d'abord. Les grabs restent hybrides : chacun se lance toujours avec des Creature Coins, et le gold est l'option plus chère. Les notes complètes sont dans les annonces Discord."
+        },
+        "de": {
+          "date": "16. Juli 2026",
+          "title": "Zweite Council-Sitzung",
+          "body": "Die zweite Player-Council-Sitzung ist vorbei, und die vollständige Zusammenfassung ist öffentlich. Die Kernpunkte: Creature Coins bleiben nur für Holder, sodass sie zu verdienen weiter etwas bedeutet. Die Trait-Auswahl für Gen 2 steht fest, und das Team hat sich öffentlich auf 12 Monate bis zur Fertigstellung festgelegt, mit den Pets zuerst. Grabs bleiben hybrid: jeder dreht weiterhin mit Creature Coins, und Gold ist die teurere Option. Die vollständigen Notizen stehen in den Discord-Ankündigungen."
+        },
+        "ru": {
+          "date": "16 июля 2026",
+          "title": "Вторая встреча Совета",
+          "body": "Вторая встреча Player Council завершилась, и полный отчёт опубликован. Главное: Creature Coins остаются только для холдеров, так что зарабатывать их по-прежнему имеет смысл. Набор трейтов Gen 2 зафиксирован, и команда публично назвала срок в 12 месяцев на его завершение, сначала петы. Grabs остаются гибридными: каждый по-прежнему крутится за Creature Coins, а gold остаётся более дорогим вариантом. Полные заметки есть в анонсах Discord."
+        },
+        "tr": {
+          "date": "16 Temmuz 2026",
+          "title": "İkinci Konsey toplantısı",
+          "body": "İkinci Player Council toplantısı bitti ve tam özet herkese açık. Öne çıkanlar: Creature Coins holder'lara özel kalıyor, yani onları kazanmak hâlâ bir anlam taşıyor. Gen 2'nin trait listesi kilitlendi ve ekip, önce pets olacak şekilde, bitirmek için 12 aylık açık bir süre koydu. Grab'ler hibrit kalıyor: her biri hâlâ Creature Coins ile dönüyor ve gold daha pahalı seçenek. Tam notlar Discord duyurularında."
+        }
+      }
+    },
+    {
+      "date": "July 10, 2026",
+      "title": "Gen 2 update: first set nearly there",
+      "body": "The first Gen 2 set, the Yogurt Zombies, is close to final. The strongest concepts are cleaned up and pulled into one cohesive lineup, with the rough ideas cut. The biweekly previews and the public tracker keep rolling, and everything shown is still work in progress until it ships.",
+      "tag": "announcement",
+      "i18n": {
+        "pt": {
+          "date": "10 de jul. de 2026",
+          "title": "Atualização do Gen 2: o primeiro conjunto está quase pronto",
+          "body": "O primeiro conjunto do Gen 2, os Yogurt Zombies, está perto do final. Os conceitos mais fortes foram finalizados e reunidos em uma linha coesa, com as ideias fracas cortadas. As prévias quinzenais e o tracker público continuam, e tudo que é mostrado ainda é trabalho em andamento até ser lançado."
+        },
+        "es": {
+          "date": "10 jul. 2026",
+          "title": "Actualización de Gen 2: el primer conjunto casi listo",
+          "body": "El primer conjunto de Gen 2, los Yogurt Zombies, está cerca de la versión final. Los conceptos más fuertes están terminados y reunidos en una línea coherente, con las ideas flojas descartadas. Las vistas previas quincenales y el tracker público continúan, y todo lo que se muestra sigue siendo trabajo en curso hasta que se lance."
+        },
+        "fr": {
+          "date": "10 juil. 2026",
+          "title": "Mise à jour Gen 2 : le premier ensemble y est presque",
+          "body": "Le premier ensemble de Gen 2, les Yogurt Zombies, approche de sa version finale. Les concepts les plus forts sont finalisés et réunis en une gamme cohérente, les idées faibles écartées. Les aperçus bimensuels et le tracker public continuent, et tout ce qui est montré reste en cours de réalisation jusqu'à sa sortie."
+        },
+        "de": {
+          "date": "10. Juli 2026",
+          "title": "Gen-2-Update: das erste Set ist fast fertig",
+          "body": "Das erste Gen-2-Set, die Yogurt Zombies, ist nah an der finalen Version. Die stärksten Konzepte sind fertig und zu einer stimmigen Reihe zusammengeführt, die schwachen Ideen sind gestrichen. Die zweiwöchentlichen Vorschauen und der öffentliche Tracker laufen weiter, und alles Gezeigte ist bis zum Release noch in Arbeit."
+        },
+        "ru": {
+          "date": "10 июля 2026",
+          "title": "Обновление Gen 2: первый набор почти готов",
+          "body": "Первый набор Gen 2, Yogurt Zombies, близок к финалу. Самые сильные концепты доведены до ума и собраны в единую цельную линейку, а слабые идеи убраны. Превью раз в две недели и публичный трекер продолжаются, и всё показанное остаётся работой в процессе до релиза."
+        },
+        "tr": {
+          "date": "10 Temmuz 2026",
+          "title": "Gen 2 güncellemesi: ilk set neredeyse hazır",
+          "body": "İlk Gen 2 seti, Yogurt Zombies, final sürümüne yakın. En güçlü konseptler temizlendi ve tek bir tutarlı seride toplandı, zayıf fikirler ise elendi. İki haftalık önizlemeler ve herkese açık tracker devam ediyor ve gösterilen her şey yayınlanana kadar hâlâ devam eden bir çalışma."
+        }
+      }
+    },
+    {
+      "date": "July 8, 2026",
+      "title": "Your first Council meeting",
+      "body": "The first Player Council met this week, and the full recap is public. Two things you asked for landed: gold-only grabs are off the table, and every grab going forward still spins with Creature Coins, with gold as the pricier alternative. The Council also sent the Gen 2 ship order, pets first, creatures first, or all together, to your first club-wide vote on the Polls & Votes page.",
+      "tag": "council",
+      "i18n": {
+        "pt": {
+          "date": "8 de jul. de 2026",
+          "title": "Sua primeira reunião do Conselho",
+          "body": "O primeiro Player Council se reuniu esta semana, e o resumo completo está público. Duas coisas que você pediu aconteceram: os grabs só de gold estão fora de cogitação, e todo grab daqui pra frente ainda gira com Creature Coins, com o gold como alternativa mais cara. O Conselho também levou a ordem de lançamento do Gen 2, pets primeiro, creatures primeiro ou tudo junto, para a sua primeira votação aberta a todo o clube na página Enquetes & Votos."
+        },
+        "es": {
+          "date": "8 jul. 2026",
+          "title": "Tu primera reunión del Consejo",
+          "body": "El primer Player Council se reunió esta semana, y el resumen completo es público. Dos cosas que pediste se cumplieron: los grabs solo de gold quedan descartados, y todo grab de aquí en adelante sigue girando con Creature Coins, con el gold como alternativa más cara. El Consejo también llevó el orden de lanzamiento de Gen 2, pets primero, creatures primero o todo junto, a tu primera votación abierta a todo el club en la página Encuestas y Votos."
+        },
+        "fr": {
+          "date": "8 juil. 2026",
+          "title": "Ta première réunion du Conseil",
+          "body": "Le premier Player Council s'est réuni cette semaine, et le récapitulatif complet est public. Deux choses que tu demandais sont là : les grabs uniquement en gold sont écartés, et chaque grab à venir se lance toujours avec des Creature Coins, le gold servant d'alternative plus chère. Le Conseil a aussi soumis l'ordre de sortie de Gen 2, pets d'abord, creatures d'abord ou tout ensemble, à ton premier vote ouvert à tout le club sur la page Sondages & Votes."
+        },
+        "de": {
+          "date": "8. Juli 2026",
+          "title": "Deine erste Council-Sitzung",
+          "body": "Der erste Player Council hat sich diese Woche getroffen, und die vollständige Zusammenfassung ist öffentlich. Zwei Dinge, die ihr gefordert habt, sind da: reine Gold-Grabs sind vom Tisch, und jeder Grab dreht künftig weiter mit Creature Coins, mit Gold als teurerer Alternative. Der Council hat außerdem die Gen-2-Reihenfolge, Pets zuerst, Creatures zuerst oder alles zusammen, in eure erste clubweite Abstimmung auf der Seite Umfragen & Abstimmungen gegeben."
+        },
+        "ru": {
+          "date": "8 июля 2026",
+          "title": "Ваша первая встреча Совета",
+          "body": "Первый Player Council собрался на этой неделе, и полный отчёт опубликован. Сбылись две вещи, о которых вы просили: grabs только за gold отменены, и каждый grab дальше по-прежнему крутится за Creature Coins, а gold остаётся более дорогой альтернативой. Совет также вынес порядок выпуска Gen 2, петы первыми, creatures первыми или всё вместе, на ваше первое голосование всего клуба на странице «Опросы и голосования»."
+        },
+        "tr": {
+          "date": "8 Temmuz 2026",
+          "title": "İlk Konsey toplantınız",
+          "body": "İlk Player Council bu hafta toplandı ve tam özet herkese açık. İstediğiniz iki şey gerçekleşti: yalnızca gold ile grab'ler masadan kalktı ve bundan sonra her grab yine Creature Coins ile dönüyor, gold daha pahalı seçenek olarak kalıyor. Konsey ayrıca Gen 2 çıkış sırasını, önce pets, önce creatures ya da hepsi birlikte, kulübün tamamına açık ilk oylamanız için Anketler ve Oylamalar sayfasına taşıdı."
+        }
+      }
+    },
+    {
       "date": "June 20, 2026",
       "title": "Pride Month drop",
       "body": "To celebrate Pride Month, HCC dropped a set of items for holders — three items plus a sweater to keep and a second sweater to gift a friend.",
@@ -420,6 +534,196 @@
     }
   ],
   "site": [
+    {
+      "date": "July 20, 2026",
+      "title": "Holder profiles",
+      "body": "Claim your own holder profile, an opt-in showcase page for your collection. It shows your Highrise-linked wallets, your Creatures and LAND, and a switch between everything you hold and just what's listed for sale. Filter by trait or wallet, and share it with one link. Profiles stay off until you turn yours on, and you can switch it back off anytime.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "20 de jul. de 2026",
+          "title": "Perfis de holder",
+          "body": "Crie o seu próprio perfil de holder, uma página opcional para mostrar sua coleção. Ela exibe suas carteiras vinculadas à Highrise, suas Creatures e LAND, e um botão para alternar entre tudo o que você tem e apenas o que está à venda. Filtre por trait ou por carteira, e compartilhe com um único link. Os perfis ficam desligados até você ligar o seu, e você pode desligá-lo de novo quando quiser."
+        },
+        "es": {
+          "date": "20 jul. 2026",
+          "title": "Perfiles de holder",
+          "body": "Crea tu propio perfil de holder, una página opcional para mostrar tu colección. Muestra tus wallets vinculadas a Highrise, tus Creatures y LAND, y un botón para alternar entre todo lo que tienes y solo lo que está en venta. Filtra por trait o por wallet, y compártelo con un único enlace. Los perfiles están apagados hasta que enciendes el tuyo, y puedes apagarlo de nuevo cuando quieras."
+        },
+        "fr": {
+          "date": "20 juil. 2026",
+          "title": "Profils de holder",
+          "body": "Crée ton propre profil de holder, une page facultative pour présenter ta collection. Elle affiche tes wallets liés à Highrise, tes Creatures et ton LAND, et un bouton pour basculer entre tout ce que tu détiens et seulement ce qui est en vente. Filtre par trait ou par wallet, et partage le tout avec un seul lien. Les profils restent désactivés jusqu'à ce que tu actives le tien, et tu peux le désactiver à nouveau quand tu veux."
+        },
+        "de": {
+          "date": "20. Juli 2026",
+          "title": "Holder-Profile",
+          "body": "Leg dir dein eigenes Holder-Profil an, eine optionale Seite, um deine Sammlung zu zeigen. Sie zeigt deine mit Highrise verknüpften Wallets, deine Creatures und LAND und einen Schalter zwischen allem, was du hältst, und nur dem, was zum Verkauf steht. Filtere nach Trait oder Wallet und teile alles mit einem einzigen Link. Profile bleiben aus, bis du deins einschaltest, und du kannst es jederzeit wieder ausschalten."
+        },
+        "ru": {
+          "date": "20 июля 2026",
+          "title": "Профили холдеров",
+          "body": "Заведите собственный профиль холдера, необязательную страницу-витрину для вашей коллекции. На ней видны ваши привязанные к Highrise кошельки, ваши Creatures и LAND, а также переключатель между всем, что у вас есть, и только тем, что выставлено на продажу. Фильтруйте по трейту или кошельку и делитесь одной ссылкой. Профили выключены, пока вы не включите свой, и его можно снова выключить в любой момент."
+        },
+        "tr": {
+          "date": "20 Temmuz 2026",
+          "title": "Holder profilleri",
+          "body": "Kendi holder profilini oluştur, koleksiyonunu sergilemek için isteğe bağlı bir sayfa. Highrise'a bağlı cüzdanlarını, Creatures ve LAND varlıklarını ve tuttuğun her şey ile yalnızca satışta olanlar arasında geçiş yapan bir düğmeyi gösterir. Trait'e veya cüzdana göre filtrele ve tek bir bağlantıyla paylaş. Profiller sen kendininkini açana kadar kapalı kalır ve istediğin zaman tekrar kapatabilirsin."
+        }
+      }
+    },
+    {
+      "date": "July 17, 2026",
+      "title": "Look up any wallet's holdings",
+      "body": "Search any wallet address in the Marketplace to see the Creatures and LAND it holds, with the same filters and sort you use on your own inventory. Copy any address with a single tap.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "17 de jul. de 2026",
+          "title": "Veja o que qualquer carteira tem",
+          "body": "Pesquise qualquer endereço de carteira no marketplace para ver as Creatures e LAND que ela tem, com os mesmos filtros e ordenação que você usa no seu próprio inventário. Copie qualquer endereço com um toque."
+        },
+        "es": {
+          "date": "17 jul. 2026",
+          "title": "Consulta lo que tiene cualquier wallet",
+          "body": "Busca cualquier dirección de wallet en el marketplace para ver las Creatures y LAND que tiene, con los mismos filtros y orden que usas en tu propio inventario. Copia cualquier dirección con un solo toque."
+        },
+        "fr": {
+          "date": "17 juil. 2026",
+          "title": "Vois ce que détient n'importe quel wallet",
+          "body": "Cherche n'importe quelle adresse de wallet dans le marketplace pour voir les Creatures et le LAND qu'il détient, avec les mêmes filtres et tris que sur ton propre inventaire. Copie n'importe quelle adresse d'un seul geste."
+        },
+        "de": {
+          "date": "17. Juli 2026",
+          "title": "Sieh nach, was jede Wallet hält",
+          "body": "Suche im Marktplatz nach einer beliebigen Wallet-Adresse, um die Creatures und LAND darin zu sehen, mit denselben Filtern und der Sortierung, die du für dein eigenes Inventar nutzt. Kopiere jede Adresse mit einem einzigen Tippen."
+        },
+        "ru": {
+          "date": "17 июля 2026",
+          "title": "Посмотрите, что есть у любого кошелька",
+          "body": "Введите в маркетплейсе любой адрес кошелька, чтобы увидеть его Creatures и LAND, с теми же фильтрами и сортировкой, что и в вашем собственном инвентаре. Скопируйте любой адрес одним касанием."
+        },
+        "tr": {
+          "date": "17 Temmuz 2026",
+          "title": "Herhangi bir cüzdanda ne olduğuna bak",
+          "body": "Pazarda herhangi bir cüzdan adresini aratarak içindeki Creatures ve LAND'i gör, kendi envanterinde kullandığın aynı filtreler ve sıralamayla. Herhangi bir adresi tek dokunuşla kopyala."
+        }
+      }
+    },
+    {
+      "date": "July 17, 2026",
+      "title": "Scam Watch",
+      "body": "A new Scam Watch guide helps you spot trouble before it finds you. Tap through the red flags hidden in a real-style scam DM, then work through a safety checklist that saves your progress on your device. Find it under Guides.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "17 de jul. de 2026",
+          "title": "Scam Watch",
+          "body": "Um novo guia Scam Watch ajuda você a identificar o perigo antes que ele te encontre. Toque nos sinais de alerta escondidos numa DM de golpe realista e depois siga uma lista de segurança que salva seu progresso no seu dispositivo. Encontre em Guias."
+        },
+        "es": {
+          "date": "17 jul. 2026",
+          "title": "Scam Watch",
+          "body": "Una nueva guía Scam Watch te ayuda a detectar el peligro antes de que te encuentre. Toca las señales de alerta escondidas en un DM de estafa realista y luego completa una lista de seguridad que guarda tu progreso en tu dispositivo. Encuéntrala en Guías."
+        },
+        "fr": {
+          "date": "17 juil. 2026",
+          "title": "Scam Watch",
+          "body": "Un nouveau guide Scam Watch t'aide à repérer le danger avant qu'il ne te trouve. Touche les signaux d'alerte cachés dans un DM d'arnaque réaliste, puis parcours une liste de sécurité qui enregistre ta progression sur ton appareil. Trouve-le dans Guides."
+        },
+        "de": {
+          "date": "17. Juli 2026",
+          "title": "Scam Watch",
+          "body": "Ein neuer Scam-Watch-Guide hilft dir, Gefahr zu erkennen, bevor sie dich findet. Tippe die Warnsignale an, die in einer echt wirkenden Betrugs-DM versteckt sind, und arbeite dann eine Sicherheits-Checkliste durch, die deinen Fortschritt auf deinem Gerät speichert. Zu finden unter Anleitungen."
+        },
+        "ru": {
+          "date": "17 июля 2026",
+          "title": "Scam Watch",
+          "body": "Новый гайд Scam Watch помогает распознать угрозу раньше, чем она найдёт вас. Нажимайте на тревожные признаки, спрятанные в реалистичном мошенническом сообщении, а затем пройдите чек-лист безопасности, который сохраняет ваш прогресс на устройстве. Ищите его в разделе «Гайды»."
+        },
+        "tr": {
+          "date": "17 Temmuz 2026",
+          "title": "Scam Watch",
+          "body": "Yeni Scam Watch rehberi, tehlikeyi seni bulmadan önce fark etmene yardım eder. Gerçekçi bir dolandırıcılık DM'inde gizli tehlike işaretlerine dokun, ardından ilerlemeni cihazında kaydeden bir güvenlik listesini tamamla. Rehberler altında bulabilirsin."
+        }
+      }
+    },
+    {
+      "date": "July 15, 2026",
+      "title": "Announcements tab",
+      "body": "Every official Creature Club announcement now mirrors to the site the moment it's posted in Discord, in a new Announcements tab. No Discord account needed to read along, and edits or deletions there update here on their own.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "15 de jul. de 2026",
+          "title": "Aba Anúncios",
+          "body": "Todo anúncio oficial do Creature Club agora é espelhado no site assim que é postado no Discord, em uma nova aba Anúncios. Não precisa de conta no Discord para acompanhar, e edições ou exclusões por lá se atualizam aqui sozinhas."
+        },
+        "es": {
+          "date": "15 jul. 2026",
+          "title": "Pestaña Anuncios",
+          "body": "Cada anuncio oficial del Creature Club ahora se refleja en el sitio en cuanto se publica en Discord, en una nueva pestaña Anuncios. No hace falta cuenta de Discord para seguirlos, y las ediciones o eliminaciones allí se actualizan aquí solas."
+        },
+        "fr": {
+          "date": "15 juil. 2026",
+          "title": "Onglet Annonces",
+          "body": "Chaque annonce officielle du Creature Club est désormais reflétée sur le site dès qu'elle est publiée sur Discord, dans un nouvel onglet Annonces. Pas besoin de compte Discord pour suivre, et les modifications ou suppressions là-bas se mettent à jour ici toutes seules."
+        },
+        "de": {
+          "date": "15. Juli 2026",
+          "title": "Ankündigungen-Tab",
+          "body": "Jede offizielle Creature-Club-Ankündigung wird jetzt in dem Moment auf der Website gespiegelt, in dem sie in Discord gepostet wird, in einem neuen Ankündigungen-Tab. Du brauchst kein Discord-Konto zum Mitlesen, und Änderungen oder Löschungen dort aktualisieren sich hier von selbst."
+        },
+        "ru": {
+          "date": "15 июля 2026",
+          "title": "Вкладка «Объявления»",
+          "body": "Каждое официальное объявление Creature Club теперь отражается на сайте в момент публикации в Discord, в новой вкладке «Объявления». Аккаунт Discord для чтения не нужен, а правки или удаления там обновляются здесь сами."
+        },
+        "tr": {
+          "date": "15 Temmuz 2026",
+          "title": "Duyurular sekmesi",
+          "body": "Her resmî Creature Club duyurusu artık Discord'da paylaşıldığı anda, yeni bir Duyurular sekmesinde siteye yansıyor. Takip etmek için Discord hesabı gerekmiyor ve oradaki düzenlemeler ya da silmeler burada kendiliğinden güncelleniyor."
+        }
+      }
+    },
+    {
+      "date": "July 9, 2026",
+      "title": "Guides that narrate themselves",
+      "body": "The interactive Marketplace walkthroughs now talk you through each step as they play, with plain-language captions under the action. Watch a buy, a sale, or a transfer run start to finish before you try it yourself.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "9 de jul. de 2026",
+          "title": "Guias que se narram sozinhos",
+          "body": "Os tutoriais interativos do marketplace agora explicam cada passo enquanto acontecem, com legendas em linguagem simples embaixo da ação. Veja uma compra, uma venda ou uma transferência do começo ao fim antes de tentar você mesmo."
+        },
+        "es": {
+          "date": "9 jul. 2026",
+          "title": "Guías que se narran solas",
+          "body": "Los tutoriales interactivos del marketplace ahora te explican cada paso mientras ocurren, con subtítulos en lenguaje sencillo debajo de la acción. Mira una compra, una venta o una transferencia de principio a fin antes de intentarlo tú mismo."
+        },
+        "fr": {
+          "date": "9 juil. 2026",
+          "title": "Des guides qui se racontent",
+          "body": "Les tutoriels interactifs du marketplace t'expliquent maintenant chaque étape pendant qu'ils se déroulent, avec des sous-titres en langage simple sous l'action. Regarde un achat, une vente ou un transfert du début à la fin avant de l'essayer toi-même."
+        },
+        "de": {
+          "date": "9. Juli 2026",
+          "title": "Anleitungen, die sich selbst erklären",
+          "body": "Die interaktiven Marktplatz-Anleitungen erklären dir jetzt jeden Schritt, während sie ablaufen, mit Untertiteln in einfacher Sprache unter der Aktion. Sieh dir einen Kauf, einen Verkauf oder eine Übertragung von Anfang bis Ende an, bevor du es selbst versuchst."
+        },
+        "ru": {
+          "date": "9 июля 2026",
+          "title": "Гайды, которые рассказывают сами себя",
+          "body": "Интерактивные разборы маркетплейса теперь проговаривают каждый шаг по ходу дела, с подписями простым языком под действием. Посмотрите покупку, продажу или перевод от начала до конца, прежде чем попробовать самому."
+        },
+        "tr": {
+          "date": "9 Temmuz 2026",
+          "title": "Kendi kendini anlatan rehberler",
+          "body": "Etkileşimli pazar anlatımları artık oynarken her adımı sana anlatıyor, eylemin altında sade dille altyazılarla. Kendin denemeden önce bir alışı, bir satışı ya da bir transferi baştan sona izle."
+        }
+      }
+    },
     {
       "date": "July 8, 2026",
       "title": "Polls & Votes: official club votes",
