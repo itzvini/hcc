@@ -4254,11 +4254,72 @@ function discordMessageUrl(messageId) {
   return `https://discord.com/channels/${DISCORD_GUILD_ID}/${ANNOUNCEMENTS_CHANNEL_ID}/${messageId}`;
 }
 
+// --- image mirroring --------------------------------------------------------------------
+// Discord attachment URLs are signed and die ~24h after issuance, so an image left on its
+// Discord URL stops loading the day after we mirror it ("This content is no longer
+// available."). To keep the feed permanent we copy the bytes to our own domain at ingest,
+// while the URL is still fresh, and rewrite the attachment to /api/announcements/media/<id>
+// (served by us, never expires). img-src 'self' already allows the same-origin URL.
+const MEDIA_ROUTE = '/api/announcements/media/';
+const MEDIA_PATH_RE = /^\/api\/announcements\/media\/\d{1,25}$/;
+const MIRROR_MAX_BYTES = 8 * 1024 * 1024; // 8 MB — announcement images are small; refuse anything larger
+const MIRRORABLE_CT_RE = /^image\/(png|jpe?g|gif|webp|avif)$/i;
+
+// Fetch an image from a (Discord-CDN-validated) URL and return its bytes + a content hash.
+// The URL is always one safeDiscordImg() already vetted, so this can't be turned into an
+// open proxy. We trust the RESPONSE content-type, not the attachment metadata, and accept
+// only known raster types, so a mislabelled upload can't get stored and served as active
+// content (the serve route also sends nosniff + a locked-down CSP).
+async function downloadImageBytes(url) {
+  const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error(`http ${res.status}`);
+  const ct = String(res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+  if (!MIRRORABLE_CT_RE.test(ct)) throw new Error(`unexpected content-type: ${ct || 'none'}`);
+  if ((Number(res.headers.get('content-length')) || 0) > MIRROR_MAX_BYTES) throw new Error('too large (declared)');
+  const bytes = Buffer.from(await res.arrayBuffer());
+  if (!bytes.length) throw new Error('empty body');
+  if (bytes.length > MIRROR_MAX_BYTES) throw new Error(`too large: ${bytes.length}`);
+  const etag = '"' + crypto.createHash('sha256').update(bytes).digest('hex').slice(0, 32) + '"';
+  return { contentType: ct, bytes, size: bytes.length, etag };
+}
+
+// Mirror every image attachment on a normalized message, rewriting each url to our route.
+// Runs at ingest, before the row is stored, so the DB persists the permanent URL. Best
+// effort per image: a download failure leaves the original Discord URL in place (it still
+// works for ~24h) and logs, so one bad fetch never blocks the announcement from posting.
+// Already-mirrored attachments (a re-send or edit) skip the download entirely.
+// NOTE: embed images (embeds[].image) still use their expiring Discord URL — announcements
+// here are native uploads, not link embeds, so this covers the reported case.
+async function mirrorAnnouncementImages(norm) {
+  for (const att of norm.attachments || []) {
+    if (!att || !att.id || !isImageAttachment(att)) continue; // id is a validated snowflake or null
+    const src = safeDiscordImg(att.url);
+    if (!src) continue;
+    try {
+      if (!(await db.announcementMediaExists(att.id))) {
+        const media = await downloadImageBytes(src);
+        await db.saveAnnouncementMedia({ id: att.id, messageId: norm.messageId, ...media });
+      }
+      att.url = MEDIA_ROUTE + att.id; // point at our permanent copy (only reached once bytes are stored)
+    } catch (err) {
+      console.error(`[announcements] image mirror failed for attachment ${att.id}:`, err.message);
+    }
+  }
+}
+
+// A feed image is either our own mirrored copy (permanent, same-origin) or, as a fallback
+// when mirroring failed, a Discord CDN URL (expires ~24h). Anything else is dropped.
+function safeFeedImg(url) {
+  const s = String(url || '');
+  return MEDIA_PATH_RE.test(s) ? s : safeDiscordImg(s);
+}
+
 // Bound + normalize an incoming Discord message into the row our DB stores. Trusted
 // source (the bot), but still capped so one bad payload can't bloat the table.
 function normalizeAnnouncementMessage(msg) {
   const clip = (s, n) => String(s ?? '').slice(0, n);
   const attachments = Array.isArray(msg.attachments) ? msg.attachments.slice(0, 10).map(a => ({
+    id: /^\d{1,25}$/.test(String(a?.id ?? '')) ? String(a.id) : null,
     url: clip(a.url, 600),
     filename: clip(a.filename, 200),
     content_type: clip(a.content_type, 100),
@@ -4348,7 +4409,7 @@ function shapeAnnouncement(row) {
   const atts = Array.isArray(row.attachments) ? row.attachments : [];
   const attachments = atts.map(a => {
     if (isImageAttachment(a)) {
-      const src = safeDiscordImg(a.url);
+      const src = safeFeedImg(a.url);
       return src ? { type: 'image', url: src, name: a.filename || '', width: a.width || null, height: a.height || null } : null;
     }
     // Non-image files render as a download chip; the href is a plain link (not an <img>).
@@ -4391,6 +4452,35 @@ function shapeAnnouncement(row) {
 //   message updates its one card instead of ever creating a second.
 async function handleAnnouncementsApi(request, response, url) {
   const { pathname } = url;
+
+  // Mirrored attachment image bytes, served from our own domain so they never expire the
+  // way Discord's signed CDN URLs do. Bytes are immutable per attachment id; we still send
+  // an ETag + must-revalidate (per the caching policy) so repeat loads 304 cheaply.
+  const mediaMatch = pathname.match(/^\/api\/announcements\/media\/(\d{1,25})$/);
+  if (mediaMatch) {
+    if (request.method !== 'GET') { sendJson(response, 405, { error: 'Method not allowed.' }); return; }
+    const ip = (request.headers['x-forwarded-for'] || '').split(',')[0].trim() || request.socket.remoteAddress || 'unknown';
+    const wait = rateLimited(`ann-media:${ip}`, 1200, 60 * 1000); // generous — a full feed load is well under this
+    if (wait) { sendJson(response, 429, { error: 'Too many requests.' }, { 'Retry-After': String(wait) }); return; }
+
+    const media = await db.getAnnouncementMedia(mediaMatch[1]);
+    if (!media) { sendJson(response, 404, { error: 'Not found' }); return; }
+    const headers = {
+      'Content-Type': media.content_type,
+      'Cache-Control': 'public, max-age=86400, must-revalidate',
+      'ETag': media.etag,
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; sandbox", // inert as an <img>; neutralized if opened as a page
+    };
+    if (request.headers['if-none-match'] === media.etag) {
+      response.writeHead(304, headers);
+      response.end();
+      return;
+    }
+    response.writeHead(200, { ...headers, 'Content-Length': String(media.size) });
+    response.end(media.bytes);
+    return;
+  }
 
   if (pathname === '/api/announcements' && request.method === 'GET') {
     const rows = await db.getAnnouncements({ limit: 50 });
@@ -4448,7 +4538,9 @@ async function handleAnnouncementsApi(request, response, url) {
       // Upsert guards: right channel, and NOT a thread reply.
       if (String(msg.channel_id) !== ANNOUNCEMENTS_CHANNEL_ID || msg.thread_id) { skipped++; continue; }
       if (!msg.timestamp) { skipped++; continue; }
-      await db.upsertAnnouncement(normalizeAnnouncementMessage(msg));
+      const norm = normalizeAnnouncementMessage(msg);
+      await mirrorAnnouncementImages(norm); // copy image bytes to our domain while Discord URLs are fresh
+      await db.upsertAnnouncement(norm);
       upserted++;
     }
 
