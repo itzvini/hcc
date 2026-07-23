@@ -476,6 +476,36 @@ getHolderStats().catch(err => console.error('Holder stats prefetch failed:', err
 const IMX_ZKEVM_CHAIN   = 'imtbl-zkevm-mainnet';
 const CREATURE_CONTRACT = '0xCf44b1cBC959295bbBb49935B1b339cC0AA77cdA';
 const IMX_ETH_TOKEN     = '0x52a6c53869ce09a731cd772f245b97a4401d3348'; // ETH on Immutable zkEVM (18 decimals)
+// Bridged USDC on Immutable zkEVM — a dollar-pegged listing currency alongside ETH. VERIFIED
+// ON-CHAIN 2026-07-23 (symbol()=="USDC", decimals()==6 via rpc.immutable.com); do NOT swap this
+// for a search-found address without re-checking symbol/decimals — a wrong token means listings
+// no one can fill. USDC has 6 decimals (ETH has 18): all price math MUST be currency-aware.
+const IMX_USDC_TOKEN    = '0x6de8acc0d406837030ce4dd28e7c08c5a96a30d2';
+// Accepted listing currencies on zkEVM (Creatures). The security allowlists on sell/create +
+// offer/create only ever permit tokens in THIS map — never an arbitrary address.
+const ZK_CURRENCIES = {
+  eth:  { key: 'eth',  address: IMX_ETH_TOKEN,  decimals: 18, symbol: 'ETH'  },
+  usdc: { key: 'usdc', address: IMX_USDC_TOKEN, decimals: 6,  symbol: 'USDC' },
+};
+const ZK_CURRENCY_BY_ADDR = new Map(Object.values(ZK_CURRENCIES).map(c => [c.address.toLowerCase(), c]));
+const zkCurrency = key => ZK_CURRENCIES[String(key || '').toLowerCase()] || null;
+const zkCurrencyByAddr = addr => ZK_CURRENCY_BY_ADDR.get(String(addr || '').toLowerCase()) || null;
+// Decimals-aware conversions. amount (human string/number) <-> smallest-unit wei string.
+const CUR_POW = new Map([[18, 10n ** 18n], [6, 10n ** 6n]]);
+function amountToUnits(amount, decimals) {
+  const s = String(amount).trim();
+  if (!/^\d+(\.\d+)?$/.test(s)) return null;
+  const [whole, frac = ''] = s.split('.');
+  const fracPadded = (frac + '0'.repeat(decimals)).slice(0, decimals);
+  try { return (BigInt(whole) * (CUR_POW.get(decimals) || 10n ** BigInt(decimals)) + BigInt(fracPadded || '0')).toString(); }
+  catch { return null; }
+}
+function unitsToAmount(units, decimals) {
+  try {
+    const n = Number(BigInt(units)) / Number(CUR_POW.get(decimals) || 10n ** BigInt(decimals));
+    return round4(n);
+  } catch { return null; }
+}
 const IMX_L1_TOKEN      = '0xf57e7e7c23978c3caec3c3548e3d615c346e79ff'; // IMX (ERC-20) on Ethereum mainnet (18 decimals)
 const LAND_CONTRACT     = '0x8bf3a40ea2337e6e4f6e540680ea6390cb3b4e11'; // Highrise LAND on Ethereum
 const LAND_OS_SLUG      = 'highrise-land';
@@ -514,8 +544,8 @@ async function imxFetch(url) {
   throw lastErr;
 }
 
-// Page through Immutable orderbook/activities until the cursor runs out.
-async function imxPaged(baseUrl, params, onItems) {
+// Page through Immutable orderbook/activities until the cursor runs out (or the page cap).
+async function imxPaged(baseUrl, params, onItems, maxPages = MAX_MARKET_PAGES) {
   let cursor = null, pages = 0;
   do {
     const url = new URL(baseUrl);
@@ -525,7 +555,7 @@ async function imxPaged(baseUrl, params, onItems) {
     onItems(body.result ?? []);
     cursor = body.page?.next_cursor ?? null;
     pages++;
-  } while (cursor && pages < MAX_MARKET_PAGES);
+  } while (cursor && pages < maxPages);
 }
 
 // All ETH-denominated Creature sales: [{ ts, price }] (price in ETH).
@@ -535,10 +565,15 @@ async function fetchCreatureSales() {
   await imxPaged(base, { contract_address: CREATURE_CONTRACT, activity_type: 'sale', page_size: '100' }, items => {
     for (const a of items) {
       const p = a.details?.payment;
-      if ((p?.token?.contract_address || '').toLowerCase() !== IMX_ETH_TOKEN) continue;
-      const price = Number(p.price_including_fees) / 1e18;
+      // ETH + USDC sales both count toward volume/history. USDC's `amt` is dollars; its
+      // ETH-equivalent is applied later (computeMarketStats) at each sale's own day rate.
+      const cur = zkCurrencyByAddr(p?.token?.contract_address);
+      if (!cur) continue;
+      const amt = Number(p.price_including_fees) / 10 ** cur.decimals;
       const ts = Date.parse(a.updated_at);
-      if (Number.isFinite(price) && price > 0 && Number.isFinite(ts)) sales.push({ ts, price });
+      if (Number.isFinite(amt) && amt > 0 && Number.isFinite(ts)) {
+        sales.push(cur.key === 'eth' ? { ts, price: amt, currency: 'eth' } : { ts, currency: 'usdc', amt });
+      }
     }
   });
   return sales;
@@ -559,6 +594,23 @@ async function fetchCreatureFloorEth() {
   const body = await imxFetch(url.toString());
   const buy = (body.result ?? [])[0]?.buy?.[0];
   const v = buy ? Number(buy.amount) / 1e18 : null;
+  return Number.isFinite(v) && v > 0 ? v : null;
+}
+
+// Cheapest active USDC listing = the USDC-denominated Creature floor (in dollars). Converted to
+// an ETH-equivalent in computeMarketStats and merged with the ETH floor so the headline floor
+// reflects the whole mixed book, not just ETH listings.
+async function fetchCreatureFloorUsdc() {
+  const url = new URL(`https://api.immutable.com/v1/chains/${IMX_ZKEVM_CHAIN}/orders/listings`);
+  url.searchParams.set('sell_item_contract_address', CREATURE_CONTRACT);
+  url.searchParams.set('buy_item_contract_address', IMX_USDC_TOKEN);
+  url.searchParams.set('status', 'ACTIVE');
+  url.searchParams.set('sort_by', 'buy_item_amount');
+  url.searchParams.set('sort_direction', 'asc');
+  url.searchParams.set('page_size', '1');
+  const body = await imxFetch(url.toString());
+  const buy = (body.result ?? [])[0]?.buy?.[0];
+  const v = buy ? Number(buy.amount) / 1e6 : null; // USDC = 6 decimals → dollars
   return Number.isFinite(v) && v > 0 ? v : null;
 }
 
@@ -776,9 +828,10 @@ async function computeMarketStats() {
 
   // Each source degrades independently — a transient failure in one (e.g. the
   // orderbook 500ing) blanks just that figure instead of taking down the whole tab.
-  const [creatureSales, creatureFloor, land, ethUsd, fxRates] = await Promise.all([
+  const [creatureSalesRaw, creatureFloorEth, creatureFloorUsdc, land, ethUsd, fxRates] = await Promise.all([
     fetchCreatureSales().catch(err => { console.error('Creature sales failed:', err.message); return []; }),
     fetchCreatureFloorEth().catch(err => { console.error('Creature floor failed:', err.message); return null; }),
+    fetchCreatureFloorUsdc().catch(err => { console.error('Creature USDC floor failed:', err.message); return null; }),
     fetchLandData(cutoff).catch(err => { console.error('LAND market data failed:', err.message); return null; }),
     fetchEthUsd().catch(err => { console.error('ETH/USD rate failed:', err.message); return { at: () => null, current: null }; }),
     fetchFxRates().catch(err => { console.error('FX rates failed:', err.message); return { usd: 1 }; }),
@@ -786,6 +839,16 @@ async function computeMarketStats() {
 
   const rate = ethUsd.current;
   const toUsd = eth => (eth != null && rate != null ? Math.round(eth * rate) : null);
+  // Normalize every Creature sale to an ETH price: USDC sales convert at their OWN day's rate
+  // (so historical volume is valued correctly), dropping any USDC sale from a day with no rate.
+  const creatureSales = creatureSalesRaw.map(s => {
+    if (s.currency === 'usdc') { const r = ethUsd.at(s.ts); return r ? { ts: s.ts, price: s.amt / r } : null; }
+    return { ts: s.ts, price: s.price };
+  }).filter(Boolean);
+  // Headline floor = the cheapest listing across BOTH currencies (the USDC floor converted to
+  // ETH at the current rate), so a below-ETH-floor USDC listing correctly moves the floor.
+  const usdcFloorEth = creatureFloorUsdc != null && rate ? creatureFloorUsdc / rate : null;
+  const creatureFloor = [creatureFloorEth, usdcFloorEth].filter(v => v != null && v > 0).reduce((m, v) => (m == null || v < m ? v : m), null);
   // Tag each sale with the USD value at its own time, then aggregate.
   const withUsd = s => ({ ts: s.ts, eth: s.price, usd: ethUsd.at(s.ts) != null ? s.price * ethUsd.at(s.ts) : null });
 
@@ -983,10 +1046,12 @@ const SEL_ALLOWANCE = '0xdd62ed3e'; // allowance(address,address)
 
 async function offerIsFunded(o) {
   try {
+    // The bidder must hold + have approved enough of the OFFER currency (ETH or USDC).
+    const token = (zkCurrency(o.currency)?.address) || IMX_ETH_TOKEN;
     const owner = padUint(BigInt(o.from));
     const [balRaw, alwRaw] = await Promise.all([
-      ethCall(ZK_RPC_URL, IMX_ETH_TOKEN, SEL_BALANCE_OF + owner),
-      ethCall(ZK_RPC_URL, IMX_ETH_TOKEN, SEL_ALLOWANCE + owner + padUint(BigInt(SEAPORT_ZK))),
+      ethCall(ZK_RPC_URL, token, SEL_BALANCE_OF + owner),
+      ethCall(ZK_RPC_URL, token, SEL_ALLOWANCE + owner + padUint(BigInt(SEAPORT_ZK))),
     ]);
     const need = BigInt(o.grossWei || '0');
     return BigInt(balRaw || '0x0') >= need && BigInt(alwRaw || '0x0') >= need;
@@ -1004,6 +1069,27 @@ async function fundedOffersOnly(offers) {
   return (await annotateOffersFunded(offers))
     .filter(o => o.funded)
     .map(({ grossWei, funded, ...rest }) => rest);
+}
+
+// Add an ETH-equivalent (for cross-currency ranking) + a USD estimate to each zkEVM offer.
+// A USDC offer's ETH-equivalent is amount / ethUsd; an ETH offer's USD is amount * ethUsd.
+function enrichZkOffers(offers, ethUsd) {
+  return (offers || []).map(o => o.currency === 'usdc'
+    ? { ...o, priceEth: ethUsd ? round4(o.priceAmt / ethUsd) : null, netEth: ethUsd ? round4(o.netAmt / ethUsd) : null, priceUsd: o.priceAmt, netUsd: o.netAmt }
+    : { ...o, priceUsd: ethUsd ? Math.round(o.priceAmt * ethUsd) : null, netUsd: ethUsd ? Math.round(o.netAmt * ethUsd) : null });
+}
+// Fetch offers in EVERY accepted currency (ETH + USDC) and merge into one mixed book, best
+// first by ETH-equivalent. `fn` is one of the orderbook list{Collection,Token,My}Offers; `base`
+// carries nftContract (+ tokenId / accountAddress). Each currency is queried independently so
+// one currency's hiccup can't blank the whole book.
+async function zkOffersAllCurrencies(fn, base, ethUsd) {
+  const perCur = await Promise.all(Object.values(ZK_CURRENCIES).map(async cur => {
+    try { const d = await fn({ ...base, sellContract: cur.address, currency: { code: cur.key, decimals: cur.decimals } }); return d.offers || []; }
+    catch (err) { console.error(`offers(${cur.key}) failed:`, err.message); return []; }
+  }));
+  const merged = enrichZkOffers(perCur.flat(), ethUsd);
+  merged.sort((a, b) => (b.priceEth ?? 0) - (a.priceEth ?? 0)); // best offer first (ETH-equivalent)
+  return merged;
 }
 
 // --- Transfer recipient safety checks ---
@@ -1155,19 +1241,27 @@ async function getMyListings(address) {
   url.searchParams.set('account_address', address);
   url.searchParams.set('status', 'ACTIVE');
   url.searchParams.set('page_size', '50');
-  const body = await imxFetch(url.toString());
+  const [body, fx] = await Promise.all([imxFetch(url.toString()), getMarketplaceFx().catch(() => ({ ethUsd: null }))]);
   const orders = body.result ?? [];
   const metaById = await fetchCreatureMetaBatch(orders.map(o => o.sell?.[0]?.token_id).filter(Boolean));
+  const ethUsd = fx.ethUsd;
   return {
     items: orders.map(o => {
       const tokenId = o.sell?.[0]?.token_id;
-      const amount = o.buy?.[0]?.amount;
+      const buy = o.buy?.[0] || {};
+      const amount = buy.amount;
       if (!tokenId || !amount) return null;
       const meta = metaById.get(String(tokenId)) || {};
+      // The listing's currency (default ETH); USDC uses 6 decimals, so amounts are per-currency.
+      const cur = zkCurrencyByAddr(buy.contract_address) || ZK_CURRENCIES.eth;
+      const priceAmt = unitsToAmount(amount, cur.decimals);
+      const priceUsd = cur.key === 'usdc' ? priceAmt : (ethUsd != null ? round4(priceAmt * ethUsd) : null);
       return {
         listingId: o.id,
         tokenId,
-        priceEth: round4(Number(BigInt(amount)) / 1e18),
+        currency: cur.key,
+        priceAmt, totalAmt: priceAmt, priceUsd,
+        priceEth: cur.key === 'eth' ? priceAmt : (ethUsd ? round4(priceAmt / ethUsd) : priceAmt),
         name: meta.name || `Highrise Creature #${tokenId}`,
         image: meta.image || null,
       };
@@ -1313,6 +1407,22 @@ async function getMarketplaceFx() {
   }
 }
 
+// Daily ETH→USD history, cached, so each past sale can show its value at the rate that
+// actually applied on its day (not today's). fetchEthUsd() returns { at(ts), current };
+// at(ts) clamps to the nearest known day. Degrades to the last good copy on failure.
+const ethUsdDailyCache = { data: null, at: 0, inFlight: null };
+const ETH_USD_DAILY_TTL_MS = 30 * 60 * 1000;
+async function getEthUsdDaily() {
+  const fresh = ethUsdDailyCache.data && Date.now() - ethUsdDailyCache.at < ETH_USD_DAILY_TTL_MS;
+  if (!fresh && !ethUsdDailyCache.inFlight) {
+    ethUsdDailyCache.inFlight = fetchEthUsd()
+      .then(d => { ethUsdDailyCache.data = d; ethUsdDailyCache.at = Date.now(); return d; })
+      .catch(err => { console.error('ETH/USD daily fetch failed:', err.message); return ethUsdDailyCache.data; })
+      .finally(() => { ethUsdDailyCache.inFlight = null; });
+  }
+  return ethUsdDailyCache.data || ethUsdDailyCache.inFlight;
+}
+
 async function getCreatureListings(cursor = '') {
   const key = cursor || '';
   const hit = listingsCache.get(key);
@@ -1364,41 +1474,62 @@ const RARITY_ORDER = ['Legendary', 'Epic', 'Rare', 'Uncommon', 'Common']; // bes
 const rarityRank = r => { const i = RARITY_ORDER.indexOf(r); return i === -1 ? RARITY_ORDER.length : i; };
 const browseIndex = { data: null, at: 0, inFlight: null };
 
-async function buildBrowseIndex() {
-  // 1) Every active ETH listing, cheapest first, across however many pages exist.
+// Page every active listing priced in one currency (cheapest first), tagging each with it.
+async function fetchListingsByCurrency(cur) {
   const orders = [];
-  let cursor = null, pages = 0;
+  let cursor = null, pages = 0, truncated = false;
   do {
     const url = new URL(`https://api.immutable.com/v1/chains/${IMX_ZKEVM_CHAIN}/orders/listings`);
     url.searchParams.set('sell_item_contract_address', CREATURE_CONTRACT);
-    url.searchParams.set('buy_item_contract_address', IMX_ETH_TOKEN);
+    url.searchParams.set('buy_item_contract_address', cur.address);
     url.searchParams.set('status', 'ACTIVE');
     url.searchParams.set('sort_by', 'buy_item_amount');
     url.searchParams.set('sort_direction', 'asc');
     url.searchParams.set('page_size', '200');
     if (cursor) url.searchParams.set('page_cursor', cursor);
     const body = await imxFetch(url.toString());
-    orders.push(...(body.result ?? []));
+    for (const o of (body.result ?? [])) orders.push({ o, cur });
     cursor = body.page?.next_cursor ?? null;
-  } while (cursor && ++pages < BROWSE_MAX_PAGES);
+    if (cursor && ++pages >= BROWSE_MAX_PAGES) { truncated = true; break; }
+  } while (cursor);
+  return { orders, truncated };
+}
+
+async function buildBrowseIndex() {
+  // 1) Every active listing in EACH accepted currency (ETH + USDC), plus the ETH/USD rate
+  //    so USDC prices can be compared against ETH prices in one mixed, sortable book.
+  const fx = await getMarketplaceFx().catch(() => ({ ethUsd: null }));
+  const ethUsd = fx.ethUsd;
+  const results = await Promise.all(Object.values(ZK_CURRENCIES).map(fetchListingsByCurrency));
+  const orders = results.flatMap(r => r.orders);
+  const truncated = results.some(r => r.truncated);
 
   // 2) Metadata. Traits are immutable, so the full-collection index (once built) is
   //    the authoritative source — zero metadata API calls per rebuild, and a transient
   //    upstream 429 can't blank a snapshot's traits. Only tokens the index doesn't
   //    know (not built yet, or a gap) hit the batch endpoint.
   const collIdx = collectionIndex.data;
-  const ids = [...new Set(orders.map(o => o.sell?.[0]?.token_id).filter(Boolean).map(String))];
+  const ids = [...new Set(orders.map(({ o }) => o.sell?.[0]?.token_id).filter(Boolean).map(String))];
   const metaById = await fetchCreatureMetaBatch(collIdx ? ids.filter(id => !collIdx.byId.has(id)) : ids);
 
-  // 3) Join into flat filterable rows. `traits`/`listedAt` stay server-side; the wire
-  //    item matches the /listings shape the grid and buy flow already render.
-  const items = orders.map(o => {
+  // 3) Join into flat filterable rows. `priceEth`/`totalEth` stay as the ETH-COMPARABLE value
+  //    (native for ETH rows, USD/ethUsd for USDC rows) so the existing sort/price-filter/floor
+  //    logic keeps working across the mixed book; `currency` + `priceAmt`/`totalAmt` carry the
+  //    native amount the grid actually displays, and `priceUsd` the all-in dollar value.
+  const items = orders.map(({ o, cur }) => {
     const sell = (o.sell ?? [])[0] || {};
     const buy  = (o.buy ?? [])[0] || {};
     const tokenId = sell.token_id;
     if (!tokenId || !buy.amount) return null;
-    const priceWei = BigInt(buy.amount);
-    const feesWei  = (o.fees ?? []).reduce((s, f) => s + (f.amount ? BigInt(f.amount) : 0n), 0n);
+    const priceUnits = BigInt(buy.amount);
+    const feesUnits  = (o.fees ?? []).reduce((s, f) => s + (f.amount ? BigInt(f.amount) : 0n), 0n);
+    const priceAmt = unitsToAmount(priceUnits, cur.decimals);
+    const totalAmt = unitsToAmount(priceUnits + feesUnits, cur.decimals);
+    // All-in USD (USDC is 1:1; ETH via the live rate) → the mixed-book comparable.
+    const priceUsd = cur.key === 'usdc' ? totalAmt : (ethUsd != null ? round4(totalAmt * ethUsd) : null);
+    // ETH-equivalent for the existing ETH-denominated sort/filter/floor machinery.
+    const totalEth = cur.key === 'eth' ? totalAmt : (ethUsd ? round4(totalAmt / ethUsd) : totalAmt);
+    const priceEth = cur.key === 'eth' ? priceAmt : (ethUsd ? round4(priceAmt / ethUsd) : priceAmt);
     const known = collIdx?.byId.get(String(tokenId));
     const meta = metaById.get(String(tokenId));
     const traits = {};
@@ -1408,8 +1539,10 @@ async function buildBrowseIndex() {
       listingId: o.id,
       tokenId,
       seller: o.account_address || null,
-      priceEth: round4(Number(priceWei) / 1e18),
-      totalEth: round4(Number(priceWei + feesWei) / 1e18),
+      currency: cur.key,          // 'eth' | 'usdc' — drives native display
+      priceAmt, totalAmt,         // native amount in that currency (what the grid shows)
+      priceUsd,                   // all-in USD (comparison + the "≈ $X" line)
+      priceEth, totalEth,         // ETH-comparable (kept so sort/filter/floor are unchanged)
       name: known?.name || meta?.name || `Highrise Creature #${tokenId}`,
       image: known?.image || meta?.image || null,
       rarity: Object.entries(traits).find(([k]) => /rarity/i.test(k))?.[1] || null,
@@ -1417,7 +1550,7 @@ async function buildBrowseIndex() {
       traits,
     };
   }).filter(Boolean);
-  return { items, truncated: !!cursor };
+  return { items, truncated };
 }
 
 async function getBrowseIndex() {
@@ -1654,6 +1787,142 @@ async function getCreatureBrowse(searchParams) {
   };
 }
 
+// --- Sales history: recent COMPLETED sales, collection-wide, filtered like Browse ------
+// Price discovery beside the active listings: what buyers actually paid, not just what
+// sellers ask. The same faceted filter (search / price / traits) the Browse tab uses runs
+// over the sold set, so "Cutesy mouth Creatures" or "Premium LAND" narrows the history to
+// comparable past sales. All read-only public on-chain data (buyer/seller are wallet
+// addresses the explorer already exposes) — no auth, nothing sensitive.
+
+// Every ETH-denominated Creature sale, newest first, briefly cached. Keeps the fields a
+// sale card needs (price, when, tx, buyer, seller); traits/name/image are joined per
+// request from the collection index, so a metadata refresh never blanks the feed.
+const CREATURE_SALES_TTL_MS = 3 * 60 * 1000;
+const creatureSalesFeed = { data: null, at: 0, inFlight: null };
+async function buildCreatureSalesFeed() {
+  const base = `https://api.immutable.com/v1/chains/${IMX_ZKEVM_CHAIN}/activities`;
+  const sales = [];
+  await imxPaged(base, { contract_address: CREATURE_CONTRACT, activity_type: 'sale', page_size: '100' }, items => {
+    for (const a of items) {
+      const d = a.details || {};
+      const asset = Array.isArray(d.asset) ? d.asset[0] : d.asset; // sale.asset is an array
+      const tokenId = asset?.token_id;
+      const p = d.payment;
+      // Sales settled in ETH or USDC (either accepted listing currency); ignore any other token.
+      const cur = zkCurrencyByAddr(p?.token?.contract_address);
+      if (!tokenId || !cur) continue;
+      const amt = p.price_including_fees ? unitsToAmount(p.price_including_fees, cur.decimals) : null;
+      const at = a.updated_at || a.indexed_at || null;
+      if (!Number.isFinite(amt) || amt <= 0 || !at) continue;
+      sales.push({
+        tokenId: String(tokenId), currency: cur.key, priceAmt: amt,
+        priceEth: cur.key === 'eth' ? amt : null, // USDC's ETH-equivalent is added per-sale in shapeSalesHistory
+        at,
+        tx: a.blockchain_metadata?.transaction_hash || null,
+        buyer: (d.to || '').toLowerCase() || null,
+        seller: (d.from || '').toLowerCase() || null,
+      });
+    }
+  });
+  sales.sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0));
+  return sales;
+}
+async function getCreatureSalesFeed() {
+  const fresh = creatureSalesFeed.data && Date.now() - creatureSalesFeed.at < CREATURE_SALES_TTL_MS;
+  if (!fresh && !creatureSalesFeed.inFlight) {
+    creatureSalesFeed.inFlight = buildCreatureSalesFeed()
+      .then(d => { creatureSalesFeed.data = d; creatureSalesFeed.at = Date.now(); return d; })
+      .catch(err => {
+        console.error('Creature sales feed build failed:', err.message);
+        if (!creatureSalesFeed.data) throw err;
+        return creatureSalesFeed.data;
+      })
+      .finally(() => { creatureSalesFeed.inFlight = null; });
+  }
+  return creatureSalesFeed.data || creatureSalesFeed.inFlight;
+}
+
+// Sales-history sort — its own small set (Browse's price-asc default makes no sense for a
+// time-ordered log). Recent first by default.
+const SALES_SORTS = {
+  recent:       (a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0),
+  oldest:       (a, b) => (Date.parse(a.at) || 0) - (Date.parse(b.at) || 0),
+  'price-asc':  (a, b) => a.priceEth - b.priceEth,
+  'price-desc': (a, b) => b.priceEth - a.priceEth,
+};
+function parseSalesSort(searchParams) {
+  const s = searchParams.get('sort');
+  return SALES_SORTS[s] ? s : 'recent';
+}
+
+// Shared shaper: enrich each raw sale with catalogue metadata (name/image/traits/rank),
+// value it in USD at its own day's rate, filter by the Browse query, sort, paginate. A
+// full wallet address in `q` matches the buyer OR seller instead of the name.
+function shapeSalesHistory(feed, f, sortKey, meta) {
+  const rate = ts => (meta.daily && ts ? meta.daily.at(ts) : null) ?? meta.ethUsd ?? null;
+  const rows = feed.map(s => {
+    const known = meta.lookup(s.tokenId);
+    const ts = Date.parse(s.at) || 0;
+    const usd = rate(ts);
+    // Is this token listed RIGHT NOW? (drives the "For sale / Not listed" badge + the
+    // in-marketplace deep link.) meta.listed returns the current all-in list price or null.
+    const listedNow = meta.listed ? (meta.listed(s.tokenId) ?? null) : null;
+    // Currency-aware valuation: a USDC sale's USD is its dollar amount 1:1 and its ETH-
+    // equivalent (the sort/compare key) is amount / that day's ETH-USD; an ETH sale is the
+    // mirror. priceAmt/currency ride through for the client's currency-aware display.
+    const isUsdc = s.currency === 'usdc';
+    const priceEth = isUsdc ? (usd ? Math.round(s.priceAmt / usd * 1e6) / 1e6 : null) : s.priceEth;
+    const priceUsd = isUsdc ? s.priceAmt : (usd != null && s.priceEth != null ? Math.round(s.priceEth * usd * 100) / 100 : null);
+    // Catalogue metadata wins for traits/rank; name/image/coords fall back to whatever the
+    // raw feed already carried (OpenSea LAND events ship these; Immutable sales don't).
+    return {
+      ...s,
+      name: known?.name || s.name || meta.fallbackName(s.tokenId),
+      image: known?.image || s.image || null,
+      rarity: known?.rarity || null,
+      rank: known?.rank ?? null,
+      coords: known?.coords || s.coords || null,
+      traits: known?.traits || {},
+      search: known?.search || known?.name || s.name || '',
+      currency: s.currency || 'eth',
+      priceAmt: s.priceAmt ?? s.priceEth,
+      priceEth,
+      priceUsd,
+      listedNow,
+    };
+  });
+  const isAddr = HEX_ADDRESS.test(f.q);
+  const fq = isAddr ? { ...f, q: '' } : f; // wallet query is handled below, not as a name match
+  const matched = rows.filter(r =>
+    (!isAddr || r.buyer === f.q || r.seller === f.q) && browseMatch(r, fq)
+  ).sort(SALES_SORTS[sortKey]);
+  const start = f.page * BROWSE_PAGE_SIZE;
+  return {
+    items: matched.slice(start, start + BROWSE_PAGE_SIZE).map(({ search, ...pub }) => pub),
+    total: matched.length,
+    page: f.page,
+    hasMore: start + BROWSE_PAGE_SIZE < matched.length,
+    facets: computeBrowseFacets(rows, fq),
+    ethUsd: meta.ethUsd,
+    fxRates: meta.fxRates,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+async function getCreatureSalesHistory(searchParams) {
+  const f = parseBrowseQuery(searchParams);
+  const sortKey = parseSalesSort(searchParams);
+  const [feed, fx, daily, listIdx] = await Promise.all([getCreatureSalesFeed(), getMarketplaceFx(), getEthUsdDaily(), getBrowseIndex()]);
+  const coll = getCollectionIndex(); // null until the first catalogue build lands
+  const listedMap = new Map((listIdx?.items || []).map(it => [String(it.tokenId), it.totalEth ?? it.priceEth]));
+  return shapeSalesHistory(feed, f, sortKey, {
+    daily, ethUsd: fx.ethUsd, fxRates: fx.fxRates,
+    lookup: id => coll?.byId.get(String(id)) || null,
+    listed: id => listedMap.get(String(id)) ?? null,
+    fallbackName: id => `Highrise Creature #${id}`,
+  });
+}
+
 // --- Unified LAND browse: every parcel, shown via its attached Slime ---
 // A LAND parcel and its Slime are ONE NFT — you buy the parcel, the slime comes with
 // it — so there's a single faceted browse: filter parcels by their slime's traits +
@@ -1684,29 +1953,50 @@ async function landListingsByToken(force = false) {
   return map;
 }
 
-const landRowOf = (s, L) => ({
-  tokenId: s.tokenId,
-  coords: s.coords,
-  name: s.slimeName || s.parcelName,
-  slimeName: s.slimeName,
-  parcelName: s.parcelName,
-  search: `${s.slimeName || ''} ${s.parcelName} ${s.coords.x} ${s.coords.y}`,
-  traits: s.traits,
-  rank: s.rank,
-  listed: !!L,
-  priceEth: L ? L.priceEth : null,
-  totalEth: L ? L.priceEth : null, // OpenSea price is already all-in
-  listingId: L ? L.orderHash : null,
-  protocolAddress: L ? L.protocolAddress : null,
-  seller: L ? L.seller : null,
-  listedAt: 0,
-});
+// Shape a parcel + its (optional) listing into a browse row. Mixed-currency: an ETH listing's
+// native amount IS its ETH-equivalent; a USDC listing is dollar-denominated, so its ETH-
+// equivalent (used for sort/floor/the modal's all-in gate) is amount / ethUsd, and its USD
+// estimate is the amount itself. `ethUsd` comes from the marketplace FX (getLandBrowse).
+const landRowOf = (s, L, ethUsd = null) => {
+  let currency, priceAmt = null, totalEth = null, priceUsd = null;
+  if (L) {
+    currency = L.currency || 'eth';
+    priceAmt = L.priceAmt != null ? L.priceAmt : L.priceEth;
+    if (currency === 'usdc') {
+      priceUsd = priceAmt;
+      totalEth = ethUsd ? round4(priceAmt / ethUsd) : null;
+    } else {
+      totalEth = priceAmt;
+      priceUsd = ethUsd ? Math.round(priceAmt * ethUsd) : null;
+    }
+  }
+  return {
+    tokenId: s.tokenId,
+    coords: s.coords,
+    name: s.slimeName || s.parcelName,
+    slimeName: s.slimeName,
+    parcelName: s.parcelName,
+    search: `${s.slimeName || ''} ${s.parcelName} ${s.coords.x} ${s.coords.y}`,
+    traits: s.traits,
+    rank: s.rank,
+    listed: !!L,
+    currency: L ? currency : undefined,
+    priceAmt, totalAmt: priceAmt,
+    priceUsd,
+    priceEth: L ? totalEth : null,
+    totalEth, // ETH-equivalent (all-in) — the sort/floor key
+    listingId: L ? L.orderHash : null,
+    protocolAddress: L ? L.protocolAddress : null,
+    seller: L ? L.seller : null,
+    listedAt: 0,
+  };
+};
 // A listed parcel the slime catalogue doesn't know yet (still sweeping, or the rare
 // parcel with no pet) must still appear for sale — just without traits/rank.
-const listingRowOf = (tokenId, L) => landRowOf({
+const listingRowOf = (tokenId, L, ethUsd = null) => landRowOf({
   tokenId, coords: L.coords || {}, slimeName: null,
   parcelName: L.name || `LAND #${tokenId}`, traits: {}, rank: null,
-}, L);
+}, L, ethUsd);
 
 async function getLandBrowse(searchParams) {
   const f = parseBrowseQuery(searchParams);
@@ -1720,10 +2010,10 @@ async function getLandBrowse(searchParams) {
 
   const rows = [];
   const seen = new Set();
-  if (index) for (const s of index.items) { seen.add(String(s.tokenId)); rows.push(landRowOf(s, listings.get(String(s.tokenId)))); }
+  if (index) for (const s of index.items) { seen.add(String(s.tokenId)); rows.push(landRowOf(s, listings.get(String(s.tokenId)), fx.ethUsd)); }
   // Listed parcels missing from the catalogue still show for sale (completeness — a
   // marketplace must never hide a buyable item behind an unfinished index).
-  for (const [tokenId, L] of listings) if (!seen.has(tokenId)) rows.push(listingRowOf(tokenId, L));
+  for (const [tokenId, L] of listings) if (!seen.has(tokenId)) rows.push(listingRowOf(tokenId, L, fx.ethUsd));
 
   const wantAll = f.scope === 'all';
   const pool = wantAll ? rows : rows.filter(r => r.listed);
@@ -1760,6 +2050,51 @@ async function getLandBrowse(searchParams) {
     fxRates: fx.fxRates,
     fetchedAt: new Date().toISOString(),
   };
+}
+
+// LAND sales feed (OpenSea collection events), briefly cached. Traits/rank are joined per
+// request from the slime catalogue, so a parcel the sweep hasn't reached yet still shows
+// its sale (price/date/wallets) — just without trait facets, same as LAND browse.
+const LAND_SALES_TTL_MS = 3 * 60 * 1000;
+const landSalesFeed = { data: null, at: 0, inFlight: null };
+async function getLandSalesFeed() {
+  const fresh = landSalesFeed.data && Date.now() - landSalesFeed.at < LAND_SALES_TTL_MS;
+  if (!fresh && !landSalesFeed.inFlight) {
+    landSalesFeed.inFlight = landMarket.collectionSales()
+      .then(d => { landSalesFeed.data = d; landSalesFeed.at = Date.now(); return d; })
+      .catch(err => {
+        console.error('LAND sales feed build failed:', err.message);
+        if (!landSalesFeed.data) throw err;
+        return landSalesFeed.data;
+      })
+      .finally(() => { landSalesFeed.inFlight = null; });
+  }
+  return landSalesFeed.data || landSalesFeed.inFlight;
+}
+
+async function getLandSalesHistory(searchParams) {
+  const f = parseBrowseQuery(searchParams);
+  const sortKey = parseSalesSort(searchParams);
+  const [feed, fx, daily, listings] = await Promise.all([getLandSalesFeed(), getMarketplaceFx(), getEthUsdDaily(), landListingsByToken()]);
+  const index = slimeIndex.getSlimeIndex(); // null while the first sweep runs
+  const data = shapeSalesHistory(feed, f, sortKey, {
+    daily, ethUsd: fx.ethUsd, fxRates: fx.fxRates,
+    listed: id => { const L = listings.get(String(id)); if (!L) return null; return L.currency === 'usdc' ? (fx.ethUsd ? Math.round(L.priceAmt / fx.ethUsd * 1e4) / 1e4 : null) : (L.priceEth ?? L.priceAmt ?? null); },
+    // The OpenSea event already carries name/image/coords; the catalogue adds traits + rank.
+    lookup: id => {
+      const s = index?.byToken.get(String(id));
+      return s ? { name: s.slimeName || s.parcelName, traits: s.traits, rank: s.rank,
+        coords: s.coords, search: `${s.slimeName || ''} ${s.parcelName} ${s.coords?.x ?? ''} ${s.coords?.y ?? ''}` } : null;
+    },
+    fallbackName: id => `Highrise LAND #${id}`,
+  });
+  // Attach a collection-wide trait % (as LAND browse does) so the shared filter bar shows
+  // the same rarity tags on the Sales tab.
+  if (index && index.total) for (const facet of data.facets) for (const val of facet.values) {
+    const c = index.traitFreq.get(`${facet.type}:${val.v}`);
+    if (c != null) { val.total = c; val.pct = c / index.total; }
+  }
+  return data;
 }
 
 // --- Wallet view: paste an address into Browse search → that wallet's holdings ------------
@@ -1819,7 +2154,7 @@ async function ownedLandRows(addr) {
     console.error('Wallet LAND chain read failed, falling back to OpenSea:', err.message);
     items = landMarket.configured() ? (await landMarket.ownedLand(addr)).items : [];
   }
-  const [listings] = await Promise.all([landListingsByToken()]);
+  const [listings, fx] = await Promise.all([landListingsByToken(), getMarketplaceFx()]);
   const sidx = slimeIndex.getSlimeIndex();
   return items.map(it => {
     const id = String(it.tokenId);
@@ -1829,7 +2164,7 @@ async function ownedLandRows(addr) {
     return landRowOf({
       tokenId: id, coords: s?.coords || it.coords || { x: '', y: '' },
       slimeName: s?.slimeName || null, parcelName, traits: s?.traits || {}, rank: s?.rank ?? null,
-    }, L);
+    }, L, fx.ethUsd);
   });
 }
 
@@ -2089,6 +2424,19 @@ async function handleMarketplaceApi(request, response, url) {
     return;
   }
 
+  // Recent completed Creature sales, filtered by the same query as Browse (search / price /
+  // traits), for the Sales History tab. Public on-chain data; short-cached like Browse.
+  if (pathname === '/api/market/creatures/sales') {
+    try {
+      const data = await getCreatureSalesHistory(url.searchParams);
+      sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=30' });
+    } catch (err) {
+      console.error('Creature sales history failed:', err.message);
+      sendJson(response, 503, { error: 'unavailable' });
+    }
+    return;
+  }
+
   // One token's active listing, from the browse snapshot — powers ?token= deep links
   // (e.g. Discord new-listing pings), where the paged grid feed may not contain the
   // token. Same wire shape as a /listings item; null when the token isn't listed.
@@ -2197,15 +2545,19 @@ async function handleMarketplaceApi(request, response, url) {
     const body = await readJsonBody(request, 4 * 1024);
     const maker = String(body.makerAddress || '').toLowerCase();
     const tokenId = String(body.tokenId || '');
-    const wei = parseEthToWei(body.priceEth);
+    // Currency: 'eth' (default, back-compat) or 'usdc'. Price arrives as `price` (+ currency);
+    // legacy callers send `priceEth`. Amount is converted at the currency's own decimals.
+    const cur = zkCurrency(body.currency || 'eth');
+    const units = cur ? amountToUnits(body.price ?? body.priceEth, cur.decimals) : null;
     if (!HEX_ADDRESS.test(maker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
     if (!/^\d{1,80}$/.test(tokenId)) { sendJson(response, 400, { error: 'bad_token' }); return; }
-    if (wei == null) { sendJson(response, 400, { error: 'bad_price' }); return; }
+    if (!cur) { sendJson(response, 400, { error: 'bad_currency' }); return; }
+    if (units == null || BigInt(units) <= 0n) { sendJson(response, 400, { error: 'bad_price' }); return; }
 
     try {
       const prepared = await mktOrderbook.prepareSell({
         makerAddress: maker, sellContract: CREATURE_CONTRACT, tokenId,
-        buyContract: IMX_ETH_TOKEN, amountWei: wei.toString(),
+        buyContract: cur.address, amountWei: units,
       });
       sendJson(response, 200, prepared);
     } catch (err) {
@@ -2231,12 +2583,16 @@ async function handleMarketplaceApi(request, response, url) {
     // Scope allowlist: this endpoint only relays orders selling THIS collection for
     // THIS payment token (mirrors what sell/prepare pins). The orderbook would verify
     // the signature anyway, but without this the endpoint is a generic Seaport relay.
+    // The order must sell exactly one Creature and be priced in ONE allowed currency (ETH or
+    // USDC) — every consideration item (proceeds + royalty) in that same token. This keeps the
+    // endpoint from relaying an order priced in some arbitrary/worthless token.
     const offer = Array.isArray(orderComponents.offer) ? orderComponents.offer : [];
     const consideration = Array.isArray(orderComponents.consideration) ? orderComponents.consideration : [];
+    const payCur = consideration.length ? zkCurrencyByAddr(consideration[0]?.token) : null;
     const scopeOk = offer.length === 1
       && String(offer[0]?.token || '').toLowerCase() === CREATURE_CONTRACT.toLowerCase()
-      && consideration.length >= 1
-      && consideration.every(c => String(c?.token || '').toLowerCase() === IMX_ETH_TOKEN);
+      && payCur
+      && consideration.every(c => String(c?.token || '').toLowerCase() === payCur.address.toLowerCase());
     if (!scopeOk) { sendJson(response, 400, { error: 'bad_order' }); return; }
     try {
       const created = await mktOrderbook.createSell({ orderComponents, orderHash, signature });
@@ -2283,24 +2639,28 @@ async function handleMarketplaceApi(request, response, url) {
   // ("floor") offers any holder can sell into. Same trust model as listings: the
   // bidder's signature is the authorization; the orderbook + Seaport verify it.
 
-  // Read endpoints (public orderbook data).
+  // Read endpoints (public orderbook data). Each returns a MIXED-currency book — offers in
+  // ETH and USDC merged, best first — with an ETH-equivalent + USD estimate on every row.
   if (pathname === '/api/market/creatures/offers/collection') {
-    const data = await mktOrderbook.listCollectionOffers({ nftContract: CREATURE_CONTRACT, ethContract: IMX_ETH_TOKEN });
-    sendJson(response, 200, { offers: await fundedOffersOnly(data.offers) }, { 'Cache-Control': 'public, max-age=15' });
+    const fx = await getMarketplaceFx();
+    const offers = await zkOffersAllCurrencies(mktOrderbook.listCollectionOffers, { nftContract: CREATURE_CONTRACT }, fx.ethUsd);
+    sendJson(response, 200, { offers: await fundedOffersOnly(offers) }, { 'Cache-Control': 'public, max-age=15' });
     return;
   }
   const offersTokenMatch = pathname.match(/^\/api\/market\/creatures\/offers\/token\/(\d{1,80})$/);
   if (offersTokenMatch) {
-    const data = await mktOrderbook.listTokenOffers({ nftContract: CREATURE_CONTRACT, ethContract: IMX_ETH_TOKEN, tokenId: offersTokenMatch[1] });
-    sendJson(response, 200, { offers: await fundedOffersOnly(data.offers) }, { 'Cache-Control': 'public, max-age=15' });
+    const fx = await getMarketplaceFx();
+    const offers = await zkOffersAllCurrencies(mktOrderbook.listTokenOffers, { nftContract: CREATURE_CONTRACT, tokenId: offersTokenMatch[1] }, fx.ethUsd);
+    sendJson(response, 200, { offers: await fundedOffersOnly(offers) }, { 'Cache-Control': 'public, max-age=15' });
     return;
   }
   const offersMineMatch = pathname.match(/^\/api\/market\/creatures\/offers\/mine\/(0x[0-9a-f]{40})$/);
   if (offersMineMatch) {
-    const data = await mktOrderbook.listMyOffers({ nftContract: CREATURE_CONTRACT, ethContract: IMX_ETH_TOKEN, accountAddress: offersMineMatch[1] });
+    const fx = await getMarketplaceFx();
+    const offers = await zkOffersAllCurrencies(mktOrderbook.listMyOffers, { nftContract: CREATURE_CONTRACT, accountAddress: offersMineMatch[1] }, fx.ethUsd);
     // The user's OWN offers are annotated, not hidden — an unfunded one needs their
     // attention (top up or cancel), not silence.
-    const annotated = await annotateOffersFunded(data.offers);
+    const annotated = await annotateOffersFunded(offers);
     sendJson(response, 200, { offers: annotated.map(({ grossWei, ...rest }) => rest) }, { 'Cache-Control': 'no-store' });
     return;
   }
@@ -2313,15 +2673,19 @@ async function handleMarketplaceApi(request, response, url) {
 
     const body = await readJsonBody(request, 4 * 1024);
     const maker = String(body.makerAddress || '').toLowerCase();
-    const wei = parseEthToWei(body.priceEth);
+    // Currency: 'eth' (default) or 'usdc'. Amount arrives as `price` (+ currency); legacy
+    // callers send `priceEth`. Converted at the currency's own decimals.
+    const cur = zkCurrency(body.currency || 'eth');
+    const units = cur ? amountToUnits(body.price ?? body.priceEth, cur.decimals) : null;
     const tokenId = body.tokenId != null ? String(body.tokenId) : null;
     if (!HEX_ADDRESS.test(maker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
-    if (wei == null) { sendJson(response, 400, { error: 'bad_price' }); return; }
+    if (!cur) { sendJson(response, 400, { error: 'bad_currency' }); return; }
+    if (units == null || BigInt(units) <= 0n) { sendJson(response, 400, { error: 'bad_price' }); return; }
     if (tokenId != null && !/^\d{1,80}$/.test(tokenId)) { sendJson(response, 400, { error: 'bad_token' }); return; }
 
     try {
       const prepared = await mktOrderbook.prepareOffer({
-        makerAddress: maker, ethContract: IMX_ETH_TOKEN, amountWei: wei.toString(),
+        makerAddress: maker, sellContract: cur.address, amountWei: units,
         nftContract: CREATURE_CONTRACT, tokenId,
       });
       sendJson(response, 200, prepared);
@@ -2346,15 +2710,18 @@ async function handleMarketplaceApi(request, response, url) {
       || !/^0x[0-9a-f]{60,2600}$/i.test(String(signature || ''))) {
       sendJson(response, 400, { error: 'bad_order' }); return;
     }
+    // Scope allowlist mirrors sell/create, sides flipped: a bid OFFERS one allowed currency
+    // (ETH or USDC) and takes the Creature in consideration (fee items ride along in that same
+    // currency). Widened from ETH-only to {ETH, USDC} — still never an arbitrary token.
     const offer = Array.isArray(orderComponents.offer) ? orderComponents.offer : [];
     const consideration = Array.isArray(orderComponents.consideration) ? orderComponents.consideration : [];
     const creature = CREATURE_CONTRACT.toLowerCase();
-    const scopeOk = offer.length === 1
-      && String(offer[0]?.token || '').toLowerCase() === IMX_ETH_TOKEN
+    const payCur = offer.length === 1 ? zkCurrencyByAddr(offer[0]?.token) : null;
+    const scopeOk = payCur
       && consideration.length >= 1
       && consideration.every(c => {
         const tk = String(c?.token || '').toLowerCase();
-        return tk === creature || tk === IMX_ETH_TOKEN;
+        return tk === creature || tk === payCur.address.toLowerCase();
       })
       && consideration.some(c => String(c?.token || '').toLowerCase() === creature);
     if (!scopeOk) { sendJson(response, 400, { error: 'bad_order' }); return; }
@@ -2495,12 +2862,16 @@ async function handleMarketplaceApi(request, response, url) {
     const addr = String(url.searchParams.get('address') || '').toLowerCase();
     const reqToken = String(url.searchParams.get('token') || 'ETH').toUpperCase();
     const fiatUsd = Number(url.searchParams.get('fiat'));
-    // zkEVM only delivers IMX here (gas); Ethereum delivers ETH (price). Pin accordingly.
+    // Delivery is pinned by network: zkEVM delivers IMX (gas) or USDC (a USDC Creature buy);
+    // Ethereum delivers ETH (price) or USDC (a USDC LAND buy). USDC delivery depends on Transak
+    // offering it for that network — if not, the widget still opens and the buyer picks manually;
+    // the client falls back to Immutable's keyless page (zkEVM) or hides the CTA (ethereum).
     const network = chain === 'zkevm' ? 'immutablezkevm' : chain === 'ethereum' ? 'ethereum' : null;
-    const token = chain === 'zkevm' ? 'IMX' : 'ETH';
+    const ALLOWED = { zkevm: ['IMX', 'USDC'], ethereum: ['ETH', 'USDC'] };
     if (!network) { sendJson(response, 400, { error: 'bad_chain' }); return; }
     if (!HEX_ADDRESS.test(addr)) { sendJson(response, 400, { error: 'bad_address' }); return; }
-    if (reqToken !== token) { sendJson(response, 400, { error: 'bad_token' }); return; }
+    if (!(ALLOWED[chain] || []).includes(reqToken)) { sendJson(response, 400, { error: 'bad_token' }); return; }
+    const token = reqToken;
 
     // referrerDomain: the request host (strip port) unless explicitly overridden.
     const referrerDomain = TRANSAK_REFERRER_DOMAIN
@@ -2613,8 +2984,10 @@ async function handleMarketplaceApi(request, response, url) {
   // surfaces existing OpenSea demand so holders can see the floor bid. WETH-denominated.
   if (pathname === '/api/market/land/offers/collection') {
     if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
-    const data = await landMarket.listCollectionOffers();
-    sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=30' });
+    const [data, fx] = await Promise.all([landMarket.listCollectionOffers(), getMarketplaceFx()]);
+    // Mixed book (WETH≈ETH + USDC): add an ETH-equivalent + USD estimate, re-rank best first.
+    const offers = enrichZkOffers(data.offers, fx.ethUsd).sort((a, b) => (b.priceEth ?? 0) - (a.priceEth ?? 0));
+    sendJson(response, 200, { offers }, { 'Cache-Control': 'public, max-age=30' });
     return;
   }
   // Unified LAND browse: every parcel via its Slime — trait facets, rarity rank,
@@ -2626,6 +2999,19 @@ async function handleMarketplaceApi(request, response, url) {
     }
     const data = await getLandBrowse(url.searchParams);
     sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=15' });
+    return;
+  }
+  // Recent completed LAND sales (OpenSea), filtered like the LAND Browse. Needs the OpenSea
+  // key; without it (or on an upstream hiccup) the client shows a graceful "unavailable".
+  if (pathname === '/api/market/land/sales') {
+    if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    try {
+      const data = await getLandSalesHistory(url.searchParams);
+      sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=30' });
+    } catch (err) {
+      console.error('LAND sales history failed:', err.message);
+      sendJson(response, 503, { error: 'unavailable' });
+    }
     return;
   }
   const landTokenMatch = pathname.match(/^\/api\/market\/land\/token\/(\d{1,80})$/);
@@ -2753,14 +3139,18 @@ async function handleMarketplaceApi(request, response, url) {
     const body = await readJsonBody(request, 4 * 1024);
     const maker = String(body.makerAddress || '').toLowerCase();
     const tokenId = String(body.tokenId || '');
-    const wei = parseEthToWei(body.priceEth);
+    // Currency: 'eth' (default, back-compat) or 'usdc'. Price arrives as `price` (+ currency);
+    // legacy callers send `priceEth`. Converted at the currency's own decimals (ETH 18, USDC 6).
+    const cur = landMarket.currency(body.currency || 'eth');
+    const units = cur ? amountToUnits(body.price ?? body.priceEth, cur.decimals) : null;
     if (!HEX_ADDRESS.test(maker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
     if (!/^\d{1,80}$/.test(tokenId)) { sendJson(response, 400, { error: 'bad_token' }); return; }
-    if (wei == null || wei <= 0n) { sendJson(response, 400, { error: 'bad_price' }); return; }
+    if (!cur) { sendJson(response, 400, { error: 'bad_currency' }); return; }
+    if (units == null || BigInt(units) <= 0n) { sendJson(response, 400, { error: 'bad_price' }); return; }
 
     try {
       sendJson(response, 200, await landMarket.prepareListing({
-        tokenId, priceWei: wei.toString(), maker, durationDays: body.durationDays,
+        tokenId, currency: cur.code, priceUnits: units, maker, durationDays: body.durationDays,
       }));
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
@@ -2808,12 +3198,16 @@ async function handleMarketplaceApi(request, response, url) {
 
     const body = await readJsonBody(request, 4 * 1024);
     const maker = String(body.makerAddress || '').toLowerCase();
-    const wei = parseEthToWei(body.priceEth);
+    // Currency 'eth' (→WETH on-chain) or 'usdc'. Amount arrives as `price` (+ currency); legacy
+    // callers send `priceEth`. ETH/USDC decimals match the listing registry (18 / 6).
+    const cur = landMarket.currency(body.currency || 'eth');
+    const units = cur ? amountToUnits(body.price ?? body.priceEth, cur.decimals) : null;
     if (!HEX_ADDRESS.test(maker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
-    if (wei == null || wei <= 0n) { sendJson(response, 400, { error: 'bad_price' }); return; }
+    if (!cur) { sendJson(response, 400, { error: 'bad_currency' }); return; }
+    if (units == null || BigInt(units) <= 0n) { sendJson(response, 400, { error: 'bad_price' }); return; }
 
     try {
-      sendJson(response, 200, await landMarket.prepareOffer({ makerAddress: maker, priceWei: wei.toString(), durationDays: body.durationDays }));
+      sendJson(response, 200, await landMarket.prepareOffer({ makerAddress: maker, currency: cur.code, priceUnits: units, durationDays: body.durationDays }));
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }
@@ -2885,7 +3279,8 @@ async function handleMarketplaceApi(request, response, url) {
   if (landOffersMineMatch) {
     if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
     try {
-      sendJson(response, 200, await landMarket.myOffers(landOffersMineMatch[1]), { 'Cache-Control': 'no-store' });
+      const [data, fx] = await Promise.all([landMarket.myOffers(landOffersMineMatch[1]), getMarketplaceFx()]);
+      sendJson(response, 200, { offers: enrichZkOffers(data.offers, fx.ethUsd) }, { 'Cache-Control': 'no-store' });
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }

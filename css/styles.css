@@ -2551,6 +2551,23 @@ footer { margin-top: 28px; }
   background-repeat: no-repeat; background-position: right 13px center;
 }
 .trade-field select.trade-price-unit:disabled { opacity: .55; cursor: default; }
+/* Fixed "USDC" unit chip (shown instead of the ETH/fiat select when listing in USDC). */
+.trade-cur-fixed {
+  flex: 0 0 auto; display: grid; place-items: center;
+  border-radius: var(--hr-radius-md); font-size: 13px; font-weight: 800;
+  padding: 0 16px; color: var(--hr-fg-0);
+  border: 1px solid var(--hr-line-strong); background-color: var(--hr-bg-2);
+}
+/* "Sell for ETH / USDC" segmented picker — compact version of the shared .seg. */
+.trade-cur-seg { display: flex; width: fit-content; gap: 4px; padding: 4px; margin: 6px 0 0; }
+.trade-cur-seg .seg-btn { min-width: 74px; min-height: 34px; font-size: 13px; font-weight: 800; }
+/* USDC prices read in a calm dollar-green so they're distinct from ETH's mint at a glance. */
+.trade-tile-price.is-usdc, .trade-modal-price-eth.is-usdc, .trade-mass-unit.is-usdc,
+.trade-offer-price.is-usdc, .trade-sale-eth.is-usdc, .trade-myoffer-chip .is-usdc,
+.trade-colloffer-price.is-usdc { color: var(--hr-online); }
+/* Compact ETH|USDC toggle inside the inline offer forms — smaller than the sell picker. */
+.trade-offer-cur { margin: 0 6px 0 0; padding: 3px; gap: 3px; }
+.trade-offer-cur .seg-btn { min-width: 52px; min-height: 30px; font-size: 12px; font-weight: 800; }
 .trade-price-conv {
   display: block; margin-top: 7px; min-height: 16px;
   font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px;
@@ -2577,12 +2594,15 @@ footer { margin-top: 28px; }
   margin-top: 14px; padding: 12px 14px; border-radius: var(--hr-radius-md);
   font-size: 13.5px; font-weight: 600; line-height: 1.45;
 }
-.trade-status.is-error, .trade-status.is-info, .trade-status.is-ok { display: flex; }
+.trade-status.is-error, .trade-status.is-info, .trade-status.is-ok, .trade-status.is-warn { display: flex; }
 .trade-status.is-error { background: var(--hr-alert-15); border: 1px solid rgba(255,91,149,.45); color: var(--hr-fg-0); }
 .trade-status.is-error span:first-child { color: var(--hr-alert); font-size: 16px; }
 .trade-status.is-info  { background: rgba(13,166,252,.12); border: 1px solid rgba(13,166,252,.4); color: var(--hr-fg-0); }
 .trade-status.is-ok    { background: rgba(100,242,169,.12); border: 1px solid rgba(100,242,169,.45); color: var(--hr-fg-0); }
 .trade-status.is-ok span:first-child { color: var(--hr-online); font-size: 16px; font-weight: 900; }
+/* Partial success (some listed/sent, some couldn't) — banana, not alarm-red. */
+.trade-status.is-warn  { background: rgba(255,249,95,.10); border: 1px solid rgba(255,249,95,.4); color: var(--hr-fg-0); }
+.trade-status.is-warn span:first-child { color: var(--hr-accent); font-size: 16px; }
 .trade-status a { color: var(--hr-primary); font-weight: 800; text-decoration: underline; }
 
 /* Transfer recipient checks */
@@ -3222,6 +3242,46 @@ body.trade-sheet-open { overflow: hidden; }
   .trade-workbench .trade-pick { max-height: 264px; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
 }
 
+/* "You're listing this one" card — pinned above the price form so the picked Creature
+   is always unmistakable (a mis-pick here could mean an accidental listing). */
+.trade-sell-selected {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border-radius: var(--hr-radius-lg);
+  border: 1px solid rgba(81,255,165,.4);
+  background: linear-gradient(180deg, rgba(81,255,165,.09), rgba(81,255,165,.02));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+}
+.trade-sell-selected.is-empty {
+  border-style: dashed; border-color: var(--hr-line);
+  background: rgba(255,255,255,.02);
+  justify-content: center; text-align: center; gap: 9px;
+}
+.trade-sell-selected.is-empty p { margin: 0; font-size: 12.5px; font-weight: 600; color: var(--hr-fg-3); }
+.trade-sell-sel-ph { font-size: 18px; opacity: .75; }
+.trade-sell-sel-media {
+  width: 52px; height: 52px; flex: 0 0 auto;
+  border-radius: var(--hr-radius-md); overflow: hidden;
+  background: var(--hr-bg-2); border: 1px solid var(--hr-line);
+}
+.trade-sell-sel-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.trade-sell-sel-media img.is-pet, .trade-sell-sel-media img[data-fallback] { object-fit: contain; padding: 8%; box-sizing: border-box; }
+.trade-sell-sel-media .trade-tile-noimg { width: 100%; height: 100%; display: grid; place-items: center; font-size: 22px; }
+.trade-sell-sel-info { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.trade-sell-sel-label { font-size: 9.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--hr-primary); }
+.trade-sell-sel-name { font-family: var(--hr-sans); font-weight: 800; font-size: 14px; color: var(--hr-fg-0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trade-sell-sel-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 1px; }
+.trade-sell-sel-tags .trade-rar,
+.trade-sell-sel-tags .trade-rank { position: static; top: auto; left: auto; right: auto; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.trade-sell-sel-clear {
+  margin-left: auto; flex: 0 0 auto; cursor: pointer;
+  width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  background: rgba(255,255,255,.06); border: 1px solid var(--hr-line);
+  color: var(--hr-fg-2); font-size: 15px; line-height: 1;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.trade-sell-sel-clear:hover { background: var(--hr-alert-15); color: var(--hr-alert); border-color: rgba(255,91,149,.4); }
+.trade-sell-sel-clear:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; }
+
 /* Collection switcher (Creatures ⟷ LAND) — sits above the action tabs */
 .trade-coll-switch { display: flex; width: fit-content; gap: 4px; padding: 4px; margin: 0; }
 .trade-coll-switch .seg-btn { min-width: 110px; min-height: 36px; font-size: 13px; font-weight: 800; }
@@ -3268,6 +3328,7 @@ body.trade-sheet-open { overflow: hidden; }
   padding: 4px; border-radius: var(--hr-radius-md);
 }
 .trade-pick-tile {
+  position: relative;
   display: flex; flex-direction: column; gap: 4px; cursor: pointer; padding: 0;
   overflow: hidden; border-radius: var(--hr-radius-md);
   background: var(--hr-bg-2); border: 2px solid var(--hr-line);
@@ -3281,6 +3342,65 @@ body.trade-sheet-open { overflow: hidden; }
 .trade-pick-tile img { width: 100%; aspect-ratio: 1/1; object-fit: cover; display: block; }
 .trade-pick-tile .trade-tile-noimg { width: 100%; aspect-ratio: 1/1; font-size: 24px; }
 .trade-pick-tile span { font-size: 10.5px; font-weight: 700; color: var(--hr-fg-1); padding: 0 4px 6px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Multi-select checkbox overlay (top-left) — empty box until picked, mint check when on. */
+.trade-pick-check {
+  position: absolute; top: 6px; left: 6px; z-index: 2;
+  width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center;
+  background: rgba(15,16,20,.7); border: 2px solid rgba(255,255,255,.55);
+  color: transparent; font-size: 12px; font-weight: 900; line-height: 1;
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  transition: background .12s, border-color .12s, color .12s;
+}
+.trade-pick-tile.is-sel .trade-pick-check { background: var(--hr-primary); border-color: var(--hr-primary); color: var(--hr-on-primary); }
+
+/* Select-all / count bar above a multi-select picker. */
+.trade-pick-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.trade-pick-all {
+  cursor: pointer; padding: 6px 13px; border-radius: var(--hr-radius-pill);
+  font-family: var(--hr-sans); font-weight: 800; font-size: 12px;
+  color: var(--hr-primary); background: rgba(81,255,165,.08); border: 1px solid rgba(81,255,165,.35);
+  transition: background .15s, border-color .15s;
+}
+.trade-pick-all:hover { background: rgba(81,255,165,.16); border-color: var(--hr-primary); }
+.trade-pick-all[disabled] { opacity: .5; cursor: not-allowed; }
+.trade-pick-count { font-size: 12.5px; font-weight: 800; color: var(--hr-fg-1); }
+.trade-pick-clear { cursor: pointer; margin-left: auto; padding: 4px 8px; font-size: 12px; font-weight: 800; color: var(--hr-fg-2); background: none; border: none; text-decoration: underline; text-underline-offset: 3px; border-radius: 8px; }
+.trade-pick-clear:hover { color: var(--hr-alert); }
+
+/* Mass-list panel (2+ Creatures/parcels): apply-all, per-item price rows, total, batch button. */
+.trade-mass { display: flex; flex-direction: column; gap: 14px; }
+.trade-mass-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.trade-mass-head .trade-form-h { margin: 0; }
+.trade-mass-applyall { display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: var(--hr-radius-md); background: rgba(255,255,255,.03); border: 1px solid var(--hr-line); }
+.trade-mass-applyall input { flex: 1; min-width: 0; }
+.trade-mass-dur { margin: 0; }
+.trade-mass-rows { display: flex; flex-direction: column; gap: 8px; max-height: min(46vh, 460px); overflow-y: auto; padding-right: 2px; }
+.trade-mass-row { display: grid; grid-template-columns: 40px 1fr auto auto; gap: 10px; align-items: center; }
+.trade-mass-thumb { width: 40px; height: 40px; border-radius: var(--hr-radius-sm); overflow: hidden; background: var(--hr-bg-2); border: 1px solid var(--hr-line); flex: 0 0 auto; }
+.trade-mass-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.trade-mass-thumb img.is-pet, .trade-mass-thumb img[data-fallback] { object-fit: contain; padding: 8%; box-sizing: border-box; }
+.trade-mass-thumb .trade-tile-noimg { width: 100%; height: 100%; display: grid; place-items: center; font-size: 18px; }
+.trade-mass-num { font-family: var(--hr-sans); font-weight: 800; font-size: 13px; color: var(--hr-fg-0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.trade-mass-price { display: flex; align-items: center; gap: 4px; }
+.trade-mass-price-in { width: 84px; text-align: right; }
+.trade-mass-unit { font-size: 11px; font-weight: 800; color: var(--hr-fg-3); }
+.trade-mass-rm { cursor: pointer; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.06); border: 1px solid var(--hr-line); color: var(--hr-fg-2); font-size: 14px; line-height: 1; transition: background .15s, color .15s, border-color .15s; }
+.trade-mass-rm:hover { background: var(--hr-alert-15); color: var(--hr-alert); border-color: rgba(255,91,149,.4); }
+.trade-mass-total { font-size: 13px; font-weight: 700; color: var(--hr-fg-1); padding-top: 2px; }
+.trade-mass-total b { color: var(--hr-primary); font-weight: 900; }
+
+/* Mass-transfer selection strip: the picked Creatures about to be sent to one address. */
+.trade-xfer-selected { padding: 12px 14px; border-radius: var(--hr-radius-lg); border: 1px solid rgba(81,255,165,.4); background: linear-gradient(180deg, rgba(81,255,165,.09), rgba(81,255,165,.02)); }
+.trade-xfer-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.trade-xfer-chips { display: flex; flex-wrap: wrap; gap: 8px; max-height: 210px; overflow-y: auto; }
+.trade-xfer-chip { position: relative; width: 58px; }
+.trade-xfer-thumb { width: 58px; height: 58px; border-radius: var(--hr-radius-md); overflow: hidden; background: var(--hr-bg-2); border: 1px solid var(--hr-line); }
+.trade-xfer-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.trade-xfer-thumb img.is-pet, .trade-xfer-thumb img[data-fallback] { object-fit: contain; padding: 8%; box-sizing: border-box; }
+.trade-xfer-thumb .trade-tile-noimg { width: 100%; height: 100%; display: grid; place-items: center; font-size: 20px; }
+.trade-xfer-num { display: block; font-size: 10px; font-weight: 700; color: var(--hr-fg-2); text-align: center; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trade-xfer-rm { position: absolute; top: -6px; right: -6px; cursor: pointer; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--hr-bg-4); border: 1px solid var(--hr-line-strong); color: var(--hr-fg-1); font-size: 12px; line-height: 1; }
+.trade-xfer-rm:hover { background: var(--hr-alert); color: #fff; border-color: var(--hr-alert); }
 
 /* My listings strip */
 .trade-mine { margin-bottom: 18px; }
@@ -3352,6 +3472,84 @@ body.trade-sheet-open { overflow: hidden; }
 .trade-history-badge.is-sent     { color: var(--hr-fg-1);      background: rgba(255,255,255,.06); border-color: var(--hr-line); }
 .trade-history-badge.is-cancelled { color: var(--hr-alert);    background: var(--hr-alert-15);     border-color: rgba(255,91,149,.4); }
 .trade-history-badge.is-expired   { color: var(--hr-fg-2);     background: rgba(255,255,255,.05);  border-color: var(--hr-line); }
+
+/* Sales history — collection-wide COMPLETED sales, a scannable list of comparables for
+   price discovery. Shares the Browse filter sidebar (.trade-side); each row is a glass card:
+   art · details (name/type, traits, buyer+seller, date, links) · the price actually paid. */
+.trade-sales { display: flex; flex-direction: column; gap: 12px; }
+.trade-sale-card {
+  display: grid; grid-template-columns: 72px 1fr auto; gap: 14px; align-items: center;
+  padding: 12px 14px; border-radius: var(--hr-radius-lg);
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+  border: 1px solid var(--hr-line);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+  transition: transform .15s, border-color .15s, box-shadow .15s;
+  animation: trade-sale-in .4s ease both;
+}
+.trade-sale-card:hover { transform: translateY(-2px); border-color: var(--hr-line-strong); box-shadow: var(--hr-shadow-2), 0 0 22px rgba(81,255,165,.10); }
+@keyframes trade-sale-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .trade-sale-card { animation: none; } }
+/* Clickable thumbnail — opens the asset inside our own marketplace (button reset). */
+.trade-sale-media {
+  position: relative; width: 72px; height: 72px; border-radius: var(--hr-radius-md);
+  overflow: hidden; background: var(--hr-bg-2); padding: 0; border: 1px solid var(--hr-line);
+  cursor: pointer; transition: border-color .15s, box-shadow .15s;
+}
+.trade-sale-media:hover { border-color: var(--hr-primary); box-shadow: 0 0 0 3px var(--hr-primary-25); }
+.trade-sale-media:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; }
+.trade-sale-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.trade-sale-img.is-pet { object-fit: contain; padding: 8%; box-sizing: border-box; }
+.trade-sale-media .trade-tile-noimg { width: 100%; height: 100%; display: grid; place-items: center; font-size: 30px; }
+.trade-sale-body { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.trade-sale-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+/* Name is a button that opens the asset in-marketplace — reset to a heading-like link. */
+.trade-sale-name {
+  font-family: var(--hr-sans); font-weight: 800; font-size: 14px; color: var(--hr-fg-0);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
+}
+.trade-sale-name:hover { color: var(--hr-primary); }
+.trade-sale-name:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; border-radius: 4px; }
+.trade-sale-type { font-size: 10.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: var(--hr-fg-3); }
+/* Tag row: rarity + rank (reused chips, un-absolute-positioned here) + for-sale status. */
+.trade-sale-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.trade-sale-tags .trade-rar,
+.trade-sale-tags .trade-rank { position: static; top: auto; left: auto; right: auto; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.trade-sale-status {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .02em;
+  padding: 3px 9px; border-radius: var(--hr-radius-pill); border: 1px solid transparent;
+}
+.trade-sale-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.trade-sale-status.is-listed { color: var(--hr-primary); background: rgba(81,255,165,.12); border-color: rgba(81,255,165,.4); }
+.trade-sale-status.is-unlisted { color: var(--hr-fg-3); background: rgba(255,255,255,.05); border-color: var(--hr-line); }
+.trade-sale-traits { display: flex; flex-wrap: wrap; gap: 5px; }
+.trade-sale-trait { font-size: 10.5px; font-weight: 700; color: var(--hr-fg-1); background: rgba(255,255,255,.06); border: 1px solid var(--hr-line); border-radius: var(--hr-radius-pill); padding: 2px 8px; }
+.trade-sale-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 14px; font-size: 11.5px; }
+.trade-sale-party { display: inline-flex; align-items: center; gap: 5px; color: var(--hr-fg-2); font-weight: 600; }
+.trade-sale-party-k { color: var(--hr-fg-3); font-weight: 700; text-transform: uppercase; font-size: 10px; letter-spacing: .03em; }
+.trade-sale-party code { color: var(--hr-fg-1); font-size: 11px; }
+.trade-sale-when { color: var(--hr-fg-2); font-weight: 600; margin-left: auto; }
+.trade-sale-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.trade-sale-link { color: var(--hr-secondary); font-weight: 700; font-size: 11.5px; text-decoration: none; }
+.trade-sale-link:hover { text-decoration: underline; }
+/* Primary "View in marketplace" (a button) — mint pill so it reads as the main action. */
+.trade-sale-link.is-view {
+  color: var(--hr-primary); background: rgba(81,255,165,.10); border: 1px solid rgba(81,255,165,.35);
+  border-radius: var(--hr-radius-pill); padding: 4px 12px; cursor: pointer; font-family: var(--hr-sans);
+  transition: background .15s, border-color .15s;
+}
+.trade-sale-link.is-view:hover { text-decoration: none; background: rgba(81,255,165,.18); border-color: var(--hr-primary); }
+.trade-sale-link.is-view:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; }
+.trade-sale-price { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; white-space: nowrap; }
+.trade-sale-eth { font-family: var(--hr-sans); font-weight: 900; font-size: 16px; color: var(--hr-primary); }
+.trade-sale-usd { font-size: 11.5px; color: var(--hr-fg-3); }
+@media (max-width: 560px) {
+  .trade-sale-card { grid-template-columns: 58px 1fr; gap: 11px; }
+  .trade-sale-media { width: 58px; height: 58px; }
+  .trade-sale-price { grid-column: 1 / -1; text-align: left; align-items: baseline; flex-direction: row; gap: 8px; }
+  .trade-sale-when { margin-left: 0; }
+}
 
 /* Token detail modal */
 body.trade-modal-open { overflow: hidden; }

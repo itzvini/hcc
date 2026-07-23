@@ -73,6 +73,7 @@ const IS_ADDR = /^0x[0-9a-f]{40}$/;
 // powers Immutable's own toolkit bridge) pre-set to ETH-on-Ethereum → ETH-on-zkEVM;
 // unknown params degrade gracefully to Squid's defaults.
 const IMX_ETH_TOKEN = '0x52a6c53869ce09a731cd772f245b97a4401d3348';
+const IMX_USDC_TOKEN = '0x6de8acc0d406837030ce4dd28e7c08c5a96a30d2'; // bridged USDC on zkEVM (6 decimals, verified on-chain)
 const SQUID_NATIVE = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'; // Squid's native-coin placeholder
 const BRIDGE_URL = `https://app.squidrouter.com/?chains=1,13371&tokens=${SQUID_NATIVE},${IMX_ETH_TOKEN}`;
 // The reverse, for sellers cashing out their proceeds: ETH-on-zkEVM → ETH-on-Ethereum.
@@ -80,6 +81,9 @@ const CASHOUT_URL = `https://app.squidrouter.com/?chains=13371,1&tokens=${IMX_ET
 // LAND offers settle in WETH on Ethereum mainnet — a seller's proceeds arrive as this ERC-20
 // (invisible in MetaMask until added). Canonical mainnet WETH.
 const WETH_TOKEN = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
+// USDC on Ethereum mainnet (Circle) — the dollar-pegged LAND listing currency (6 decimals,
+// verified on-chain). A USDC LAND buyer's balance/allowance are read against this.
+const USDC_MAINNET_TOKEN = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
 // IMX is the NATIVE gas token on Immutable zkEVM — every on-chain action (a buy, a sell's
 // one-time collection approval, a transfer) needs a little, and the ETH ERC-20 can't pay
 // for it. This deep-link bridges native ETH on Ethereum → native IMX on zkEVM (both the
@@ -128,7 +132,9 @@ let ethUsd = null;
 let fxRates = { usd: 1 };   // USD-relative display rates from the listings API
 let currency = 'usd';       // active display currency for the fiat estimate ('eth' = none)
 let sellUnit = 'eth';       // unit the seller types a listing price in: 'eth' or a fiat code
+let sellCurrency = 'eth';   // the currency the listing SETTLES in: 'eth' or 'usdc' (dollar-pegged)
 let offerUnit = 'eth';      // unit the buyer types an offer/bid in: 'eth' or a fiat code
+let offerCurrency = 'eth';  // the currency an offer/bid SETTLES in: 'eth' or 'usdc' (dollar-pegged)
 const CURRENCIES = ['usd', 'eth', 'eur', 'gbp', 'brl', 'rub', 'try', 'jpy', 'cad', 'aud'];
 
 // Explorer state (Creatures only — LAND keeps the plain cursor feed). Filters are
@@ -148,6 +154,20 @@ let browseHadFilters = false;  // whether the LAST APPLIED response was filtered
 let browseFacets = null;       // [{type, values:[{v, n}]}] from the server
 let browsePriceRange = null;   // {min, max} over all listings — price placeholder hints
 let openFacet = null;          // trait type whose value popover is open
+
+// Sales History state — recent completed sales, filtered by the SAME `flt` as Browse
+// (search / price / traits carry over), plus its own time-ordered sort. Facets come back
+// counted over the sold set, so the shared filter bar reads them via curFacets() when this
+// tab is active.
+let salesItems = null;         // null = not loaded; [] = loaded, none matched
+let salesLoading = false;
+let salesError = false;
+let salesPage = 0;
+let salesHasMore = false;
+let salesTotal = null;
+let salesSort = 'recent';      // 'recent' | 'oldest' | 'price-asc' | 'price-desc'
+let salesFacets = null;
+let salesReqId = 0;
 let fltOpenMobile = false;     // filter drawer expanded (mobile)
 let fltDebounce = null;
 let browseReqId = 0;           // drops stale responses when filters change mid-flight
@@ -222,6 +242,9 @@ function resetBrowseForView() {
   browseCollectionTotal = null; browseScope = flt.scope; browseIndexing = false;
   browsePage = 0; browseHasMore = false; browseHadFilters = false;
   browseOwner = null; browseOwnedTotal = null; browseOwnerProfile = null; browseProfileExpandedFor = null;
+  // Sales History shares this collection scope — drop its sold set + facets so the new
+  // collection reloads its own (via maybeLoadSales on the next render).
+  salesItems = null; salesFacets = null; salesPage = 0; salesHasMore = false; salesTotal = null; salesError = false;
   setFltSheet(false);
   clearTimeout(fltDebounce);
 }
@@ -261,7 +284,9 @@ const BUY_BUSY_PHASES = new Set(['prepare', 'approve', 'approveWait', 'fulfill',
 let gasState = null;
 
 // Which action tab is active inside the Trade panel: 'buy' | 'sell' | 'transfer' |
-// 'history' | 'profile'. 'profile' swaps the content area for the holder-profile view
+// 'sales' | 'history' | 'profile'. 'sales' is the collection-wide Sales History (shares
+// the Browse filter bar); 'history' is the connected wallet's own activity ("My History").
+// 'profile' swaps the content area for the holder-profile view
 // (own profile + manage card, or another member's showcase via profileViewSlug).
 let tradeTab = 'buy';
 // Whose profile the 'profile' view shows: a slug, or null for the signed-in member's
@@ -306,11 +331,22 @@ let sellerLoading = false;
 let histItems = null;      // null = not loaded; [] = loaded, none
 let historyLoading = false;
 let historyError = false;
-let sellSel = null;        // tokenId picked for sale
+// Selection is multi-select (Set of stringified tokenIds), so the picker drives BOTH
+// single listings/transfers and Token-Trove-style mass ops. `sellSel`/`transferSel` stay as
+// the DERIVED single selection (the one token when exactly one is picked, else null) so every
+// existing single-item path — offers, instant-sell, gas checks, LAND — keeps working
+// untouched; the batch panels take over only at 2+. syncSellSel/syncTransferSel keep them in
+// step after any selection change. See toggleSellPick / massSelectAll.
+let sellSet = new Set();
+let transferSet = new Set();
+let sellPrices = new Map();  // tokenId -> typed price string (in sellUnit); shared by the single
+                             // form and the per-item mass-list rows, so prices survive re-renders
+let massState = null;        // batch run: { kind:'sell'|'transfer', total, done, failed:[], phase, msg }
+let sellSel = null;        // tokenId picked for sale (derived: set.size === 1 ? theOne : null)
 let sellPickOffers = null; // specific offers on the picked token (instant-sell target)
 
-// Transfer state: picked Creature + live recipient assessment.
-let transferSel = null;
+// Transfer state: picked Creature(s) + live recipient assessment.
+let transferSel = null;    // derived single selection (transferSet.size === 1 ? theOne : null)
 let transferCheck = null;      // null | 'loading' | {addr, valid, reason?, checksum, contract, active, activityKnown, creatures}
 let transferAck = false;       // explicit confirmation for never-used addresses
 let transferCheckTimer = null;
@@ -378,10 +414,15 @@ function fmtTraitPct(p) {
   if (v > 0 && v < 0.1) return '<0.1%';
   return `${v < 10 ? v.toFixed(1) : Math.round(v)}%`;
 }
-// Look up a trait value's rarity % from the current browse facets (collection-wide,
+// The facet set feeding the shared filter bar: the Sales tab counts over the sold set, so
+// its chips read "how many recent sales match", every other browse-like view uses the
+// listing/collection facets. One helper so every facet renderer stays tab-agnostic.
+function curFacets() { return tradeTab === 'sales' ? salesFacets : browseFacets; }
+
+// Look up a trait value's rarity % from the current facets (collection-wide,
 // scope-independent). Null when facets aren't loaded or the value isn't catalogued.
 function traitPctOf(type, value) {
-  const f = (browseFacets || []).find(x => x.type === type);
+  const f = (curFacets() || []).find(x => x.type === type);
   return f?.values.find(x => x.v === value)?.pct ?? null;
 }
 // USD to prefill the card on-ramp so the buyer RECEIVES enough crypto. Transak's fee (~3.5–5.5%)
@@ -405,6 +446,21 @@ function fmtFiat(eth) {
   const rate = currency === 'usd' ? 1 : fxRates[currency];
   if (rate == null) return '';
   const val = Number(eth) * ethUsd * rate;
+  try {
+    return `≈ ${new Intl.NumberFormat(undefined, { style: 'currency', currency: currency.toUpperCase(), maximumFractionDigits: 0 }).format(val)}`;
+  } catch {
+    return `≈ ${Math.round(val).toLocaleString()} ${currency.toUpperCase()}`;
+  }
+}
+
+// A past sale's fiat value AT THE TIME OF SALE. The server already valued it in USD at that
+// day's ETH rate (priceUsd); other display currencies scale by today's USD→X rate (exact
+// for USD, a close proxy elsewhere — same approach the price chart uses). '' when showing ETH.
+function fmtSaleFiat(usd) {
+  if (currency === 'eth' || usd == null || !Number.isFinite(Number(usd))) return '';
+  const rate = currency === 'usd' ? 1 : fxRates[currency];
+  if (rate == null) return '';
+  const val = Number(usd) * rate;
   try {
     return `≈ ${new Intl.NumberFormat(undefined, { style: 'currency', currency: currency.toUpperCase(), maximumFractionDigits: 0 }).format(val)}`;
   } catch {
@@ -495,6 +551,32 @@ function sellUnitOptions() { return unitOptions(sellUnit); }
 function normOfferUnit() { if (!fiatReady() && offerUnit !== 'eth') offerUnit = 'eth'; return offerUnit; }
 function offerConvHtml(raw) { return unitConvHtml(raw, offerUnit); }
 function offerUnitOptions() { return unitOptions(offerUnit); }
+
+// Resolve a typed offer price into the {currency, price} the offer endpoints expect — the
+// mirror of sellPricePayload. USDC is entered directly in dollars; ETH runs through the unit
+// conversion. (LAND ETH offers settle in WETH on-chain, but the buyer still types plain ETH.)
+function offerPricePayload(raw) {
+  if (offerCurrency === 'usdc') {
+    const s = String(raw || '').trim().replace(',', '.');
+    if (!/^\d{1,9}(\.\d{1,6})?$/.test(s) || !(parseFloat(s) > 0)) return { ok: false, msg: t('trade.err.badPrice') };
+    return { ok: true, currency: 'usdc', price: s };
+  }
+  const conv = unitPriceToEth(raw, offerUnit);
+  return conv.ok ? { ok: true, currency: 'eth', price: conv.eth } : conv;
+}
+// Compact "OFFER IN ETH | USDC" segmented picker for the offer forms (shares offerCurrency).
+function offerCurrencyPickerHtml() {
+  return `<div class="seg trade-cur-seg trade-offer-cur" role="tablist" aria-label="${esc(t('trade.sell.currency'))}">
+    ${LISTING_CURRENCIES.map(c => `<button type="button" role="tab" class="seg-btn ${offerCurrency === c ? 'is-active' : ''}"
+      aria-selected="${offerCurrency === c}" data-act="offer-cur" data-cur="${c}">${esc(CUR_SYM[c])}</button>`).join('')}
+  </div>`;
+}
+// Currency-aware offer amount/line — reuses the listing formatters by shaping the offer row
+// into a listing-like object (offers carry currency + priceAmt/netAmt + priceUsd/netUsd +
+// an ETH-equivalent). Falls back to ETH for untagged/legacy rows.
+const offerAsListing = (o, useNet) => ({ currency: o.currency, totalAmt: useNet ? (o.netAmt ?? o.netEth) : (o.priceAmt ?? o.priceEth), totalEth: useNet ? o.netEth : o.priceEth, priceUsd: useNet ? o.netUsd : o.priceUsd });
+const fmtOfferLine = o => (o.currency ? fmtListingLine(offerAsListing(o, false)) : fmtEthFiat(o.priceEth));
+const fmtOfferNetLine = o => (o.currency ? fmtListingLine(offerAsListing(o, true)) : fmtEthFiat(o.netEth));
 
 // --- Known wallet bugs ---
 // MetaMask extension 13.33.0 shipped a regression that wrongly reports "not enough IMX
@@ -1500,13 +1582,19 @@ async function loadBrowse(reset = true, quiet = false) {
   }
 }
 
+// The filter bar is shared by Buy and Sales History, so a filter change reloads whichever
+// feed is on screen — the sold set on the Sales tab, the listings otherwise.
+function reloadActiveFeed(reset = true) {
+  return tradeTab === 'sales' ? loadSales(reset) : loadBrowse(reset);
+}
+
 // Re-fetch from page 0 after any filter change, debounced for typed input — every
 // keystroke must not become a request (and the rate limiter agrees).
 function applyFilters(debounceMs = 0) {
   clearTimeout(fltDebounce);
-  if (!debounceMs) { patchFilters(); loadBrowse(true); return; }
+  if (!debounceMs) { patchFilters(); reloadActiveFeed(true); return; }
   patchFilters();
-  fltDebounce = setTimeout(() => loadBrowse(true), debounceMs);
+  fltDebounce = setTimeout(() => reloadActiveFeed(true), debounceMs);
 }
 
 function skeletons(n) {
@@ -1521,9 +1609,42 @@ function rankChip(rank) {
   return rank != null ? `<span class="trade-rank" title="${esc(t('trade.filter.rankAria'))}">#${esc(String(rank))}</span>` : '';
 }
 
+// --- Listing currency (ETH + USDC on zkEVM) -------------------------------------------
+// A listing carries its own `currency` ('eth'|'usdc') + native `priceAmt`/`totalAmt` + an
+// all-in `priceUsd`. These helpers show the NATIVE price plus a secondary estimate in the
+// user's chosen display currency, and degrade to the old ETH-only path for rows without a
+// currency tag (LAND parcels, older cached rows).
+const CUR_SYM = { eth: 'ETH', usdc: 'USDC' };
+const LISTING_CURRENCIES = ['eth', 'usdc']; // seller's choice of listing denomination
+function fmtListingAmt(it) {
+  const cur = it.currency || 'eth';
+  const amt = it.totalAmt ?? it.priceAmt ?? it.totalEth ?? it.priceEth;
+  const n = Number(amt);
+  if (!Number.isFinite(n)) return '—';
+  return `${n.toLocaleString(undefined, { maximumFractionDigits: cur === 'usdc' ? 2 : 4 })} ${CUR_SYM[cur] || 'ETH'}`;
+}
+function fmtListingFiat(it) {
+  if (it.currency && it.priceUsd != null) {
+    // Showing prices in ETH: a USDC listing gets its ETH-equivalent as the secondary (when we
+    // know it — some light surfaces like My Listings carry no rate), an ETH listing needs none.
+    if (currency === 'eth') return it.currency === 'eth' || it.totalEth == null ? '' : `≈ ${fmtEth(it.totalEth)}`;
+    const rate = currency === 'usd' ? 1 : fxRates[currency];
+    if (rate == null) return '';
+    const val = it.priceUsd * rate;
+    try { return `≈ ${new Intl.NumberFormat(undefined, { style: 'currency', currency: currency.toUpperCase(), maximumFractionDigits: 0 }).format(val)}`; }
+    catch { return `≈ ${Math.round(val).toLocaleString()} ${currency.toUpperCase()}`; }
+  }
+  return fmtFiat(it.totalEth ?? it.priceEth); // legacy / LAND rows (ETH-only)
+}
+// "0.15 ETH (≈ $282)" / "250 USDC (≈ $250)" — one-line native + estimate, for compact rows.
+function fmtListingLine(it) {
+  const fiat = fmtListingFiat(it);
+  return fiat ? `${fmtListingAmt(it)} (${fiat})` : fmtListingAmt(it);
+}
+
 function tileHtml(it) {
   const unlisted = it.listed === false; // scope=all rows; LAND/listed rows lack the flag
-  const fiat = unlisted ? '' : fmtFiat(it.totalEth ?? it.priceEth);
+  const fiat = unlisted ? '' : fmtListingFiat(it);
   // LAND tiles show the parcel's slime pet (plot art is in the modal); if the parcel
   // has no pet (404) the delegated error handler swaps in the plot image.
   const pet = coll === 'land' ? petUrl(it) : null;
@@ -1534,7 +1655,7 @@ function tileHtml(it) {
     : `<div class="trade-tile-img trade-tile-noimg" aria-hidden="true">${coll === 'land' ? '🗺️' : '🐾'}</div>`;
   const price = unlisted
     ? `<span class="trade-tile-price is-unlisted">${esc(t('trade.filter.unlisted'))}</span>`
-    : `<span class="trade-tile-price">${esc(fmtEth(it.totalEth ?? it.priceEth))}</span>`;
+    : `<span class="trade-tile-price ${it.currency === 'usdc' ? 'is-usdc' : ''}">${esc(fmtListingAmt(it))}</span>`;
   // LAND: one card is a parcel, shown via its slime — lead with the slime's nickname,
   // with the parcel coordinates (the asset you're buying) as the subtitle.
   const sub = coll === 'land' && it.slimeName && it.parcelName
@@ -1761,10 +1882,11 @@ function modalCardHtml() {
     : `<div class="trade-modal-img trade-tile-noimg" aria-hidden="true">🐾</div>`;
 
   const allIn = it.totalEth ?? it.priceEth;
-  const modalFiat = fmtFiat(allIn);
+  const modalFiat = it.currency ? fmtListingFiat(it) : fmtFiat(allIn);
+  const modalPrice = it.currency ? fmtListingAmt(it) : fmtEth(allIn);
   const price = it.priceEth != null
     ? `<div class="trade-modal-price">
-         <span class="trade-modal-price-eth">${esc(fmtEth(allIn))}</span>
+         <span class="trade-modal-price-eth ${it.currency === 'usdc' ? 'is-usdc' : ''}">${esc(modalPrice)}</span>
          ${modalFiat ? `<span class="trade-modal-price-usd">${esc(modalFiat)}</span>` : ''}
          <span class="trade-modal-fees">${esc(t('trade.price.allin'))} ${tipHtml('trade.price.allin.tip')}</span>
        </div>
@@ -2643,22 +2765,36 @@ function dropStaleListing(listingId) {
 // LAND buy: Ethereum mainnet, native-ETH value transaction, no approvals. The
 // prepared calldata is zone-bound to this buyer, so it can't be hijacked.
 async function handleBuyLand(it) {
+  const isUsdc = it.currency === 'usdc';
   try {
     setBuy('prepare');
-    const needWei = BigInt(Math.round((it.totalEth ?? it.priceEth) * 1e6)) * 10n ** 12n + 10n ** 16n; // +0.01 ETH gas cushion
     // Switch to mainnet first so the pre-flight reads the AUTHORITATIVE balance straight
     // from the wallet — the exact figure MetaMask shows and uses to fund the tx. A
     // third-party RPC (e.g. Blockscout) can lag a recent top-up and wrongly block a funded
-    // buyer; the wallet's own eth_getBalance never does. null = read failed → let it through
+    // buyer; the wallet's own read never does. null = read failed → let it through
     // (the wallet still guards at signing).
     await switchToChain('0x1');
-    const balWei = await readNative(account);
-    if (balWei != null && balWei < needWei) {
-      // Short on mainnet ETH — offer a card on-ramp that delivers ETH straight to Ethereum
-      // (Transak, if configured). Minted on click; stash the shortfall (in USD) to prefill.
-      const shortEth = Number(needWei - balWei) / 1e18;
-      setBuy('error', { msg: t('trade.err.landFunds').replace('{x}', fmtEth(Number(needWei) / 1e18)).replace('{y}', fmtEth(Number(balWei) / 1e18)), onramp: { chain: 'ethereum', token: 'ETH', fiat: onrampFiatUsd(shortEth) } });
-      return;
+    if (isUsdc) {
+      // USDC listing: the price is paid in mainnet USDC (6 decimals); only gas is native ETH.
+      // Check the USDC balance and keep a small ETH cushion for the approval + fulfil gas.
+      // (A USDC buyer on-ramp is a follow-up — a buyer must already hold USDC on Ethereum.)
+      const [usdcBal, ethBal] = await Promise.all([readErc20(USDC_MAINNET_TOKEN, account), readNative(account)]);
+      const needUnits = BigInt(Math.round((it.totalAmt ?? it.priceAmt ?? 0) * 1e6));
+      if (usdcBal != null && usdcBal < needUnits) { setBuy('error', { msg: t('trade.err.needUsdcLand').replace('{x}', fmtListingAmt(it)), onramp: { chain: 'ethereum', token: 'USDC', fiat: onrampFiatUsd(Math.max(1, (it.totalAmt ?? it.priceAmt ?? 0) - Number(usdcBal) / 1e6)) } }); return; }
+      if (ethBal != null && ethBal < 3n * 10n ** 15n) { // < ~0.003 ETH → can't cover mainnet gas
+        setBuy('error', { msg: t('trade.err.landGas'), onramp: { chain: 'ethereum', token: 'ETH', fiat: onrampFiatUsd(0.01) } });
+        return;
+      }
+    } else {
+      const needWei = BigInt(Math.round((it.totalEth ?? it.priceEth) * 1e6)) * 10n ** 12n + 10n ** 16n; // +0.01 ETH gas cushion
+      const balWei = await readNative(account);
+      if (balWei != null && balWei < needWei) {
+        // Short on mainnet ETH — offer a card on-ramp that delivers ETH straight to Ethereum
+        // (Transak, if configured). Minted on click; stash the shortfall (in USD) to prefill.
+        const shortEth = Number(needWei - balWei) / 1e18;
+        setBuy('error', { msg: t('trade.err.landFunds').replace('{x}', fmtEth(Number(needWei) / 1e18)).replace('{y}', fmtEth(Number(balWei) / 1e18)), onramp: { chain: 'ethereum', token: 'ETH', fiat: onrampFiatUsd(shortEth) } });
+        return;
+      }
     }
 
     const res = await fetch('/api/market/land/buy/prepare', {
@@ -2673,7 +2809,19 @@ async function handleBuyLand(it) {
       return;
     }
 
+    // A USDC buy carries a one-time conduit approval BEFORE the fulfilment (native ETH buys are
+    // a single tx). Approve first (no pre-flight simulate — a plain ERC-20 approve won't revert),
+    // then simulate + send the fulfilment.
     for (const tx of (data.transactions || [])) {
+      const isApproval = tx.purpose === 'APPROVAL';
+      if (isApproval) {
+        setBuy('approve');
+        const ah = await eth().request({ method: 'eth_sendTransaction', params: [{ from: account, to: tx.to, data: tx.data, value: undefined }] });
+        setBuy('approveWait', { hash: ah });
+        const ar = await waitForReceipt(ah);
+        if (!ar || ar.status !== '0x1') { setBuy('error', { msg: t(skey('trade.err.txFailed')) }); return; }
+        continue;
+      }
       setBuy('fulfill');
       // Simulate before signing. OpenSea can still hand out a "fulfillable" order for a few
       // seconds after a sale, but Seaport reverts an already-filled order — so estimateGas
@@ -2723,12 +2871,24 @@ async function handleBuy(listingId) {
     // wallet round-trip — a real shortfall goes straight to the friendly funds panel
     // (balances + bridge quote). Also means any wallet-side "insufficient" alert that
     // appears later is a false positive (MetaMask's custom-network reads can lag).
-    const [zkEthBal, imxBal] = await Promise.all([readErc20(IMX_ETH_TOKEN, account), readNative(account)]);
-    const needWei = BigInt(Math.round((it.totalEth ?? it.priceEth) * 1e6)) * 10n ** 12n;
-    if (zkEthBal != null && zkEthBal < needWei) { await showFundsHelp(it); return; }
-    // Has the ETH but no gas — the exact wall in the Discord report. Same guided IMX
-    // top-up the Sell/Transfer flows now use, instead of a terse "add some IMX".
-    if (imxBal != null && imxBal < GAS_MIN_WEI) { setBuy('gas'); showGasHelp('buy'); return; }
+    // Currency-aware: a USDC listing is paid in USDC (6 decimals), not ETH — so check the
+    // USDC balance and skip the ETH bridge helper (a USDC buyer on-ramp is a follow-up).
+    if (it.currency === 'usdc') {
+      const [usdcBal, imxBal] = await Promise.all([readErc20(IMX_USDC_TOKEN, account), readNative(account)]);
+      const need = it.totalAmt ?? it.priceAmt ?? 0;
+      const needUnits = BigInt(Math.round(need * 1e6));
+      // Short on USDC → offer a card on-ramp that delivers USDC to zkEVM (if Transak lists it),
+      // prefilled with the shortfall in dollars.
+      if (usdcBal != null && usdcBal < needUnits) { setBuy('error', { msg: t('trade.err.needUsdc').replace('{x}', fmtListingAmt(it)), onramp: { chain: 'zkevm', token: 'USDC', fiat: onrampFiatUsd(Math.max(1, need - Number(usdcBal) / 1e6)) } }); return; }
+      if (imxBal != null && imxBal < GAS_MIN_WEI) { setBuy('gas'); showGasHelp('buy'); return; }
+    } else {
+      const [zkEthBal, imxBal] = await Promise.all([readErc20(IMX_ETH_TOKEN, account), readNative(account)]);
+      const needWei = BigInt(Math.round((it.totalEth ?? it.priceEth) * 1e6)) * 10n ** 12n;
+      if (zkEthBal != null && zkEthBal < needWei) { await showFundsHelp(it); return; }
+      // Has the ETH but no gas — the exact wall in the Discord report. Same guided IMX
+      // top-up the Sell/Transfer flows now use, instead of a terse "add some IMX".
+      if (imxBal != null && imxBal < GAS_MIN_WEI) { setBuy('gas'); showGasHelp('buy'); return; }
+    }
 
     // Up to a couple of passes: a first-time buyer's ERC-20 spend approval must be MINED
     // before the fulfilment can be built (estimateGas needs the allowance in place), so
@@ -3106,8 +3266,8 @@ function modalOffersHtml(meta) {
         ? `<ul class="trade-offer-list">${tokenOffers.slice(0, 3).map((o, i) => `
             <li${i === 0 ? ' class="is-top"' : ''}>
               <div class="trade-offer-main">
-                <span class="trade-offer-price">${esc(fmtEthFiat(o.priceEth))}</span>
-                <span class="trade-offer-meta">${esc(t('trade.offers.net').replace('{x}', fmtEthFiat(o.netEth)))} · ${esc(t('trade.offers.from'))} <code>${esc(shortWallet(o.from))}</code></span>
+                <span class="trade-offer-price ${o.currency === 'usdc' ? 'is-usdc' : ''}">${esc(fmtOfferLine(o))}</span>
+                <span class="trade-offer-meta">${esc(t('trade.offers.net').replace('{x}', fmtOfferNetLine(o)))} · ${esc(t('trade.offers.from'))} <code>${esc(shortWallet(o.from))}</code></span>
               </div>
               ${isOwner ? `<button class="trade-offer-accept" data-act="accept-offer" data-offer="${esc(o.offerId)}" type="button" ${acceptBusyId ? 'disabled' : ''}>${esc(acceptBusyId === o.offerId ? t('trade.accept.busy') : t('trade.offers.accept'))}</button>` : ''}
             </li>`).join('')}</ul>`
@@ -3115,13 +3275,17 @@ function modalOffersHtml(meta) {
 
   const makeBusy = offerState && OFFER_BUSY.has(offerState.phase);
   normOfferUnit();
-  const offerPh = offerUnit === 'eth' ? t('trade.offers.make.ph') : t('trade.offers.make.phFiat');
+  const isUsdcOffer = offerCurrency === 'usdc';
+  const offerPh = isUsdcOffer ? '250' : (offerUnit === 'eth' ? t('trade.offers.make.ph') : t('trade.offers.make.phFiat'));
   const makeForm = !isOwner && account && onZk()
     ? `<form class="trade-offer-form" id="trade-offer-form" data-token="${esc(modalToken)}" novalidate>
+        ${offerCurrencyPickerHtml()}
         <input id="trade-offer-price" type="text" inputmode="decimal" placeholder="${esc(offerPh)}" autocomplete="off" />
-        <select id="trade-offer-unit" class="seg-select trade-offer-unit" aria-label="${esc(t('trade.sell.unitAria'))}" ${fiatReady() ? '' : 'disabled'}>${offerUnitOptions()}</select>
+        ${isUsdcOffer
+          ? `<span class="trade-price-unit trade-cur-fixed">USDC</span>`
+          : `<select id="trade-offer-unit" class="seg-select trade-offer-unit" aria-label="${esc(t('trade.sell.unitAria'))}" ${fiatReady() ? '' : 'disabled'}>${offerUnitOptions()}</select>`}
         <button class="trade-offer-btn" type="submit" ${makeBusy ? 'disabled' : ''}>${esc(t('trade.offers.make.btn'))}</button>
-        <span class="trade-offer-conv" id="trade-offer-conv">${esc(offerConvHtml(''))}</span>
+        <span class="trade-offer-conv" id="trade-offer-conv">${esc(isUsdcOffer ? '' : offerConvHtml(''))}</span>
       </form>`
     : '';
 
@@ -3146,24 +3310,28 @@ function collStripHtml() {
         ${myOffers.map(o => `
           <span class="trade-myoffer-chip ${o.funded === false ? 'is-unfunded' : ''}">
             ${o.funded === false ? `<span class="trade-myoffer-warn" title="${esc(t('trade.coll.unfunded'))}" aria-label="${esc(t('trade.coll.unfunded'))}">⚠</span>` : ''}
-            ${esc(o.collection ? t('trade.coll.chipAny') : `#…${String(o.tokenId).slice(-4)}`)} · ${esc(fmtEthFiat(o.priceEth))}
+            ${esc(o.collection ? t('trade.coll.chipAny') : `#…${String(o.tokenId).slice(-4)}`)} · <span class="${o.currency === 'usdc' ? 'is-usdc' : ''}">${esc(fmtOfferLine(o))}</span>
             <button data-act="cancel-offer" data-offer="${esc(o.offerId)}" type="button" aria-label="${esc(t('trade.coll.cancel'))}" ${acceptBusyId ? 'disabled' : ''}>×</button>
           </span>`).join('')}
       </div>`
     : '';
+  const isUsdcOffer = offerCurrency === 'usdc';
   return `
     <div class="trade-colloffer" id="trade-colloffer">
       <div class="trade-colloffer-row">
         <div class="trade-colloffer-info">
           <span class="trade-colloffer-label">${esc(t('trade.coll.top'))} ${tipHtml('trade.coll.make.p')}</span>
-          <span class="trade-colloffer-price">${top ? esc(fmtEthFiat(top.priceEth)) : esc(t(collOffersError ? 'trade.coll.loadErr' : 'trade.coll.none'))}</span>
+          <span class="trade-colloffer-price ${top?.currency === 'usdc' ? 'is-usdc' : ''}">${top ? esc(fmtOfferLine(top)) : esc(t(collOffersError ? 'trade.coll.loadErr' : 'trade.coll.none'))}</span>
         </div>
         ${account && onZk() ? `
           <form class="trade-offer-form is-inline" id="trade-coll-offer-form" novalidate>
-            <input id="trade-coll-offer-price" type="text" inputmode="decimal" placeholder="${esc(offerUnit === 'eth' ? t('trade.offers.make.ph') : t('trade.offers.make.phFiat'))}" autocomplete="off" />
-            <select id="trade-coll-offer-unit" class="seg-select trade-offer-unit" aria-label="${esc(t('trade.sell.unitAria'))}" ${fiatReady() ? '' : 'disabled'}>${offerUnitOptions()}</select>
+            ${offerCurrencyPickerHtml()}
+            <input id="trade-coll-offer-price" type="text" inputmode="decimal" placeholder="${esc(isUsdcOffer ? '250' : (offerUnit === 'eth' ? t('trade.offers.make.ph') : t('trade.offers.make.phFiat')))}" autocomplete="off" />
+            ${isUsdcOffer
+              ? `<span class="trade-price-unit trade-cur-fixed">USDC</span>`
+              : `<select id="trade-coll-offer-unit" class="seg-select trade-offer-unit" aria-label="${esc(t('trade.sell.unitAria'))}" ${fiatReady() ? '' : 'disabled'}>${offerUnitOptions()}</select>`}
             <button class="trade-offer-btn" type="submit" ${makeBusy ? 'disabled' : ''}>${esc(t('trade.coll.make.btn'))}</button>
-            <span class="trade-offer-conv" id="trade-coll-offer-conv">${esc(offerConvHtml(''))}</span>
+            <span class="trade-offer-conv" id="trade-coll-offer-conv">${esc(isUsdcOffer ? '' : offerConvHtml(''))}</span>
           </form>` : `<span class="trade-colloffer-hint">${esc(t('trade.coll.connectHint'))}</span>`}
       </div>
       ${offerCtx === 'browse' ? offerStatusHtml() : ''}
@@ -3187,21 +3355,24 @@ function landOfferStripHtml() {
         <span class="trade-myoffers-h">${esc(t('trade.coll.mine.h'))}</span>
         ${landMyOffers.map(o => `
           <span class="trade-myoffer-chip">
-            ${esc(t('trade.coll.chipAny'))} · ${esc(fmtEthFiat(o.priceEth))}
+            ${esc(t('trade.coll.chipAny'))} · <span class="${o.currency === 'usdc' ? 'is-usdc' : ''}">${esc(fmtOfferLine(o))}</span>
             <button data-act="cancel-land-offer" data-offer="${esc(o.offerId)}" type="button" aria-label="${esc(t('trade.coll.cancel'))}" ${cancelBusy ? 'disabled' : ''}>×</button>
           </span>`).join('')}
       </div>`
     : '';
+  const isUsdcOffer = offerCurrency === 'usdc';
   return `
     <div class="trade-colloffer" id="trade-landoffer">
       <div class="trade-colloffer-row">
         <div class="trade-colloffer-info">
           <span class="trade-colloffer-label">${esc(t('trade.landoffer.top'))} ${tipHtml('trade.landoffer.tip')}</span>
-          <span class="trade-colloffer-price">${top ? esc(fmtEthFiat(top.priceEth)) : esc(t(landCollOffersError ? 'trade.coll.loadErr' : 'trade.coll.none'))}</span>
+          <span class="trade-colloffer-price ${top?.currency === 'usdc' ? 'is-usdc' : ''}">${top ? esc(fmtOfferLine(top)) : esc(t(landCollOffersError ? 'trade.coll.loadErr' : 'trade.coll.none'))}</span>
         </div>
         ${account ? `
           <form class="trade-offer-form is-inline" id="trade-land-offer-form" novalidate>
-            <input id="trade-land-offer-price" type="text" inputmode="decimal" placeholder="${esc(t('trade.offers.make.ph'))}" autocomplete="off" />
+            ${offerCurrencyPickerHtml()}
+            <input id="trade-land-offer-price" type="text" inputmode="decimal" placeholder="${esc(isUsdcOffer ? '250' : t('trade.offers.make.ph'))}" autocomplete="off" />
+            ${isUsdcOffer ? `<span class="trade-price-unit trade-cur-fixed">USDC</span>` : ''}
             <button class="trade-offer-btn" type="submit" ${makeBusy ? 'disabled' : ''}>${esc(t('trade.landoffer.make.btn'))}</button>
           </form>` : `<span class="trade-colloffer-hint">${esc(t('trade.coll.connectHint'))}</span>`}
       </div>
@@ -3221,8 +3392,8 @@ async function fetchSellPickOffers(tokenId) {
   try {
     const res = await fetch(`/api/market/creatures/offers/token/${encodeURIComponent(tokenId)}`, { headers: { Accept: 'application/json' } });
     const offers = res.ok ? ((await res.json()).offers || []) : [];
-    if (String(sellSel) === String(tokenId)) { sellPickOffers = offers; patchSellView(); }
-  } catch { if (String(sellSel) === String(tokenId)) { sellPickOffers = []; patchSellView(); } }
+    if (String(sellSel) === String(tokenId)) { sellPickOffers = offers; patchSellInstant(); }
+  } catch { if (String(sellSel) === String(tokenId)) { sellPickOffers = []; patchSellInstant(); } }
 }
 
 function instantSellHtml() {
@@ -3317,33 +3488,38 @@ function setAccept(phase, extra) { acceptState = { phase, ...extra }; patchModal
 async function handleMakeOffer(tokenId, priceRaw, ctx) {
   if (offerState && OFFER_BUSY.has(offerState.phase)) return;
   offerCtx = ctx;
-  // The user may type the offer in ETH or a fiat currency — normalize to an ETH string
-  // (the order is always created in ETH on-chain) using the live rate.
-  const conv = unitPriceToEth(priceRaw, offerUnit);
-  if (!conv.ok) return setOffer('error', { msg: conv.msg });
-  const price = conv.eth;
+  // Resolve the typed price to {currency, price}: USDC in dollars, ETH via the unit conversion.
+  const pay = offerPricePayload(priceRaw);
+  if (!pay.ok) return setOffer('error', { msg: pay.msg });
+  const price = pay.price;
 
   try {
     setOffer('prepare');
 
-    // Pre-flight FIRST: an offer must be BACKED by zkEVM ETH (the SDK refuses to create a bid
-    // the maker can't currently cover — that rejection was surfacing as a misleading "Buying
-    // is temporarily unavailable"). Check the balance ourselves and, on a shortfall, go
-    // straight to the warm funds panel (balances + one-tap bridge / card top-off) instead of
-    // a dead-end error — they may well hold the ETH on Ethereum mainnet.
-    const zkEthBal = await readErc20(IMX_ETH_TOKEN, account);
-    const needWei = BigInt(Math.round(Number(price) * 1e6)) * 10n ** 12n;
-    if (zkEthBal != null && zkEthBal < needWei) return showOfferFundsHelp(Number(price), ctx);
+    // Pre-flight FIRST: an offer must be BACKED by the offer currency (the SDK refuses to create
+    // a bid the maker can't currently cover — that rejection surfaced as a misleading "Buying is
+    // temporarily unavailable"). A USDC offer needs USDC (6 dec); an ETH offer needs zkEVM ETH —
+    // on an ETH shortfall we open the warm funds panel (they may hold it on mainnet); a USDC
+    // shortfall shows a plain "top up USDC" (a USDC on-ramp is a separate follow-up).
+    if (pay.currency === 'usdc') {
+      const usdcBal = await readErc20(IMX_USDC_TOKEN, account);
+      const needUnits = BigInt(Math.round(Number(price) * 1e6));
+      if (usdcBal != null && usdcBal < needUnits) return setOffer('error', { msg: t('trade.err.needUsdc').replace('{x}', `${price} USDC`) });
+    } else {
+      const zkEthBal = await readErc20(IMX_ETH_TOKEN, account);
+      const needWei = BigInt(Math.round(Number(price) * 1e6)) * 10n ** 12n;
+      if (zkEthBal != null && zkEthBal < needWei) return showOfferFundsHelp(Number(price), ctx);
+    }
 
     const res = await fetch('/api/market/creatures/offer/prepare', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ makerAddress: account, priceEth: price, ...(tokenId != null ? { tokenId } : {}) }),
+      body: JSON.stringify({ makerAddress: account, currency: pay.currency, price, ...(tokenId != null ? { tokenId } : {}) }),
     });
     const data = await res.json().catch(() => ({}));
     // Server-confirmed shortfall (e.g. balance moved between the check above and prepare) —
     // route to the same funds panel rather than the bare insufficient-funds text.
     if (!res.ok) {
-      if (data.error === 'insufficient') return showOfferFundsHelp(Number(price), ctx);
+      if (data.error === 'insufficient') return pay.currency === 'usdc' ? setOffer('error', { msg: t('trade.err.needUsdc').replace('{x}', `${price} USDC`) }) : showOfferFundsHelp(Number(price), ctx);
       return setOffer('error', { msg: offerServerError(data.error) });
     }
 
@@ -3407,14 +3583,15 @@ function landOfferStatusHtml() {
 async function handleMakeLandOffer(priceRaw) {
   if (landOfferState && OFFER_BUSY.has(landOfferState.phase)) return;
   if (!account) return setLandOffer('error', { msg: t('trade.coll.connectHint') });
-  const price = (priceRaw || '').trim().replace(',', '.');
-  if (!/^\d{1,6}(\.\d{1,18})?$/.test(price) || Number(price) <= 0) return setLandOffer('error', { msg: t('trade.err.badPrice') });
+  const pay = offerPricePayload(priceRaw);
+  if (!pay.ok) return setLandOffer('error', { msg: pay.msg });
+  const price = pay.price;
   try {
     await switchToChain('0x1'); // offers settle on Ethereum mainnet
     setLandOffer('prepare');
     const res = await fetch('/api/market/land/offer/prepare', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ makerAddress: account, priceEth: price }),
+      body: JSON.stringify({ makerAddress: account, currency: pay.currency, price }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return setLandOffer('error', { msg: landOfferServerError(data.error) });
@@ -3638,7 +3815,7 @@ function walletBarHtml() {
 function rarityFacet() {
   // Live counts come from the server; the tier vocabulary is stable so the chips can
   // render (uncounted) before the first response lands.
-  const f = (browseFacets || []).find(x => /rarity/i.test(x.type));
+  const f = (curFacets() || []).find(x => /rarity/i.test(x.type));
   return { type: f?.type || 'Rarity', counts: new Map((f?.values || []).map(({ v, n }) => [v, n])) };
 }
 
@@ -3656,7 +3833,7 @@ function rarityChipsHtml() {
     const sel = traitSelected(type, tier);
     // A tier absent from the facets has zero listings — render it disabled, same as
     // an explicit zero (before the first response, counts are unknown: leave enabled).
-    const n = browseFacets ? (counts.get(tier) ?? 0) : null;
+    const n = curFacets() ? (counts.get(tier) ?? 0) : null;
     return `<button type="button" class="trade-flt-rchip ${sel ? 'is-on' : ''}" data-r="${tier.toLowerCase()}"
       data-act="flt-val" data-type="${esc(type)}" data-val="${esc(tier)}" aria-pressed="${sel}" ${n === 0 && !sel ? 'disabled' : ''}>
       <span class="trade-flt-rdot" aria-hidden="true"></span>${esc(tier)}${n != null ? `<span class="trade-flt-n">${n}</span>` : ''}
@@ -3668,14 +3845,14 @@ function rarityChipsHtml() {
 // visible, each with its collection-wide rarity %. Same toggle mechanism as any trait
 // value (data-act="flt-val"), so it reuses the existing filter handler.
 function tierFacet() {
-  return (browseFacets || []).find(x => x.type === 'Tier') || null;
+  return (curFacets() || []).find(x => x.type === 'Tier') || null;
 }
 function tierChipsHtml() {
   const vals = new Map((tierFacet()?.values || []).map(o => [o.v, o]));
   return TIER_VALUES.map(name => {
     const o = vals.get(name);
     const sel = traitSelected('Tier', name);
-    const n = browseFacets ? (o?.n ?? 0) : null; // unknown before first response → enabled
+    const n = curFacets() ? (o?.n ?? 0) : null; // unknown before first response → enabled
     // Collection browse shows each tier's collection-wide rarity %; wallet/profile
     // views have no % (facets are per-holder) — show the holder's plot COUNT instead.
     const tag = (o ? fmtTraitPct(o.pct) : '') || (n != null ? String(n) : '');
@@ -3701,9 +3878,9 @@ function traitPopHtml(f) {
 }
 
 function traitDropsHtml() {
-  if (!browseFacets) return `<span class="trade-flt-loading">${esc(t('trade.filter.loading'))}</span>`;
+  if (!curFacets()) return `<span class="trade-flt-loading">${esc(t('trade.filter.loading'))}</span>`;
   // 'Tier' is rendered as its own chip group (see tierChipsHtml), so keep it out here.
-  return browseFacets.filter(f => !/rarity/i.test(f.type) && f.type !== 'Tier').map(f => {
+  return curFacets().filter(f => !/rarity/i.test(f.type) && f.type !== 'Tier').map(f => {
     const selCount = flt.traits.get(f.type)?.size || 0;
     const open = openFacet === f.type;
     return `
@@ -3735,6 +3912,7 @@ function extraFiltersActive() {
 function countLineHtml() {
   // Everything here is response-time state (browse*) — mixing in live flt state mid-
   // fetch produced nonsense like "103 in the collection". Dim it while a fetch runs.
+  if (tradeTab === 'sales') return salesCountHtml();
   const ds = browseDataset();
   if (browseOwner || browseOwnerProfile) {
     if (browseTotal == null || browseOwnedTotal == null) return '';
@@ -4122,6 +4300,215 @@ function browseHtml() {
   </section>`;
 }
 
+// --- Sales History (collection-wide completed sales, shares the Browse filter bar) --------
+// The Buy tab shows what sellers ASK; this shows what buyers PAID — real comparables for
+// price discovery. It reuses `flt` (search / price / traits carry straight over from Browse)
+// plus its own time-ordered sort, and renders the same filter sidebar so tweaking a filter
+// here narrows the sold set exactly as it narrows the listings next door.
+
+// Wire format mirrors browseQuery, minus scope (a sale is a sale) and with the sales sort.
+function salesQuery(page) {
+  const p = new URLSearchParams();
+  if (flt.q) p.set('q', flt.q);
+  if (flt.min) p.set('min', flt.min);
+  if (flt.max) p.set('max', flt.max);
+  for (const [type, vals] of flt.traits) for (const v of vals) p.append('t', `${type}:${v}`);
+  if (salesSort !== 'recent') p.set('sort', salesSort);
+  if (page) p.set('page', String(page));
+  return p.toString();
+}
+
+async function loadSales(reset = true) {
+  if (!reset && (!salesHasMore || salesLoading)) return;
+  const page = reset ? 0 : salesPage + 1;
+  if (reset) salesError = false; // keep any current rows on screen through a filter reload (no flash)
+  const rid = ++salesReqId;
+  const startColl = coll;
+  const api = `/api/market/${coll === 'land' ? 'land' : 'creatures'}/sales`;
+  salesLoading = true;
+  patchSalesGrid(); patchFilters();
+  try {
+    const qs = salesQuery(page);
+    const res = await fetch(`${api}${qs ? '?' + qs : ''}`, { headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error('http ' + res.status);
+    const data = await res.json();
+    if (rid !== salesReqId || coll !== startColl) return; // superseded by a newer request / view
+    if (data.ethUsd != null) ethUsd = data.ethUsd;
+    if (data.fxRates) fxRates = data.fxRates;
+    const items = data.items || [];
+    salesItems = reset ? items : (salesItems || []).concat(items);
+    salesPage = data.page ?? page;
+    salesHasMore = !!data.hasMore;
+    salesTotal = data.total ?? null;
+    if (data.facets) salesFacets = data.facets;
+  } catch (err) {
+    if (rid !== salesReqId) return;
+    console.error('Sales history load failed:', err);
+    if (reset) { salesItems = salesItems || []; salesError = true; }
+  } finally {
+    if (rid === salesReqId) { salesLoading = false; patchSalesGrid(); patchFilters(); }
+  }
+}
+function maybeLoadSales() {
+  if (salesItems === null && !salesLoading) loadSales(true);
+}
+
+// Toolbar above the sold list: search + a time-ordered sort + the mobile Filters toggle.
+// No "On sale / All" scope — every row here is a completed sale.
+function salesToolbarHtml() {
+  const sorts = [['recent', 'sortRecent'], ['oldest', 'sortOldest'], ['price-desc', 'sortPriceDesc'], ['price-asc', 'sortPriceAsc']];
+  return `
+  <div class="trade-toolbar">
+    <label class="trade-flt-search">
+      <svg class="trade-flt-sico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M16.5 16.5L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input id="flt-q" type="search" autocomplete="off" enterkeyhint="search" placeholder="${esc(t('trade.filter.search'))}" value="${esc(flt.q)}" aria-label="${esc(t('trade.filter.search'))}" />
+    </label>
+    <select id="sales-sort" class="seg-select trade-flt-sort" aria-label="${esc(t('trade.sales.sortAria'))}">
+      ${sorts.map(([v, k]) => `<option value="${v}" ${salesSort === v ? 'selected' : ''}>${esc(t('trade.filter.' + k))}</option>`).join('')}
+    </select>
+    <button type="button" class="apply-btn-ghost trade-flt-toggle" data-act="flt-drawer" aria-expanded="${fltOpenMobile}" aria-controls="trade-side">
+      ${esc(t('trade.filter.toggle'))}${fltCount() ? `<span class="trade-flt-badge">${fltCount()}</span>` : ''}
+    </button>
+  </div>
+  <div class="trade-flt-active" id="flt-active">${activeChipsHtml()}</div>`;
+}
+
+// "142 recent sales" / "18 sales match" — response-time state, dimmed mid-fetch.
+function salesCountHtml() {
+  if (salesTotal == null) return '';
+  const key = fltActive() ? 'trade.sales.countFiltered' : 'trade.sales.count';
+  return `<span class="trade-flt-count ${salesLoading ? 'is-stale' : ''}" role="status">${esc(t(key).replace('{n}', salesTotal.toLocaleString()))}</span>`;
+}
+
+function salesHtml() {
+  return `<section class="trade-browse has-side">
+    ${filterSideHtml()}
+    <div class="trade-main">
+      <div class="trade-results-head">
+        <h3 class="trade-browse-h">${esc(t('trade.sales.h'))} ${tipHtml(coll === 'land' ? 'trade.sales.subLand' : 'trade.sales.sub')}</h3>
+        <div class="trade-browse-actions">
+          <select class="seg-select trade-currency" id="trade-currency" aria-label="${esc(t('trade.currency.aria'))}">
+            ${CURRENCIES.map(c => `<option value="${c}" ${currency === c ? 'selected' : ''}>${c.toUpperCase()}</option>`).join('')}
+          </select>
+          <button class="apply-btn-ghost trade-refresh" data-act="sales-refresh" type="button">${esc(t('trade.refresh'))}</button>
+        </div>
+      </div>
+      ${salesToolbarHtml()}
+      <div class="trade-sales" id="trade-sales-grid">${salesGridInnerHtml()}</div>
+      <div class="trade-loadmore" id="trade-sales-loadmore">${salesLoadMoreHtml()}</div>
+    </div>
+  </section>`;
+}
+
+// "Jun 12, 2026" for the sale date, in the user's locale.
+function fmtSaleDate(iso) {
+  if (!iso) return '';
+  const ts = Date.parse(iso);
+  if (!Number.isFinite(ts)) return '';
+  try { return new Date(ts).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }); }
+  catch { return ''; }
+}
+
+// The asset's type line: "Creature" / "LAND", with the plot tier or rarity tier when known.
+function saleTypeLabel(s) {
+  if (coll === 'land') {
+    const tier = s.traits && (s.traits.Tier || s.traits.tier);
+    return tier ? `${t('trade.sales.typeLand')} · ${tier}` : t('trade.sales.typeLand');
+  }
+  return t('trade.sales.typeCreature');
+}
+
+// Up to three notable traits as chips (rarity/tier are shown separately as the badge), so a
+// comparable's defining features read at a glance without opening anything.
+function saleTraitChips(s) {
+  const traits = s.traits || {};
+  const chips = Object.entries(traits)
+    .filter(([k, v]) => !/rarity/i.test(k) && k !== 'Tier' && v && !/^none$/i.test(v))
+    .slice(0, 3)
+    .map(([, v]) => `<span class="trade-sale-trait">${esc(v)}</span>`);
+  return chips.length ? `<div class="trade-sale-traits">${chips.join('')}</div>` : '';
+}
+
+function saleCardHtml(s, i = 0) {
+  const pet = coll === 'land' ? petUrl(s) : null;
+  const src = pet || s.image;
+  const fallback = pet && s.image ? ` data-fallback="${esc(s.image)}"` : '';
+  const img = src
+    ? `<img class="trade-sale-img ${pet ? 'is-pet' : ''}" src="${esc(src)}"${fallback} alt="" loading="lazy" />`
+    : `<div class="trade-sale-img trade-tile-noimg" aria-hidden="true">${coll === 'land' ? '🗺️' : '🐾'}</div>`;
+  const fiat = fmtSaleFiat(s.priceUsd);
+  const when = esc(fmtSaleDate(s.at));
+  const listed = s.listedNow != null;
+  // Open the asset inside OUR marketplace (buy modal if it's currently listed, detail +
+  // make-offer if not). knownListed skips the "brand-new listing, syncing…" hunt when unlisted.
+  const openAttrs = `data-act="sale-open" data-token="${esc(s.tokenId)}" data-listed="${listed ? '1' : '0'}"`;
+  const wallets = [];
+  if (s.seller) wallets.push(`<span class="trade-sale-party"><span class="trade-sale-party-k">${esc(t('trade.sales.seller'))}</span><code>${esc(shortWallet(s.seller))}</code></span>`);
+  if (s.buyer) wallets.push(`<span class="trade-sale-party"><span class="trade-sale-party-k">${esc(t('trade.sales.buyer'))}</span><code>${esc(shortWallet(s.buyer))}</code></span>`);
+  const txLink = s.tx
+    ? `<a href="${esc(txExplorerUrl(s.tx))}" target="_blank" rel="noopener" class="trade-sale-link">${esc(t('trade.sales.tx'))} ↗</a>` : '';
+  const assetLink = `<a href="${esc(tokenExplorerUrl(s.tokenId))}" target="_blank" rel="noopener" class="trade-sale-link">${esc(t('trade.sales.asset'))} ↗</a>`;
+  const viewBtn = `<button type="button" class="trade-sale-link is-view" ${openAttrs}>${esc(t('trade.sales.view'))}</button>`;
+  // Status: currently for sale (with its live all-in price) or not listed. Doubles as the
+  // rank/rarity tag row so nothing collides in the little thumbnail corner.
+  const status = listed
+    ? `<span class="trade-sale-status is-listed">${esc(t('trade.sales.forSale'))} · ${esc(fmtEth(s.listedNow))}</span>`
+    : `<span class="trade-sale-status is-unlisted">${esc(t('trade.sales.notListed'))}</span>`;
+  const delay = Math.min(i * 35, 350);
+  return `
+    <article class="trade-sale-card" style="animation-delay:${delay}ms">
+      <button type="button" class="trade-sale-media" ${openAttrs} aria-label="${esc(t('trade.sales.view'))}">${img}</button>
+      <div class="trade-sale-body">
+        <div class="trade-sale-top">
+          <button type="button" class="trade-sale-name" ${openAttrs}>${esc(s.name)}</button>
+          <span class="trade-sale-type">${esc(saleTypeLabel(s))}</span>
+        </div>
+        <div class="trade-sale-tags">${rarityChip(s.rarity)}${rankChip(s.rank)}${status}</div>
+        ${saleTraitChips(s)}
+        <div class="trade-sale-meta">
+          ${wallets.join('')}
+          ${when ? `<span class="trade-sale-when">${when}</span>` : ''}
+        </div>
+        <div class="trade-sale-links">${viewBtn}${assetLink}${txLink}</div>
+      </div>
+      <div class="trade-sale-price">
+        <span class="trade-sale-eth ${s.currency === 'usdc' ? 'is-usdc' : ''}">${esc(s.currency ? fmtListingAmt({ currency: s.currency, totalAmt: s.priceAmt, totalEth: s.priceEth }) : fmtEth(s.priceEth))}</span>
+        ${fiat ? `<span class="trade-sale-usd">${esc(fiat)}</span>` : ''}
+      </div>
+    </article>`;
+}
+
+function salesGridInnerHtml() {
+  if (salesLoading && !(salesItems && salesItems.length)) {
+    return `<div class="trade-grid-state"><span class="trade-mini-spin" aria-hidden="true"></span><p>${esc(t('trade.sales.loading'))}</p></div>`;
+  }
+  if (salesError && !(salesItems && salesItems.length)) {
+    return `<div class="trade-grid-state"><p>${esc(t('trade.sales.error'))}</p>
+      <button class="apply-btn-ghost" data-act="sales-retry" type="button">${esc(t('trade.browse.retry'))}</button></div>`;
+  }
+  if (!salesItems || !salesItems.length) {
+    if (fltActive()) {
+      return `<div class="trade-grid-state"><div class="trade-grid-state-ico" aria-hidden="true">🔍</div><p>${esc(t('trade.sales.noneFiltered'))}</p>
+        <button class="apply-btn-ghost" data-act="flt-clear" type="button">${esc(t('trade.filter.clear'))}</button></div>`;
+    }
+    return `<div class="trade-grid-state"><div class="trade-grid-state-ico" aria-hidden="true">🧾</div><p>${esc(t('trade.sales.none'))}</p></div>`;
+  }
+  return salesItems.map((s, i) => saleCardHtml(s, i)).join('');
+}
+
+function salesLoadMoreHtml() {
+  if (!(salesItems && salesItems.length) || !salesHasMore) return '';
+  return `<button class="apply-btn-ghost" data-act="sales-loadmore" type="button" ${salesLoading ? 'disabled' : ''}>${esc(salesLoading ? t('trade.browse.loadingMore') : t('trade.browse.loadMore'))}</button>`;
+}
+
+function patchSalesGrid() {
+  if (tradeTab !== 'sales') return;
+  const g = root()?.querySelector('#trade-sales-grid');
+  if (g) g.innerHTML = salesGridInnerHtml();
+  const lm = root()?.querySelector('#trade-sales-loadmore');
+  if (lm) lm.innerHTML = salesLoadMoreHtml();
+}
+
 // --- Seller hub (my listings + sell + transfer) ---
 
 // --- Optimistic ownership: a just-bought item, before the indexer knows -------------------
@@ -4234,7 +4621,7 @@ function myListingsHtml() {
               : (l.image ? `<img src="${esc(l.image)}" alt="" loading="lazy" />` : '<div class="trade-tile-noimg">🐾</div>')}
             <div class="trade-mine-info">
               <span class="trade-mine-name">${esc(l.name)}</span>
-              <span class="trade-mine-price">${esc(fmtEthFiat(l.priceEth))}</span>
+              <span class="trade-mine-price">${esc(l.currency ? fmtListingLine(l) : fmtEthFiat(l.priceEth))}</span>
             </div>
             <button class="trade-mine-cancel" data-act="cancel-listing" data-listing="${esc(l.listingId)}" type="button"
               ${cancelBusy ? 'disabled' : ''}>${esc(cancelBusy === l.listingId ? t('trade.mine.cancelling') : t('trade.mine.cancel'))}</button>
@@ -4354,22 +4741,44 @@ function patchHistoryView() {
   view.innerHTML = historyViewHtml();
 }
 
+// Select-all / clear bar above a multi-select picker. "Select all" acts on the CURRENTLY
+// FILTERED set (a trait filter narrows what "all" means); flips to "Deselect all" once the
+// whole filtered set is picked. Shows a live count.
+function pickBarHtml(set) {
+  const ids = invFilteredItems().map(o => String(o.tokenId));
+  const allOn = ids.length > 0 && ids.every(id => set.has(id));
+  const n = set.size;
+  return `<div class="trade-pick-bar">
+    <button type="button" class="trade-pick-all" data-act="mass-all" ${ids.length ? '' : 'disabled'}>${esc(t(allOn ? 'trade.mass.deselectAll' : 'trade.mass.selectAll'))}</button>
+    ${n ? `<span class="trade-pick-count" role="status">${esc(t('trade.mass.selected').replace('{n}', String(n)))}</span>
+    <button type="button" class="trade-pick-clear" data-act="mass-clear">${esc(t('trade.mass.clear'))}</button>` : ''}
+  </div>`;
+}
+
+// One multi-select tile: a checkbox overlay + is-sel highlight, membership from `set`.
+function pickTileHtml(o, act, set) {
+  const on = set.has(String(o.tokenId));
+  const art = coll === 'land' && petUrl(o)
+    ? `<img src="${esc(petUrl(o))}" ${o.image ? `data-fallback="${esc(o.image)}"` : ''} alt="" loading="lazy" />`
+    : (o.image ? `<img src="${esc(o.image)}" alt="" loading="lazy" />` : '<div class="trade-tile-noimg">🐾</div>');
+  return `
+    <button class="trade-pick-tile ${on ? 'is-sel' : ''}" type="button"
+      role="option" aria-selected="${on}"
+      data-act="${act}" data-token="${esc(o.tokenId)}" title="${esc(o.name)}">
+      <span class="trade-pick-check" aria-hidden="true">✓</span>
+      ${art}
+      <span>${esc(o.name.replace(/^Highrise (Creature|LAND) /, ''))}</span>
+    </button>`;
+}
+
 function sellPickerHtml() {
   if (owned === null) return `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t(skey('trade.sell.loadingOwned')))}</div>`;
   if (!invBase().length) return `<p class="trade-form-p">${esc(t(skey('trade.sell.none')))}</p>`;
   const sellable = invFilteredItems();
   if (!sellable.length) return `<p class="trade-form-p">${esc(t('trade.filter.invNone'))} <button type="button" class="trade-flt-clearall" data-act="inv-clear">${esc(t('trade.filter.clear'))}</button></p>`;
-  return `
-    <div class="trade-pick" role="listbox" aria-label="${esc(t(skey('trade.sell.pickAria')))}">
-      ${sellable.map(o => `
-        <button class="trade-pick-tile ${String(sellSel) === String(o.tokenId) ? 'is-sel' : ''}" type="button"
-          role="option" aria-selected="${String(sellSel) === String(o.tokenId)}"
-          data-act="sell-pick" data-token="${esc(o.tokenId)}" title="${esc(o.name)}">
-          ${coll === 'land' && petUrl(o)
-            ? `<img src="${esc(petUrl(o))}" ${o.image ? `data-fallback="${esc(o.image)}"` : ''} alt="" loading="lazy" />`
-            : (o.image ? `<img src="${esc(o.image)}" alt="" loading="lazy" />` : '<div class="trade-tile-noimg">🐾</div>')}
-          <span>${esc(o.name.replace(/^Highrise (Creature|LAND) /, ''))}</span>
-        </button>`).join('')}
+  return `${pickBarHtml(sellSet)}
+    <div class="trade-pick" role="listbox" aria-multiselectable="true" aria-label="${esc(t(skey('trade.sell.pickAria')))}">
+      ${sellable.map(o => pickTileHtml(o, 'sell-pick', sellSet)).join('')}
     </div>`;
 }
 
@@ -4391,7 +4800,7 @@ function tradeTabsHtml() {
   // Both collections have a History tab: Creatures via Immutable's activities + orders APIs,
   // LAND via OpenSea's account events feed.
   const TABS = [['buy', 'trade.tab.buy'], ['sell', 'trade.tab.sell'], ['transfer', 'trade.tab.transfer'],
-    ['history', 'trade.tab.history']];
+    ['sales', 'trade.tab.sales'], ['history', 'trade.tab.myhistory']];
   return `<div class="seg trade-tabs" role="tablist" aria-label="${esc(t('trade.tabs.aria'))}">
     ${TABS.map(([id, key]) => `
       <button type="button" role="tab" class="seg-btn ${tradeTab === id ? 'is-active' : ''}"
@@ -4829,29 +5238,186 @@ function sellViewHtml() {
         <h4 class="trade-form-h">${esc(t(skey('trade.sell.h')))} ${tipHtml(skey('trade.sell.p'))}</h4>
         <div id="trade-pick-wrap">${sellPickerHtml()}</div>
       </div>
-      <div class="trade-wb-side">
-        <form class="trade-form" id="trade-sell-form" novalidate>
-          <label class="trade-field"><span>${esc(t('trade.sell.price'))}</span>
-            <div class="trade-price-row">
-              <input id="trade-sell-price" type="text" inputmode="decimal" placeholder="${esc(sellUnit === 'eth' ? t('trade.sell.price.ph') : t('trade.sell.price.phFiat'))}" autocomplete="off" />
-              <select id="trade-sell-unit" class="seg-select trade-price-unit" aria-label="${esc(t('trade.sell.unitAria'))}" ${sellFiatReady() ? '' : 'disabled'}>
-                ${sellUnitOptions()}
-              </select>
-            </div>
-            <span class="trade-price-conv" id="trade-price-conv">${esc(sellConvHtml(''))}</span></label>
-          ${isLand ? landSellDurationHtml() : ''}
-          ${isLand ? `<div class="trade-sell-net" id="trade-sell-net">${landSellNetHtml('')}</div>` : ''}
-          <button class="trade-send" id="trade-sell-submit" type="submit" ${sellBusy || !sellSel ? 'disabled' : ''}>
-            ${esc(t('trade.sell.btn'))} <span aria-hidden="true">→</span></button>
-          <div id="trade-sell-status" role="status" aria-live="polite">${sellStatusHtml()}</div>
-        </form>
-        ${isLand ? landInstantSellHtml() : instantSellHtml()}
-      </div>
+      <div class="trade-wb-side" id="trade-sell-side">${sellSideHtml()}</div>
     </div>`;
   // Same left filter sidebar + toolbar as Buy, once there's an inventory worth filtering.
   return invHasFilters()
     ? `<section class="trade-browse has-side">${invFilterSideHtml()}<div class="trade-main">${myListingsHtml()}${invToolbarHtml()}${wb}</div></section>`
     : `${myListingsHtml()}${wb}`;
+}
+
+// The Sell action column adapts to the selection: 0-or-1 Creatures keeps the familiar
+// single-listing form (price + List for sale + instant-sell into an offer); 2+ switches to
+// the mass-list panel (per-item prices + apply-to-all + a batch List button). One shared
+// container so a pick just re-renders this side, never the picker (its scroll survives).
+function sellSideHtml() {
+  if (sellSet.size >= 2) return sellMassHtml();
+  // After a batch finishes and every item cleared, keep the "Listed X of N" summary visible
+  // above the (now empty) single panel until the next pick — otherwise the result flashes away.
+  const banner = (massState && massState.kind === 'sell' && massState.phase === 'done')
+    ? `<div class="trade-mass-summary" id="trade-mass-status">${massStatusHtml()}</div>` : '';
+  return banner + sellSingleHtml();
+}
+
+// Segmented "settle in ETH ⟷ USDC" picker. USDC is dollar-pegged, so sellers who want to dodge
+// the swings price directly in dollars — on Creatures (Immutable orderbook, zkEVM USDC) and
+// LAND (OpenSea Seaport, mainnet USDC) alike.
+function sellCurrencyPickerHtml() {
+  return `<div class="trade-field"><span>${esc(t('trade.sell.currency'))} ${tipHtml('trade.sell.currency.tip')}</span>
+    <div class="seg trade-cur-seg" role="tablist" aria-label="${esc(t('trade.sell.currency'))}">
+      ${LISTING_CURRENCIES.map(c => `<button type="button" role="tab" class="seg-btn ${sellCurrency === c ? 'is-active' : ''}"
+        aria-selected="${sellCurrency === c}" data-act="sell-cur" data-cur="${c}">${esc(CUR_SYM[c])}</button>`).join('')}
+    </div></div>`;
+}
+
+function sellSingleHtml() {
+  const isLand = coll === 'land';
+  const sellBusy = sellState && SELL_BUSY_PHASES.has(sellState.phase);
+  const price = sellSel != null ? (sellPrices.get(String(sellSel)) || '') : '';
+  const isUsdc = sellCurrency === 'usdc';
+  // USDC is entered directly in dollars (no ETH/fiat unit conversion); ETH keeps the unit picker.
+  return `
+    <div id="trade-sell-selected">${sellSelectedHtml()}</div>
+    <form class="trade-form" id="trade-sell-form" novalidate>
+      ${sellCurrencyPickerHtml()}
+      <label class="trade-field"><span>${esc(t('trade.sell.price'))}</span>
+        <div class="trade-price-row">
+          <input id="trade-sell-price" type="text" inputmode="decimal" value="${esc(price)}" placeholder="${esc(isUsdc ? '250' : (sellUnit === 'eth' ? t('trade.sell.price.ph') : t('trade.sell.price.phFiat')))}" autocomplete="off" />
+          ${isUsdc
+            ? `<span class="trade-price-unit trade-cur-fixed">USDC</span>`
+            : `<select id="trade-sell-unit" class="seg-select trade-price-unit" aria-label="${esc(t('trade.sell.unitAria'))}" ${sellFiatReady() ? '' : 'disabled'}>${sellUnitOptions()}</select>`}
+        </div>
+        <span class="trade-price-conv" id="trade-price-conv">${esc(isUsdc ? '' : sellConvHtml(price))}</span></label>
+      ${isLand ? landSellDurationHtml() : ''}
+      ${isLand ? `<div class="trade-sell-net" id="trade-sell-net">${landSellNetHtml(price)}</div>` : ''}
+      <button class="trade-send" id="trade-sell-submit" type="submit" ${sellBusy || !sellSel ? 'disabled' : ''}>
+        ${esc(t('trade.sell.btn'))} <span aria-hidden="true">→</span></button>
+      <div id="trade-sell-status" role="status" aria-live="polite">${sellStatusHtml()}</div>
+    </form>
+    <div id="trade-sell-instant">${isLand ? landInstantSellHtml() : instantSellHtml()}</div>`;
+}
+
+function patchSellSide() {
+  const side = root()?.querySelector('#trade-sell-side');
+  if (side) side.innerHTML = sellSideHtml();
+  patchSellTiles();
+}
+// Toggle the picker tiles' selected state in place (never rebuilds the picker → scroll survives).
+function patchSellTiles() {
+  root()?.querySelectorAll('#trade-pick-wrap .trade-pick-tile').forEach(btn => {
+    const on = sellSet.has(String(btn.dataset.token));
+    btn.classList.toggle('is-sel', on);
+    btn.setAttribute('aria-selected', String(on));
+  });
+  const bar = root()?.querySelector('#trade-pick-wrap .trade-pick-bar');
+  if (bar) bar.outerHTML = pickBarHtml(sellSet);
+}
+
+// Sum of the picked items' typed prices, in the SELECTED currency's native units (ETH or
+// dollars) — skips blanks/invalid. Drives the running "total" readout + the submit enable.
+function massSellTotal() {
+  let sum = 0;
+  for (const it of pickedItems(sellSet)) {
+    const pay = sellPricePayload(sellPrices.get(String(it.tokenId)) || '');
+    if (pay.ok) sum += Number(pay.price); // pay.price is a STRING — coerce or it concatenates
+  }
+  return sum;
+}
+// The mass "total" line, currency-aware. LAND nets 6% less (1% OpenSea + 5% royalty); Creatures
+// list fee-free. USDC shows dollars 1:1; ETH shows its fiat estimate.
+function massTotalLineHtml(total) {
+  if (!(total > 0)) return '';
+  const isLand = coll === 'land';
+  const net = isLand ? total * 0.94 : total;
+  const key = isLand ? 'trade.mass.sell.netTotal' : 'trade.mass.sell.total';
+  const shown = sellCurrency === 'usdc'
+    ? `${net.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC`
+    : fmtEthFiat(net);
+  return t(key).replace('{x}', `<b>${esc(shown)}</b>`);
+}
+
+// Mass-list panel (2+ Creatures/parcels picked): a per-item price row for each, an
+// apply-to-all quick-fill, a running total, and one batch List button. Prices persist in
+// `sellPrices` so re-renders never wipe them.
+function sellMassHtml() {
+  const isLand = coll === 'land';
+  const items = pickedItems(sellSet);
+  const busy = massState && massState.phase === 'run';
+  const isUsdc = sellCurrency === 'usdc';
+  // Per-row unit label: dollars when listing in USDC, else the ETH/fiat display unit.
+  const unit = isUsdc ? 'USDC' : sellUnit.toUpperCase();
+  const rowPh = isUsdc ? '250' : (sellUnit === 'eth' ? '0.15' : '250');
+  const total = massSellTotal();
+  const totalLine = massTotalLineHtml(total);
+  const rows = items.map(it => {
+    const k = String(it.tokenId);
+    const num = esc(it.name.replace(/^Highrise (Creature|LAND) /, '')); // name already carries "#1234"
+    const pet = coll === 'land' ? petUrl(it) : null;
+    const src = pet || it.image;
+    const fb = pet && it.image ? ` data-fallback="${esc(it.image)}"` : '';
+    const art = src ? `<img class="${pet ? 'is-pet' : ''}" src="${esc(src)}"${fb} alt="" loading="lazy" />`
+      : `<div class="trade-tile-noimg" aria-hidden="true">${isLand ? '🗺️' : '🐾'}</div>`;
+    return `<div class="trade-mass-row">
+      <div class="trade-mass-thumb">${art}</div>
+      <span class="trade-mass-num" title="${esc(it.name)}">${num}</span>
+      <div class="trade-mass-price">
+        <input type="text" inputmode="decimal" class="trade-mass-price-in" data-token="${esc(k)}"
+          value="${esc(sellPrices.get(k) || '')}" placeholder="${esc(rowPh)}" aria-label="${esc(t('trade.sell.price'))} ${num}" />
+        <span class="trade-mass-unit ${isUsdc ? 'is-usdc' : ''}">${esc(unit)}</span>
+      </div>
+      <button type="button" class="trade-mass-rm" data-act="sell-pick" data-token="${esc(k)}" aria-label="${esc(t('trade.mass.remove'))}" title="${esc(t('trade.mass.remove'))}">×</button>
+    </div>`;
+  }).join('');
+  return `
+    <div class="trade-mass">
+      <div class="trade-mass-head">
+        <h4 class="trade-form-h">${esc(t(skey('trade.mass.sell.h')).replace('{n}', String(items.length)))}</h4>
+        <button type="button" class="trade-flt-clearall" data-act="mass-clear">${esc(t('trade.mass.clear'))}</button>
+      </div>
+      ${sellCurrencyPickerHtml()}
+      <div class="trade-mass-applyall">
+        <input id="trade-mass-all-price" type="text" inputmode="decimal" placeholder="${esc(t('trade.mass.applyPh'))}" autocomplete="off" aria-label="${esc(t('trade.mass.applyAll'))}" />
+        ${isUsdc
+          ? `<span class="trade-price-unit trade-cur-fixed">USDC</span>`
+          : `<select id="trade-sell-unit" class="seg-select trade-price-unit" aria-label="${esc(t('trade.sell.unitAria'))}" ${sellFiatReady() ? '' : 'disabled'}>${sellUnitOptions()}</select>`}
+        <button type="button" class="apply-btn-ghost" data-act="mass-apply-all">${esc(t('trade.mass.apply'))}</button>
+      </div>
+      ${isLand ? `<div class="trade-mass-dur">${landSellDurationHtml()}</div>` : ''}
+      <form class="trade-form" id="trade-mass-sell-form" novalidate>
+        <div class="trade-mass-rows">${rows}</div>
+        ${totalLine ? `<div class="trade-mass-total">${totalLine}</div>` : ''}
+        <button class="trade-send" id="trade-mass-submit" type="submit" ${busy || total <= 0 ? 'disabled' : ''}>
+          ${esc(t('trade.mass.sell.btn').replace('{n}', String(items.length)))} <span aria-hidden="true">→</span></button>
+        <div id="trade-mass-status" role="status" aria-live="polite">${massStatusHtml()}</div>
+      </form>
+    </div>`;
+}
+
+// Batch-run progress/summary, shared by mass-list and mass-transfer. Fields:
+// { kind:'sell'|'transfer', total, i (1-based item in flight), ok, failed:[], phase, msg }.
+function massStatusHtml() {
+  const m = massState;
+  if (!m) return '';
+  if (m.phase === 'run') {
+    const step = t(`trade.mass.${m.kind}.progress`).replace('{i}', String(m.i)).replace('{n}', String(m.total));
+    return `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(step)}${m.failed.length ? ` · ${esc(t('trade.mass.failedSoFar').replace('{f}', String(m.failed.length)))}` : ''}</span></div>`;
+  }
+  if (m.phase === 'error') {
+    return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(m.msg)}</span></div>`;
+  }
+  if (m.phase === 'done') {
+    const okMsg = t(`trade.mass.${m.kind}.done`).replace('{ok}', String(m.ok)).replace('{n}', String(m.total));
+    const failMsg = m.failed.length ? ` ${t('trade.mass.doneFailed').replace('{f}', String(m.failed.length))}` : '';
+    return `<div class="trade-status ${m.failed.length ? 'is-warn' : 'is-ok'}"><span aria-hidden="true">${m.failed.length ? '⚠' : '✓'}</span><span>${esc(okMsg)}${esc(failMsg)}</span></div>`;
+  }
+  return '';
+}
+function patchMassStatus() {
+  const el = root()?.querySelector('#trade-mass-status');
+  if (el) el.innerHTML = massStatusHtml();
+  const btn = root()?.querySelector('#trade-mass-submit');
+  const total = massSellTotal();
+  if (btn) btn.disabled = !!(massState && massState.phase === 'run') || total <= 0;
 }
 
 // LAND listing length (Seaport startTime→endTime). A short expiry means abandoned test
@@ -4865,10 +5431,14 @@ function landSellDurationHtml() {
 
 // Live "you'll receive" estimate under the LAND price field — the 6% (1% OpenSea + 5%
 // royalty) is shown up front; the exact split is in the order the wallet shows on sign.
+// Currency-aware: an ETH listing nets ETH, a USDC listing nets USDC (both minus 6%).
 function landSellNetHtml(priceStr) {
   const p = parseFloat(String(priceStr).replace(',', '.'));
   if (!(p > 0)) return `<span class="trade-sell-net-hint">${esc(t('trade.sell.feeNote'))}</span>`;
-  return `<span class="trade-sell-net-hint">${t('trade.sell.netNote').replace('{net}', `<b>${esc(fmtEth(p * 0.94))} ETH</b>`).replace('{fee}', '6')}</span>`;
+  const net = sellCurrency === 'usdc'
+    ? `${(p * 0.94).toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC`
+    : `${fmtEth(p * 0.94)} ETH`;
+  return `<span class="trade-sell-net-hint">${t('trade.sell.netNote').replace('{net}', `<b>${esc(net)}</b>`).replace('{fee}', '6')}</span>`;
 }
 
 // Picker of transferable Creatures (owned minus actively listed — transferring a
@@ -4881,17 +5451,9 @@ function transferPickerHtml() {
   if (!base.length) return `<p class="trade-form-p">${esc(t(skey('trade.transfer.none')))}</p>${hiddenNote}`;
   const transferable = invFilteredItems();
   if (!transferable.length) return `<p class="trade-form-p">${esc(t('trade.filter.invNone'))} <button type="button" class="trade-flt-clearall" data-act="inv-clear">${esc(t('trade.filter.clear'))}</button></p>${hiddenNote}`;
-  return `
-    <div class="trade-pick" role="listbox" aria-label="${esc(t(skey('trade.transfer.pick')))}">
-      ${transferable.map(o => `
-        <button class="trade-pick-tile ${String(transferSel) === String(o.tokenId) ? 'is-sel' : ''}" type="button"
-          role="option" aria-selected="${String(transferSel) === String(o.tokenId)}"
-          data-act="transfer-pick" data-token="${esc(o.tokenId)}" title="${esc(o.name)}">
-          ${coll === 'land' && petUrl(o)
-            ? `<img src="${esc(petUrl(o))}" ${o.image ? `data-fallback="${esc(o.image)}"` : ''} alt="" loading="lazy" />`
-            : (o.image ? `<img src="${esc(o.image)}" alt="" loading="lazy" />` : '<div class="trade-tile-noimg">🐾</div>')}
-          <span>${esc(o.name.replace(/^Highrise (Creature|LAND) /, ''))}</span>
-        </button>`).join('')}
+  return `${pickBarHtml(transferSet)}
+    <div class="trade-pick" role="listbox" aria-multiselectable="true" aria-label="${esc(t(skey('trade.transfer.pick')))}">
+      ${transferable.map(o => pickTileHtml(o, 'transfer-pick', transferSet)).join('')}
     </div>${hiddenNote}`;
 }
 
@@ -4939,7 +5501,8 @@ function transferCheckHtml() {
 // soft warning has been explicitly acknowledged.
 function transferSendAllowed() {
   const c = transferCheck;
-  return transferSel != null && c && c !== 'loading' && c.valid && (c.active || transferAck);
+  const running = massState && massState.kind === 'transfer' && massState.phase === 'run';
+  return transferSet.size >= 1 && !running && c && c !== 'loading' && c.valid && (c.active || transferAck);
 }
 
 function transferViewHtml() {
@@ -4954,20 +5517,78 @@ function transferViewHtml() {
         <span class="trade-field-label">${esc(t(skey('trade.transfer.pick')))}</span>
         <div id="trade-pick-wrap">${transferPickerHtml()}</div>
       </div>
-      <div class="trade-wb-side">
-        <form class="trade-form" id="trade-transfer-form" novalidate>
-          <label class="trade-field"><span>${esc(t(skey('trade.field.recipient')))}</span>
-            <input id="trade-to" type="text" placeholder="0x…" autocomplete="off" spellcheck="false" /></label>
-          <div id="trade-to-check" aria-live="polite">${transferCheckHtml()}</div>
-          <button class="trade-send" id="trade-send" type="submit" ${transferSendAllowed() ? '' : 'disabled'}>${esc(t(skey('trade.transfer.btn')))} <span aria-hidden="true">→</span></button>
-          <div class="trade-status" id="trade-status" role="status" aria-live="polite"></div>
-        </form>
-      </div>
+      <div class="trade-wb-side" id="trade-transfer-side">${transferSideHtml()}</div>
     </div>`;
   // Same left filter sidebar + toolbar as Buy, once there's an inventory worth filtering.
   return invHasFilters()
     ? `<section class="trade-browse has-side">${invFilterSideHtml()}<div class="trade-main">${invToolbarHtml()}${wb}</div></section>`
     : wb;
+}
+
+// The Transfer action column: a strip of the picked Creatures (any number), one shared
+// recipient + safety check, and a count-aware Send button. One item behaves exactly like
+// the old single transfer; 2+ runs the batch (one confirmation each). Recipient stays put.
+function transferSideHtml() {
+  const to = ''; // the input value is preserved by patchTransferSide, not re-seeded here
+  const n = transferSet.size;
+  const label = n >= 2 ? t('trade.mass.transfer.btn').replace('{n}', String(n)) : t(skey('trade.transfer.btn'));
+  return `
+    <div id="trade-transfer-selected">${transferSelectedHtml()}</div>
+    <form class="trade-form" id="trade-transfer-form" novalidate>
+      <label class="trade-field"><span>${esc(t(skey('trade.field.recipient')))}</span>
+        <input id="trade-to" type="text" value="${esc(to)}" placeholder="0x…" autocomplete="off" spellcheck="false" /></label>
+      <div id="trade-to-check" aria-live="polite">${transferCheckHtml()}</div>
+      <button class="trade-send" id="trade-send" type="submit" ${transferSendAllowed() ? '' : 'disabled'}>${esc(label)} <span aria-hidden="true">→</span></button>
+      <div class="trade-status" id="trade-status" role="status" aria-live="polite">${massState && massState.kind === 'transfer' ? massStatusHtml() : ''}</div>
+    </form>`;
+}
+
+// Strip of picked-to-transfer items (thumb + number + remove ×), or a prompt when empty —
+// the mirror of the Sell selection card, so it's always clear WHAT is about to be sent.
+function transferSelectedHtml() {
+  const items = pickedItems(transferSet);
+  if (!items.length) {
+    return `<div class="trade-sell-selected is-empty">
+      <span class="trade-sell-sel-ph" aria-hidden="true">📦</span>
+      <p>${esc(t(skey('trade.transfer.selectPrompt')))}</p>
+    </div>`;
+  }
+  const chips = items.map(it => {
+    const pet = coll === 'land' ? petUrl(it) : null;
+    const src = pet || it.image;
+    const fb = pet && it.image ? ` data-fallback="${esc(it.image)}"` : '';
+    const art = src ? `<img class="${pet ? 'is-pet' : ''}" src="${esc(src)}"${fb} alt="" loading="lazy" />`
+      : `<div class="trade-tile-noimg" aria-hidden="true">${coll === 'land' ? '🗺️' : '🐾'}</div>`;
+    const num = esc(it.name.replace(/^Highrise (Creature|LAND) /, ''));
+    return `<div class="trade-xfer-chip" title="${esc(it.name)}">
+      <div class="trade-xfer-thumb">${art}</div>
+      <span class="trade-xfer-num">${num}</span>
+      <button type="button" class="trade-xfer-rm" data-act="transfer-pick" data-token="${esc(it.tokenId)}" aria-label="${esc(t('trade.mass.remove'))}" title="${esc(t('trade.mass.remove'))}">×</button>
+    </div>`;
+  }).join('');
+  return `<div class="trade-xfer-selected">
+    <div class="trade-xfer-head"><span class="trade-sell-sel-label">${esc(t('trade.mass.transfer.sending').replace('{n}', String(items.length)))}</span>
+      <button type="button" class="trade-flt-clearall" data-act="mass-clear">${esc(t('trade.mass.clear'))}</button></div>
+    <div class="trade-xfer-chips">${chips}</div>
+  </div>`;
+}
+
+// Re-render the transfer side (selection strip + recipient form) without rebuilding the
+// picker — preserve the typed recipient + its live check across a pick.
+function patchTransferSide() {
+  const side = root()?.querySelector('#trade-transfer-side');
+  if (!side) return;
+  const to = side.querySelector('#trade-to')?.value || '';
+  side.innerHTML = transferSideHtml();
+  const input = side.querySelector('#trade-to');
+  if (input && to) input.value = to;
+  root()?.querySelectorAll('#trade-pick-wrap .trade-pick-tile').forEach(btn => {
+    const on = transferSet.has(String(btn.dataset.token));
+    btn.classList.toggle('is-sel', on);
+    btn.setAttribute('aria-selected', String(on));
+  });
+  const bar = root()?.querySelector('#trade-pick-wrap .trade-pick-bar');
+  if (bar) bar.outerHTML = pickBarHtml(transferSet);
 }
 
 function patchTransferView() {
@@ -5027,8 +5648,95 @@ function viewHtml() {
   if (tradeTab === 'sell')     return `<section class="trade-actions" id="trade-view">${sellViewHtml()}</section>`;
   if (tradeTab === 'transfer') return `<section class="trade-actions" id="trade-view">${transferViewHtml()}</section>`;
   if (tradeTab === 'history') return `<section class="trade-actions" id="trade-view">${historyViewHtml()}</section>`;
+  if (tradeTab === 'sales') return `<div id="trade-view">${salesHtml()}</div>`;
   if (tradeTab === 'profile') return `<section class="trade-profile-view" id="trade-view">${profileViewHtml()}</section>`;
   return `<div id="trade-view">${browseHtml()}</div>`;
+}
+
+// --- Multi-select selection (Sell + Transfer share one model) ---
+// The picker toggles set membership (Token-Trove-style multi-select); the single derived
+// selection powers the unchanged 1-item flows, the set powers the mass panels.
+function selSet() { return tradeTab === 'transfer' ? transferSet : sellSet; }
+function syncSellSel() { sellSel = sellSet.size === 1 ? [...sellSet][0] : null; }
+function syncTransferSel() { transferSel = transferSet.size === 1 ? [...transferSet][0] : null; }
+function toggleSellPick(token) {
+  if (massState && massState.phase !== 'run') massState = null; // starting fresh clears an old summary
+  const k = String(token);
+  if (sellSet.has(k)) { sellSet.delete(k); sellPrices.delete(k); } else sellSet.add(k);
+  syncSellSel();
+}
+function toggleTransferPick(token) {
+  if (massState && massState.phase !== 'run') massState = null;
+  const k = String(token);
+  if (transferSet.has(k)) transferSet.delete(k); else transferSet.add(k);
+  syncTransferSel();
+}
+// Select-all / clear over the CURRENTLY FILTERED pickable set (so a trait filter narrows
+// what "all" means — pick every Cutesy-mouth Creature, then list them). Toggles: if the
+// whole filtered set is already picked, clear it instead.
+function massToggleAll() {
+  const set = selSet();
+  const ids = invFilteredItems().map(o => String(o.tokenId));
+  const allOn = ids.length > 0 && ids.every(id => set.has(id));
+  if (allOn) ids.forEach(id => set.delete(id));
+  else ids.forEach(id => set.add(id));
+  tradeTab === 'transfer' ? syncTransferSel() : syncSellSel();
+}
+function clearSelection() {
+  const set = selSet();
+  set.clear();
+  if (tradeTab !== 'transfer') sellPrices.clear();
+  tradeTab === 'transfer' ? syncTransferSel() : syncSellSel();
+}
+// Picked owned items (excludes anything already listed, same base as the picker), for the
+// mass panels. A filter change never drops an already-picked item — membership is the truth.
+function pickedItems(set) {
+  return invBase().filter(o => set.has(String(o.tokenId)));
+}
+
+// The Creature (or parcel) currently picked to list, from the loaded owned set.
+function sellSelectedItem() {
+  if (sellSel == null || !Array.isArray(owned)) return null;
+  return owned.find(o => String(o.tokenId) === String(sellSel)) || null;
+}
+
+// A confirmation card pinned at the TOP of the "List for sale" column: the picked
+// Creature's thumbnail + number, so it's always unmistakable which one you're listing
+// (picking a tile no longer scrolls the picker away — see patchSellSide). Empty
+// state prompts the pick so the card is never a blank box.
+function sellSelectedHtml() {
+  const it = sellSelectedItem();
+  if (!it) {
+    return `<div class="trade-sell-selected is-empty">
+      <span class="trade-sell-sel-ph" aria-hidden="true">🎯</span>
+      <p>${esc(t(skey('trade.sell.selectPrompt')))}</p>
+    </div>`;
+  }
+  const pet = coll === 'land' ? petUrl(it) : null;
+  const src = pet || it.image;
+  const fallback = pet && it.image ? ` data-fallback="${esc(it.image)}"` : '';
+  const img = src
+    ? `<img class="${pet ? 'is-pet' : ''}" src="${esc(src)}"${fallback} alt="" loading="lazy" />`
+    : `<div class="trade-tile-noimg" aria-hidden="true">${coll === 'land' ? '🗺️' : '🐾'}</div>`;
+  const rarity = it.rarity || (it.traits && (it.traits.Rarity || it.traits.rarity)) || null;
+  return `<div class="trade-sell-selected">
+    <div class="trade-sell-sel-media">${img}</div>
+    <div class="trade-sell-sel-info">
+      <span class="trade-sell-sel-label">${esc(t(skey('trade.sell.selected')))}</span>
+      <span class="trade-sell-sel-name">${esc(it.name)}</span>
+      <div class="trade-sell-sel-tags">${rarityChip(rarity)}${rankChip(it.rank)}</div>
+    </div>
+    <button type="button" class="trade-sell-sel-clear" data-act="sell-pick" data-token="${esc(it.tokenId)}"
+      aria-label="${esc(t('trade.sell.deselect'))}" title="${esc(t('trade.sell.deselect'))}">×</button>
+  </div>`;
+}
+
+// Patch only the instant-sell block (single mode) — used when a picked token's offers
+// arrive async, so a price the user is mid-typing in the same column is never wiped.
+function patchSellInstant() {
+  if (tradeTab !== 'sell') return;
+  const el = root()?.querySelector('#trade-sell-instant');
+  if (el) el.innerHTML = coll === 'land' ? landInstantSellHtml() : instantSellHtml();
 }
 
 // Re-render the active Sell view in place, preserving the typed price — a picker
@@ -5070,19 +5778,30 @@ function sellServerError(code) {
   return t(KEY[code] || 'trade.err.unavailable');
 }
 
+// Resolve the typed price into the {currency, price} the sell endpoints expect. USDC is
+// entered directly in dollars; ETH runs through the ETH/fiat unit conversion.
+function sellPricePayload(raw) {
+  if (sellCurrency === 'usdc') {
+    const s = String(raw || '').trim().replace(',', '.');
+    if (!/^\d{1,9}(\.\d{1,6})?$/.test(s) || !(parseFloat(s) > 0)) return { ok: false, msg: t('trade.err.badPrice') };
+    return { ok: true, currency: 'usdc', price: s };
+  }
+  const conv = sellPriceToEth(raw);
+  return conv.ok ? { ok: true, currency: 'eth', price: conv.eth } : conv;
+}
+
 async function handleSell(form) {
   if (sellState && SELL_BUSY_PHASES.has(sellState.phase)) return;
   if (coll === 'land') return handleSellLand(form);
   if (!sellSel) return setSell('error', { msg: t('trade.err.noSel') });
-  const conv = sellPriceToEth(form.querySelector('#trade-sell-price').value);
-  if (!conv.ok) return setSell('error', { msg: conv.msg });
-  const priceEth = conv.eth;
+  const pay = sellPricePayload(form.querySelector('#trade-sell-price').value);
+  if (!pay.ok) return setSell('error', { msg: pay.msg });
 
   try {
     setSell('prepare');
     const res = await fetch('/api/market/creatures/sell/prepare', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ makerAddress: account, tokenId: sellSel, priceEth }),
+      body: JSON.stringify({ makerAddress: account, tokenId: sellSel, currency: pay.currency, price: pay.price }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return setSell('error', { msg: sellServerError(data.error) });
@@ -5120,7 +5839,7 @@ async function handleSell(form) {
     if (!createRes.ok) return setSell('error', { msg: sellServerError(created.error) });
 
     setSell('done');
-    sellSel = null;
+    if (sellSel != null) { sellSet.delete(String(sellSel)); sellPrices.delete(String(sellSel)); syncSellSel(); }
     form.reset();
     refreshAfterTx();      // "my listings" + picker + browse; retries as the orderbook indexes
   } catch (err) {
@@ -5135,16 +5854,15 @@ async function handleSell(form) {
 async function handleSellLand(form) {
   const durationDays = Number(form.querySelector('#trade-sell-duration')?.value) || 7;
   if (!sellSel) return setSell('error', { msg: t(skey('trade.err.noSel')) });
-  const conv = sellPriceToEth(form.querySelector('#trade-sell-price').value);
-  if (!conv.ok) return setSell('error', { msg: conv.msg });
-  const priceEth = conv.eth;
+  const pay = sellPricePayload(form.querySelector('#trade-sell-price').value);
+  if (!pay.ok) return setSell('error', { msg: pay.msg });
 
   try {
     setSell('prepare');
     await switchToChain('0x1'); // sign + approve happen on mainnet (no-op if already there)
     const res = await fetch('/api/market/land/sell/prepare', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ makerAddress: account, tokenId: sellSel, priceEth, durationDays }),
+      body: JSON.stringify({ makerAddress: account, tokenId: sellSel, currency: pay.currency, price: pay.price, durationDays }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return setSell('error', { msg: sellServerError(data.error) });
@@ -5176,7 +5894,7 @@ async function handleSellLand(form) {
     if (!createRes.ok) return setSell('error', { msg: sellServerError(created.error) });
 
     setSell('done');
-    sellSel = null;
+    if (sellSel != null) { sellSet.delete(String(sellSel)); sellPrices.delete(String(sellSel)); syncSellSel(); }
     form.reset();
     // "my listings" + picker + browse, with retries — OpenSea takes a few seconds to index
     // the order and the server re-warms its listings cache ~10s out, so the ~14s retry tick
@@ -5186,6 +5904,79 @@ async function handleSellLand(form) {
     console.error('LAND sell failed:', err);
     setSell('error', { msg: friendlyError(err) });
   }
+}
+
+// --- Mass listing / mass transfer (Token-Trove-style batch ops) -------------------------
+// Both are inherently sequential: each ERC-721 listing is its own gasless signature and each
+// transfer its own on-chain tx, so we run one after another with live progress. Partial
+// success is first-class — a rejection or a single failure never loses the rest.
+const isUserReject = err => err?.code === 4001 || /user (rejected|denied)/i.test(err?.message || '');
+
+// List ONE token — the per-item core the mass loop drives. On Creatures the first item may
+// carry the one-time collection approval (needs IMX gas); every later item is just a
+// signature. Currency ('eth'|'usdc') + native price flow to the same endpoints the single
+// sell uses. Throws on failure (with `.friendly`), `.gas` on IMX shortfall, or 4001 on reject.
+async function listOne(tokenId, currency, price, durationDays) {
+  const isLand = coll === 'land';
+  if (isLand) await switchToChain('0x1');
+  const res = await fetch(isLand ? '/api/market/land/sell/prepare' : '/api/market/creatures/sell/prepare', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(isLand
+      ? { makerAddress: account, tokenId, currency, price, durationDays }
+      : { makerAddress: account, tokenId, currency, price }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(sellServerError(data.error)), { friendly: sellServerError(data.error) });
+  let signature = null;
+  for (const action of (data.actions || [])) {
+    if (action.type === 'TRANSACTION') { // one-time collection approval
+      if (!isLand) { const imxBal = await readNative(account); if (imxBal != null && imxBal < GAS_MIN_WEI) throw Object.assign(new Error('gas'), { gas: true }); }
+      const hash = await eth().request({ method: 'eth_sendTransaction', params: [{ from: account, to: action.to, data: action.data, value: action.value && action.value !== '0x0' ? action.value : undefined }] });
+      const receipt = await waitForReceipt(hash);
+      if (!receipt || receipt.status !== '0x1') throw new Error(t('trade.err.txFailed'));
+    } else if (action.type === 'SIGNABLE') {
+      signature = await signTypedData(action.typedData);
+    }
+  }
+  if (!signature) throw new Error(t('trade.err.unavailable'));
+  const createRes = await fetch(isLand ? '/api/market/land/sell/create' : '/api/market/creatures/sell/create', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(isLand ? { orderParameters: data.orderParameters, signature } : { orderComponents: data.orderComponents, orderHash: data.orderHash, signature }),
+  });
+  const created = await createRes.json().catch(() => ({}));
+  if (!createRes.ok) throw Object.assign(new Error(sellServerError(created.error)), { friendly: sellServerError(created.error) });
+}
+
+async function handleMassSell() {
+  if (massState && massState.phase === 'run') return;
+  const items = pickedItems(sellSet);
+  // Every picked item needs a valid price (in the chosen currency) before we open the wallet.
+  const jobs = [];
+  for (const it of items) {
+    const pay = sellPricePayload(sellPrices.get(String(it.tokenId)) || '');
+    if (!pay.ok) { massState = { kind: 'sell', total: items.length, i: 0, ok: 0, failed: [], phase: 'error', msg: t('trade.mass.sell.needPrices') }; patchMassStatus(); return; }
+    jobs.push({ tokenId: String(it.tokenId), currency: pay.currency, price: pay.price });
+  }
+  const durationDays = Number(root()?.querySelector('#trade-sell-duration')?.value) || 7;
+  massState = { kind: 'sell', total: jobs.length, i: 0, ok: 0, failed: [], phase: 'run' };
+  patchMassStatus();
+  for (const job of jobs) {
+    massState.i++; patchMassStatus();
+    try {
+      await listOne(job.tokenId, job.currency, job.price, durationDays);
+      sellSet.delete(job.tokenId); sellPrices.delete(job.tokenId);
+      massState.ok++; patchMassStatus();
+    } catch (err) {
+      if (isUserReject(err)) break; // stop the run; keep the rest picked so they can resume
+      if (err?.gas) { massState = null; showGasHelp('sell'); patchSellSide(); return; }
+      console.error('Mass list failed for', job.tokenId, err);
+      massState.failed.push(job.tokenId); patchMassStatus();
+    }
+  }
+  massState.phase = 'done'; patchMassStatus();
+  syncSellSel();
+  refreshAfterTx();
+  patchSellSide(); // reflect the shrunken selection; the summary survives (massState persists)
 }
 
 async function handleCancelListing(listingId) {
@@ -5286,55 +6077,61 @@ async function handleCancelLandOffer(orderHash) {
   }
 }
 
-async function handleTransferSubmit(form) {
-  const status = form.querySelector('#trade-status');
-  const btn    = form.querySelector('#trade-send');
-  const fail = m => { status.className = 'trade-status is-error'; status.innerHTML = `<span aria-hidden="true">⚠</span><span>${esc(m)}</span>`; };
-  const info = m => { status.className = 'trade-status is-info';  status.innerHTML = `<span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(m)}</span>`; };
-  const done = (msg, hash) => {
-    status.className = 'trade-status is-ok';
-    status.innerHTML = `<span aria-hidden="true">✓</span><span>${esc(msg)} <a href="${esc(txExplorerUrl(hash))}" target="_blank" rel="noopener">${esc(t('trade.status.view'))}</a></span>`;
-  };
+// Write batch-transfer progress into the transfer form's status slot (without touching the
+// recipient input), and keep the Send button disabled while a run is in flight.
+function patchTransferStatus() {
+  const el = root()?.querySelector('#trade-transfer-form #trade-status');
+  if (el) el.innerHTML = massStatusHtml();
+  const btn = root()?.querySelector('#trade-send');
+  if (btn) btn.disabled = !transferSendAllowed();
+}
 
-  if (btn.disabled) return;
-  const tokenId = transferSel;
+// Transfer the picked Creatures/parcels to ONE recipient. Unifies single + mass: one item
+// behaves exactly like the old single transfer (one confirmation), 2+ runs sequentially with
+// progress. Each is its own on-chain tx; a rejection or failure keeps the rest picked.
+async function handleMassTransfer(form) {
+  if (massState && massState.kind === 'transfer' && massState.phase === 'run') return;
   const to = (form.querySelector('#trade-to').value || '').trim().toLowerCase();
+  const setError = msg => { massState = { kind: 'transfer', total: 0, i: 0, ok: 0, failed: [], phase: 'error', msg }; patchTransferStatus(); };
   // Belt and braces — the button is disabled unless these hold, but state can race.
-  if (tokenId == null)         return fail(t(skey('trade.err.noTransferSel')));
-  if (!IS_ADDR.test(to))       return fail(t('trade.err.badAddr'));
-  if (to === account)          return fail(t('trade.err.self'));
-  if (to === ZERO)             return fail(t('trade.err.zero'));
-  if (!transferSendAllowed() || transferCheck?.addr?.toLowerCase() !== to) {
-    return fail(t('trade.err.badAddr'));
-  }
+  if (!transferSet.size)  return setError(t(skey('trade.err.noTransferSel')));
+  if (!IS_ADDR.test(to))  return setError(t('trade.err.badAddr'));
+  if (to === account)     return setError(t('trade.err.self'));
+  if (to === ZERO)        return setError(t('trade.err.zero'));
+  if (!transferSendAllowed() || transferCheck?.addr?.toLowerCase() !== to) return setError(t('trade.err.badAddr'));
 
-  btn.disabled = true;
+  const items = pickedItems(transferSet).map(o => String(o.tokenId));
+  massState = { kind: 'transfer', total: items.length, i: 0, ok: 0, failed: [], phase: 'run' };
+  patchTransferStatus();
   try {
-    info(t('trade.status.checking'));
-    // ownerOf reads via the wallet provider — ensure it's on the collection's chain.
-    await switchToChain(C().chainHex);
-    const owner = await ownerOf(C().contract, tokenId);
-    if (owner === null)    { fail(t('trade.err.noToken'));  btn.disabled = false; return; }
-    if (owner !== account) { fail(t('trade.err.notOwner')); btn.disabled = false; return; }
-    // A transfer is always an on-chain tx. On zkEVM that means native IMX for gas — guide
-    // the user to top up rather than letting the send hit MetaMask's phantom shortfall.
-    // (LAND transfers settle on Ethereum and burn mainnet ETH; that's a separate path.)
-    if (coll === 'creatures') {
-      const imxBal = await readNative(account);
-      if (imxBal != null && imxBal < GAS_MIN_WEI) { showGasHelp('transfer'); btn.disabled = !transferSendAllowed(); return; }
-    }
-    info(t('trade.status.confirm'));
-    const hash = await sendTransfer(C().contract, tokenId, to);
-    done(t('trade.status.sent'), hash);
-    transferSel = null; transferCheck = null; transferAck = false;
-    form.querySelector('#trade-to').value = '';
-    dropPendingOwned(tokenId); // if it was a fresh buy, don't let the optimistic copy resurrect it
-    refreshAfterTx(); // the item left this wallet — refresh holdings/balance, retry as the indexer catches up
-  } catch (err) {
-    console.error('Transfer failed:', err);
-    fail(friendlyError(err));
-    btn.disabled = !transferSendAllowed();
+    await switchToChain(C().chainHex); // ownerOf + transfer both read/write via the wallet
+  } catch (err) { setError(friendlyError(err)); return; }
+  // On zkEVM a transfer burns native IMX for gas — one guided top-up up front beats N cryptic
+  // MetaMask "not enough IMX" popups mid-batch. (LAND settles on mainnet ETH — separate path.)
+  if (coll === 'creatures') {
+    const imxBal = await readNative(account);
+    if (imxBal != null && imxBal < GAS_MIN_WEI) { massState = null; showGasHelp('transfer'); return; }
   }
+  for (const tokenId of items) {
+    massState.i++; patchTransferStatus();
+    try {
+      const owner = await ownerOf(C().contract, tokenId);
+      if (owner !== account) { massState.failed.push(tokenId); patchTransferStatus(); continue; }
+      const hash = await sendTransfer(C().contract, tokenId, to);
+      await waitForReceipt(hash);
+      transferSet.delete(tokenId);
+      dropPendingOwned(tokenId);
+      massState.ok++; patchTransferStatus();
+    } catch (err) {
+      if (isUserReject(err)) break; // stop; keep the rest picked so they can resume
+      console.error('Mass transfer failed for', tokenId, err);
+      massState.failed.push(tokenId); patchTransferStatus();
+    }
+  }
+  massState.phase = 'done';
+  syncTransferSel();
+  refreshAfterTx();
+  patchTransferSide(); // strip shrinks to what's left; the summary survives (massStatusHtml)
 }
 
 // Last-known wallet-bar balances per account+collection — re-renders seed from this
@@ -5405,6 +6202,8 @@ function render() {
   }
   // History is read-only by address — load it even when the wallet isn't on the right chain.
   if (account && tradeTab === 'history') maybeLoadHistory();
+  // Sales History is public — no wallet needed. Load it the first time the tab is shown.
+  if (tradeTab === 'sales') maybeLoadSales();
   // The holder-profile pill shows on every tab, so fetch the Discord session state once.
   wireProfileEvents();
   fetchMeForProfile();
@@ -5489,15 +6288,42 @@ function onClick(e) {
       return;
     }
     case 'sell-pick':
-      sellSel = String(sellSel) === String(target.dataset.token) ? null : target.dataset.token;
+      toggleSellPick(target.dataset.token); // multi-select: toggle membership
       sellState = null;
       sellPickOffers = null;
-      // Instant-sell-into-offers is Creatures-only; LAND has no in-site offers yet.
+      // Instant-sell-into-offers is a single-item action, Creatures-only.
       if (sellSel != null && coll === 'creatures') fetchSellPickOffers(sellSel);
-      return patchSellView();
+      // Targeted patch (NOT a full re-render) so the picker's scroll position survives —
+      // the side panel shows the selection card (1) or the mass-list panel (2+).
+      return patchSellSide();
     case 'transfer-pick':
-      transferSel = String(transferSel) === String(target.dataset.token) ? null : target.dataset.token;
-      return patchTransferView();
+      toggleTransferPick(target.dataset.token);
+      return patchTransferSide();
+    case 'mass-all':
+      massToggleAll();
+      return tradeTab === 'transfer' ? patchTransferSide() : patchSellSide();
+    case 'mass-clear':
+      clearSelection();
+      return tradeTab === 'transfer' ? patchTransferSide() : patchSellSide();
+    case 'sell-cur':
+      if (sellCurrency === target.dataset.cur) return;
+      sellCurrency = target.dataset.cur === 'usdc' ? 'usdc' : 'eth';
+      return patchSellSide(); // re-render the price row (unit picker vs fixed USDC)
+    case 'offer-cur': {
+      const next = target.dataset.cur === 'usdc' ? 'usdc' : 'eth';
+      if (offerCurrency === next) return;
+      offerCurrency = next;
+      // Re-render whichever offer surface is showing (modal token-offer, Creature strip, LAND strip).
+      if (modalToken) patchModal();
+      if (coll === 'land') patchLandOfferStrip(); else patchCollStrip();
+      return;
+    }
+    case 'mass-apply-all': {
+      const v = (root()?.querySelector('#trade-mass-all-price')?.value || '').trim();
+      if (!v) return;
+      pickedItems(sellSet).forEach(it => sellPrices.set(String(it.tokenId), v));
+      return patchSellSide(); // rows re-read their value from sellPrices
+    }
     case 'hp-open':        return openProfileView(meState?.holderProfile?.enabled ? meState.holderProfile.slug : null);
     case 'open-profile':   return openProfileView(target.dataset.slug);
     case 'hp-wallets':     hpWalletsOpen = !hpWalletsOpen; hpLinkError = null; return patchProfileCard();
@@ -5582,6 +6408,10 @@ function onClick(e) {
     case 'loadmore':   return loadListings(false);
     case 'retry':      return loadListings(true);
     case 'refresh':    loadListings(true); if (coll === 'creatures') loadCollOffers(); else if (coll === 'land') loadLandCollOffers(); return;
+    case 'sales-loadmore': return loadSales(false);
+    case 'sales-retry':    salesItems = null; salesError = false; return loadSales(true);
+    case 'sales-refresh':  salesItems = null; salesError = false; return loadSales(true);
+    case 'sale-open':      return openDeepLink(target.dataset.token, { knownListed: target.dataset.listed === '1' });
     case 'seller-refresh': loadSellerData(); loadListings(true); return; // manual wallet refresh (Sell/Transfer)
     case 'flt-scope':
       if (flt.scope === target.dataset.scope) return;
@@ -5630,8 +6460,9 @@ function onClick(e) {
   }
 }
 function onSubmit(e) {
-  if (e.target?.id === 'trade-transfer-form') { e.preventDefault(); handleTransferSubmit(e.target); }
-  if (e.target?.id === 'trade-sell-form')     { e.preventDefault(); handleSell(e.target); }
+  if (e.target?.id === 'trade-transfer-form') { e.preventDefault(); handleMassTransfer(e.target); }
+  if (e.target?.id === 'trade-sell-form')      { e.preventDefault(); handleSell(e.target); }
+  if (e.target?.id === 'trade-mass-sell-form') { e.preventDefault(); handleMassSell(); }
   if (e.target?.id === 'trade-offer-form') {
     e.preventDefault();
     handleMakeOffer(e.target.dataset.token, e.target.querySelector('#trade-offer-price')?.value, 'modal');
@@ -5660,6 +6491,10 @@ function onChange(e) {
     invFlt.sort = e.target.value;
     return patchInvFilter();
   }
+  if (e.target?.id === 'sales-sort') {
+    salesSort = e.target.value;
+    return loadSales(true);
+  }
   if (e.target?.id === 'trade-sell-unit') {
     const newUnit = e.target.value;
     const input = root()?.querySelector('#trade-sell-price');
@@ -5674,6 +6509,9 @@ function onChange(e) {
     }
     sellUnit = newUnit;
     try { localStorage.setItem('hcc-trade-sellunit', sellUnit); } catch { /* private mode — fine */ }
+    // Mass panel has no single #trade-sell-price — re-render so every row's unit label +
+    // placeholder + the running total pick up the new unit (typed amounts stay as entered).
+    if (sellSet.size >= 2) { patchSellSide(); return; }
     const convEl = root()?.querySelector('#trade-price-conv');
     if (convEl) convEl.textContent = sellConvHtml(input?.value || '');
     const net = root()?.querySelector('#trade-sell-net'); // LAND only
@@ -5705,6 +6543,7 @@ function onChange(e) {
   currency = e.target.value;
   try { localStorage.setItem('hcc-trade-cur', currency); } catch { /* private mode — fine */ }
   patchGrid();
+  patchSalesGrid(); // re-render sale prices in the newly picked currency (no-op off the Sales tab)
   if (modalToken) patchModal();
 }
 function onInput(e) {
@@ -5722,16 +6561,28 @@ function onInput(e) {
     return patchInvFilter(); // patches facets/chips/picker, not the input — focus survives
   }
   if (e.target?.id === 'trade-sell-price') {
+    if (sellSel != null) sellPrices.set(String(sellSel), e.target.value); // survive re-renders
     const convEl = root()?.querySelector('#trade-price-conv');
-    if (convEl) convEl.textContent = sellConvHtml(e.target.value);
+    if (convEl) convEl.textContent = sellCurrency === 'usdc' ? '' : sellConvHtml(e.target.value); // USDC = dollars, no conversion
     const net = root()?.querySelector('#trade-sell-net'); // LAND only — element absent for Creatures
     if (net) net.innerHTML = landSellNetHtml(sellEthFromInput(e.target.value));
+    return;
+  }
+  // Per-item price on a mass-list row: store it and refresh only the running total + button
+  // (never the inputs — focus/caret survive typing).
+  if (e.target?.classList?.contains('trade-mass-price-in')) {
+    sellPrices.set(String(e.target.dataset.token), e.target.value);
+    const totalEl = root()?.querySelector('#trade-sell-side .trade-mass-total');
+    const total = massSellTotal();
+    if (totalEl) totalEl.innerHTML = massTotalLineHtml(total);
+    const btn = root()?.querySelector('#trade-mass-submit');
+    if (btn) btn.disabled = !!(massState && massState.phase === 'run') || total <= 0;
     return;
   }
   if (e.target?.id === 'trade-offer-price' || e.target?.id === 'trade-coll-offer-price') {
     const convId = e.target.id === 'trade-coll-offer-price' ? '#trade-coll-offer-conv' : '#trade-offer-conv';
     const convEl = root()?.querySelector(convId);
-    if (convEl) convEl.textContent = offerConvHtml(e.target.value);
+    if (convEl) convEl.textContent = offerCurrency === 'usdc' ? '' : offerConvHtml(e.target.value); // USDC = dollars, no conversion
     return;
   }
   if (e.target?.id === 'flt-q') {
@@ -5752,6 +6603,8 @@ function onInput(e) {
 }
 function resetSellerState() {
   owned = null; mine = null; sellSel = null; sellState = null; cancelBusy = null;
+  sellSet.clear(); transferSet.clear(); sellPrices.clear(); massState = null; // drop any selection/batch
+  sellCurrency = 'eth'; // LAND has no USDC path yet; also a clean default per collection
   histItems = null; historyError = false; // per-collection; reload on demand
   myOffers = null; offerState = null; offerCtx = null; acceptState = null; acceptBusyId = null;
   landMyOffers = null; landOfferState = null; landAcceptState = null; landAcceptBusy = false; unwrapState = null;
