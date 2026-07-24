@@ -614,13 +614,27 @@ async function fetchCreatureFloorUsdc() {
   return Number.isFinite(v) && v > 0 ? v : null;
 }
 
-// Daily ETH→USD lookup from CoinGecko (free). Returns { at(ts), current }.
+// Shared CoinGecko fetch. Sends the Demo API key when one is set, which gives us a
+// private per-key rate budget instead of sharing the free per-IP pool — the reason
+// prod (behind Railway's shared egress IPs) hit 429s while local dev didn't. The
+// key stays on api.coingecko.com; pro-api.coingecko.com is paid-plan only.
+const COINGECKO_KEY = process.env.COINGECKO_API_KEY || '';
+function cgFetch(url) {
+  return fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      ...(COINGECKO_KEY && { 'x-cg-demo-api-key': COINGECKO_KEY }),
+    },
+    signal: AbortSignal.timeout(20000),
+  });
+}
+
+// Daily ETH→USD lookup from CoinGecko. Returns { at(ts), current }.
 // at(ts) finds the closest prior day's price (within a week) so each historical
 // sale is valued in USD at the rate that actually applied then, not today's.
 async function fetchEthUsd() {
-  const res = await fetch(
+  const res = await cgFetch(
     'https://api.coingecko.com/api/v3/coins/ethereum/market_chart?vs_currency=usd&days=365&interval=daily',
-    { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(20000) },
   );
   if (!res.ok) throw new Error(`CoinGecko ETH/USD ${res.status}`);
   const body = await res.json();
@@ -652,19 +666,48 @@ async function fetchEthUsd() {
 // latest USD→X rate, which preserves the chart shape and is exact for current values.
 const FX_CURRENCIES = ['usd', 'eur', 'gbp', 'brl', 'rub', 'try', 'jpy', 'cad', 'aud'];
 
-// Current USD-relative FX rates (rate.usd === 1), derived from one CoinGecko call
-// that prices ETH in every target currency. Degrades to USD-only on failure.
-async function fetchFxRates() {
-  const res = await fetch(
-    `https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=${FX_CURRENCIES.join(',')}`,
-    { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(20000) },
-  );
-  if (!res.ok) throw new Error(`CoinGecko FX ${res.status}`);
-  const eth = (await res.json()).ethereum || {};
-  const usd = eth.usd;
-  const rates = { usd: 1 };
-  if (usd) for (const c of FX_CURRENCIES) if (c !== 'usd' && eth[c] != null) rates[c] = eth[c] / usd;
-  return rates;
+// ETH→USD plus USD-relative rates for every display currency, in ONE CoinGecko call.
+// The single source of current FX for the whole server (market snapshot + every
+// marketplace endpoint), so we hit CoinGecko once per cache window instead of once
+// per caller. FX barely moves minute to minute; degrades to the last good value, or
+// USD-only, on failure.
+const mktFxCache = { data: null, at: 0 };
+const MKT_FX_TTL_MS = 15 * 60 * 1000;
+async function getMarketplaceFx() {
+  if (mktFxCache.data && Date.now() - mktFxCache.at < MKT_FX_TTL_MS) return mktFxCache.data;
+  try {
+    const res = await cgFetch(
+      `https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=${FX_CURRENCIES.join(',')}`,
+    );
+    if (!res.ok) throw new Error(`CoinGecko FX ${res.status}`);
+    const eth = (await res.json()).ethereum || {};
+    const ethUsd = eth.usd ?? null;
+    const fxRates = { usd: 1 }; // USD-relative display rates (rate.usd === 1)
+    if (ethUsd) for (const c of FX_CURRENCIES) if (c !== 'usd' && eth[c] != null) fxRates[c] = eth[c] / ethUsd;
+    const data = { ethUsd, fxRates };
+    mktFxCache.data = data; mktFxCache.at = Date.now();
+    return data;
+  } catch (err) {
+    console.error('Marketplace FX failed:', err.message);
+    return mktFxCache.data || { ethUsd: null, fxRates: { usd: 1 } };
+  }
+}
+
+// Daily ETH→USD history, cached, so each past sale can show its value at the rate that
+// actually applied on its day (not today's). fetchEthUsd() returns { at(ts), current };
+// at(ts) clamps to the nearest known day. The single source of daily rates (market
+// snapshot + sales feeds). Degrades to the last good copy on failure.
+const ethUsdDailyCache = { data: null, at: 0, inFlight: null };
+const ETH_USD_DAILY_TTL_MS = 30 * 60 * 1000;
+async function getEthUsdDaily() {
+  const fresh = ethUsdDailyCache.data && Date.now() - ethUsdDailyCache.at < ETH_USD_DAILY_TTL_MS;
+  if (!fresh && !ethUsdDailyCache.inFlight) {
+    ethUsdDailyCache.inFlight = fetchEthUsd()
+      .then(d => { ethUsdDailyCache.data = d; ethUsdDailyCache.at = Date.now(); return d; })
+      .catch(err => { console.error('ETH/USD daily fetch failed:', err.message); return ethUsdDailyCache.data; })
+      .finally(() => { ethUsdDailyCache.inFlight = null; });
+  }
+  return ethUsdDailyCache.data || ethUsdDailyCache.inFlight;
 }
 
 // Bucket sales into daily aggregates: low/high sale, total volume, and trade
@@ -794,11 +837,9 @@ async function fetchLandFromOpenSea(cutoff) {
   };
 }
 
-// LAND fallback via CoinGecko (keyless): current floor + owners only, no history.
+// LAND fallback via CoinGecko: current floor + owners only, no history.
 async function fetchLandFromCoinGecko() {
-  const res = await fetch(`https://api.coingecko.com/api/v3/nfts/ethereum/contract/${LAND_CONTRACT}`, {
-    headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(20000),
-  });
+  const res = await cgFetch(`https://api.coingecko.com/api/v3/nfts/ethereum/contract/${LAND_CONTRACT}`);
   if (!res.ok) throw new Error(`CoinGecko NFT ${res.status}`);
   const b = await res.json();
   return {
@@ -828,15 +869,19 @@ async function computeMarketStats() {
 
   // Each source degrades independently — a transient failure in one (e.g. the
   // orderbook 500ing) blanks just that figure instead of taking down the whole tab.
-  const [creatureSalesRaw, creatureFloorEth, creatureFloorUsdc, land, ethUsd, fxRates] = await Promise.all([
+  // ethUsd + fxRates come from the shared caches (getEthUsdDaily / getMarketplaceFx),
+  // the same ones the marketplace endpoints use, so the snapshot rebuild doesn't spend
+  // extra CoinGecko credit on rates it can read from cache.
+  const [creatureSalesRaw, creatureFloorEth, creatureFloorUsdc, land, ethUsd, fx] = await Promise.all([
     fetchCreatureSales().catch(err => { console.error('Creature sales failed:', err.message); return []; }),
     fetchCreatureFloorEth().catch(err => { console.error('Creature floor failed:', err.message); return null; }),
     fetchCreatureFloorUsdc().catch(err => { console.error('Creature USDC floor failed:', err.message); return null; }),
     fetchLandData(cutoff).catch(err => { console.error('LAND market data failed:', err.message); return null; }),
-    fetchEthUsd().catch(err => { console.error('ETH/USD rate failed:', err.message); return { at: () => null, current: null }; }),
-    fetchFxRates().catch(err => { console.error('FX rates failed:', err.message); return { usd: 1 }; }),
+    getEthUsdDaily().then(d => d || { at: () => null, current: null }).catch(err => { console.error('ETH/USD rate failed:', err.message); return { at: () => null, current: null }; }),
+    getMarketplaceFx().catch(err => { console.error('FX rates failed:', err.message); return { fxRates: { usd: 1 } }; }),
   ]);
 
+  const fxRates = fx.fxRates || { usd: 1 };
   const rate = ethUsd.current;
   const toUsd = eth => (eth != null && rate != null ? Math.round(eth * rate) : null);
   // Normalize every Creature sale to an ETH price: USDC sales convert at their OWN day's rate
@@ -1378,49 +1423,6 @@ async function getMyListingHistory(address) {
     it.image = meta.image || null;
   }
   return { items };
-}
-
-// ETH→USD plus USD-relative rates for every display currency, in ONE CoinGecko call.
-// Independent of the heavy market-stats cache (which can be cold on a fresh boot, so
-// listings used to render with no fiat). Own short cache — FX barely moves minute to
-// minute. Degrades to the last good value, or USD-only, on failure.
-const mktFxCache = { data: null, at: 0 };
-const MKT_FX_TTL_MS = 10 * 60 * 1000;
-async function getMarketplaceFx() {
-  if (mktFxCache.data && Date.now() - mktFxCache.at < MKT_FX_TTL_MS) return mktFxCache.data;
-  try {
-    const res = await fetch(
-      `https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=${FX_CURRENCIES.join(',')}`,
-      { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(20000) },
-    );
-    if (!res.ok) throw new Error(`CoinGecko FX ${res.status}`);
-    const eth = (await res.json()).ethereum || {};
-    const ethUsd = eth.usd ?? null;
-    const fxRates = { usd: 1 }; // USD-relative display rates (rate.usd === 1)
-    if (ethUsd) for (const c of FX_CURRENCIES) if (c !== 'usd' && eth[c] != null) fxRates[c] = eth[c] / ethUsd;
-    const data = { ethUsd, fxRates };
-    mktFxCache.data = data; mktFxCache.at = Date.now();
-    return data;
-  } catch (err) {
-    console.error('Marketplace FX failed:', err.message);
-    return mktFxCache.data || { ethUsd: null, fxRates: { usd: 1 } };
-  }
-}
-
-// Daily ETH→USD history, cached, so each past sale can show its value at the rate that
-// actually applied on its day (not today's). fetchEthUsd() returns { at(ts), current };
-// at(ts) clamps to the nearest known day. Degrades to the last good copy on failure.
-const ethUsdDailyCache = { data: null, at: 0, inFlight: null };
-const ETH_USD_DAILY_TTL_MS = 30 * 60 * 1000;
-async function getEthUsdDaily() {
-  const fresh = ethUsdDailyCache.data && Date.now() - ethUsdDailyCache.at < ETH_USD_DAILY_TTL_MS;
-  if (!fresh && !ethUsdDailyCache.inFlight) {
-    ethUsdDailyCache.inFlight = fetchEthUsd()
-      .then(d => { ethUsdDailyCache.data = d; ethUsdDailyCache.at = Date.now(); return d; })
-      .catch(err => { console.error('ETH/USD daily fetch failed:', err.message); return ethUsdDailyCache.data; })
-      .finally(() => { ethUsdDailyCache.inFlight = null; });
-  }
-  return ethUsdDailyCache.data || ethUsdDailyCache.inFlight;
 }
 
 async function getCreatureListings(cursor = '') {
