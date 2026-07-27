@@ -84,6 +84,10 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
           <button class="nav-link" type="button" id="tab-roadmap" aria-controls="panel-roadmap" data-tab="roadmap" data-i18n="nav.roadmap">Roadmap</button>
         </li>
 
+        <li>
+          <button class="nav-link" type="button" id="tab-collections" aria-controls="panel-collections" data-tab="collections" data-i18n="nav.collections">Collections</button>
+        </li>
+
         <li class="nav-group">
           <button class="nav-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="menu-market" data-i18n="nav.market">Market</button>
           <div class="nav-dropdown" id="menu-market">
@@ -154,6 +158,12 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
       <span class="hub-ico">🧭</span>
       <span class="hub-t" data-i18n="nav.roadmap">Roadmap</span>
       <span class="hub-d" data-i18n="hub.roadmap.d">What's shipping next, in order.</span>
+      <span class="hub-arrow">→</span>
+    </button>
+    <button class="hub-card" type="button" data-goto="collections">
+      <span class="hub-ico">🗂️</span>
+      <span class="hub-t" data-i18n="nav.collections">Collections</span>
+      <span class="hub-d" data-i18n="hub.collections.d">Every drop, grab and store collection the club has ever released.</span>
       <span class="hub-arrow">→</span>
     </button>
     <button class="hub-card" type="button" data-goto="guides">
@@ -296,7 +306,27 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
   <details><summary data-i18n="faq.q5">Is my creature's ownership safe?</summary><p data-i18n="faq.a5">Yes. Plans to migrate creatures off the blockchain have been canceled following Steam approval. If that ever needs to change, we'll tell you early and clearly. No surprises.</p></details>
   <details><summary data-i18n="faq.q7">How much does a Creature cost, and what if I can't afford one yet?</summary><p data-i18n-html="faq.a7">Prices are set by holders, so they range widely: from a few hundred dollars to several thousand, depending on rarity and traits. For live numbers, the <a href="/market">Market page</a> shows the current floor and real sale history. Can't buy in yet? Keep an eye on the Highrise Discord. There are regular giveaways and contests where you can win one for free.</p></details>
   <details><summary data-i18n="faq.q8">I bought a Creature but don't see my role or perks yet. What gives?</summary><p data-i18n="faq.a8">First, make sure the wallet holding it is linked to your Highrise account. That's what connects your NFTs to the club. Once it's linked, your Discord roles and perks sync on their own, usually within an hour. If it's been longer, double-check you linked the right wallet, then ask in the public Highrise Discord.</p></details>
-  <details><summary data-i18n="faq.q9">Which marketplace do I use, and how do I avoid fakes?</summary><p data-i18n-html="faq.a9">Gen 1 Creatures trade on <strong>Token Trove</strong> (Immutable zkEVM). LAND and Gen 2 live on <strong>OpenSea</strong>, under the "Highrise LAND" collection. Important: Gen 1 Creatures are <strong>not</strong> on OpenSea. Any "Highrise Creature" or "Highrise Creature Club" collection you see there is a fake scam. Always reach a marketplace through the official links in the Highrise Discord, never a random DM.</p></details>
+  <details>
+    <summary data-i18n="faq.q9">Where do I buy and sell, and how do I spot a fake?</summary>
+    <div class="faq-body">
+      <p data-i18n-html="faq.a9.lead">Start here. The club's own <a href="/trade">Marketplace</a> lets you browse, buy, sell and transfer straight from your own wallet, in ETH or USDC, with no marketplace fee from us. If you'd rather trade elsewhere, here's where each collection actually lives, so you can check any listing you come across.</p>
+      <ul class="faq-venues">
+        <li class="faq-venue" style="--accent:var(--hr-primary)">
+          <span class="faq-venue-ico" aria-hidden="true">🐉</span>
+          <span><b data-i18n="faq.a9.v1h">Gen 1 Creatures</b> <span data-i18n-html="faq.a9.v1p">live on Immutable zkEVM. Off-site, the one official marketplace is <a href="https://tokentrove.com/collection/Highrise" target="_blank" rel="noopener noreferrer">Token Trove</a>.</span></span>
+        </li>
+        <li class="faq-venue" style="--accent:var(--hr-secondary)">
+          <span class="faq-venue-ico" aria-hidden="true">🗺️</span>
+          <span><b data-i18n="faq.a9.v2h">LAND and its slime pet</b> <span data-i18n-html="faq.a9.v2p">live on Ethereum mainnet. Off-site, the one official collection is <a href="https://opensea.io/collection/highrise-land" target="_blank" rel="noopener noreferrer">Highrise LAND on OpenSea</a>.</span></span>
+        </li>
+        <li class="faq-venue" style="--accent:var(--hr-banana)">
+          <span class="faq-venue-ico" aria-hidden="true">🧟</span>
+          <span><b data-i18n="faq.a9.v3h">Gen 2</b> <span data-i18n="faq.a9.v3p">isn't out. It's still in production, so it doesn't trade anywhere yet. Anything sold as a Gen 2 creature or pet today is fake, without exception.</span></span>
+        </li>
+      </ul>
+      <p class="faq-warn" data-i18n-html="faq.a9.warn"><b>The fake to know:</b> Gen 1 Creatures are not on OpenSea. Every "Highrise Creature" or "Highrise Creature Club" collection you see there is a scam. Reach any marketplace through <a href="/guides/links">the official links</a>, never a DM, and read <a href="/guides/safety">Stay safe</a> before your first trade.</p>
+    </div>
+  </details>
 </section>
 
 </main>
@@ -815,6 +845,22 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
     <p class="rm-note" data-i18n="g2.note">Set order and pacing can shift as the Council weighs in. We'll explain every change in the updates every two weeks.</p>
   </section>
   </div><!-- /gen2 -->
+</main>
+
+<!-- Collections — the full release archive, oldest to newest. js/collections.js fills
+     #collections-app from /collections.json; the loading spinner is the only static bit. -->
+<main id="panel-collections" class="tab-panel" role="region" aria-labelledby="tab-collections" hidden>
+  <section class="wrap col-wrap">
+    <div class="eyebrow" data-i18n="col.eyebrow">The whole archive</div>
+    <h2 data-i18n="col.h2">Collections</h2>
+    <p class="lead" data-i18n="col.lead">Every drop, grab, store collection and giveaway the club has ever put out, oldest to newest. Open any release to see each item that came with it.</p>
+
+    <div id="collections-app" class="col-box" aria-live="polite" aria-busy="true">
+      <div class="apply-loading"><div class="apply-spinner"></div></div>
+    </div>
+
+    <p class="apply-fineprint" data-i18n="col.fineprint">Built from the Highrise item catalogue and the club's gift log. Dates marked with a ~ are worked out from when the items were made, because they landed before the announcements channel existed, so treat those as the right month rather than the exact day.</p>
+  </section>
 </main>
 
 <main id="panel-guides" class="tab-panel" role="region" aria-labelledby="tab-guides" hidden>

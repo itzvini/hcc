@@ -56,6 +56,177 @@ Without key+secret, the **LAND** card CTA is hidden and **Creatures** fall back 
 keyless hosted on-ramp ([toolkit.immutable.com/onramp](https://toolkit.immutable.com/onramp/)) —
 which can't pin the network, so the buyer must pick Immutable zkEVM themselves.
 
+## Collections (the release archive)
+
+The **Collections** tab (`/collections`) is the club's full back catalogue: 107 releases
+and 1,283 items, oldest to newest, on a year-by-year timeline. Each release card opens
+into a grid of its items with their in-game art, rarity and copy counts. You can filter
+by type (drops, grabs, Creature Store, events, giveaways, collabs), search across item and
+release names, and flip the order.
+
+A collapsed card carries a preview strip of up to seven items, rarest first and then by
+how widely they were handed out, with a `+N` chip for the rest. The build picks them by
+row index (`hero` in the JSON) from the items that resolve to a picture, so every release
+gets a strip, and cuts each one a small thumbnail of its own (see below).
+
+Clicking any item (in the grid or on a card's preview strip) opens it in a floating
+inspect card: the item blown up, its rarity, slot, copy count and release, and the whole
+avatar render for context. Arrow keys walk the rest of the release, Escape closes.
+
+Two things feed it, and only one of them is in the repo:
+
+- `collections.json` (~180 KB) — the release and item data, served static
+- the `collection_art` table in Postgres — every item's picture, 1,723 rows, 27.9 MB
+
+**No item art is committed.** The repo used to carry 561 files and 6.9 MB under
+`img/collections/`; those bytes now live in the database and reach the browser through
+`/api/collections/art/<variant>/<art_id>.webp`. That also closed the last id leak: an
+`art_id` is a hash of the picture's own bytes, so nothing in the repo or on the page names
+a Highrise item. See "About the item art" below for what this costs and what it buys.
+
+Everything that makes those two lives in `tools/`, which is **gitignored**: the build
+script, the workbook-derived maps, the asset-portal art, and the render cache. None of it
+is needed to run or deploy the site.
+
+Keep a copy of `tools/` wherever you build from. To regenerate:
+
+```bash
+pip install openpyxl pillow numpy psycopg2-binary
+python tools/build-collections.py path/to/hcc_items_release_matching.xlsx
+```
+
+That reads a database URL from `COLLECTIONS_DATABASE_URL`, `DATABASE_PUBLIC_URL` or
+`DATABASE_URL` (environment first, then the gitignored `.env`) and loads the pictures
+straight in. Rerun it when new releases ship, then commit the regenerated JSON.
+`--skip-art` builds the JSON alone and touches no database, which leaves every item
+showing a placeholder. `--refresh-art` re-encodes and reloads everything.
+
+**Rows the archive leaves out.** The build drops 68 catalogue rows that aren't really
+separate items to browse: `hair_back` entries (40, each rendering identically to its
+`hair_front` twin), pet body parts (20, they belong to pets rather than the club's own
+line), unnamed entries whose name is nothing but dashes (7), and `Fake Inverted Fangs`.
+Release item counts, rarity mixes and copy totals are all summed over what survives, so
+the numbers on a card match what it lists.
+
+**About the item art.** Every picture is served by us, out of `collection_art`, at
+`/api/collections/art/<variant>/<art_id>.webp`. Two variants share one id:
+
+- **`full`** is the whole render at its native size, usually 600x800. The item grid crops
+  it to the item with a CSS window; the inspect card shows it both ways.
+- **`thumb`** is a 104px square, cropped to the item when it was encoded, for the 52px
+  boxes in a collapsed card's strip. 507 items need one, the ones a strip can show.
+
+`art_id` is a SHA-1 of the source bytes, first 16 hex. Content-addressed does three jobs:
+the URL names nothing, two items with identical art share a row, and because the bytes
+behind an id can never change the serve route sends `immutable` with a year of
+`max-age`. That is the one exception to the caching policy in
+[.claude/CLAUDE.md](.claude/CLAUDE.md), and it is safe for exactly the reason the policy
+forbids it elsewhere: these URLs really are fingerprinted.
+
+**Why WebP at native size.** The Highrise CDN only serves PNG, averaging 93 KB. Re-encoded
+at quality 88 the same 600x800 render is **21 KB**, so shrinking it buys almost nothing
+(512px only saves another 2.5 KB) and full detail is kept for the inspect card. Thumbnails
+are quality 82 and average 3.2 KB.
+
+What that adds up to, measured in a browser against the same pages:
+
+| | before, off the Highrise CDN | now, from Postgres |
+|---|---|---|
+| glance at the page | 4.73 MB | **192 KB** |
+| scroll all 107 cards | 44.3 MB | **1.57 MB** |
+| open a 56-item grab | 5.07 MB | **1.15 MB** |
+| repeat visit | revalidates every picture | **0 bytes**, straight from cache |
+
+All of it verified in a browser against the real database, including the last row: on a
+revisit or a reload every picture comes back with `transferSize: 0`.
+
+**Latency, not just bytes.** The one thing this design gives up is edge delivery: a first
+visitor now waits on our origin instead of a CDN. `getCollectionArt()` keeps what it has
+read in a bounded in-process cache (48 MB, comfortably the whole table), which is safe
+precisely because an id names fixed bytes. Measured on a 56-item grid, 42 tiles in view:
+cold, 8s to fill; with the pictures already in the server's memory, under 1s. Locally the
+cold figure is inflated because every read crosses the public proxy to Railway; in
+production the app and Postgres share the private network. If first-paint latency ever
+matters more than this, a CDN in front of the domain is the fix, not a change here.
+
+So the tab is lighter than it ever was on the CDN, grids included. Two trades. Those bytes
+are now our egress rather than Highrise's. And **Collections needs Postgres**: with no
+database the timeline, stats, search and filters all still work off the JSON, but every
+tile shows its placeholder and the browser logs a 404 per picture.
+
+**Where the pictures come from.** The build encodes one source per item, in this order:
+
+- `tools/item-art/<disp_id>.png`/`.webp` when present, used uncropped and ahead of
+  everything else. 35 items that aren't on the public CDN come from the asset portal's
+  `avataritem/front/<disp_id>.png`, plus 6 sets and the Ignition Boost emote icon. These
+  need the session cookie the HighriseHelper bot keeps in its `prod_api_settings` table,
+  which is why they sit in `tools/` rather than being fetched at build time.
+  `--extra-images DIR` points elsewhere.
+- the workbook preview, for the 13 furniture pieces and the room decal. Nothing wears
+  those, so no avatar render of them exists.
+- otherwise `cdn.highrisegame.com/avatar/<disp_id>.png`, fetched once per item and kept in
+  `tools/render-cache/` so later rebuilds ask for nothing. One request each, no retries; a
+  failure becomes a warning and that item shows a placeholder until the build is rerun.
+  Reruns are cheap because the cache holds everything already fetched.
+
+**Crop windows.** 1,153 of the items carry a crop window (`b` in the JSON) framing just
+the item, so the grid can zoom past the mannequin; the inspect card still shows the whole
+render below it. `zoomStyle()` reads a window as fractions of its frame and scales one
+axis only, leaving the other `auto`, so the image keeps its own aspect and no render can
+come out stretched however large it arrives.
+
+A window still only means something in the frame it was measured in, and 14 of the
+renders Highrise serves come back trimmed instead of 600x800 — some to the item alone, one
+to the avatar (298x783). Each is trimmed differently, so there is nothing to map.
+`checkFrame()` compares the loaded shape against the frame the window names and, if they
+disagree, drops the zoom and shows the picture whole. That guard now only matters for the
+grid and the inspect card: strip thumbnails are cropped when they are encoded, against the
+real pixels, so the one trimmed render that used to show a small avatar in the strip is a
+proper close-up.
+
+Most come from differencing a render against its category's median render, measured on the
+workbook preview. That only works where the preview shares the render's 3:4 shape — the
+workbook trimmed about 100 of them to odd shapes (32x90, 90x90, ...), and a window measured
+on one of those maps nowhere on the render and stretches it badly. Those are skipped.
+
+Face, neck, hat and hair windows are fixed fractions rather than measured, so they are
+stated against the 600x800 render directly and keep working for the odd-shaped ones. The
+head window itself is measured: across face-slot renders the head sits at x 17-48, y 1-36
+of a 67x90 frame, padded out to a square. It has to reach the very top — starting even 2%
+down clips the crown, which reads as the head being squashed vertically.
+
+The only items with no window are the three whose bundled art is already the item alone.
+
+**Sets.** `tools/item-sets.json` maps a set's `disp_id` to the `disp_id`s it contains,
+and that membership overrides the workbook's `release_name`. It has to: the Year Four
+recolours were all filed under the Whiteout release even though each colourway shipped as
+its own set, so without it the pink, blue and red items sat in the wrong place. Rebuilding
+regroups 38 rows. Set art comes from the set record's `image_url` on CloudFront and lives
+in `tools/item-art/` with the rest. Override with `--item-sets FILE`.
+
+To refresh it after a new set ships, ask the asset portal for
+`{"_type": "GetItemRequest", "disp_id": "<set disp_id>"}` and read `clothing[].item_id`
+and `image_url` off the reply. Like the rest of `tools/`, the file is local only.
+
+**What the JSON deliberately leaves out.** The inspect card used to carry a "View on
+Highrise" link, which meant shipping every item's Highrise catalogue id: 1,283 internal
+ids in a public repo, as a bulk machine-readable index. Both the link and the ids are gone,
+which took the JSON from 227 KB to 189 KB.
+
+`disp_id` (`d`) is still there, because it is the only way to name an item's picture:
+`cdn.highrisegame.com/avatar/<disp_id>.png` for the grid and inspect card, and the
+thumbnail filenames. Removing it would mean serving every render from here instead, which
+is 15 MB or more of committed art, or proxying the CDN through the server. Note the id is
+already visible in each of those image URLs either way.
+
+**About the dates.** Only 20 releases carry a posted release date, and the announcements
+channel doesn't go back past March 2023. The build fills the gaps from the club's gift log
+(a real dated distribution event) and, failing that, from when the items were authored.
+Worked-out dates render as a month with a `~` marker and say so on the card, so the
+timeline never shows a guessed date as a known one. The build also reports anything
+suspicious — re-gifts of older sets, and releases whose date disagrees with the year in
+their own name — so you can check those against the announcements.
+
 ## Market data
 
 The **Market** tab shows floor prices and weekly sale-price history for Creatures and LAND.

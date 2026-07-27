@@ -24,3 +24,13 @@ C*Temp*.json
 Temp*.json
 debug-*.json
 test-*.json
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Build tooling, local only. The site runs on the generated output alone
+# (collections.json + img/collections/), so none of this needs to ship — and
+# tools/item-ids.json is a bulk map of Highrise's internal catalogue ids.
+tools/
+*.py

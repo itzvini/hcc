@@ -11,6 +11,7 @@ import { loadPolls, rerenderPolls } from './polls.js';
 import { loadAnnouncements, rerenderAnnouncements } from './announcements.js';
 import { loadGen2, rerenderGen2 } from './gen2.js';
 import { initGuideDemos, rerenderGuideDemos } from './guide-demos.js';
+import { loadCollections, rerenderCollections } from './collections.js';
 import { initPerks, rerenderPerks } from './perks.js';
 import { initSafety, rerenderSafety } from './safety.js';
 import { rerenderProfile } from './profile.js';
@@ -28,6 +29,7 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
     rerenderPolls();
     rerenderAnnouncements();
     rerenderGen2();
+    rerenderCollections();
     rerenderGuideDemos();
     rerenderPerks();
     rerenderSafety();
@@ -51,6 +53,7 @@ let pollsLoaded     = false;
 let announcementsLoaded = false;
 let tradeLoaded     = false;
 let roadmapLoaded   = false;
+let collectionsLoaded = false;
 
 // Mobile menu open/close (the whole menu sheet drops from under the bar)
 function setDrawer(open) {
@@ -150,6 +153,7 @@ function selectTab(name, updateUrl = true) {
   // /profile/{slug} path re-opens the view right after, so deep links still work.
   else if (name === 'trade') closeProfileView();
   if (name === 'roadmap'   && !roadmapLoaded)   { roadmapLoaded   = true; loadGen2(); }
+  if (name === 'collections' && !collectionsLoaded) { collectionsLoaded = true; loadCollections(); }
   if (updateUrl && location.pathname !== urlFor(name)) history.pushState(null, '', urlFor(name));
 }
 
@@ -312,7 +316,7 @@ initSafety();
 // and in-page anchors (#terms, #council) still work and get normalized to paths.
 // 'apply' is a legacy alias: the old Apply & Vote tab now lives at /council/vote,
 // and route() rewrites it so bookmarks and old OAuth redirects keep working.
-const ROUTE_TABS = ['club', 'announcements', 'council', 'apply', 'polls', 'roadmap', 'guides', 'perks', 'holders', 'market', 'trade', 'profile', 'changelog', 'contribute', 'terms', 'privacy'];
+const ROUTE_TABS = ['club', 'announcements', 'council', 'apply', 'polls', 'roadmap', 'collections', 'guides', 'perks', 'holders', 'market', 'trade', 'profile', 'changelog', 'contribute', 'terms', 'privacy'];
 
 function urlFor(name, sub) {
   return name === 'club' && !sub ? '/' : `/${name}${sub ? `/${sub}` : ''}`;
@@ -395,6 +399,7 @@ initI18n().then(() => {
   rerenderPolls();
   rerenderAnnouncements();
   rerenderGen2();
+  rerenderCollections();
   rerenderGuideDemos();
   rerenderPerks();
   rerenderSafety();

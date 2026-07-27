@@ -4847,6 +4847,39 @@ function shapeAnnouncement(row) {
 //   carries no thread_id — so thread replies under an announcement, and anything from
 //   another channel, are refused. Upsert is keyed on the message id, so an edited
 //   message updates its one card instead of ever creating a second.
+// One item picture. The art id is a hash of the bytes it names, which is why these
+// responses may cache hard while the rest of the site revalidates: the bytes behind an id
+// can never change, so there is nothing to go stale.
+async function handleCollectionArt(request, response, variant, artId) {
+  if (request.method !== 'GET') { sendJson(response, 405, { error: 'Method not allowed.' }); return; }
+  const ip = (request.headers['x-forwarded-for'] || '').split(',')[0].trim() || request.socket.remoteAddress || 'unknown';
+  // Deliberately high. One screen of strips is ~60 pictures, scrolling the whole timeline
+  // is ~500, and opening a few big grabs adds a few hundred more, so a curious visitor
+  // can legitimately ask for over a thousand in a minute — and several people behind one
+  // office IP share this bucket. An earlier 1500 tripped on an ordinary browse. Guessing
+  // an id isn't a threat (16 hex, and collections.json lists them anyway), so this is
+  // only here to bound abuse, not to keep anything secret.
+  const wait = rateLimited(`col-art:${ip}`, 12000, 60 * 1000);
+  if (wait) { sendJson(response, 429, { error: 'Too many requests.' }, { 'Retry-After': String(wait) }); return; }
+
+  const art = await db.getCollectionArt(artId, variant);
+  if (!art) { sendJson(response, 404, { error: 'Not found' }); return; }
+  const headers = {
+    'Content-Type': art.content_type,
+    'Cache-Control': 'public, max-age=31536000, immutable',
+    'ETag': art.etag,
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': "default-src 'none'; sandbox", // inert as an <img>
+  };
+  if (request.headers['if-none-match'] === art.etag) {
+    response.writeHead(304, headers);
+    response.end();
+    return;
+  }
+  response.writeHead(200, { ...headers, 'Content-Length': String(art.size) });
+  response.end(art.bytes);
+}
+
 async function handleAnnouncementsApi(request, response, url) {
   const { pathname } = url;
 
@@ -5271,7 +5304,7 @@ const contentTypes = {
 // server.js, package.json, node_modules, etc.) returns 404. This is the primary
 // guard against leaking secrets or source on an open-source, self-hostable repo.
 const PUBLIC_DIRS  = new Set(['css', 'js', 'img', 'assets', 'fonts', 'locales']);
-const PUBLIC_FILES = new Set(['index.html', 'changelog.json', 'gen2-progress.json', 'favicon.ico', 'robots.txt', 'sitemap.xml']);
+const PUBLIC_FILES = new Set(['index.html', 'changelog.json', 'gen2-progress.json', 'collections.json', 'favicon.ico', 'robots.txt', 'sitemap.xml']);
 // Gzip candidates: text formats plus raw OpenType/TrueType fonts (~45% smaller).
 // WOFF/WOFF2 and images are already compressed — recompressing wastes CPU for ~0%.
 const COMPRESSIBLE_EXT = new Set(['.html', '.css', '.js', '.json', '.svg', '.otf', '.ttf']);
@@ -5280,7 +5313,7 @@ const gzipCache = new Map(); // filePath → { etag, body } — one gzipped copy
 // router in js/app.js opens the matching tab from location.pathname. 'apply' is a
 // legacy alias — the old Apply & Vote tab now lives at /council/vote and the client
 // router rewrites it — kept so bookmarks and old OAuth redirects keep working.
-const TAB_ROUTES = new Set(['club', 'announcements', 'council', 'apply', 'polls', 'roadmap', 'guides', 'perks',
+const TAB_ROUTES = new Set(['club', 'announcements', 'council', 'apply', 'polls', 'roadmap', 'collections', 'guides', 'perks',
   'holders', 'market', 'trade', 'profile', 'changelog', 'contribute', 'terms', 'privacy']);
 const SERVABLE_EXT = new Set([
   '.html', '.css', '.js', '.json',
@@ -5444,6 +5477,18 @@ const server = http.createServer((request, response) => {
     if (!url) { sendJson(response, 400, { error: 'Bad request.' }); return; }
     handlePollsApi(request, response, url).catch(err => {
       console.error('Polls API error:', err.message);
+      if (!response.headersSent) sendJson(response, 500, { error: 'Something went wrong.' });
+    });
+    return;
+  }
+
+  // Collections item art, out of Postgres. Two reasons it lives there rather than in the
+  // repo: the pictures come to ~32 MB, and this way the client only ever sees a content
+  // hash, so no Highrise disp_id is published.
+  const artMatch = request.url.match(/^\/api\/collections\/art\/(thumb|full)\/([0-9a-f]{16})\.webp$/);
+  if (artMatch) {
+    handleCollectionArt(request, response, artMatch[1], artMatch[2]).catch(err => {
+      console.error('Collection art error:', err.message);
       if (!response.headersSent) sendJson(response, 500, { error: 'Something went wrong.' });
     });
     return;
