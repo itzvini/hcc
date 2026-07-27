@@ -18,6 +18,7 @@ const TYPES = {
   grab:     { ico: '🎰', accent: 'var(--hr-secondary)' },
   store:    { ico: '🛒', accent: 'var(--hr-banana)'    },
   event:    { ico: '🎪', accent: 'var(--hr-blueberry)' },
+  competition: { ico: '🏆', accent: 'var(--hr-tangerine)' },
   giveaway: { ico: '🎁', accent: 'var(--hr-alert)'     },
   collab:   { ico: '🤝', accent: 'var(--hr-tangerine)' },
   other:    { ico: '✨', accent: 'var(--hr-mackerel)'  },
@@ -348,6 +349,10 @@ function card(rel, idx) {
         ${rarityMix(rel)}
         ${rel.gift ? `<p class="col-gift"><span aria-hidden="true">🎁</span>${esc(rel.gift)}</p>` : ''}
         ${rel.quote ? `<blockquote class="col-quote">${discordMarkup(rel.quote)}</blockquote>` : ''}
+        ${rel.note ? `<aside class="col-annot">
+          <span class="col-annot-lbl">${esc(t('col.annot'))}</span>
+          <span class="col-annot-t">${esc(rel.note)}</span>
+        </aside>` : ''}
       </div>
       ${heroStrip(rel)}
       <!-- Own grid row, after the preview strip, so the stacked mobile card reads

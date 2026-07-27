@@ -1350,6 +1350,25 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
   font-size: 12.5px; line-height: 1.5; color: var(--hr-fg-2); font-style: italic;
 }
 
+/* A release annotation: context the archive can't get from the catalogue. Deliberately
+   unlike the quote above it — that's an announcement from the day, this is an editorial
+   aside — so it gets a small frame rather than more italic prose. Named -annot, not -note:
+   .col-note is already the approx-date fineprint further down, and reusing it put a border
+   and a background around that too. */
+.col-annot {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 9px;
+  margin-top: 13px; padding: 10px 13px;
+  border-radius: var(--hr-radius-md);
+  border: 1px solid color-mix(in srgb, var(--hr-banana) 22%, transparent);
+  background: color-mix(in srgb, var(--hr-banana) 7%, transparent);
+}
+.col-annot-lbl {
+  flex: none;
+  font: 800 9.5px/1.4 var(--hr-sans); letter-spacing: .07em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--hr-banana) 82%, var(--hr-fg-0));
+}
+.col-annot-t { flex: 1 1 12ch; font-size: 12.5px; line-height: 1.55; color: var(--hr-fg-2); }
+
 /* Collapsed preview strip — a tidy 4-wide block in the card's right column */
 .col-hero {
   display: flex; flex-wrap: wrap; align-content: start; gap: 8px;

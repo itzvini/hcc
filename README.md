@@ -58,8 +58,8 @@ which can't pin the network, so the buyer must pick Immutable zkEVM themselves.
 
 ## Collections (the release archive)
 
-The **Collections** tab (`/collections`) is the club's full back catalogue: 107 releases
-and 1,283 items, oldest to newest, on a year-by-year timeline. Each release card opens
+The **Collections** tab (`/collections`) is the club's full back catalogue: 102 releases
+and 1,172 items, oldest to newest, on a year-by-year timeline. Each release card opens
 into a grid of its items with their in-game art, rarity and copy counts. You can filter
 by type (drops, grabs, Creature Store, events, giveaways, collabs), search across item and
 release names, and flip the order.
@@ -75,8 +75,8 @@ avatar render for context. Arrow keys walk the rest of the release, Escape close
 
 Two things feed it, and only one of them is in the repo:
 
-- `collections.json` (~180 KB) — the release and item data, served static
-- the `collection_art` table in Postgres — every item's picture, 1,723 rows, 27.9 MB
+- `collections.json` (~149 KB) — the release and item data, served static
+- the `collection_art` table in Postgres — every item's picture, 1,583 rows, 24.9 MB
 
 **No item art is committed.** The repo used to carry 561 files and 6.9 MB under
 `img/collections/`; those bytes now live in the database and reach the browser through
@@ -101,12 +101,28 @@ straight in. Rerun it when new releases ship, then commit the regenerated JSON.
 `--skip-art` builds the JSON alone and touches no database, which leaves every item
 showing a placeholder. `--refresh-art` re-encodes and reloads everything.
 
-**Rows the archive leaves out.** The build drops 68 catalogue rows that aren't really
-separate items to browse: `hair_back` entries (40, each rendering identically to its
-`hair_front` twin), pet body parts (20, they belong to pets rather than the club's own
-line), unnamed entries whose name is nothing but dashes (7), and `Fake Inverted Fangs`.
-Release item counts, rarity mixes and copy totals are all summed over what survives, so
-the numbers on a card match what it lists.
+**Rows the archive leaves out.** Two separate filters.
+
+The build drops 59 catalogue rows that aren't really separate items to browse: `hair_back`
+entries (34, each rendering identically to its `hair_front` twin), pet body parts (18 — a
+pet species' own ears, eyes, tail and wings, spotted by the doubled `pet_pet` marker in the
+disp_id, so pet *clothing* in the same slot is kept), unnamed entries whose name is nothing
+but dashes, and `Fake Inverted Fangs`.
+
+It also drops content that isn't the club's, on holder feedback (July 2026). The workbook
+flags an item HCC when Tom authored it, which is not the same as club-exclusive, and five
+releases were ordinary public ones: Ectoplasm Collection, Whispering Spirits Chase,
+Moonlight Phantoms Chase, Halloween Wolf Grab and Tom's Mouth. See `DROP_RELEASES` in the
+build for the list.
+
+Earth Day Drop was nearly cut down the same way and then kept whole. The first read was
+that its high-copy items were a public tip-war payout; a correction came back saying the
+tip-war pieces were in fact the one-of-a-kind and three-made ones, and that keeping them on
+the page was fine. So all 88 items stay and the card carries a note instead.
+
+Release item counts, rarity mixes and copy totals are all summed over what survives, so the
+numbers on a card match what it lists. Note they are copies *minted*, not sold: a giveaway
+of 3,000 and a store sale of 3,000 look identical here.
 
 **About the item art.** Every picture is served by us, out of `collection_art`, at
 `/api/collections/art/<variant>/<art_id>.webp`. Two variants share one id:
@@ -114,7 +130,7 @@ the numbers on a card match what it lists.
 - **`full`** is the whole render at its native size, usually 600x800. The item grid crops
   it to the item with a CSS window; the inspect card shows it both ways.
 - **`thumb`** is a 104px square, cropped to the item when it was encoded, for the 52px
-  boxes in a collapsed card's strip. 507 items need one, the ones a strip can show.
+  boxes in a collapsed card's strip. 476 items need one, the ones a strip can show.
 
 `art_id` is a SHA-1 of the source bytes, first 16 hex. Content-addressed does three jobs:
 the URL names nothing, two items with identical art share a row, and because the bytes
@@ -133,7 +149,7 @@ What that adds up to, measured in a browser against the same pages:
 | | before, off the Highrise CDN | now, from Postgres |
 |---|---|---|
 | glance at the page | 4.73 MB | **192 KB** |
-| scroll all 107 cards | 44.3 MB | **1.57 MB** |
+| scroll all 102 cards | 44.3 MB | **1.45 MB** |
 | open a 56-item grab | 5.07 MB | **1.15 MB** |
 | repeat visit | revalidates every picture | **0 bytes**, straight from cache |
 
@@ -197,6 +213,17 @@ down clips the crown, which reads as the head being squashed vertically.
 
 The only items with no window are the three whose bundled art is already the item alone.
 
+**Release notes.** `RELEASE_NOTES` in the build attaches a short editorial note to a
+release, rendered as a framed aside under the card's quote (`.col-annot`). It exists for
+context the catalogue cannot carry: Earth Day Drop's rarest pieces came out of a charity
+tip war rather than a club release, which no column in the workbook records. The label is
+`t('col.annot')`, just "Note" — a note carries no byline, so nobody is on the hook for an
+editorial call. The text itself is not translated, same as `quote`, since both are specific
+to one release.
+
+Mind the class name: `.col-note` was already taken by the approx-date fineprint, and reusing
+it wrapped that in a border and a background on all 49 approx-dated cards. Hence `.col-annot`.
+
 **Sets.** `tools/item-sets.json` maps a set's `disp_id` to the `disp_id`s it contains,
 and that membership overrides the workbook's `release_name`. It has to: the Year Four
 recolours were all filed under the Whiteout release even though each colourway shipped as
@@ -209,7 +236,7 @@ To refresh it after a new set ships, ask the asset portal for
 and `image_url` off the reply. Like the rest of `tools/`, the file is local only.
 
 **What the JSON deliberately leaves out.** The inspect card used to carry a "View on
-Highrise" link, which meant shipping every item's Highrise catalogue id: 1,283 internal
+Highrise" link, which meant shipping every item's Highrise catalogue id: over 1,200 internal
 ids in a public repo, as a bulk machine-readable index. Both the link and the ids are gone,
 which took the JSON from 227 KB to 189 KB.
 
