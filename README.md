@@ -58,16 +58,21 @@ which can't pin the network, so the buyer must pick Immutable zkEVM themselves.
 
 ## Collections (the release archive)
 
-The **Collections** tab (`/collections`) is the club's full back catalogue: 104 releases
-and 1,174 items, oldest to newest, on a year-by-year timeline. Each release card opens
+The **Collections** tab (`/collections`) is the club's full back catalogue: 130 releases
+and 1,444 items, oldest to newest, on a year-by-year timeline. Each release card opens
 into a grid of its items with their in-game art, rarity and copy counts. You can filter
 by type (drops, grabs, Creature Store, events, giveaways, collabs), search across item and
 release names, and flip the order.
 
-A collapsed card carries a preview strip of up to seven items, rarest first and then by
-how widely they were handed out, with a `+N` chip for the rest. The build picks them by
-row index (`hero` in the JSON) from the items that resolve to a picture, so every release
-gets a strip, and cuts each one a small thumbnail of its own (see below).
+A release lists its items **rarest first**, then by slot, then by name. Rarity leads
+because that is what anyone reading a release card is looking for: the mythical piece, not
+the fourth colourway of a tee. Slot next, so a rarity band still reads like with like, and
+the name last, so colourways stay in a predictable run.
+
+A collapsed card carries a preview strip of the release's first seven items, so the strip
+and the grid tell the same story, with a `+N` chip for the rest. The build holds them as
+row indices (`hero` in the JSON), and cuts each one a small thumbnail of its own (see
+below).
 
 Clicking any item (in the grid or on a card's preview strip) opens it in a floating
 inspect card: the item blown up, its rarity, slot, copy count and release, and the whole
@@ -75,8 +80,8 @@ avatar render for context. Arrow keys walk the rest of the release, Escape close
 
 Two things feed it, and only one of them is in the repo:
 
-- `collections.json` (~149 KB) — the release and item data, served static
-- the `collection_art` table in Postgres — every item's picture, 1,587 rows, 25.0 MB
+- `collections.json` (~181 KB) — the release and item data, served static
+- the `collection_art` table in Postgres — every item's picture, 2,046 rows, 31.7 MB
 
 **No item art is committed.** The repo used to carry 561 files and 6.9 MB under
 `img/collections/`; those bytes now live in the database and reach the browser through
