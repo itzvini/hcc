@@ -232,33 +232,69 @@ client) so nothing tries to find an avatar render for them, and reads as "Egg" o
 Each release also lists the snugglin the egg hatches, in a `pet` category (also not-worn,
 reads as "Snugglin"), first in the list so it takes the hero thumbnail.
 
-**Composing the snugglins.** The snugglins themselves have no picture anywhere upstream:
-the pet archetype rows carry no `image_url`, `thumbnail_url` or `icon_url`, and no render
-endpoint applies a plushie's fur — ask one for a snugglin and you get a peach avatar. So
-they are composed from their own part assets, the same way the game does it and the same
-algorithm [lib/land-pets.js](lib/land-pets.js) already uses for LAND's slimes:
+**The pet giveaways.** The club handed members a one-off pet eleven times between July 2023
+and February 2026 — three slimes on `pet_slime_legendary`, two more on `pet_slime`, and six
+bunnies on `pet_bunny_mythical`. None of them has a catalogue release row, so each is an
+`EXTRA_RELEASES` entry built by the `pet_giveaway()` helper: one `pet` item and the rarity
+from its archetype. Dates are read off the giveaway bot's own posts, so they are `exact`
+rather than `approx` and every one wears the Announced badge. No note either — the card's
+picture says what the creature is better than a sentence would.
+
+Finding a pet's parts takes one look at the admin panel and no API access. Its character
+page lists the traits, and one trait id gives away the whole set, because the family shares
+a naming pattern: `body-pet_petbunny2024<slot><suffix>` for the bunnies,
+`body-pet_<slot><datecode>` for the slimes. The rest come from probing that pattern against
+the public CDN, where a wrong guess just 404s. The slot vocabulary across every pet here is
+`body ears eyes mouth nose blush tail wings hat freckle` for bunnies and
+`base eye mouth antenna` for slimes. Two of them hide something: a third eye ships as
+`freckle`, and a unicorn horn ships as `antenna`.
+
+**Composing the pets.** No pet has a picture anywhere upstream: the archetype rows carry no
+`image_url`, `thumbnail_url` or `icon_url`, and no render endpoint applies a pet's own skin
+— ask one for a snugglin and you get a peach avatar. So they are composed from their own
+part assets, the same way the game does it and the same algorithm
+[lib/land-pets.js](lib/land-pets.js) already uses for LAND's slimes:
 
 1. Each part is a zip on the public avatar CDN, `/avatar/<item_id>.zip`. Inside, every
    `front-<item_id>-<Layer>.vec` entry is a plain SVG carrying its own bounds in a leading
-   fixed-width comment. Twenty parts cover both pets — fourteen each, eight shared.
-2. Stack the layers in skeleton order and union the bounds. Order is keyed on the layer
-   name (the rig slot: `Head`, `CoreBody`, `EarLeft`, `Tail`, `HatUpper`, …), not on the
-   item id — plushie parts fill several slots each, unlike slime parts. `CoreBody` sits
-   *above* the torso and limbs: it is where the HCC badge and the keepsake pin go.
+   fixed-width comment.
+2. Stack the layers in rig order and union the bounds. Order is keyed on the layer name
+   (the rig slot: `Head`, `CoreBody`, `EarLeft`, `Tail`, `HatUpper`, …), not on the item id
+   — a pet part fills several slots at once, unlike a slime part, which is why
+   `lib/land-pets.js` can get away with keying off the id and this can't. Three rigs, three
+   orders:
+   * **plushie** (snugglins) — `CoreBody` sits *above* the torso: it is where the HCC badge
+     and the keepsake pin go.
+   * **bunny** — far-side limbs behind the body, near-side in front. The art says which is
+     which, since every `Right*` layer is shaded darker than its `Left*` twin. Headwear
+     (`HatUpper` / `BagUpper`) is a left-right pair on top of the head, not a front-back one.
+   * **slime** — body, face, then whatever sits on top.
 3. Skip the alternate animation frames shipped alongside the idle ones (`*Closed` blink
-   frames, `HappyMouth`).
-4. Recolour two ramps. The art ships in the default palette — peach fur, blue eyes — and
-   the palette a real pet applies isn't in any source available here. Both eggs show the
-   real thing is black-furred with mint (Krampi) or pink (Krambi) eyes, and each pet's own
-   colorpatch bakes its accent pair, so the fur ramp maps to a near-black ramp and the
-   eye/halo ramp to that accent pair, preserving relative brightness so the shading
-   survives. Everything else passes through untouched: the teddy, coal bag and keepsake
-   already bake maroon for Krampi and pink for Krambi.
+   frames, `HappyMouth`, `SadMouth`).
+4. Recolour, but only the snugglins. Every bunny and slime here reports Active Palette 0 in
+   the admin panel, so for those the default palette baked into the art *is* the final look
+   and nothing is remapped. The snugglins are the exception: their art ships peach-furred
+   with blue eyes and the palette a real one applies isn't in any source available here.
+   Three source ramps map to three targets:
+   * **fur** (the peach ramp's light and mid tones) → near-black, per both eggs.
+   * **accent** (the same ramp's dark browns) → crimson for Krampi, pink for Krambi. These
+     are not fur: they are the horns, hooves, tongue, blush rings and eye rims, which the
+     reference art the community circulated shows in the pet's accent colour. Anchored on
+     each pet's own baked trio — the keepsake and teddy already bake `5E1123`/`7A233A`/
+     `C13A5E` and `E35D93`/`E679A5`/`F299C2`.
+   * **eye/halo** → the two colours the pet's own colorpatch bakes, plus a near-white tip.
 
-Geometry and accessories are therefore exact official art; the fur and eye ramp values are
-reconstructed. Both pets share a pose, so one crop window (`SNUGGLIN_FACE`) frames both on
-the horns, third eye and muzzle — a black snugglin is a dark blob in a 104px strip thumb,
-and a portrait reads.
+   Splitting fur from accent matters twice over. Mapping one ramp across both zones turned
+   the horns and tongue black, and it stretched the range so the body's dominant `B56551`
+   landed mid-ramp and came out charcoal instead of black. `9E4733` is the one hex that
+   straddles them; it stays with the fur, because it shades the ear insides and tail tip
+   where the difference shows, and a dark rim reads the same as a black one on black fur.
+
+So every pet here is exact official art except the snugglins' three reconstructed ramps.
+Nothing carries a crop window: the card shows each pet whole.
+
+Bluluvey is the one pet that skips all of this: it ships as a single flat SVG under
+[assets/pets/](assets/pets/) rather than as separate parts, so it is rasterised as-is.
 
 **Release notes.** `RELEASE_NOTES` in the build attaches a short editorial note to a
 release, rendered as a framed aside under the card's quote (`.col-annot`). It exists for
