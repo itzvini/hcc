@@ -631,6 +631,7 @@
   "trade.profile.copy": "Скопировать ссылку",
   "trade.profile.error": "Не сработало. Попробуйте ещё раз.",
   "trade.profile.nav": "Мой профиль",
+  "trade.modal.holderView": "Открыть профиль",
   "trade.profile.walletsBtn": "Кошельки ({n})",
   "trade.profile.disconnect": "Отключить Discord",
   "profile.listed": "Продаётся",

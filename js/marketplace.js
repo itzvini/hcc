@@ -273,6 +273,13 @@ let modalLoading = false;
 let linkListing = null;
 let linkSync = null;
 
+// Who publicly holds the open token's wallet — resolved from the opt-in holder profiles
+// so a buyer knows who to message instead of staring at a bare 0x address. Cached per
+// address; a cached `null` means "no public profile" (or claims too ambiguous to name
+// one), which is a real answer worth remembering, not a miss.
+const holderProfileCache = new Map(); // wallet -> { slug, name, avatar, verified } | null
+let holderProfileLoading = null;      // wallet currently in flight
+
 // Buy state — survives modal re-renders so a language switch or balance refresh can't
 // wipe an in-flight purchase status. {phase, msg?, hash?}; null = idle.
 let buyState = null;
@@ -1770,6 +1777,29 @@ async function fetchLandOwner(tokenId) {
   } catch { /* owner is optional detail — ignore */ }
 }
 
+// The wallet holding the open token: the token metadata's owner when we have it, else
+// the listing's seller (you can't list what you don't hold).
+function modalOwnerWallet() {
+  const it = listingForToken(modalToken) || {};
+  return modalMeta?.owner || it.seller || null;
+}
+
+async function maybeLoadHolderProfile(wallet) {
+  const w = String(wallet || '').toLowerCase();
+  if (!IS_ADDR.test(w) || holderProfileCache.has(w) || holderProfileLoading === w) return;
+  holderProfileLoading = w;
+  try {
+    const res = await fetch(`/api/profile/by-wallet/${w}`, { headers: { Accept: 'application/json' } });
+    holderProfileCache.set(w, res.ok ? ((await res.json()).profile || null) : null);
+  } catch {
+    holderProfileCache.set(w, null); // best-effort detail — never block the card
+  } finally {
+    holderProfileLoading = null;
+  }
+  // Still looking at the same wallet? Repaint so the card appears under the price.
+  if (modalToken && String(modalOwnerWallet() || '').toLowerCase() === w) patchModal();
+}
+
 async function openModal(tokenId) {
   modalToken = tokenId; modalMeta = null; modalLoading = true; buyState = null;
   tokenOffers = null;
@@ -1905,8 +1935,11 @@ function modalCardHtml() {
           }).join('')}</div>`
         : '');
 
-  const owner = meta.owner
-    ? `<div class="trade-modal-meta-row">${esc(t('trade.modal.owner'))}: <code title="${esc(meta.owner)}">${esc(shortWallet(meta.owner))}</code>${copyBtnHtml(meta.owner, 'trade.modal.copyOwner')}</div>`
+  // The seller of a listed item IS its current holder, so Creature listings get an owner
+  // row too (their token endpoint carries no owner field).
+  const ownerWallet = meta.owner || it.seller || null;
+  const owner = ownerWallet
+    ? `<div class="trade-modal-meta-row">${esc(t('trade.modal.owner'))}: <code title="${esc(ownerWallet)}">${esc(shortWallet(ownerWallet))}</code>${copyBtnHtml(ownerWallet, 'trade.modal.copyOwner')}</div>`
     : '';
   // Slimes live on a parcel — show its coordinates, not the parcel's 50-digit token id.
   const idRow = meta.isSlime
@@ -1927,11 +1960,36 @@ function modalCardHtml() {
       ${rank}
       ${price}
       ${coll === 'creatures' ? modalOffersHtml(meta) : ''}
+      ${holderCardHtml(ownerWallet)}
       ${owner}
       ${idRow}
       ${traits}
       <a class="trade-modal-explorer" href="${esc(explorer)}" target="_blank" rel="noopener">${esc(t('trade.modal.viewExplorer'))} ↗</a>
     </div>`;
+}
+
+// "Who holds this" — the opt-in holder profile behind the owner wallet, so a buyer can
+// take a negotiation to Highrise or Discord instead of a dead-end 0x address. Renders
+// only for holders who turned their profile on; silent otherwise (and while loading).
+// The trust badge is the same vocabulary the profile page uses: a signature-Verified
+// wallet is proof of control, a bare Highrise-link is only an association.
+function holderCardHtml(wallet) {
+  const w = String(wallet || '').toLowerCase();
+  if (!IS_ADDR.test(w)) return '';
+  const p = holderProfileCache.get(w);
+  if (!p) return '';
+  const initial = ((p.name || '').trim().slice(0, 1).toUpperCase().replace(/['"\\<>&`]/g, '')) || '?';
+  const trust = p.verified
+    ? `<span class="trade-holder-badge is-verified">${esc(t('profile.trustVerified'))}</span>`
+    : `<span class="trade-holder-badge is-linked">${esc(t('profile.trustLinked'))}</span>`;
+  return `
+    <button type="button" class="trade-holder" data-act="holder-profile" data-slug="${esc(p.slug)}"
+      aria-label="${esc(t('trade.modal.holderView'))}: ${esc(p.name)}">
+      <span class="trade-holder-avatar" data-initial="${esc(initial)}" aria-hidden="true">
+        ${p.avatar ? `<img src="${esc(p.avatar)}" alt="" loading="lazy" />` : esc(initial)}</span>
+      <span class="trade-holder-top"><span class="trade-holder-name">${esc(p.name)}</span>${trust}</span>
+      <span class="trade-holder-go" aria-hidden="true">${esc(t('trade.modal.holderView'))} →</span>
+    </button>`;
 }
 
 // --- Buy flow ---
@@ -3748,6 +3806,8 @@ function patchModal() {
   m.querySelector('.trade-modal-card').innerHTML = modalToken ? modalCardHtml() : '';
   // Focus the dialog on open only — status repaints during a buy must not steal focus.
   if (modalToken && !m.contains(document.activeElement)) m.querySelector('.trade-modal-close')?.focus();
+  // Resolve the holder behind the owner wallet (cached; repaints itself when it lands).
+  if (modalToken) maybeLoadHolderProfile(modalOwnerWallet());
 }
 
 // --- Wallet bar + actions ---
@@ -6326,6 +6386,10 @@ function onClick(e) {
     }
     case 'hp-open':        return openProfileView(meState?.holderProfile?.enabled ? meState.holderProfile.slug : null);
     case 'open-profile':   return openProfileView(target.dataset.slug);
+    case 'holder-profile': // from the asset card — close the token modal, show the holder
+      if (buyState && BUY_BUSY_PHASES.has(buyState.phase)) return; // never mid-purchase
+      closeModal();
+      return openProfileView(target.dataset.slug);
     case 'hp-wallets':     hpWalletsOpen = !hpWalletsOpen; hpLinkError = null; return patchProfileCard();
     case 'hp-enable':      return setHolderProfile(true);
     case 'hp-disable':     return setHolderProfile(false);
@@ -6626,11 +6690,17 @@ function ensureDelegation() {
   // back to the real plot image when the parcel has no pet or the render fails.
   el.addEventListener('error', e => {
     const img = e.target;
-    if (img?.tagName === 'IMG' && img.dataset.fallback) {
+    if (img?.tagName !== 'IMG') return;
+    if (img.dataset.fallback) {
       img.src = img.dataset.fallback;
       img.classList.remove('is-pet');
       delete img.dataset.fallback;
+      return;
     }
+    // Highrise avatar URLs are versioned and 404 after a restyle — fall back to the
+    // holder's initial (no inline onerror: the page CSP forbids inline handlers).
+    const av = img.closest('.trade-holder-avatar[data-initial]');
+    if (av) av.textContent = av.dataset.initial || '?';
   }, true);
 }
 

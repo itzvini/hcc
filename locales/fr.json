@@ -631,6 +631,7 @@
   "trade.profile.copy": "Copier le lien",
   "trade.profile.error": "Ça n'a pas fonctionné. Réessayez.",
   "trade.profile.nav": "Mon profil",
+  "trade.modal.holderView": "Voir le profil",
   "trade.profile.walletsBtn": "Wallets ({n})",
   "trade.profile.disconnect": "Déconnecter Discord",
   "profile.listed": "En vente",

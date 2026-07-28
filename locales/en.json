@@ -2017,6 +2017,7 @@
   "trade.profile.copy": "Copy link",
   "trade.profile.error": "That didn't work. Try again.",
   "trade.profile.nav": "My profile",
+  "trade.modal.holderView": "View profile",
   "trade.profile.walletsBtn": "Wallets ({n})",
   "trade.profile.disconnect": "Disconnect Discord",
   "profile.listed": "Listed",

@@ -3815,6 +3815,24 @@ async function handleProfileApi(request, response, url) {
     return;
   }
 
+  // Public read — "who holds this wallet", for the marketplace asset card so a buyer
+  // knows who to message. Same consent model as the profile page: only holders who
+  // opted in appear, and only their already-public display fields (never a Discord id).
+  // Ambiguity is resolved conservatively: the signature-verified owner wins; failing
+  // that, a lone Highrise-link is shown (flagged unverified); two or more competing
+  // unverified claims resolve to nothing rather than naming the wrong member.
+  const bw = pathname.match(/^\/api\/profile\/by-wallet\/(0x[0-9a-fA-F]{40})$/);
+  if (bw && request.method === 'GET') {
+    const wait = rateLimited(`profwallet:${ip}`, 120, 60 * 1000);
+    if (wait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(wait) }); return; }
+    const claims = await db.getProfilesForWallet(bw[1].toLowerCase()).catch(() => []);
+    const verified = claims.find(c => c.verified) || null;
+    const unverified = claims.filter(c => !c.verified);
+    const pick = verified || (unverified.length === 1 ? unverified[0] : null);
+    sendJson(response, 200, { profile: pick, claims: claims.length }, { 'Cache-Control': 'no-store' });
+    return;
+  }
+
   // Public read — the payload behind /profile/{slug}. Only rows that exist (= holders
   // who opted in), only display fields + the wallet they chose to showcase. Counts
   // come from the same authoritative per-wallet read the Council eligibility uses

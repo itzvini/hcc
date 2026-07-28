@@ -631,6 +631,7 @@
   "trade.profile.copy": "Bağlantıyı kopyala",
   "trade.profile.error": "Olmadı. Tekrar dene.",
   "trade.profile.nav": "Profilim",
+  "trade.modal.holderView": "Profili gör",
   "trade.profile.walletsBtn": "Cüzdanlar ({n})",
   "trade.profile.disconnect": "Discord bağlantısını kes",
   "profile.listed": "Satışta",
