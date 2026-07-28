@@ -25,7 +25,7 @@ const TYPES = {
 };
 const RARITY = ['m', 'l', 'e', 'r', 'c'];   // mythical → common, best first
 // Slots that aren't worn, so their render is the object itself, not an avatar in it
-const NOT_WORN = new Set(['furniture', 'room_floor', 'emote', 'set']);
+const NOT_WORN = new Set(['furniture', 'room_floor', 'emote', 'set', 'container', 'pet']);
 const HERO_THUMBS = 7;   // 7 thumbs + a "+N" chip fill the strip's 4-wide block exactly
 
 // UI state

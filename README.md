@@ -58,8 +58,8 @@ which can't pin the network, so the buyer must pick Immutable zkEVM themselves.
 
 ## Collections (the release archive)
 
-The **Collections** tab (`/collections`) is the club's full back catalogue: 102 releases
-and 1,172 items, oldest to newest, on a year-by-year timeline. Each release card opens
+The **Collections** tab (`/collections`) is the club's full back catalogue: 104 releases
+and 1,174 items, oldest to newest, on a year-by-year timeline. Each release card opens
 into a grid of its items with their in-game art, rarity and copy counts. You can filter
 by type (drops, grabs, Creature Store, events, giveaways, collabs), search across item and
 release names, and flip the order.
@@ -76,7 +76,7 @@ avatar render for context. Arrow keys walk the rest of the release, Escape close
 Two things feed it, and only one of them is in the repo:
 
 - `collections.json` (~149 KB) — the release and item data, served static
-- the `collection_art` table in Postgres — every item's picture, 1,583 rows, 24.9 MB
+- the `collection_art` table in Postgres — every item's picture, 1,587 rows, 25.0 MB
 
 **No item art is committed.** The repo used to carry 561 files and 6.9 MB under
 `img/collections/`; those bytes now live in the database and reach the browser through
@@ -130,7 +130,7 @@ of 3,000 and a store sale of 3,000 look identical here.
 - **`full`** is the whole render at its native size, usually 600x800. The item grid crops
   it to the item with a CSS window; the inspect card shows it both ways.
 - **`thumb`** is a 104px square, cropped to the item when it was encoded, for the 52px
-  boxes in a collapsed card's strip. 476 items need one, the ones a strip can show.
+  boxes in a collapsed card's strip. 478 items need one, the ones a strip can show.
 
 `art_id` is a SHA-1 of the source bytes, first 16 hex. Content-addressed does three jobs:
 the URL names nothing, two items with identical art share a row, and because the bytes
@@ -212,6 +212,53 @@ of a 67x90 frame, padded out to a square. It has to reach the very top — start
 down clips the crown, which reads as the head being squashed vertically.
 
 The only items with no window are the three whose bundled art is already the item alone.
+
+**Releases the workbook doesn't have.** The workbook only exports items already matched
+to a release, so a club item it never matched simply isn't there. `EXTRA_RELEASES` in the
+build declares those by hand. Two so far, the Krampus Snugglin eggs: **Krampi** (Creature
+Store, 50,000 Creature Coins) and **Krambi** (member giveaway). The catalogue marks both
+"Creature Club Exclusive Item", which is what settled that they belong here.
+
+Their dates come from the first four bytes of each archetype's ObjectId, which is its mint
+time, so they carry `approx` precision for the same reason the workbook's median dates do:
+that is when the item was made, not necessarily the day it went out. Art is staged in
+`tools/item-art/` under the egg's `disp_id` like any other replacement picture, pulled from
+`cdn.highrisegame.com/container/<disp_id>/full` — a different path from the `/avatar/` one
+worn items use, and the only place these eggs have a picture. A missing staged file is
+reported as a warning rather than shipping a placeholder silently.
+
+The eggs sit in a `container` category, which is in `NOT_WORN_SLOTS` (and `NOT_WORN` on the
+client) so nothing tries to find an avatar render for them, and reads as "Egg" on the card.
+Each release also lists the snugglin the egg hatches, in a `pet` category (also not-worn,
+reads as "Snugglin"), first in the list so it takes the hero thumbnail.
+
+**Composing the snugglins.** The snugglins themselves have no picture anywhere upstream:
+the pet archetype rows carry no `image_url`, `thumbnail_url` or `icon_url`, and no render
+endpoint applies a plushie's fur — ask one for a snugglin and you get a peach avatar. So
+they are composed from their own part assets, the same way the game does it and the same
+algorithm [lib/land-pets.js](lib/land-pets.js) already uses for LAND's slimes:
+
+1. Each part is a zip on the public avatar CDN, `/avatar/<item_id>.zip`. Inside, every
+   `front-<item_id>-<Layer>.vec` entry is a plain SVG carrying its own bounds in a leading
+   fixed-width comment. Twenty parts cover both pets — fourteen each, eight shared.
+2. Stack the layers in skeleton order and union the bounds. Order is keyed on the layer
+   name (the rig slot: `Head`, `CoreBody`, `EarLeft`, `Tail`, `HatUpper`, …), not on the
+   item id — plushie parts fill several slots each, unlike slime parts. `CoreBody` sits
+   *above* the torso and limbs: it is where the HCC badge and the keepsake pin go.
+3. Skip the alternate animation frames shipped alongside the idle ones (`*Closed` blink
+   frames, `HappyMouth`).
+4. Recolour two ramps. The art ships in the default palette — peach fur, blue eyes — and
+   the palette a real pet applies isn't in any source available here. Both eggs show the
+   real thing is black-furred with mint (Krampi) or pink (Krambi) eyes, and each pet's own
+   colorpatch bakes its accent pair, so the fur ramp maps to a near-black ramp and the
+   eye/halo ramp to that accent pair, preserving relative brightness so the shading
+   survives. Everything else passes through untouched: the teddy, coal bag and keepsake
+   already bake maroon for Krampi and pink for Krambi.
+
+Geometry and accessories are therefore exact official art; the fur and eye ramp values are
+reconstructed. Both pets share a pose, so one crop window (`SNUGGLIN_FACE`) frames both on
+the horns, third eye and muzzle — a black snugglin is a dark blob in a 104px strip thumb,
+and a portrait reads.
 
 **Release notes.** `RELEASE_NOTES` in the build attaches a short editorial note to a
 release, rendered as a framed aside under the card's quote (`.col-annot`). It exists for
