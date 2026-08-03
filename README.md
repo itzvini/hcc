@@ -58,7 +58,7 @@ which can't pin the network, so the buyer must pick Immutable zkEVM themselves.
 
 ## Collections (the release archive)
 
-The **Collections** tab (`/collections`) is the club's full back catalogue: 128 releases
+The **Collections** tab (`/collections`) is the club's full back catalogue: 130 releases
 and 1,443 items, oldest to newest, on a year-by-year timeline. Each release card opens
 into a grid of its items with their in-game art, rarity and copy counts. You can filter
 by type (drops, grabs, Creature Store, events, giveaways, collabs), search across item and
@@ -80,7 +80,7 @@ avatar render for context. Arrow keys walk the rest of the release, Escape close
 
 Two things feed it, and only one of them is in the repo:
 
-- `collections.json` (~181 KB) — the release and item data, served static
+- `collections.json` (~183 KB) — the release and item data, served static
 - the `collection_art` table in Postgres — every item's picture, 2,044 rows, 31.7 MB
 
 **No item art is committed.** The repo used to carry 561 files and 6.9 MB under
@@ -108,11 +108,15 @@ showing a placeholder. `--refresh-art` re-encodes and reloads everything.
 
 **Rows the archive leaves out.** Two separate filters.
 
-The build drops 59 catalogue rows that aren't really separate items to browse: `hair_back`
+The build drops 60 catalogue rows that aren't really separate items to browse: `hair_back`
 entries (34, each rendering identically to its `hair_front` twin), pet body parts (18 — a
 pet species' own ears, eyes, tail and wings, spotted by the doubled `pet_pet` marker in the
 disp_id, so pet *clothing* in the same slot is kept), unnamed entries whose name is nothing
-but dashes, and `Fake Inverted Fangs`.
+but dashes, `Fake Inverted Fangs`, and one spare archetype: a second Year One White Tee
+that nobody was ever given, which read on the card as the same shirt listed twice.
+Spares go in `DROP_ITEMS` one id at a time rather than by a "zero copies" rule, because 136
+rows read as zero copies and nearly all of them are real items whose count the stats pull
+missed.
 
 It also drops content that isn't the club's, on holder feedback (July 2026). The workbook
 flags an item HCC when Tom authored it, which is not the same as club-exclusive, and five
