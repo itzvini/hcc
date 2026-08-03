@@ -59,7 +59,7 @@ which can't pin the network, so the buyer must pick Immutable zkEVM themselves.
 ## Collections (the release archive)
 
 The **Collections** tab (`/collections`) is the club's full back catalogue: 130 releases
-and 1,455 items, oldest to newest, on a year-by-year timeline. Each release card opens
+and 1,457 items, oldest to newest, on a year-by-year timeline. Each release card opens
 into a grid of its items with their in-game art, rarity and copy counts. You can filter
 by type (drops, grabs, Creature Store, events, giveaways, collabs), search across item and
 release names, and flip the order.
@@ -83,7 +83,7 @@ avatar render for context. Arrow keys walk the rest of the release, Escape close
 Two things feed it, and only one of them is in the repo:
 
 - `collections.json` (~184 KB) — the release and item data, served static
-- the `collection_art` table in Postgres — every item's picture, 2,068 rows, 31.7 MB
+- the `collection_art` table in Postgres — every item's picture, 2,072 rows, 31.8 MB
 
 **No item art is committed.** The repo used to carry 561 files and 6.9 MB under
 `img/collections/`; those bytes now live in the database and reach the browser through
@@ -143,7 +143,7 @@ of 3,000 and a store sale of 3,000 look identical here.
 - **`full`** is the whole render at its native size, usually 600x800. The item grid crops
   it to the item with a CSS window; the inspect card shows it both ways.
 - **`thumb`** is a 104px square, cropped to the item when it was encoded, for the 52px
-  boxes in a collapsed card's strip. 562 items need one, the ones a strip can show.
+  boxes in a collapsed card's strip. 564 items need one, the ones a strip can show.
 
 **Items the avatar render can't show.** Most pictures are the CDN's 600x800 worn render, but
 some items don't appear on a mannequin at all: furniture and room floors have no render, and
@@ -218,9 +218,9 @@ tile shows its placeholder and the browser logs a 404 per picture.
 **Where the pictures come from.** The build encodes one source per item, in this order:
 
 - `tools/item-art/<disp_id>.png`/`.webp` when present, used uncropped and ahead of
-  everything else. 110 files: 44 avatar items from the portal's `avataritem/front/`, 42
+  everything else. 111 files: 44 avatar items from the portal's `avataritem/front/`, 42
   furniture pieces and decals from its `furnitureitem/0/`, 6 sets, 2 containers, 2 gold bars,
-  and 14 pet and emote composites. The portal ones need the session cookie the HighriseHelper
+  and 15 pet and emote composites. The portal ones need the session cookie the HighriseHelper
   bot keeps in its `prod_api_settings` table, which is why they sit in `tools/` rather than
   being fetched at build time. `--extra-images DIR` points elsewhere.
 - the workbook preview, which **nothing now uses as a picture** — every unworn item has real
@@ -306,7 +306,7 @@ part assets, the same way the game does it and the same algorithm
 2. Stack the layers in rig order and union the bounds. Order is keyed on the layer name
    (the rig slot: `Head`, `CoreBody`, `EarLeft`, `Tail`, `HatUpper`, …), not on the item id
    — a pet part fills several slots at once, unlike a slime part, which is why
-   `lib/land-pets.js` can get away with keying off the id and this can't. Three rigs, three
+   `lib/land-pets.js` can get away with keying off the id and this can't. Four rigs, four
    orders:
    * **plushie** (snugglins) — `CoreBody` sits *above* the torso: it is where the HCC badge
      and the keepsake pin go.
@@ -314,13 +314,29 @@ part assets, the same way the game does it and the same algorithm
      which, since every `Right*` layer is shaded darker than its `Left*` twin. Headwear
      (`HatUpper` / `BagUpper`) is a left-right pair on top of the head, not a front-back one.
    * **slime** — body, face, then whatever sits on top.
+   * **bat** (Creature the Vampkin) — wings, ears, body, legs, head, eyes. The head plate
+     overlaps both the ear bases and the top of the torso, so those go behind it, and the
+     darker twin of each pair is the far side. Its mouth part is `batmouthempty`, which draws
+     nothing at all, so a rig can legitimately come up a layer short.
 3. Skip the alternate animation frames shipped alongside the idle ones (`*Closed` blink
    frames, `HappyMouth`, `SadMouth`).
-4. Recolour, but only the snugglins. Every bunny and slime here reports Active Palette 0 in
-   the admin panel, so for those the default palette baked into the art *is* the final look
-   and nothing is remapped. The snugglins are the exception: their art ships peach-furred
-   with blue eyes and the palette a real one applies isn't in any source available here.
-   Three source ramps map to three targets:
+4. Recolour when Active Palette isn't 0. Every bunny and slime here reports 0 in the admin
+   panel, so for those the palette baked into the art *is* the final look and nothing is
+   remapped. Two exceptions, and they are exceptions of different kinds.
+
+   **Creature the Vampkin is the easy kind, because the palette is published.** It wears
+   palettes 1 and 15, and its trait archetypes carry a `color_palettes` array, so Active
+   Palette *N* is just an index into it. Both 1 and 15 resolve to the same mint ramp, and
+   palette 0 is the purple ramp the art ships in, so the recolour is an exact five-colour
+   substitution. **Do it on the SVG, not on a raster.** In vector form the only fills present
+   are the flat palette colours, so the ramp maps and the navy, outline and eye white are left
+   alone. The portal's flat `avataritem/front/<trait>.png` renders tempt you here and are a
+   trap twice over: each frames its own part independently so they cannot be stacked, and their
+   mid tones are ramp-over-navy blends that no colour lookup handles cleanly.
+
+   **The snugglins are the hard kind:** their art ships peach-furred with blue eyes and no
+   palette source available here covers what a real one applies, so all three ramps are
+   reconstructed. Three source ramps map to three targets:
    * **fur** (the peach ramp's light and mid tones) → near-black, per both eggs.
    * **accent** (the same ramp's dark browns) → crimson for Krampi, pink for Krambi. These
      are not fur: they are the horns, hooves, tongue, blush rings and eye rims, which the
@@ -337,6 +353,9 @@ part assets, the same way the game does it and the same algorithm
 
 So every pet here is exact official art except the snugglins' three reconstructed ramps.
 Nothing carries a crop window: the card shows each pet whole.
+
+Pets are staged under **our own key** (`hcc-<slug>`), not a Highrise id, because nothing
+upstream looks them up. The key and the staged filename have to match exactly.
 
 Bluluvey is the one pet that skips all of this: it ships as a single flat SVG under
 [assets/pets/](assets/pets/) rather than as separate parts, so it is rasterised as-is.
