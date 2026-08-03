@@ -58,8 +58,8 @@ which can't pin the network, so the buyer must pick Immutable zkEVM themselves.
 
 ## Collections (the release archive)
 
-The **Collections** tab (`/collections`) is the club's full back catalogue: 130 releases
-and 1,443 items, oldest to newest, on a year-by-year timeline. Each release card opens
+The **Collections** tab (`/collections`) is the club's full back catalogue: 127 releases
+and 1,376 items, oldest to newest, on a year-by-year timeline. Each release card opens
 into a grid of its items with their in-game art, rarity and copy counts. You can filter
 by type (drops, grabs, Creature Store, events, giveaways, collabs), search across item and
 release names, and flip the order.
@@ -80,8 +80,8 @@ avatar render for context. Arrow keys walk the rest of the release, Escape close
 
 Two things feed it, and only one of them is in the repo:
 
-- `collections.json` (~183 KB) — the release and item data, served static
-- the `collection_art` table in Postgres — every item's picture, 2,044 rows, 31.7 MB
+- `collections.json` (~175 KB) — the release and item data, served static
+- the `collection_art` table in Postgres — every item's picture, 1,953 rows, 30.1 MB
 
 **No item art is committed.** The repo used to carry 561 files and 6.9 MB under
 `img/collections/`; those bytes now live in the database and reach the browser through
@@ -108,8 +108,8 @@ showing a placeholder. `--refresh-art` re-encodes and reloads everything.
 
 **Rows the archive leaves out.** Two separate filters.
 
-The build drops 60 catalogue rows that aren't really separate items to browse: `hair_back`
-entries (34, each rendering identically to its `hair_front` twin), pet body parts (18 — a
+The build drops 54 catalogue rows that aren't really separate items to browse: `hair_back`
+entries (30, each rendering identically to its `hair_front` twin), pet body parts (18 — a
 pet species' own ears, eyes, tail and wings, spotted by the doubled `pet_pet` marker in the
 disp_id, so pet *clothing* in the same slot is kept), unnamed entries whose name is nothing
 but dashes, `Fake Inverted Fangs`, and one spare archetype: a second Year One White Tee
@@ -118,11 +118,13 @@ Spares go in `DROP_ITEMS` one id at a time rather than by a "zero copies" rule, 
 rows read as zero copies and nearly all of them are real items whose count the stats pull
 missed.
 
-It also drops content that isn't the club's, on holder feedback (July 2026). The workbook
-flags an item HCC when Tom authored it, which is not the same as club-exclusive, and five
-releases were ordinary public ones: Ectoplasm Collection, Whispering Spirits Chase,
-Moonlight Phantoms Chase, Halloween Wolf Grab and Tom's Mouth. See `DROP_RELEASES` in the
-build for the list.
+It also drops content that isn't the club's, on holder feedback. The workbook flags an
+item HCC when Tom authored it, which is not the same as club-exclusive, and eight releases
+were ordinary public ones: Ectoplasm Collection, Whispering Spirits Chase, Moonlight
+Phantoms Chase, Halloween Wolf Grab, Tom's Mouth, and the Clown, Hellhound and Kitsune
+Spell grabs. The last three cost ectoplasm rather than Creature Coins, which holders
+checked in game; the catalogue tags ectoplasm items HCC anyway, and that indexing bug is
+what put them here. See `DROP_RELEASES` in the build for the list.
 
 Earth Day Drop was nearly cut down the same way and then kept whole. The first read was
 that its high-copy items were a public tip-war payout; a correction came back saying the
