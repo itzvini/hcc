@@ -82,8 +82,8 @@ avatar render for context. Arrow keys walk the rest of the release, Escape close
 
 Two things feed it, and only one of them is in the repo:
 
-- `collections.json` (~183 KB) — the release and item data, served static
-- the `collection_art` table in Postgres — every item's picture, 2,031 rows, 31.4 MB
+- `collections.json` (~184 KB) — the release and item data, served static
+- the `collection_art` table in Postgres — every item's picture, 2,068 rows, 31.7 MB
 
 **No item art is committed.** The repo used to carry 561 files and 6.9 MB under
 `img/collections/`; those bytes now live in the database and reach the browser through
@@ -143,7 +143,7 @@ of 3,000 and a store sale of 3,000 look identical here.
 - **`full`** is the whole render at its native size, usually 600x800. The item grid crops
   it to the item with a CSS window; the inspect card shows it both ways.
 - **`thumb`** is a 104px square, cropped to the item when it was encoded, for the 52px
-  boxes in a collapsed card's strip. 555 items need one, the ones a strip can show.
+  boxes in a collapsed card's strip. 562 items need one, the ones a strip can show.
 
 **Items the avatar render can't show.** Most pictures are the CDN's 600x800 worn render, but
 some items don't appear on a mannequin at all: furniture and room floors have no render, and
@@ -151,22 +151,27 @@ a few worn items (the Creature Gold Bars, for one) render as a bare body. The fi
 case is to stage the item's own picture as `tools/item-art/<disp_id>.png|.webp`, which the
 build prefers over any render and leaves uncropped.
 
-Finding that picture is the hard part, and the route depends on the item:
+Finding that picture is the hard part. The asset portal has a route for each kind, and neither
+is discoverable from an archetype record — its `image_url` and `thumbnail_url` fields are empty
+for every item that needs one, so go by the route, not the field:
 
-- **A worn item that renders as a bare body** takes `avataritem/front/<disp_id>.png` off the
-  asset portal, which draws it properly. That art arrives on a full mannequin, so crop it to
-  the item's own bounding box and cap the long side at 400px before staging — the build gives
-  staged art no crop window, so an uncropped beret would land as a speck. Keep the body pixels
-  inside the box rather than colour-keying the mannequin out: the mannequin's anti-aliased ramp
-  is over 1,300 colours wide and keying punches holes straight through anything peach or pink.
-- **A few archetypes carry `image_url` (1024px) and `thumbnail_url` (512px)** outright, which
-  is where the gold bars' art came from. Don't plan around it: those fields are empty for most
-  items that need them, checked one at a time across all 30 furniture pieces and all 8
-  bare-mannequin items, and not one had either.
-- **Furniture has no picture anywhere reachable.** The archetype is a `DStructureArchetype`
-  whose art is `states[].m_image_files` (`default0.png`) inside the game's own asset bundle,
-  described by `downloader_file: virtualworld/items/home/items.json`. Unsolved.
+- **Furniture, room floors and decals**: `furnitureitem/<state>/<disp_id>.png`. 256x256,
+  transparent, the piece on its own. `<state>` is the rotation, `0` upward; a four-state piece
+  answers on 0 to 3, and state `0` has been the right view every time. Square and already
+  framed, so it needs no crop window and fills the tile.
+- **A worn item that renders as a bare body**: `avataritem/front/<disp_id>.png`, which draws it
+  properly where the public CDN render returns an empty mannequin. This one arrives *on* a full
+  mannequin, so crop it to the item's own bounding box and cap the long side at 400px before
+  staging — the build gives staged art no crop window, so an uncropped beret lands as a speck.
+  Keep the body pixels inside the box rather than colour-keying the mannequin out: the
+  mannequin's anti-aliased ramp is over 1,300 colours wide, and keying punches holes straight
+  through anything peach or pink.
 - **Pets** have to be composed from part `.zip`s. See "Composing the pets".
+
+Both portal routes need the session cookie, which is why their output is staged in `tools/`
+rather than fetched at build time. A handful of archetypes do carry `image_url` (1024px) and
+`thumbnail_url` (512px) outright — that is where the Creature Gold Bars' art came from — but
+it's the exception, so don't plan around it.
 
 The build warns when one `art_id` serves three or more differently-named items, which is how
 a bare-mannequin render gives itself away. Two items sharing a picture is routine and
@@ -213,13 +218,13 @@ tile shows its placeholder and the browser logs a 404 per picture.
 **Where the pictures come from.** The build encodes one source per item, in this order:
 
 - `tools/item-art/<disp_id>.png`/`.webp` when present, used uncropped and ahead of
-  everything else. 68 files: 44 avatar items that aren't on the public CDN, from the asset
-  portal's `avataritem/front/<disp_id>.png`; 6 sets; 2 containers; 2 gold bars; and 14 pet
-  and emote composites. The portal ones need the session cookie the HighriseHelper bot keeps
-  in its `prod_api_settings` table, which is why they sit in `tools/` rather than being
-  fetched at build time. `--extra-images DIR` points elsewhere.
-- the workbook preview, for the 13 furniture pieces and the room decal. Nothing wears
-  those, so no avatar render of them exists.
+  everything else. 110 files: 44 avatar items from the portal's `avataritem/front/`, 42
+  furniture pieces and decals from its `furnitureitem/0/`, 6 sets, 2 containers, 2 gold bars,
+  and 14 pet and emote composites. The portal ones need the session cookie the HighriseHelper
+  bot keeps in its `prod_api_settings` table, which is why they sit in `tools/` rather than
+  being fetched at build time. `--extra-images DIR` points elsewhere.
+- the workbook preview, which **nothing now uses as a picture** — every unworn item has real
+  portal art instead. Previews are still read, but only to measure crop windows.
 - otherwise `cdn.highrisegame.com/avatar/<disp_id>.png`, fetched once per item and kept in
   `tools/render-cache/` so later rebuilds ask for nothing. One request each, no retries; a
   failure becomes a warning and that item shows a placeholder until the build is rerun.
