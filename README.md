@@ -58,8 +58,8 @@ which can't pin the network, so the buyer must pick Immutable zkEVM themselves.
 
 ## Collections (the release archive)
 
-The **Collections** tab (`/collections`) is the club's full back catalogue: 130 releases
-and 1,444 items, oldest to newest, on a year-by-year timeline. Each release card opens
+The **Collections** tab (`/collections`) is the club's full back catalogue: 128 releases
+and 1,443 items, oldest to newest, on a year-by-year timeline. Each release card opens
 into a grid of its items with their in-game art, rarity and copy counts. You can filter
 by type (drops, grabs, Creature Store, events, giveaways, collabs), search across item and
 release names, and flip the order.
@@ -81,7 +81,7 @@ avatar render for context. Arrow keys walk the rest of the release, Escape close
 Two things feed it, and only one of them is in the repo:
 
 - `collections.json` (~181 KB) — the release and item data, served static
-- the `collection_art` table in Postgres — every item's picture, 2,046 rows, 31.7 MB
+- the `collection_art` table in Postgres — every item's picture, 2,044 rows, 31.7 MB
 
 **No item art is committed.** The repo used to carry 561 files and 6.9 MB under
 `img/collections/`; those bytes now live in the database and reach the browser through
