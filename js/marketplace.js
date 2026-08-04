@@ -4073,6 +4073,11 @@ function filterSideHtml() {
       <div class="trade-side-sec">
         <h4 class="trade-side-h">${esc(t('trade.filter.traitsH'))}</h4>
         <div class="trade-flt-traits" id="flt-traits">${traitDropsHtml()}</div>
+        <!-- These dropdowns are 466 trait names with no pictures. The showcase is the same
+             vocabulary with the art beside it, and it links back here filtered, so anyone
+             who doesn't already know what "Glowing Torn Socket Eyes" looks like can go see. -->
+        ${coll === 'creatures' ? `<a class="trade-flt-see" href="/collections/traits">${
+          esc(t('trade.filter.seeTraits'))}<span aria-hidden="true">→</span></a>` : ''}
       </div>
       <button type="button" class="trade-send trade-side-done" data-act="flt-drawer">${esc(t('trade.filter.done'))}</button>
     </div>
@@ -6755,6 +6760,21 @@ export async function loadMarketplace() {
     if (COLLECTIONS[params.get('coll')]) coll = params.get('coll');
     const tk = (params.get('token') || '').trim();
     if (/^\d{1,80}$/.test(tk)) deepToken = tk;
+    // …&t=Type:Value (repeatable) opens Browse already filtered — how the Collections
+    // trait showcase hands a trait over ("show me Creatures with these eyes"). Same wire
+    // shape the server's browse query takes, so the two ends can't drift apart.
+    for (const pair of params.getAll('t').slice(0, 40)) {
+      const i = pair.indexOf(':');
+      if (i < 1) continue;
+      const type = pair.slice(0, i).slice(0, 60);
+      const value = pair.slice(i + 1).slice(0, 120);
+      if (!value) continue;
+      if (!flt.traits.has(type)) flt.traits.set(type, new Set());
+      flt.traits.get(type).add(value);
+    }
+    // A trait with nothing listed still has Creatures to look at, so the link can ask for
+    // the whole collection rather than dropping the visitor on an empty grid.
+    if (params.get('scope') === 'all') flt.scope = 'all';
   } catch { /* malformed query — ignore */ }
   wireEsc();
   wireTips();

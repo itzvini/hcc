@@ -529,7 +529,11 @@ function inspectDialog() {
   document.body.appendChild(dlg);
   // Clicking the backdrop (the dialog's own box, outside the panel) closes it
   dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
-  dlg.addEventListener('keydown', e => {
+  // Arrow keys walk the release. The listener sits on the document, not the dialog: stepping
+  // re-renders the card's innerHTML, which destroys the focused button and drops focus back
+  // to the body, so a dialog-scoped handler goes quiet after the first click of ‹ or ›.
+  document.addEventListener('keydown', e => {
+    if (!dlg.open) return;
     if (e.key === 'ArrowRight') { e.preventDefault(); stepInspect(1); }
     if (e.key === 'ArrowLeft')  { e.preventDefault(); stepInspect(-1); }
   });

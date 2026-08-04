@@ -58,7 +58,13 @@ which can't pin the network, so the buyer must pick Immutable zkEVM themselves.
 
 ## Collections (the release archive)
 
-The **Collections** tab (`/collections`) is the club's full back catalogue: 130 releases
+The Collections tab holds two views, as sub-tabs: **Releases** (`/collections`), the club's
+back catalogue, and **Creature Traits** (`/collections/traits`), every trait the Creatures
+themselves are built from. The archive answers "what did the club put out"; the trait view
+answers "what are the Creatures made of". They share their stat band, chips and search box
+so the tab reads as one page.
+
+The **Releases** view (`/collections`) is the club's full back catalogue: 130 releases
 and 1,457 items, oldest to newest, on a year-by-year timeline. Each release card opens
 into a grid of its items with their in-game art, rarity and copy counts. You can filter
 by type (drops, grabs, Creature Store, events, giveaways, collabs), search across item and
@@ -84,6 +90,8 @@ Two things feed it, and only one of them is in the repo:
 
 - `collections.json` (~184 KB) — the release and item data, served static
 - the `collection_art` table in Postgres — every item's picture, 2,072 rows, 31.8 MB
+  (the trait showcase keeps its tiles in a `trait_art` table beside it, for the reason
+  spelled out under Creature Traits below)
 
 **No item art is committed.** The repo used to carry 561 files and 6.9 MB under
 `img/collections/`; those bytes now live in the database and reach the browser through
@@ -400,6 +408,131 @@ Worked-out dates render as a month with a `~` marker and say so on the card, so 
 timeline never shows a guessed date as a known one. The build also reports anything
 suspicious — re-gifts of older sets, and releases whose date disagrees with the year in
 their own name — so you can check those against the announcements.
+
+## Creature Traits (the trait showcase)
+
+`/collections/traits` lists all **466 traits across 13 slots** that the 11,111 Creatures are
+assembled from — every Eyes, Hair, Outfit and Aura — as a grid of tiles grouped by slot,
+rarest first. Each tile shows how many Creatures wear the trait, its share of the
+collection, a log-scaled scarcity bar against the rest of its slot, and an "on sale" pill
+when any wearer is listed. Filter to one slot, search, sort (rarest, most common, A-Z, most
+on sale) or show only what's for sale.
+
+Opening a trait gives you its numbers, the last four sales of a Creature wearing it, and two
+ways into the marketplace with the filter already applied — the listed ones, or every
+Creature that has it. Arrow keys walk the slot, Escape closes.
+
+**Everything comes from `/api/market/creatures/traits`**, which is built from the two
+in-memory indexes Browse already keeps (the daily full-collection sweep and the 60s listings
+snapshot), so the endpoint costs no upstream calls and nothing about the trait list is
+hand-maintained. Gen 2's traits will appear here the day that collection is indexed.
+
+### Where the tile art comes from
+
+**Every trait is a real Highrise item, and the tile shows that item's own art** — the game's
+own preview of the thing, not a crop of some Creature that happens to wear it. Two inputs,
+joined on the item's **name**: the trait list from the API, and the item catalogue workbook
+(`.tmp/Highrise Creature Club — All Items & Traits.xlsx`, one sheet per category, gitignored
+like every other build input — keep a copy wherever you build from). Which item a trait may
+match is fenced per slot by `SLOT_CATS`, with pet parts dropped, so a name that only exists as
+furniture or a pet's beak is a miss rather than a wrong tile. **371 of the 466 match, with no
+ambiguity at all.**
+
+Their renders come from the asset portal, `avataritem/front/<item_id>.png`, which needs the
+session cookie. The public CDN is no use here: `cdn.highrisegame.com/avatar/<item_id>.png`
+*answers* for a trait id and hands back the shared blank mannequin (sha1 `733985b4…`) for
+hair, mouths, ears, freckles and hats, and a 1x1 pixel for auras. The portal draws all of
+them.
+
+A portal render is one of two shapes, and the item's **category** says which — never the
+pixels, because every cheap "is there a body here" test has a counter-example (long hair
+covers the chest, a glow tints the arms, and the legs are posed differently from one render
+to the next):
+
+- `aura` and `bag` come back as the item alone on transparency, so its own alpha bounds it.
+- everything else comes back worn on a mannequin, and `SLOT_WINDOW` in the build script says
+  what to crop. The body is drawn identically in every render from the chest up — the head
+  runs x 160-440, y 11-334, and being a chibi it's the top 40% of the figure with the whole
+  face crowded into the bottom third of it (eyes 166-230, nose 225-270, mouth 269-323). Each
+  window is square, so it's exactly what the square tile shows; a mouth on its own bounding
+  box would be a pair of floating lips, and the head window makes it a face.
+
+**Three slots have no item and can't have one.** An Outfit trait names a whole look rather
+than one archetype ("Bell Sleeve Outfit" shipped as a top and trousers under other names),
+Body is the creature's skin colour, and Background Color is the picture behind it. Those 95
+tiles are a crop of a Creature that has the trait, framed by `TRAIT_FRAMES` in `server.js`
+(`[centre x, centre y, side]` on the 666px render, `null` for the whole thing). Which
+Creature: the endpoint picks the **plainest wearer** — fewest non-"None" traits, then the
+most ordinary of those — so nothing crowds the trait. Rank is unique, so a trait keeps the
+same Creature across rebuilds. Each slot is uniform either way, so a block of tiles always
+reads as one set.
+
+The tiles are baked rather than cropped in the browser: a Creature render is 445 KB and a
+slot of 64 traits would pull 28 MB of them, against ~9 KB for a 240px crop.
+
+```bash
+python tools/build-trait-art.py                    # against the local server
+python tools/build-trait-art.py --api https://hcc.highrise.game
+```
+
+**The tiles live in Postgres, not the repo** — the `trait_art` table, reaching the browser
+through `/api/collections/art/trait/<art_id>.webp`, exactly as the release archive's pictures
+do. Same two reasons: no binary in the repo, and the URL is a hash of the bytes rather than the
+trait's name, so it can be cached for a year and nothing published names an item. It's a table
+of its own rather than a third variant of `collection_art` for one specific reason: that table's
+stale sweep deletes by `art_id` **without scoping to a variant**, so trait rows parked there
+would be wiped by any collections build (it has already eaten 1,111 rows once).
+
+Keyed by `slug` (`<slot>--<trait>`) with `art_id` as the served handle, so re-baking a tile
+swaps its bytes *and* its URL and no cache can serve the old one. A rebuild that changes nothing
+touches no rows. Renders cache under `tools/trait-render-cache` and `tools/creature-cache`, so a
+re-run costs no requests either.
+
+`server.js` reads slug → art_id once per boot. A trait with no row — a new one between builds,
+or no database at all — tells the client to frame a Creature render live instead: heavier
+(445 KB a tile) but never broken, and it's what a brand-new Gen 2 trait would do before the
+next build.
+
+### The panel mirror (item list + art, for any build that needs it)
+
+Two tools pull the club's whole catalogue off the asset portal so no build has to wait on a
+hand-made export. Both are local-only (`tools/` is gitignored) and both read the session cookie
+straight out of the Discord Center database — it's never printed or written anywhere.
+
+```bash
+python tools/fetch-panel-items.py     # 5 calls  -> tools/panel-items.json  (3,106 items, 1.3 MB)
+python tools/fetch-panel-art.py       # 1 per item -> tools/panel-art/<disp_id>.png + index.json
+```
+
+**The item list is five calls, not 3,000.** `GetItemsRequest` returns up to 1000 rows a page, but
+it needs **`offset` and `sorts`** alongside `filters` and `limit` — without them it answers
+`500` with an empty body, which is easy to misread as a dead cookie. Three id families are asked
+for separately, because a substring match on `hcc` cannot see `hrcc` (h-r-c-c doesn't contain
+h-c-c) and neither sees `creatureclub`: that blind spot kept 1,609 items out of the release
+archive for a year, and the workbook export still misses the 33 `creatureclub` ones. Each row
+carries the item's ObjectId, category, rarity, gender, `asset_status`, `is_purchasable`,
+`affiliations` and `updated_at`. **Copy counts are not in it and can't be** — those need
+`GetItemStatsRequest`, which is off limits, so they still only come from a supplied workbook.
+
+**The art is one request per item**, routed by archetype type — `DAvatarItemArchetype` →
+`avataritem/front/<disp_id>.png` (worn, 600x800), `DStructureArchetype` →
+`furnitureitem/0/<disp_id>.png` (the piece alone, 256px square). Every category in the catalogue
+was probed against those two before the sweep ran. `index.json` holds what came back for every id
+— hash, size, dimensions, or the status that failed — so a later build can tell "this item has no
+art" from "we never asked", and a re-run only fetches what's missing. Pet parts are skipped by
+default (`--pets` includes them): a pet is composed from its part zips, and the per-part portal
+render frames each part on its own canvas.
+
+The full sweep, 2026-08-04: **2,453 items asked, 2,438 drew, 0 failures, 221 MB.** The 15 that
+didn't are all explained, and none of them is a gap to chase:
+
+- **6 `set` archetypes and the Ignition Boost emote** answer `200` with a **1x1 pixel**. A set is
+  a bundle and an emote is an animation, so neither has art of its own.
+- **3 unnamed rows** (name `---`) the archive drops anyway, and one real item with no render at
+  all: the **Fallen Grace Distressed Tee**.
+- **4 come back as the blank mannequin.** Two are *correct* — Invisible Hair, front and back,
+  is invisible. The other two are the **Creature Gold Bars**, whose art only ever existed in their
+  archetype's `thumbnail_url` and is already staged in `tools/item-art/`.
 
 ## Market data
 

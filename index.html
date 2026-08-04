@@ -850,6 +850,12 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 <!-- Collections — the full release archive, oldest to newest. js/collections.js fills
      #collections-app from /collections.json; the loading spinner is the only static bit. -->
 <main id="panel-collections" class="tab-panel" role="region" aria-labelledby="tab-collections" hidden>
+  <nav class="guide-subnav wrap subnav-top" id="collections-top" role="tablist" aria-label="Collections sections" data-i18n-aria="a11y.collections.sections">
+    <button class="guide-subtab is-active" type="button" role="tab" aria-selected="true" data-subtab="releases" data-i18n="col.sub.releases">Releases</button>
+    <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="traits" data-i18n="col.sub.traits">Creature Traits</button>
+  </nav>
+
+  <div class="guide-subpanel" data-subpanel="releases">
   <section class="wrap col-wrap">
     <div class="eyebrow" data-i18n="col.eyebrow">The whole archive</div>
     <h2 data-i18n="col.h2">Collections</h2>
@@ -861,6 +867,21 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 
     <p class="apply-fineprint" data-i18n="col.fineprint">Built from the Highrise item catalogue and the club's gift log. Dates marked with a ~ are worked out from when the items were made, because they landed before the announcements channel existed, so treat those as the right month rather than the exact day.</p>
   </section>
+  </div>
+
+  <div class="guide-subpanel" data-subpanel="traits" hidden>
+  <section class="wrap ctr-wrap">
+    <div class="eyebrow" data-i18n="ctr.eyebrow">What they're made of</div>
+    <h2 data-i18n="ctr.h2">Creature Traits</h2>
+    <p class="lead" data-i18n="ctr.lead">Every trait in the Creature collection, slot by slot, exactly as it looks in game. Open one to see how many Creatures wear it, what it's selling for, and jump to the marketplace with that trait already filtered for you.</p>
+
+    <div id="traits-app" class="ctr-box" aria-live="polite" aria-busy="true">
+      <div class="apply-loading"><div class="apply-spinner"></div></div>
+    </div>
+
+    <p class="apply-fineprint" data-i18n="ctr.fineprint">Counts come from all 11,111 Creatures, and the for-sale numbers from the live marketplace. Most tiles are the item's own art from the game. Body, outfit and background aren't items you can wear on their own, so those show on a Creature that has them.</p>
+  </section>
+  </div>
 </main>
 
 <main id="panel-guides" class="tab-panel" role="region" aria-labelledby="tab-guides" hidden>

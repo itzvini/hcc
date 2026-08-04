@@ -1789,6 +1789,155 @@ async function getCreatureBrowse(searchParams) {
   };
 }
 
+// --- Trait showcase: every trait in the collection, on a Creature that wears it --------
+// Browse the collection by trait instead of by token — every Eyes, Hair, Outfit and Aura
+// the Creatures were built from, grouped by slot, with how many wear it and a way straight
+// into Browse filtered to it. Asked for by the club, and the same view will carry Gen 2's
+// traits the day that collection is indexed.
+//
+// No trait needs art of its own. Every Creature render is the same 666px bust, so the
+// client frames a Creature that wears the trait to the right part of the body. WHICH
+// Creature is the whole trick: the fewer other add-ons it carries, the less there is to
+// cover the trait or pull the eye off it, so the pick takes the plainest wearer — fewest
+// non-"None" traits, then the most ordinary of those (rank counts up from the rarest, so
+// the highest rank wins). Rank is unique, so the same Creature represents a trait on every
+// rebuild.
+//
+// "None" is not a trait, so those values are left out; each slot reports how many Creatures
+// wear anything in it instead. Rarity is a tier rather than a trait, and Browse already has
+// its own chips for it, so it's skipped too.
+const TRAIT_SKIP = /rarity/i;
+const traitShowcase = { forBuild: 0, data: null };
+
+// Where each slot sits on the 666px render, as [centre x, centre y, side]. The tile is
+// square and fits the window's longer side, so a window is only ever seen as the smallest
+// square around it — these are written square already, so the numbers are what you see.
+// null = show the whole render, which is right for anything that isn't in one place: an
+// aura wraps the body, a tail hangs off it, a background is all of it.
+//
+// One definition, three readers: the client frames the full render with it, and
+// tools/build-trait-art.py crops the baked tiles to it. Nudging a window here and
+// rebuilding the art keeps the two views showing the same thing.
+const TRAIT_FRAMES = {
+  'Eyes':             [372, 305, 210],
+  'Mouth':            [372, 395, 190],
+  'Nose':             [372, 352, 165],
+  'Glasses':          [372, 330, 245],
+  'Face Accessory':   [372, 345, 265],
+  'Body':             [372, 350, 300],
+  'Ears':             [338, 310, 380],
+  'Hair':             [333, 300, 560],
+  'Head Accessory':   [340, 220, 440],
+  'Outfit':           [340, 515, 300],
+  'Aura':             null,
+  'Body Accessory':   null,
+  'Background Color': null,
+};
+
+// Baked tile art: 240px crops in the `trait_art` table, built by tools/build-trait-art.py.
+// The grid shows hundreds of traits at once and a Creature render is 445 KB, so a whole slot
+// of crops costs less than two renders. The repo ships none of it, the same as the release
+// archive's pictures. Read once per boot into slug -> art_id; a trait with no row (a new one
+// between builds, or no database at all) tells the client to frame a Creature render instead,
+// which is heavier but never broken.
+const slugPart = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const traitSlug = (type, value) => `${slugPart(type)}--${slugPart(value)}`;
+let traitArtMap = null;
+async function getTraitArtMap() {
+  if (traitArtMap) return traitArtMap;
+  try {
+    const rows = await db.listTraitArt();
+    traitArtMap = new Map(rows.map(r => [r.slug, r.art_id]));
+    console.log(`Trait tile art: ${traitArtMap.size} row(s).`);
+  } catch (err) {
+    console.error('Trait tile art unavailable:', err.message);
+    traitArtMap = new Map();
+  }
+  return traitArtMap;
+}
+
+function buildTraitShowcase(coll, artMap) {
+  const types = new Map(); // type -> Map(value -> { n, pick, addOns })
+  for (const it of coll.items) {
+    let addOns = 0;
+    for (const [type, v] of Object.entries(it.traits)) {
+      if (!TRAIT_SKIP.test(type) && v !== 'None') addOns++;
+    }
+    for (const [type, v] of Object.entries(it.traits)) {
+      if (TRAIT_SKIP.test(type) || v === 'None') continue;
+      let vals = types.get(type);
+      if (!vals) types.set(type, vals = new Map());
+      const cur = vals.get(v);
+      if (!cur) { vals.set(v, { n: 1, pick: it, addOns }); continue; }
+      cur.n++;
+      if (addOns < cur.addOns || (addOns === cur.addOns && (it.rank ?? 0) > (cur.pick.rank ?? 0))) {
+        cur.pick = it;
+        cur.addOns = addOns;
+      }
+    }
+  }
+  const out = [];
+  for (const [type, vals] of types) {
+    // Rarest first: the shortest supply is what a buyer hunting traits wants at the top.
+    const values = [...vals.entries()]
+      .map(([v, e]) => ({
+        v, n: e.n, tokenId: e.pick.tokenId, name: e.pick.name, image: e.pick.image,
+        art: artMap.get(traitSlug(type, v)) || null,
+      }))
+      .sort((a, b) => a.n - b.n || a.v.localeCompare(b.v));
+    out.push({
+      type,
+      frame: TRAIT_FRAMES[type] ?? null,
+      count: values.length,
+      worn: values.reduce((s, x) => s + x.n, 0),   // one value per slot per Creature, so this sums
+      values,
+    });
+  }
+  out.sort((a, b) => a.type.localeCompare(b.type));   // the client orders these head to toe
+  return { types: out, total: coll.total, builtAt: coll.builtAt };
+}
+
+async function getCreatureTraits() {
+  const [listIdx, fx, artMap] = await Promise.all([
+    getBrowseIndex(), getMarketplaceFx(), getTraitArtMap()]);
+  const coll = getCollectionIndex();   // null until the first build lands
+  if (!coll) {
+    return { indexing: true, total: null, types: [], listedTotal: listIdx.items.length,
+      ethUsd: fx.ethUsd, fetchedAt: new Date().toISOString() };
+  }
+  if (traitShowcase.forBuild !== coll.builtAt) {
+    traitShowcase.data = buildTraitShowcase(coll, artMap);
+    traitShowcase.forBuild = coll.builtAt;
+  }
+  // Listings are a 60s snapshot against a daily trait build, so "listed now" and the floor
+  // are merged per request instead of baked into the memo.
+  const live = new Map(); // "type:value" -> { n, floorEth }
+  for (const it of listIdx.items) {
+    const p = it.totalEth ?? it.priceEth ?? null;
+    for (const [type, v] of Object.entries(it.traits)) {
+      const k = `${type}:${v}`;
+      const cur = live.get(k) || { n: 0, floorEth: null };
+      cur.n++;
+      if (p != null && (cur.floorEth == null || p < cur.floorEth)) cur.floorEth = p;
+      live.set(k, cur);
+    }
+  }
+  return {
+    indexing: false,
+    total: traitShowcase.data.total,
+    types: traitShowcase.data.types.map(ty => ({
+      ...ty,
+      values: ty.values.map(val => {
+        const l = live.get(`${ty.type}:${val.v}`);
+        return { ...val, listed: l?.n || 0, floorEth: l?.floorEth ?? null };
+      }),
+    })),
+    listedTotal: listIdx.items.length,
+    ethUsd: fx.ethUsd,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
 // --- Sales history: recent COMPLETED sales, collection-wide, filtered like Browse ------
 // Price discovery beside the active listings: what buyers actually paid, not just what
 // sellers ask. The same faceted filter (search / price / traits) the Browse tab uses runs
@@ -2423,6 +2572,15 @@ async function handleMarketplaceApi(request, response, url) {
     }
     const data = await getCreatureBrowse(url.searchParams);
     sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=15' });
+    return;
+  }
+
+  // Every trait in the collection, grouped by slot, each with a Creature that wears it —
+  // the Collections › Creature Traits showcase. Built from the same in-memory indexes
+  // Browse already keeps, so it costs no upstream calls at all.
+  if (pathname === '/api/market/creatures/traits') {
+    const data = await getCreatureTraits();
+    sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=60' });
     return;
   }
 
@@ -4880,7 +5038,9 @@ async function handleCollectionArt(request, response, variant, artId) {
   const wait = rateLimited(`col-art:${ip}`, 12000, 60 * 1000);
   if (wait) { sendJson(response, 429, { error: 'Too many requests.' }, { 'Retry-After': String(wait) }); return; }
 
-  const art = await db.getCollectionArt(artId, variant);
+  const art = variant === 'trait'
+    ? await db.getTraitArt(artId)
+    : await db.getCollectionArt(artId, variant);
   if (!art) { sendJson(response, 404, { error: 'Not found' }); return; }
   const headers = {
     'Content-Type': art.content_type,
@@ -5500,10 +5660,12 @@ const server = http.createServer((request, response) => {
     return;
   }
 
-  // Collections item art, out of Postgres. Two reasons it lives there rather than in the
-  // repo: the pictures come to ~32 MB, and this way the client only ever sees a content
-  // hash, so no Highrise disp_id is published.
-  const artMatch = request.url.match(/^\/api\/collections\/art\/(thumb|full)\/([0-9a-f]{16})\.webp$/);
+  // Collections art, out of Postgres. Two reasons it lives there rather than in the repo:
+  // the pictures come to ~35 MB, and this way the client only ever sees a content hash, so
+  // nothing published names a Highrise item. `thumb` and `full` are the release archive's two
+  // sizes of one item; `trait` is a Creature Traits tile, which comes in one size and out of
+  // its own table (see lib/db.js for why it isn't a third variant of the same rows).
+  const artMatch = request.url.match(/^\/api\/collections\/art\/(thumb|full|trait)\/([0-9a-f]{16})\.webp$/);
   if (artMatch) {
     handleCollectionArt(request, response, artMatch[1], artMatch[2]).catch(err => {
       console.error('Collection art error:', err.message);

@@ -1610,6 +1610,310 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
   .col-stat-v { font-size: 22px; }
 }
 
+/* ---------- CREATURE TRAITS ----------
+   The Collections tab's second view: every trait in the Creature collection as a tile,
+   grouped by slot. The stat band, chips, search box and empty state are the archive's own
+   (.col-*) so both views read as one page — what's here is the trait grid, its scarcity
+   readout and the inspect card. Lavender is this view's accent, mint the archive's, which
+   is the one cue that tells them apart at a glance. */
+/* One frame for the whole tab: the sub-nav, the archive and the trait grid all sit on the same
+   1180px column, so switching views doesn't shift the page and the pills line up with the
+   heading under them. `.wrap` alone is 920px, which left the sub-nav indented past its own
+   section's text. */
+#panel-collections .guide-subnav,
+#panel-collections .col-wrap,
+#panel-collections .ctr-wrap { max-width: 1180px; }
+#panel-collections .guide-subnav { margin-top: 4px; }
+#panel-collections .guide-subpanel > section { padding-top: 24px; }
+.ctr-box { margin-top: 30px; }
+.ctr-box .col-chip { --accent: var(--hr-secondary); }
+.ctr-box .col-chip.is-all.is-on { --accent: var(--hr-primary); }
+
+/* For-sale switch + sort */
+.ctr-toggle {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  padding: 9px 14px; border-radius: var(--hr-radius-pill);
+  font: 700 12.5px/1 var(--hr-sans); color: var(--hr-fg-2);
+  border: 1px solid var(--hr-line-strong); background: var(--hr-bg-2);
+  transition: color .2s, border-color .2s, background .2s;
+}
+.ctr-toggle:hover { color: var(--hr-fg-0); }
+.ctr-toggle-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--hr-fg-4);
+  transition: background .2s, box-shadow .2s;
+}
+.ctr-toggle.is-on {
+  color: var(--hr-fg-0);
+  border-color: color-mix(in srgb, var(--hr-primary) 55%, transparent);
+  background: color-mix(in srgb, var(--hr-primary) 12%, var(--hr-bg-2));
+}
+.ctr-toggle.is-on .ctr-toggle-dot {
+  background: var(--hr-primary); box-shadow: 0 0 10px var(--hr-primary);
+}
+.ctr-sortwrap { display: inline-flex; align-items: center; gap: 8px; }
+.ctr-sortlbl {
+  font: 700 10.5px/1 var(--hr-sans); letter-spacing: .07em; text-transform: uppercase;
+  color: var(--hr-fg-4);
+}
+.ctr-sort {
+  appearance: none; cursor: pointer; padding: 9px 30px 9px 14px;
+  border-radius: var(--hr-radius-pill); font: 700 12.5px/1 var(--hr-sans);
+  color: var(--hr-fg-1); border: 1px solid var(--hr-line-strong); background: var(--hr-bg-2);
+  /* Chevron drawn in the background so the pill keeps its shape across browsers */
+  background-image: linear-gradient(45deg, transparent 50%, var(--hr-fg-3) 50%),
+                    linear-gradient(135deg, var(--hr-fg-3) 50%, transparent 50%);
+  background-position: right 15px center, right 10px center;
+  background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+  transition: border-color .2s, color .2s;
+}
+.ctr-sort:hover { color: var(--hr-fg-0); border-color: color-mix(in srgb, var(--hr-secondary) 45%, transparent); }
+.ctr-sort:focus-visible { outline: none; border-color: rgba(133,97,255,.6); box-shadow: 0 0 0 3px rgba(133,97,255,.16); }
+.ctr-sort option { background: var(--hr-bg-2); color: var(--hr-fg-0); }
+
+/* Slot blocks. Both resets below are load-bearing, not tidiness: a slot block is a <section>
+   and its heading a <header>, and the site styles both for page-level use — `section` carries
+   40px of vertical padding and `header` 70px/50px. Left alone, every block opened with 160px of
+   nothing above its first tile. */
+.ctr-groups { margin-top: 30px; }
+.ctr-group { padding: 0; }
+.ctr-group + .ctr-group { margin-top: 44px; }
+/* `padding: 0` is not spare: the site's `header` rule carries `70px 0 50px` for page heroes,
+   and a slot heading is a <header>, so without this each block opened with 120px of nothing.
+   `.col-card-top` in the archive resets it for the same reason. */
+/* `center`, not `baseline`, and the archive's year headings do the same: baseline alignment
+   against the 1px rule span gives it no text baseline of its own, so it takes its bottom edge
+   and shoves the heading clear of the header's own box. */
+.ctr-group-h {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0; margin: 0 0 16px; text-align: left;
+}
+.ctr-group-t { font: 900 20px/1 var(--hr-sans); color: var(--hr-fg-0); }
+.ctr-group-m { font: 600 11.5px/1 var(--hr-sans); color: var(--hr-fg-4); white-space: nowrap; }
+.ctr-group-rule {
+  flex: 1; height: 1px; min-width: 20px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--hr-secondary) 40%, transparent), var(--hr-line) 60%);
+}
+
+/* The trait grid */
+.ctr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; }
+.ctr-tile {
+  --accent: var(--hr-secondary);
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  background: none; border: 0; padding: 0; font: inherit; color: inherit;
+}
+.ctr-fig {
+  position: relative; display: block; overflow: hidden; isolation: isolate;
+  aspect-ratio: 1; border-radius: var(--hr-radius-lg);
+  border: 1px solid var(--hr-line); background: var(--hr-bg-1);
+  transition: transform .22s, border-color .22s, box-shadow .22s;
+}
+.ctr-tile:hover .ctr-fig,
+.ctr-tile:focus-visible .ctr-fig {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: 0 10px 26px rgba(0,0,0,.4), 0 0 22px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+/* Square viewport for a Creature render. A baked tile is already the crop and fills the
+   frame; the live fallback carries an inline size + translate from frameStyle(), which
+   needs the image free of `inset` to sit where it says. */
+.ctr-shot { position: relative; display: block; width: 100%; height: 100%; overflow: hidden; }
+.ctr-shot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ctr-shot.is-framed img { inset: auto; max-width: none; object-fit: fill; }
+.ctr-shot.is-empty { display: grid; place-items: center; color: var(--hr-fg-4); font: 800 18px/1 var(--hr-sans); }
+/* Shine sweep across the art on hover */
+.ctr-fig::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(100deg, transparent 35%, rgba(255,255,255,.16) 50%, transparent 65%);
+  transform: translateX(-120%); transition: transform .7s cubic-bezier(.4,0,.2,1);
+}
+.ctr-tile:hover .ctr-fig::after { transform: translateX(120%); }
+.ctr-onsale {
+  position: absolute; z-index: 2; bottom: 7px; left: 7px;
+  padding: 3px 8px; border-radius: var(--hr-radius-pill);
+  font: 800 9.5px/1.4 var(--hr-sans); letter-spacing: .05em; text-transform: uppercase;
+  color: var(--hr-on-primary); background: var(--hr-primary);
+  box-shadow: 0 2px 10px rgba(0,0,0,.4);
+}
+.ctr-cap { display: block; margin-top: 9px; }
+.ctr-name {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  font: 700 12px/1.3 var(--hr-sans); color: var(--hr-fg-1); overflow: hidden; min-height: 2.6em;
+}
+.ctr-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 3px; }
+/* No slot label on the tile: the block heading above it already says which slot this is,
+   and a column of "Eyes / Eyes / Eyes" under the art was pure noise. */
+.ctr-n {
+  font: 600 10.5px/1.3 var(--hr-sans); color: var(--hr-fg-4);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.ctr-n b { font-weight: 800; color: var(--hr-fg-2); }
+.ctr-pct {
+  font: 700 10.5px/1.3 var(--hr-sans); color: var(--hr-fg-3);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+/* Scarcity: full bar = the rarest in its slot. Log-scaled, see scarcityBar() in js. */
+.ctr-bar {
+  display: block; margin-top: 6px; height: 3px; border-radius: 3px;
+  background: rgba(255,255,255,.07); overflow: hidden;
+}
+.ctr-bar i {
+  display: block; height: 100%; border-radius: 3px;
+  background: linear-gradient(90deg, var(--hr-secondary), var(--hr-primary));
+}
+
+/* Inspect card */
+.ctr-modal {
+  border: 0; padding: 0; background: none; max-width: none; max-height: none;
+  width: 100%; height: 100%; overflow: auto;
+}
+.ctr-modal[open] { display: grid; place-items: center; }
+.ctr-modal::backdrop { background: rgba(1,1,4,.74); backdrop-filter: blur(6px); }
+.ctr-insp {
+  --accent: var(--hr-secondary);
+  position: relative; overflow: hidden; isolation: isolate;
+  display: grid; grid-template-columns: 320px minmax(0, 350px); gap: 6px;
+  margin: 22px; border-radius: var(--hr-radius-2xl);
+  border: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(40,39,45,.92), rgba(16,15,19,.96));
+  backdrop-filter: blur(14px);
+  box-shadow: 0 30px 90px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.06);
+}
+.ctr-insp > * { position: relative; z-index: 1; }
+.ctr-insp-glow {
+  position: absolute; z-index: 0; inset: -35% 30% auto -25%; height: 90%; pointer-events: none;
+  background: radial-gradient(closest-side at 35% 25%,
+    color-mix(in srgb, var(--accent) 32%, transparent), transparent 75%);
+}
+.ctr-insp-x {
+  position: absolute; z-index: 2; top: 12px; right: 12px;
+  width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+  display: grid; place-items: center; font-size: 13px; line-height: 1;
+  color: var(--hr-fg-1); background: rgba(255,255,255,.07);
+  border: 1px solid var(--hr-line-strong); transition: color .2s, background .2s;
+}
+.ctr-insp-x:hover { color: var(--hr-fg-0); background: rgba(255,255,255,.14); }
+.ctr-insp-stage {
+  display: grid; justify-items: center; align-content: start; gap: 14px; padding: 26px;
+  border-radius: var(--hr-radius-2xl) 0 0 var(--hr-radius-2xl);
+  background: radial-gradient(closest-side at 50% 42%, rgba(255,255,255,.05), transparent 78%);
+}
+.ctr-insp-stage .ctr-shot {
+  width: 268px; height: 268px; border-radius: var(--hr-radius-xl);
+  border: 1px solid var(--hr-line); background: var(--hr-bg-1);
+}
+/* The whole Creature the crop was framed from — the same file, so it costs nothing extra */
+.ctr-insp-whole {
+  display: flex; align-items: center; gap: 11px; width: 100%;
+  padding: 9px 12px; border-radius: var(--hr-radius-lg);
+  border: 1px solid var(--hr-line); background: rgba(255,255,255,.03);
+}
+/* `contain`, not `cover`: this panel exists to show the whole Creature, and cropping it to
+   a square would hide exactly the parts the stage above already cut away. */
+.ctr-insp-whole img {
+  width: 46px; height: 46px; flex: 0 0 auto; object-fit: contain;
+  border-radius: var(--hr-radius-md); background: var(--hr-bg-1);
+}
+.ctr-insp-whole figcaption {
+  font: 700 10.5px/1.35 var(--hr-sans); letter-spacing: .04em; color: var(--hr-fg-4);
+}
+.ctr-insp-body { padding: 26px 26px 22px 8px; }
+.ctr-insp-slot {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: var(--hr-radius-pill);
+  font: 800 10.5px/1.4 var(--hr-sans); letter-spacing: .06em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent) 78%, var(--hr-fg-0));
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
+}
+.ctr-insp-h { font: 900 21px/1.2 var(--hr-sans); color: var(--hr-fg-0); margin: 12px 0 16px; }
+.ctr-insp-dl {
+  display: grid; grid-template-columns: auto 1fr; gap: 9px 16px; align-items: baseline;
+  padding-top: 14px; border-top: 1px solid var(--hr-line);
+}
+.ctr-insp-dl dt {
+  font: 700 10.5px/1.3 var(--hr-sans); letter-spacing: .06em; text-transform: uppercase;
+  color: var(--hr-fg-4);
+}
+.ctr-insp-dl dd { font-size: 13px; line-height: 1.4; color: var(--hr-fg-1); }
+.ctr-insp-dl dd b { font-weight: 800; font-variant-numeric: tabular-nums; }
+.ctr-insp-sub { margin-left: 6px; font-size: 11.5px; color: var(--hr-fg-4); }
+.ctr-insp-dim { font-size: 12.5px; color: var(--hr-fg-4); }
+
+/* Recent sales of Creatures wearing it */
+.ctr-sales { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--hr-line); }
+.ctr-sales.is-loading { display: grid; place-items: center; min-height: 54px; }
+.ctr-sales-h {
+  display: block; margin-bottom: 8px;
+  font: 700 10.5px/1.3 var(--hr-sans); letter-spacing: .06em; text-transform: uppercase;
+  color: var(--hr-fg-4);
+}
+.ctr-sales-none { margin-top: 18px; font-size: 12px; color: var(--hr-fg-4); }
+.ctr-sale-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: baseline;
+  padding: 7px 10px; border-radius: var(--hr-radius-md); text-decoration: none;
+  transition: background .2s;
+}
+.ctr-sale-row:hover { background: rgba(255,255,255,.05); }
+.ctr-sale-n {
+  font: 600 12px/1.3 var(--hr-sans); color: var(--hr-fg-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ctr-sale-p {
+  font: 800 12px/1.3 var(--hr-sans); color: var(--hr-primary);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.ctr-sale-d { font: 600 11px/1.3 var(--hr-sans); color: var(--hr-fg-4); white-space: nowrap; }
+
+.ctr-insp-cta { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 20px; }
+.ctr-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 10px 17px; border-radius: var(--hr-radius-pill); text-decoration: none;
+  font: 800 12.5px/1 var(--hr-sans); color: var(--hr-fg-1);
+  border: 1px solid var(--hr-line-strong); background: rgba(255,255,255,.04);
+  transition: color .2s, background .2s, border-color .2s, transform .2s;
+}
+.ctr-btn:hover { color: var(--hr-fg-0); background: rgba(255,255,255,.09); transform: translateY(-1px); }
+.ctr-btn.is-primary {
+  color: var(--hr-on-primary); background: var(--hr-primary); border-color: transparent;
+  box-shadow: 0 6px 20px rgba(81,255,165,.22);
+}
+.ctr-btn.is-primary:hover { background: var(--hr-primary-press); }
+.ctr-insp-nav { display: flex; align-items: center; gap: 12px; margin-top: 20px; }
+.ctr-insp-step {
+  width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
+  display: grid; place-items: center; font: 700 17px/1 var(--hr-sans);
+  color: var(--hr-fg-1); background: rgba(255,255,255,.05);
+  border: 1px solid var(--hr-line-strong);
+  transition: color .2s, background .2s, border-color .2s;
+}
+.ctr-insp-step:hover {
+  color: var(--hr-fg-0); background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.ctr-insp-count {
+  font: 700 12px/1 var(--hr-sans); color: var(--hr-fg-3); font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 860px) {
+  .ctr-grid { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 11px; }
+  .ctr-group-h { flex-wrap: wrap; }
+  .ctr-group-m { white-space: normal; }
+}
+@media (max-width: 700px) {
+  .ctr-insp { grid-template-columns: minmax(0, 1fr); margin: 14px; }
+  .ctr-insp-stage { padding: 22px 22px 6px; border-radius: var(--hr-radius-2xl) var(--hr-radius-2xl) 0 0; }
+  .ctr-insp-stage .ctr-shot { width: min(66vw, 240px); height: min(66vw, 240px); }
+  .ctr-insp-body { padding: 6px 22px 22px; }
+  .ctr-insp-h { font-size: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ctr-tile:hover .ctr-fig,
+  .ctr-tile:focus-visible .ctr-fig,
+  .ctr-btn:hover { transform: none; }
+  .ctr-fig::after { display: none; }
+  .ctr-modal::backdrop { backdrop-filter: none; }
+}
+
 /* ---------- GUIDES ---------- */
 .guide-card {
   background: var(--hr-bg-2); border: 1px solid var(--hr-line);
@@ -3359,6 +3663,14 @@ button.trade-net:hover { box-shadow: 0 0 12px var(--hr-banana-25); }
   letter-spacing: var(--hr-tracking-caps); text-transform: uppercase;
   color: var(--hr-fg-3); margin: 0 0 10px;
 }
+/* Way out of the trait dropdowns and into Collections › Creature Traits, where the same
+   vocabulary has pictures attached. */
+.trade-flt-see {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 12px;
+  font: 700 11.5px/1.3 var(--hr-sans); color: var(--hr-fg-3); text-decoration: none;
+  transition: color .2s, gap .2s;
+}
+.trade-flt-see:hover { color: var(--hr-primary); gap: 9px; }
 .trade-flt-search { position: relative; flex: 1 1 220px; min-width: 180px; display: block; }
 .trade-flt-sico {
   position: absolute; left: 14px; top: 50%; width: 16px; height: 16px;

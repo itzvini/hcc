@@ -12,6 +12,7 @@ import { loadAnnouncements, rerenderAnnouncements } from './announcements.js';
 import { loadGen2, rerenderGen2 } from './gen2.js';
 import { initGuideDemos, rerenderGuideDemos } from './guide-demos.js';
 import { loadCollections, rerenderCollections } from './collections.js';
+import { loadTraits, rerenderTraits } from './traits.js';
 import { initPerks, rerenderPerks } from './perks.js';
 import { initSafety, rerenderSafety } from './safety.js';
 import { rerenderProfile } from './profile.js';
@@ -30,6 +31,7 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
     rerenderAnnouncements();
     rerenderGen2();
     rerenderCollections();
+    rerenderTraits();
     rerenderGuideDemos();
     rerenderPerks();
     rerenderSafety();
@@ -165,6 +167,14 @@ function ensureHoldersLoaded() {
   if (!holdersLoaded) { holdersLoaded = true; loadHoldersChart(); }
 }
 document.querySelector('#panel-market [data-subtab="holders"]')?.addEventListener('click', ensureHoldersLoaded);
+
+// Collections › Creature Traits reads the whole trait catalogue, so it waits until someone
+// actually opens that sub-tab rather than loading behind the release archive.
+let traitsLoaded = false;
+function ensureTraitsLoaded() {
+  if (!traitsLoaded) { traitsLoaded = true; loadTraits(); }
+}
+document.querySelector('#panel-collections [data-subtab="traits"]')?.addEventListener('click', ensureTraitsLoaded);
 
 // The brand mark opens The Club and returns to the top, like clicking a site logo
 document.querySelector('.nav-logo')?.addEventListener('click', () => {
@@ -354,6 +364,7 @@ function route(pathname) {
     if (scope && scope.querySelector(`[data-subtab="${sub}"]`)) selectSubTab(scope, sub);
   }
   if (tab === 'market' && sub === 'holders') ensureHoldersLoaded();
+  if (tab === 'collections' && sub === 'traits') ensureTraitsLoaded();
   // Deep link to a specific step, e.g. /guides/walkthroughs/funding or
   // /guides/marketplace/trading
   if (tab === 'guides' && sub && segs[2] && stepperRouters[sub]) {
@@ -400,6 +411,7 @@ initI18n().then(() => {
   rerenderAnnouncements();
   rerenderGen2();
   rerenderCollections();
+  rerenderTraits();
   rerenderGuideDemos();
   rerenderPerks();
   rerenderSafety();
