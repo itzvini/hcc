@@ -1828,7 +1828,8 @@ const TRAIT_FRAMES = {
   'Ears':             [338, 310, 380],
   'Hair':             [333, 300, 560],
   'Head Accessory':   [340, 220, 440],
-  'Outfit':           [340, 515, 300],
+  'Outfit':           null,     // a whole look on a whole Creature; a waist-down crop of it
+                                // shows trousers and shoes and hides the top half of the outfit
   'Aura':             null,
   'Body Accessory':   null,
   'Background Color': null,
@@ -1842,6 +1843,25 @@ const TRAIT_FRAMES = {
 // which is heavier but never broken.
 const slugPart = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const traitSlug = (type, value) => `${slugPart(type)}--${slugPart(value)}`;
+
+// What each Outfit trait is actually made of. An Outfit names a whole look rather than one item —
+// "Super Belted Trench Dress Outfit" is a trench dress, a pair of clogs, fishnet socks and undies
+// — and the breakdown is worked out by tools/build-outfits.py from the items' own ids. This file
+// carries no Highrise ids: item name, category, rarity and the slug its tile is baked under, which
+// is all the page needs. Garment slots are synthesised from it, so each piece gets its own tile
+// under its own category instead of hiding inside a composite.
+const OUTFITS = (() => {
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(root, 'creature-outfits.json'), 'utf8'));
+    return raw.outfits || {};
+  } catch { return {}; }        // no map built yet — Outfits stay whole, nothing breaks
+})();
+// Head to toe, and the label each gets on the page. `shirt` covers dresses too, hence "Tops".
+const GARMENT_SLOTS = [
+  ['shirt', 'Tops'], ['fullsuit', 'Full body'], ['pants', 'Bottoms'],
+  ['skirt', 'Skirts'], ['sock', 'Socks'], ['shoes', 'Shoes'],
+];
+
 let traitArtMap = null;
 async function getTraitArtMap() {
   if (traitArtMap) return traitArtMap;
@@ -1883,10 +1903,16 @@ function buildTraitShowcase(coll, artMap) {
       .map(([v, e]) => ({
         v, n: e.n, tokenId: e.pick.tokenId, name: e.pick.name, image: e.pick.image,
         art: artMap.get(traitSlug(type, v)) || null,
+        // An Outfit is several garments; hand the page the pieces so its card can show them
+        // instead of one crop of a Creature and no explanation of what's in the look.
+        items: type === 'Outfit' && OUTFITS[v]
+          ? OUTFITS[v].map(x => ({ ...x, art: artMap.get(x.s) || null }))
+          : undefined,
       }))
       .sort((a, b) => a.n - b.n || a.v.localeCompare(b.v));
     out.push({
       type,
+      kind: 'trait',
       frame: TRAIT_FRAMES[type] ?? null,
       count: values.length,
       worn: values.reduce((s, x) => s + x.n, 0),   // one value per slot per Creature, so this sums
@@ -1894,7 +1920,36 @@ function buildTraitShowcase(coll, artMap) {
     });
   }
   out.sort((a, b) => a.type.localeCompare(b.type));   // the client orders these head to toe
-  return { types: out, total: coll.total, builtAt: coll.builtAt };
+  return { types: [...out, ...garmentSlots(out, artMap)], total: coll.total, builtAt: coll.builtAt };
+}
+
+// The Outfit slot, turned inside out: one slot per garment category, one tile per piece.
+//
+// A piece's numbers are its outfit's, and honestly so — an item belongs to exactly one outfit, so
+// the Creatures wearing that outfit are precisely the Creatures wearing the item. The card says
+// which outfit it came out of, and the marketplace link filters on that outfit, because the
+// collection has no trait for a single garment to filter on.
+function garmentSlots(traitTypes, artMap) {
+  const outfit = traitTypes.find(t => t.type === 'Outfit');
+  if (!outfit) return [];
+  const byCat = new Map();
+  for (const val of outfit.values) {
+    for (const x of (val.items || [])) {
+      if (!byCat.has(x.c)) byCat.set(x.c, new Map());
+      const seen = byCat.get(x.c).get(x.n);
+      if (seen) { seen.n += val.n; continue; }   // a name shared by two looks, if it ever happens
+      byCat.get(x.c).set(x.n, { v: x.n, n: val.n, r: x.r, of: val.v, art: artMap.get(x.s) || null });
+    }
+  }
+  const out = [];
+  for (const [cat, label] of GARMENT_SLOTS) {
+    const vals = byCat.get(cat);
+    if (!vals || !vals.size) continue;
+    const values = [...vals.values()].sort((a, b) => a.n - b.n || a.v.localeCompare(b.v));
+    out.push({ type: cat, kind: 'item', label, frame: null,
+      count: values.length, worn: values.reduce((s, x) => s + x.n, 0), values });
+  }
+  return out;
 }
 
 async function getCreatureTraits() {
@@ -1928,7 +1983,9 @@ async function getCreatureTraits() {
     types: traitShowcase.data.types.map(ty => ({
       ...ty,
       values: ty.values.map(val => {
-        const l = live.get(`${ty.type}:${val.v}`);
+        // A garment isn't a trait, so it has no listings of its own: it inherits its outfit's,
+        // which is exact — the Creatures wearing that outfit are the ones wearing the piece.
+        const l = live.get(ty.kind === 'item' ? `Outfit:${val.of}` : `${ty.type}:${val.v}`);
         return { ...val, listed: l?.n || 0, floorEth: l?.floorEth ?? null };
       }),
     })),

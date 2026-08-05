@@ -23,6 +23,9 @@ let retry = null;           // pending re-check while the server is still catalo
 // many traits each slot holds. Anything the API adds later lands after these, in its own order.
 const SLOTS = ['Eyes', 'Mouth', 'Nose', 'Ears', 'Hair', 'Head Accessory', 'Glasses',
   'Face Accessory', 'Outfit', 'Body', 'Body Accessory', 'Aura', 'Background Color'];
+// Garment slots (kind 'item') are the Outfit trait broken into the pieces it's made of. They sit
+// behind their own chips rather than in "every slot": showing both a look and its four garments at
+// once would say the same thing twice, and the count of real traits would stop meaning anything.
 const RENDER_PX = 666;      // every Creature render is this square
 const SALES_SHOWN = 4;      // recent sales listed in the inspect card
 
@@ -70,14 +73,6 @@ function shortDate(iso) {
   return new Intl.DateTimeFormat(getCurrentLang(), { day: 'numeric', month: 'short' }).format(d);
 }
 
-// Slot names come back in English (they're the collection's own metadata). Translate the
-// label where we have one and fall back to what the API said, the way the archive does.
-function slotName(type) {
-  const key = `ctr.slot.${type.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-  const label = t(key);
-  return label === key ? type : label;
-}
-
 /* ------------------------------------------------------------------- loading */
 
 export async function loadTraits() {
@@ -114,9 +109,29 @@ export function rerenderTraits() { if (ready) render(); }
 // Slots in reading order, with anything unexpected appended rather than dropped.
 function slots() {
   if (!data?.types) return [];
-  const known = SLOTS.map(s => data.types.find(ty => ty.type === s)).filter(Boolean);
-  const rest = data.types.filter(ty => !SLOTS.includes(ty.type));
+  const traits = data.types.filter(ty => ty.kind !== 'item');
+  const known = SLOTS.map(s => traits.find(ty => ty.type === s)).filter(Boolean);
+  const rest = traits.filter(ty => !SLOTS.includes(ty.type));
   return [...known, ...rest];
+}
+
+// The garment slots, in the order the API sent them (head to toe).
+function garments() {
+  return data?.types?.filter(ty => ty.kind === 'item') || [];
+}
+
+function typeOf(name) {
+  return data?.types?.find(ty => ty.type === name) || null;
+}
+
+// A slot's label: the API names garment slots itself ("Tops"), traits carry the collection's own
+// English, and both fall back to what came over the wire.
+function slotName(type) {
+  const ty = typeOf(type);
+  const key = `ctr.slot.${type.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  const label = t(key);
+  if (label !== key) return label;
+  return ty?.label || type;
 }
 
 const SORTS = {
@@ -133,19 +148,20 @@ const SORTS = {
 // screen, slot blocks included — the grid walks this list and the inspect card's arrow keys
 // step along it, so the two can never disagree about what comes next.
 function visible() {
+  const shown = slot ? [typeOf(slot)].filter(Boolean) : slots();
   const out = [];
-  slots().forEach(ty => {
-    if (slot && ty.type !== slot) return;
+  shown.forEach(ty => {
     const ti = data.types.indexOf(ty);
     ty.values.forEach((val, vi) => {
       if (saleOnly && !val.listed) return;
-      if (query && !val.v.toLowerCase().includes(query) && !ty.type.toLowerCase().includes(query)) return;
+      if (query && !val.v.toLowerCase().includes(query)
+          && !slotName(ty.type).toLowerCase().includes(query)) return;
       out.push({ ty, val, ti, vi });
     });
   });
   const cmp = SORTS[sort] || SORTS.rare;
   if (slot) return out.sort(cmp);
-  const order = new Map(slots().map((ty, i) => [ty.type, i]));
+  const order = new Map(shown.map((ty, i) => [ty.type, i]));
   return out.sort((a, b) => order.get(a.ty.type) - order.get(b.ty.type) || cmp(a, b));
 }
 
@@ -155,9 +171,11 @@ function visible() {
 // views live in the same tab, so they should read as one page rather than two designs — and
 // borrowing them means one place to change the look, and motion safety for free.
 function statTiles() {
+  // Counts the traits only. The garment slots are the Outfit trait taken apart, not more traits,
+  // and folding them in would inflate the number the collection is actually described by.
   const tiles = [
-    { k: 'traits',    raw: data.types.reduce((s, ty) => s + ty.count, 0) },
-    { k: 'slots',     raw: data.types.length },
+    { k: 'traits',    raw: slots().reduce((s, ty) => s + ty.count, 0) },
+    { k: 'slots',     raw: slots().length },
     { k: 'creatures', raw: data.total },
     { k: 'listed',    raw: data.listedTotal },
   ];
@@ -168,24 +186,29 @@ function statTiles() {
     </div>`).join('')}</div>`;
 }
 
+function chip(ty) {
+  const on = slot === ty.type;
+  return `<button class="col-chip${on ? ' is-on' : ''}" type="button" data-slot="${esc(ty.type)}" aria-pressed="${on}">
+    <span>${esc(slotName(ty.type))}</span>
+    <span class="col-chip-n">${num(ty.count)}</span>
+  </button>`;
+}
+
 function controls() {
-  const chips = slots().map(ty => {
-    const on = slot === ty.type;
-    return `<button class="col-chip${on ? ' is-on' : ''}" type="button" data-slot="${esc(ty.type)}" aria-pressed="${on}">
-      <span>${esc(slotName(ty.type))}</span>
-      <span class="col-chip-n">${num(ty.count)}</span>
-    </button>`;
-  }).join('');
   const allOn = !slot;
   const sorts = ['rare', 'common', 'az', 'sale'];
+  const pieces = garments();
   return `
   <div class="col-controls">
     <div class="col-chips" role="group" aria-label="${esc(t('ctr.a11y.slots'))}">
       <button class="col-chip is-all${allOn ? ' is-on' : ''}" type="button" data-slot="" aria-pressed="${allOn}">
         <span>${esc(t('ctr.slot.all'))}</span>
-        <span class="col-chip-n">${num(data.types.reduce((s, ty) => s + ty.count, 0))}</span>
+        <span class="col-chip-n">${num(slots().reduce((s, ty) => s + ty.count, 0))}</span>
       </button>
-      ${chips}
+      ${slots().map(chip).join('')}
+      ${pieces.length ? `<span class="ctr-chip-sep" aria-hidden="true"></span>
+        <span class="ctr-chip-lbl">${esc(t('ctr.pieces'))}</span>
+        ${pieces.map(chip).join('')}` : ''}
     </div>
     <div class="col-tools">
       <div class="col-search">
@@ -273,6 +296,27 @@ function tile(entry, i) {
   </button>`;
 }
 
+// The garments an Outfit is made of, as a strip of small tiles under its stats. This is the whole
+// point of the breakdown: a look called "Super Belted Trench Dress Outfit" is a trench dress, a
+// pair of clogs, fishnet socks and undies, and until now the card showed one crop and said nothing
+// about any of them.
+function piecesHtml(val) {
+  if (!val.items?.length) return '';
+  return `<div class="ctr-pieces">
+    <span class="ctr-pieces-h">${esc(t('ctr.insp.pieces').replace('{n}', num(val.items.length)))}</span>
+    <div class="ctr-pieces-row">
+      ${val.items.map(x => `<button class="ctr-piece" type="button" data-piece="${esc(x.c)}"
+        data-piece-v="${esc(x.n)}" title="${esc(x.n)}">
+        <span class="ctr-shot">${x.art
+          ? `<img src="/api/collections/art/trait/${encodeURIComponent(x.art)}.webp" alt="" loading="lazy" decoding="async">`
+          : '<span class="ctr-piece-none" aria-hidden="true">?</span>'}</span>
+        <span class="ctr-piece-n">${esc(x.n)}</span>
+        <span class="ctr-piece-c">${esc(slotName(x.c))}</span>
+      </button>`).join('')}
+    </div>
+  </div>`;
+}
+
 // One block per slot when browsing everything, so the grid reads as a face rather than a
 // heap. A single chosen slot needs no header — the chip already says which. The heading
 // counts what's showing, not what the slot holds, so a search never claims 63 tiles above 3.
@@ -281,7 +325,7 @@ function groupHead(ty, shown) {
   return `<section class="ctr-group">
     <header class="ctr-group-h">
       <h3 class="ctr-group-t">${esc(slotName(ty.type))}</h3>
-      <p class="ctr-group-m">${esc(t('ctr.group.meta')
+      <p class="ctr-group-m">${esc(t(ty.kind === 'item' ? 'ctr.group.pieces' : 'ctr.group.meta')
         .replace('{n}', num(shown)).replace('{pct}', pct(worn)))}</p>
       <span class="ctr-group-rule"></span>
     </header>
@@ -448,17 +492,36 @@ function stepInspect(delta) {
 }
 
 // Where the marketplace opens with this trait already picked. `scope=all` shows every
-// Creature wearing it; without it Browse stays on what's listed.
+// Creature wearing it; without it Browse stays on what's listed. A garment has no trait of its
+// own to filter on, so it hands over the outfit it belongs to — which selects exactly the same
+// Creatures, since a piece appears in one look and nowhere else.
 function tradeLink(ty, val, all) {
-  const p = new URLSearchParams({ coll: 'creatures', t: `${ty.type}:${val.v}` });
+  const filter = ty.kind === 'item' ? `Outfit:${val.of}` : `${ty.type}:${val.v}`;
+  const p = new URLSearchParams({ coll: 'creatures', t: filter });
   if (all) p.set('scope', 'all');
   return `/trade?${p}`;
+}
+
+// The key the sales feed is asked for: a garment borrows its outfit's, same reasoning as above.
+function salesKey(ty, val) {
+  return ty.kind === 'item' ? `Outfit:${val.of}` : `${ty.type}:${val.v}`;
+}
+
+// Jump from a piece back to the slot it lives in, with it open.
+function openPiece(category, value) {
+  const ti = data.types.findIndex(t => t.type === category);
+  if (ti < 0) return;
+  const vi = data.types[ti].values.findIndex(v => v.v === value);
+  if (vi < 0) return;
+  slot = category;
+  render();
+  openInspect(ti, vi);
 }
 
 // Nothing cached yet reads the same as in flight — the request is coming, so show the
 // spinner. Only an answered request can leave the block empty, and that answer is [].
 function salesHtml(ty, val) {
-  const rows = salesCache.get(`${ty.type}:${val.v}`);
+  const rows = salesCache.get(salesKey(ty, val));
   if (!rows || rows === 'loading') return `<div class="ctr-sales is-loading"><div class="apply-spinner"></div></div>`;
   if (!rows.length) return `<p class="ctr-sales-none">${esc(t('ctr.insp.nosales'))}</p>`;
   return `<div class="ctr-sales">
@@ -479,7 +542,7 @@ function salesHtml(ty, val) {
 async function loadSales(ti, vi) {
   const ty = data.types[ti];
   const val = ty.values[vi];
-  const key = `${ty.type}:${val.v}`;
+  const key = salesKey(ty, val);
   if (salesCache.has(key)) return;
   salesCache.set(key, 'loading');
   try {
@@ -511,6 +574,12 @@ function openInspect(ti, vi) {
   const usdFloor = val.floorEth != null && data.ethUsd ? val.floorEth * data.ethUsd : null;
 
   const rows = [
+    // A garment leads with the look it belongs to: that's the thing the collection actually
+    // records, and the only handle the marketplace can filter on.
+    ty.kind === 'item' && val.of
+      ? [t('ctr.insp.partof'), `<b>${esc(val.of)}</b>`] : null,
+    ty.kind === 'item' && val.r
+      ? [t('ctr.insp.rarityOf'), esc(t(`ctr.rarity.${val.r}`))] : null,
     [t('ctr.insp.wearers'), `<b>${num(val.n)}</b> <span class="ctr-insp-sub">${
       esc(t('ctr.insp.ofTotal').replace('{total}', num(data.total)))}</span>`],
     [t('ctr.insp.share'), `<b>${esc(pct(share))}</b>`],
@@ -528,15 +597,12 @@ function openInspect(ti, vi) {
       <button class="ctr-insp-x" type="button" data-close aria-label="${esc(t('ctr.insp.close'))}">✕</button>
       <div class="ctr-insp-stage">
         ${traitShot(ty, val, { lazy: false })}
-        ${val.image ? `<figure class="ctr-insp-whole">
-          <img src="${esc(val.image)}" alt="${esc(val.name || '')}" decoding="async">
-          <figcaption>${esc(t('ctr.insp.wornby').replace('{name}', val.name || ''))}</figcaption>
-        </figure>` : ''}
       </div>
       <div class="ctr-insp-body">
         <span class="ctr-insp-slot">${esc(slotName(ty.type))}</span>
         <h3 class="ctr-insp-h" id="ctr-modal-h">${esc(val.v)}</h3>
         <dl class="ctr-insp-dl">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join('')}</dl>
+        ${piecesHtml(val)}
         <div class="ctr-sales-wrap">${salesHtml(ty, val)}</div>
         <div class="ctr-insp-cta">
           ${val.listed ? `<a class="ctr-btn is-primary" href="${tradeLink(ty, val, false)}">${
@@ -555,5 +621,7 @@ function openInspect(ti, vi) {
   dlg.querySelector('[data-close]').addEventListener('click', () => dlg.close());
   dlg.querySelectorAll('[data-step]').forEach(b =>
     b.addEventListener('click', () => stepInspect(Number(b.dataset.step))));
+  dlg.querySelectorAll('[data-piece]').forEach(b =>
+    b.addEventListener('click', () => openPiece(b.dataset.piece, b.dataset.pieceV)));
   if (!dlg.open) dlg.showModal();
 }

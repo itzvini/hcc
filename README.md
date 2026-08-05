@@ -427,6 +427,41 @@ in-memory indexes Browse already keeps (the daily full-collection sweep and the 
 snapshot), so the endpoint costs no upstream calls and nothing about the trait list is
 hand-maintained. Gen 2's traits will appear here the day that collection is indexed.
 
+### Outfits, broken into the items they're made of
+
+An **Outfit** trait names a whole look rather than one item, and until you know the pieces the tile
+is a crop of a Creature with no explanation. The composition turns out to be **in the item ids**:
+every 2021 garment is `<category>-n_hrcc2021<word><NNN>[variM]`, and one outfit is one
+`(NNN, variM)` across the clothing categories. So `Super Belted Trench Dress Outfit` is
+`012vari3` — a Red Belted Trench Dress, Red Button Buckle Clogs, Knee High Layered Fishnet Socks
+and Black with Red Bow Undies.
+
+**12 look numbers × 4 variants = 48**, plus **10 named-character looks** (Calcifer, Lilith,
+Squatch…) whose items carry the character's name instead of a number. 48 + 10 = 58, exactly the
+Outfit trait's value count, which is what proves the scheme is complete.
+
+The one thing the ids don't say is which of a look's four names is which variant. The tier word
+(`Simple` / none / `Colorful` / `Super` / `Legendary`) runs plainest-to-rarest with the absent
+label left out, so it **shifts a place** between the ten looks that have a `Simple` and the two
+that end on `Legendary` — `Super` is vari4 on one family and vari3 on the other. That got settled
+against the art: each outfit's representative Creature, torso-cropped, matched to each candidate
+variant's own render, all four assigned at once so the answer has to be a permutation. All 48
+pairs were then checked by eye against `tools/outfit-proof.png`.
+
+```bash
+python tools/build-outfits.py          # after fetch-panel-items.py + fetch-panel-art.py
+```
+
+Writes `tools/outfit-items.json` (with Highrise ids, local only) and the tracked
+**`creature-outfits.json`** — item name, category, rarity and the slug its tile is baked under,
+and **no ids**. The server reads that at boot, hands the pieces to the Outfit tiles, and
+synthesises a slot per garment category (Tops, Bottoms, Shoes, Socks, Skirts, Full body) so each
+of the 186 items also gets a tile of its own. Those slots sit behind their own chips rather than
+in "every slot": a look and its four garments shown together would say the same thing twice, and
+the count of real traits would stop meaning anything. A piece's numbers are its outfit's, which is
+exact — an item belongs to one look, so the Creatures wearing that look are the ones wearing the
+item — and its marketplace link filters on the outfit, since no trait exists for a single garment.
+
 ### Where the tile art comes from
 
 **Every trait is a real Highrise item, and the tile shows that item's own art** — the game's
@@ -449,7 +484,8 @@ pixels, because every cheap "is there a body here" test has a counter-example (l
 covers the chest, a glow tints the arms, and the legs are posed differently from one render
 to the next):
 
-- `aura` and `bag` come back as the item alone on transparency, so its own alpha bounds it.
+- `aura`, `bag` and **all clothing** come back as the item alone on transparency, so its own
+  alpha bounds it.
 - everything else comes back worn on a mannequin, and `SLOT_WINDOW` in the build script says
   what to crop. The body is drawn identically in every render from the chest up — the head
   runs x 160-440, y 11-334, and being a chibi it's the top 40% of the figure with the whole
@@ -460,8 +496,10 @@ to the next):
 **Three slots have no item and can't have one.** An Outfit trait names a whole look rather
 than one archetype ("Bell Sleeve Outfit" shipped as a top and trousers under other names),
 Body is the creature's skin colour, and Background Color is the picture behind it. Those 95
-tiles are a crop of a Creature that has the trait, framed by `TRAIT_FRAMES` in `server.js`
-(`[centre x, centre y, side]` on the 666px render, `null` for the whole thing). Which
+tiles are a picture of a Creature that has the trait, framed by `TRAIT_FRAMES` in `server.js`
+(`[centre x, centre y, side]` on the 666px render, `null` for the whole thing). **Outfit is
+`null`** — a look is the whole Creature, and cropping it to the waist down showed trousers and
+shoes while hiding the top half of what the name promises. Which
 Creature: the endpoint picks the **plainest wearer** — fewest non-"None" traits, then the
 most ordinary of those — so nothing crowds the trait. Rank is unique, so a trait keeps the
 same Creature across rebuilds. Each slot is uniform either way, so a block of tiles always
