@@ -1445,9 +1445,10 @@ async function getCreatureListings(cursor = '') {
 // Full detail for one token: metadata + current on-chain owner (read straight from the
 // contract). The active listing, if any, is supplied client-side from the grid card.
 async function getCreatureToken(tokenId) {
-  const [meta, ownerRaw] = await Promise.all([
+  const [meta, ownerRaw, artMap] = await Promise.all([
     fetchCreatureMeta(tokenId),
     ethCall(ZK_RPC_URL, CREATURE_CONTRACT, SEL_OWNER_OF + padUint(BigInt(tokenId))).catch(() => null),
+    getTraitArtMap().catch(() => new Map()),
   ]);
   const owner = ownerRaw && ownerRaw.length >= 42 ? ('0x' + ownerRaw.slice(-40)).toLowerCase() : null;
   const coll = getCollectionIndex(); // statistical rank, when the index is built
@@ -1457,6 +1458,7 @@ async function getCreatureToken(tokenId) {
     image: meta?.image || null,
     description: meta?.description || null,
     attributes: meta?.attributes || [],
+    parts: creatureParts(meta?.attributes || [], artMap),
     owner,
     rank: coll?.byId.get(String(tokenId))?.rank ?? null,
     rankOf: coll?.total ?? null,
@@ -1856,10 +1858,22 @@ const OUTFITS = (() => {
     return raw.outfits || {};
   } catch { return {}; }        // no map built yet — Outfits stay whole, nothing breaks
 })();
-// Head to toe, and the label each gets on the page. `shirt` covers dresses too, hence "Tops".
+// A 1/1 character's bespoke parts go into the slot they'd be a trait of, if the collection had
+// bothered to record them. Their tokens carry Body, Outfit and Rarity and nothing else, so the
+// Eyes slot has no 1/1 value of its own — putting "Zedd Eyes" in it is the only way the ten
+// rarest Creatures show up where someone browsing eyes would look for them. Each such tile is
+// badged, its card says which look it came out of, and its marketplace link filters on that look,
+// because there's still no trait to filter on.
+const PIECE_MERGE = {
+  eye: 'Eyes', mouth: 'Mouth', nose: 'Nose', freckle: 'Face Accessory',
+  hat: 'Head Accessory', hair_front: 'Hair', aura: 'Aura', bag: 'Body Accessory',
+};
+// Everything else gets a slot of its own, head to toe, with the label it wears on the page.
+// `shirt` covers dresses too, hence "Tops". Eyebrows and Handbag exist only as 1/1 parts —
+// the collection has no trait slot for either.
 const GARMENT_SLOTS = [
-  ['shirt', 'Tops'], ['fullsuit', 'Full body'], ['pants', 'Bottoms'],
-  ['skirt', 'Skirts'], ['sock', 'Socks'], ['shoes', 'Shoes'],
+  ['eyebrow', 'Eyebrows'], ['shirt', 'Tops'], ['fullsuit', 'Full body'], ['pants', 'Bottoms'],
+  ['skirt', 'Skirts'], ['sock', 'Socks'], ['shoes', 'Shoes'], ['handbag', 'Handbag'],
 ];
 
 let traitArtMap = null;
@@ -1904,9 +1918,11 @@ function buildTraitShowcase(coll, artMap) {
         v, n: e.n, tokenId: e.pick.tokenId, name: e.pick.name, image: e.pick.image,
         art: artMap.get(traitSlug(type, v)) || null,
         // An Outfit is several garments; hand the page the pieces so its card can show them
-        // instead of one crop of a Creature and no explanation of what's in the look.
+        // instead of one crop of a Creature and no explanation of what's in the look. `c` becomes
+        // the slot the piece appears in rather than the raw catalogue category, so one lookup
+        // serves the label, the chip and the jump from the card back into the grid.
         items: type === 'Outfit' && OUTFITS[v]
-          ? OUTFITS[v].map(x => ({ ...x, art: artMap.get(x.s) || null }))
+          ? OUTFITS[v].map(x => ({ ...x, c: PIECE_MERGE[x.c] || x.c, art: artMap.get(x.s) || null }))
           : undefined,
       }))
       .sort((a, b) => a.n - b.n || a.v.localeCompare(b.v));
@@ -1920,15 +1936,66 @@ function buildTraitShowcase(coll, artMap) {
     });
   }
   out.sort((a, b) => a.type.localeCompare(b.type));   // the client orders these head to toe
+  mergeParts(out);
   return { types: [...out, ...garmentSlots(out, artMap)], total: coll.total, builtAt: coll.builtAt };
+}
+
+// Everything one Creature is actually built from, for its marketplace card: a tile per real
+// Highrise item, with the Outfit opened up into the garments it stands for. Head to toe.
+//
+// Body and Background Color are left out on purpose — a skin colour and a backdrop are not items
+// you could hold — and so is Rarity, which is a tier. They're all in the trait list above it
+// anyway. "None" means the Creature hasn't got one.
+const PART_ORDER = ['Hair', 'Head Accessory', 'Ears', 'Eyes', 'Nose', 'Mouth', 'Face Accessory',
+                    'Glasses', 'Outfit', 'Body Accessory', 'Aura'];
+const PART_SKIP = new Set(['Body', 'Background Color', 'Rarity']);
+
+function creatureParts(attributes, artMap) {
+  const rank = a => { const i = PART_ORDER.indexOf(a.trait); return i === -1 ? PART_ORDER.length : i; };
+  const pieceLabel = { ...PIECE_MERGE, ...Object.fromEntries(GARMENT_SLOTS) };
+  const out = [];
+  for (const a of [...attributes].sort((x, y) => rank(x) - rank(y))) {
+    const v = String(a.value ?? '');
+    if (!v || v === 'None' || PART_SKIP.has(a.trait)) continue;
+    if (a.trait === 'Outfit') {
+      // A look is not an item. Its garments are, and creature-outfits.json says which — so the
+      // card shows a trench dress, clogs, socks and undies instead of the words for all four.
+      for (const x of (OUTFITS[v] || [])) {
+        out.push({ n: x.n, slot: pieceLabel[x.c] || x.c, art: artMap.get(x.s) || null, of: v });
+      }
+      if (!OUTFITS[v]) out.push({ n: v, slot: a.trait, art: artMap.get(traitSlug(a.trait, v)) || null });
+      continue;
+    }
+    out.push({ n: v, slot: a.trait, art: artMap.get(traitSlug(a.trait, v)) || null });
+  }
+  return out;
+}
+
+// The 1/1 parts, dropped into the trait slots they belong to. `count` stays the number of real
+// trait values — it's what the page's "466 traits" is summed from — and `parts` counts what was
+// added, so a chip can say how many tiles the slot actually shows. `worn` is left alone too: it
+// answers how many Creatures have a value recorded in this slot, and these ten haven't.
+function mergeParts(traitTypes) {
+  const outfit = traitTypes.find(t => t.type === 'Outfit');
+  if (!outfit) return;
+  const byType = new Map(traitTypes.map(t => [t.type, t]));
+  for (const val of outfit.values) {
+    for (const x of (val.items || [])) {
+      const ty = byType.get(x.c);           // only the merged categories name a trait slot
+      if (!ty) continue;
+      ty.values.push({ v: x.n, n: val.n, r: x.r, of: val.v, art: x.art, part: true });
+      ty.parts = (ty.parts || 0) + 1;
+    }
+  }
+  for (const ty of traitTypes) {
+    if (ty.parts) ty.values.sort((a, b) => a.n - b.n || a.v.localeCompare(b.v));
+  }
 }
 
 // The Outfit slot, turned inside out: one slot per garment category, one tile per piece.
 //
-// GARMENT_SLOTS is the whole of it, on purpose. The ten 1/1 looks also carry bespoke eyes, mouths,
-// horns and auras — 73 pieces the collection's metadata never recorded — and those get NO slot of
-// their own: a chip labelled "Eyes 8" beside the real "Eyes 63" would read as eight more traits
-// when the collection has none of them. They appear inside their look's card and nowhere else.
+// Only the categories with no trait slot to merge into land here (see PIECE_MERGE) — the clothes,
+// plus Eyebrows and Handbag, which the collection has no trait for at all.
 //
 // A piece's numbers are its outfit's, and honestly so — an item belongs to exactly one outfit, so
 // the Creatures wearing that outfit are precisely the Creatures wearing the item. The card says

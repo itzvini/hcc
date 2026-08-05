@@ -1935,6 +1935,26 @@ function modalCardHtml() {
           }).join('')}</div>`
         : '');
 
+  // What it's actually built from: a tile per real Highrise item, the Outfit opened up into its
+  // garments. The trait list above names a look ("Colorful Cargo Goth Outfit"); this shows the
+  // four wearables that look is. Art comes off the Collections trait tiles, so it costs no
+  // upstream call and nothing new to bake.
+  const parts = (!modalLoading && Array.isArray(meta.parts) && meta.parts.length)
+    ? `<div class="trade-modal-parts">
+        <span class="trade-modal-parts-h">${esc(t('trade.modal.parts').replace('{n}', String(meta.parts.length)))}</span>
+        <div class="trade-parts-row">${meta.parts.map(x => `
+          <figure class="trade-part" title="${esc(x.n)}">
+            <span class="trade-part-shot">${x.art
+              ? `<img src="/api/collections/art/trait/${encodeURIComponent(x.art)}.webp" alt="" loading="lazy" decoding="async">`
+              : '<span class="trade-part-none" aria-hidden="true">?</span>'}</span>
+            <figcaption class="trade-part-cap">
+              <span class="trade-part-n">${esc(x.n)}</span>
+              <span class="trade-part-c">${esc(x.slot)}</span>
+            </figcaption>
+          </figure>`).join('')}</div>
+      </div>`
+    : '';
+
   // The seller of a listed item IS its current holder, so Creature listings get an owner
   // row too (their token endpoint carries no owner field).
   const ownerWallet = meta.owner || it.seller || null;
@@ -1964,6 +1984,7 @@ function modalCardHtml() {
       ${owner}
       ${idRow}
       ${traits}
+      ${parts}
       <a class="trade-modal-explorer" href="${esc(explorer)}" target="_blank" rel="noopener">${esc(t('trade.modal.viewExplorer'))} ↗</a>
     </div>`;
 }

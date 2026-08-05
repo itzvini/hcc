@@ -462,19 +462,51 @@ the count of real traits would stop meaning anything. A piece's numbers are its 
 exact — an item belongs to one look, so the Creatures wearing that look are the ones wearing the
 item — and its marketplace link filters on the outfit, since no trait exists for a single garment.
 
-**The ten 1/1 characters bring 73 more pieces that no trait slot can show.** Their tokens carry
-**three** attributes — Body, Outfit, Rarity — where an ordinary Creature carries fourteen
-(verified on #3295 "Zedd" and #4191 "Calcifer"). Their eyes, mouth, nose, brows, hair, horns and
-aura were drawn as real Highrise items and then never written into the metadata, so the Eyes slot
-genuinely has no 1/1 value in it and can't have one: that's the collection's data, not the site's.
-Listing them as pieces of the look is the only honest place for them — a trait value would carry a
-marketplace link matching nothing and a rarity figure with no base. They're shown, not clickable,
-because there is no slot to open. Their renders are worn mannequins like the trait items, so they
-crop to `PIECE_WINDOW` by category rather than to their alpha bounds. One piece has no tile at
-all: **Calcifer Glow**'s whole render peaks at alpha 70 over RGB 67 — an additive glow meant to sit
-over the Creature, a black square on its own — so the card names it and shows a placeholder.
-Fixing the slots themselves is upstream work: Highrise would have to write the missing attributes
-into those ten tokens.
+**The ten 1/1 characters bring 73 more pieces the collection's metadata never recorded.** Their
+tokens carry **three** attributes — Body, Outfit, Rarity — where an ordinary Creature carries
+fourteen (verified on #3295 "Zedd" and #4191 "Calcifer"). Their eyes, mouth, nose, brows, hair,
+horns and aura were drawn as real Highrise items and then never written into the metadata, which is
+why the Eyes slot has no 1/1 trait value in it and can't have one. Fixing that is upstream work:
+Highrise would have to write the missing attributes into those ten tokens.
+
+Until then the site puts each part **in the slot it would be a trait of** — `PIECE_MERGE` in
+`server.js`: eyes into Eyes, hat into Head accessory, and so on — so the ten rarest Creatures turn
+up where someone browsing eyes would look for them. Eyebrows and Handbag get slots of their own,
+since the collection has no trait for either. Each such tile is **badged "1/1 part"**, its card
+says which look it came out of, and its marketplace link filters on **that look**, because there is
+still no trait to filter on. The slot's chip counts what it shows (Eyes 72); the stat tile keeps
+counting traits only (466), and `count` / `parts` on the payload keep the two apart.
+
+Their renders are worn mannequins like the trait items, so they crop to `PIECE_WINDOW` by category
+rather than to their alpha bounds. **Every tile keeps the item's own colours**, the same as the rest
+of the showcase.
+
+> **Tried and dropped: tinting a 1/1's parts to its character's colour.** The parts are drawn on the
+> default beige mannequin, so Dimitri's face parts don't match his purple portrait. Recolouring the
+> mannequin's skin to a colour sampled off the character's art worked on paper and looked wrong in
+> practice, so it was removed on 2026-08-05. What it cost, in case anyone tries again: the skin
+> palette has to be *derived* (a flat fill covering a chunk of the head window in most of the 73
+> renders is body, not item — `#f4d5bf` and `#e6bba8`, in 59 and 53 of them); the target has to come
+> off two cheek patches of the art, because the painted background turns Zedd the green zombie
+> purple and the Body trait's name says "Moonlit Purple" where the visible face is white fur; and
+> recolouring exact matches alone leaves a pale anti-aliased rim that reads as a glowing outline on
+> a dark character, while a plain colour tolerance eats art instead (Dimitri's ear lining ramps from
+> 4 to 160 units off skin, so any single cut tints one ear and not the other). Requiring *both* near
+> a palette colour and within two pixels of solid skin fixed the rim without eating art — and the
+> result still wasn't good enough, because a dark or desaturated character turns the mannequin's
+> careful shading to mud. The item's own art is what the game shows.
+
+One piece has no tile at all: **Calcifer Glow**'s whole render peaks at alpha 70 over RGB 67 — an
+additive glow meant to sit over the Creature, a black square on its own — so the card names it and
+shows a placeholder.
+
+**The marketplace card shows the same breakdown.** `/api/market/creatures/token/<id>` returns a
+`parts` array beside `attributes` — a tile per real item, the Outfit opened up into its garments —
+resolved from the same in-memory art map and `creature-outfits.json`, so the modal costs no extra
+fetch and no upstream call. Body, Background Color and Rarity are left out (a skin colour, a
+backdrop and a tier aren't items you could hold, and all three sit in the trait list right above
+it), `None` drops out, and the order is head to toe. On a 1/1 the effect is the whole point: #3295
+lists three attributes and thirteen items.
 
 ### Where the tile art comes from
 

@@ -186,11 +186,15 @@ function statTiles() {
     </div>`).join('')}</div>`;
 }
 
+// The chip counts the tiles the slot shows, traits and 1/1 parts together. The stat tile above
+// counts traits only — that's what the collection has 466 of, and a part isn't one.
+function shown(ty) { return ty.count + (ty.parts || 0); }
+
 function chip(ty) {
   const on = slot === ty.type;
   return `<button class="col-chip${on ? ' is-on' : ''}" type="button" data-slot="${esc(ty.type)}" aria-pressed="${on}">
     <span>${esc(slotName(ty.type))}</span>
-    <span class="col-chip-n">${num(ty.count)}</span>
+    <span class="col-chip-n">${num(shown(ty))}</span>
   </button>`;
 }
 
@@ -203,7 +207,7 @@ function controls() {
     <div class="col-chips" role="group" aria-label="${esc(t('ctr.a11y.slots'))}">
       <button class="col-chip is-all${allOn ? ' is-on' : ''}" type="button" data-slot="" aria-pressed="${allOn}">
         <span>${esc(t('ctr.slot.all'))}</span>
-        <span class="col-chip-n">${num(slots().reduce((s, ty) => s + ty.count, 0))}</span>
+        <span class="col-chip-n">${num(slots().reduce((s, ty) => s + shown(ty), 0))}</span>
       </button>
       ${slots().map(chip).join('')}
       ${pieces.length ? `<span class="ctr-chip-sep" aria-hidden="true"></span>
@@ -283,6 +287,7 @@ function tile(entry, i) {
     style="--d:${Math.min(i, 12) * 35}ms">
     <span class="ctr-fig">
       ${traitShot(ty, val)}
+      ${val.part ? `<span class="ctr-part">${esc(t('ctr.tile.part'))}</span>` : ''}
       ${val.listed ? `<span class="ctr-onsale">${esc(t('ctr.tile.sale').replace('{n}', num(val.listed)))}</span>` : ''}
     </span>
     <span class="ctr-cap">
@@ -503,8 +508,11 @@ function stepInspect(delta) {
 // Creature wearing it; without it Browse stays on what's listed. A garment has no trait of its
 // own to filter on, so it hands over the outfit it belongs to — which selects exactly the same
 // Creatures, since a piece appears in one look and nowhere else.
+// A piece — a garment or a 1/1's bespoke part — has no trait of its own to filter on, wherever it
+// happens to be shown, so it borrows its look's. `val.of` is the test, not the slot it sits in:
+// "Zedd Eyes" lives in the Eyes slot and still has to filter on `Outfit:Zedd`.
 function tradeLink(ty, val, all) {
-  const filter = ty.kind === 'item' ? `Outfit:${val.of}` : `${ty.type}:${val.v}`;
+  const filter = val.of ? `Outfit:${val.of}` : `${ty.type}:${val.v}`;
   const p = new URLSearchParams({ coll: 'creatures', t: filter });
   if (all) p.set('scope', 'all');
   return `/trade?${p}`;
@@ -512,7 +520,7 @@ function tradeLink(ty, val, all) {
 
 // The key the sales feed is asked for: a garment borrows its outfit's, same reasoning as above.
 function salesKey(ty, val) {
-  return ty.kind === 'item' ? `Outfit:${val.of}` : `${ty.type}:${val.v}`;
+  return val.of ? `Outfit:${val.of}` : `${ty.type}:${val.v}`;
 }
 
 // Jump from a piece back to the slot it lives in, with it open.
@@ -584,10 +592,8 @@ function openInspect(ti, vi) {
   const rows = [
     // A garment leads with the look it belongs to: that's the thing the collection actually
     // records, and the only handle the marketplace can filter on.
-    ty.kind === 'item' && val.of
-      ? [t('ctr.insp.partof'), `<b>${esc(val.of)}</b>`] : null,
-    ty.kind === 'item' && val.r
-      ? [t('ctr.insp.rarityOf'), esc(t(`ctr.rarity.${val.r}`))] : null,
+    val.of ? [t('ctr.insp.partof'), `<b>${esc(val.of)}</b>`] : null,
+    val.of && val.r ? [t('ctr.insp.rarityOf'), esc(t(`ctr.rarity.${val.r}`))] : null,
     [t('ctr.insp.wearers'), `<b>${num(val.n)}</b> <span class="ctr-insp-sub">${
       esc(t('ctr.insp.ofTotal').replace('{total}', num(data.total)))}</span>`],
     [t('ctr.insp.share'), `<b>${esc(pct(share))}</b>`],

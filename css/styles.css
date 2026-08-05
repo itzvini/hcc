@@ -1858,6 +1858,15 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
   color: var(--hr-on-primary); background: var(--hr-primary);
   box-shadow: 0 2px 10px rgba(0,0,0,.4);
 }
+/* A 1/1 character's bespoke part sitting in a trait slot. Lavender, not the mint of a live
+   listing: it marks what the tile IS, not something you can act on. */
+.ctr-part {
+  position: absolute; z-index: 2; top: 7px; left: 7px;
+  padding: 3px 8px; border-radius: var(--hr-radius-pill);
+  font: 800 9.5px/1.4 var(--hr-sans); letter-spacing: .05em; text-transform: uppercase;
+  color: var(--hr-fg-0); background: color-mix(in srgb, var(--hr-secondary) 82%, transparent);
+  box-shadow: 0 2px 10px rgba(0,0,0,.4);
+}
 .ctr-cap { display: block; margin-top: 9px; }
 .ctr-name {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
@@ -4620,6 +4629,31 @@ body.trade-modal-open { overflow: hidden; }
 .trade-trait-v { display: block; font-size: 13px; font-weight: 700; color: var(--hr-fg-0); line-height: 1.3; }
 /* How rare this exact trait value is across the collection. */
 .trade-trait-pct { font-size: 11px; font-weight: 700; color: var(--hr-primary); font-variant-numeric: tabular-nums; }
+/* The items the Creature is built from — the same tile art the Collections trait showcase bakes,
+   so the two views agree about what a "Colorful Cargo Goth Outfit" actually is. */
+.trade-modal-parts { margin: 18px 0 4px; padding-top: 14px; border-top: 1px solid var(--hr-line); }
+.trade-modal-parts-h {
+  display: block; margin-bottom: 10px;
+  font: 700 10.5px/1.3 var(--hr-sans); letter-spacing: .06em; text-transform: uppercase;
+  color: var(--hr-fg-3);
+}
+.trade-parts-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); gap: 8px; }
+.trade-part { min-width: 0; margin: 0; }
+.trade-part-shot {
+  position: relative; display: block; width: 100%; height: auto; aspect-ratio: 1; overflow: hidden;
+  border-radius: var(--hr-radius-md); border: 1px solid var(--hr-line); background: var(--hr-bg-1);
+}
+.trade-part-shot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.trade-part-none { display: grid; place-items: center; height: 100%; color: var(--hr-fg-4); font-weight: 800; }
+/* The slot is a sibling of the name, not inside it — a two-line name would otherwise reach the
+   clamp and take the slot with it, so half the tiles said what they were and half didn't. */
+.trade-part-cap { display: block; margin-top: 5px; }
+.trade-part-n {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  overflow: hidden;
+  font: 600 10px/1.25 var(--hr-sans); color: var(--hr-fg-2);
+}
+.trade-part-c { display: block; font: 600 9.5px/1.3 var(--hr-sans); color: var(--hr-fg-4); }
 .trade-modal-explorer { display: inline-block; margin-top: 8px; font-size: 13px; font-weight: 700; color: var(--hr-primary); }
 .trade-modal-explorer:hover { text-decoration: underline; }
 
