@@ -586,6 +586,124 @@ h1 .pop { color: var(--hr-primary); }
 .dot.e { background: var(--hr-primary);   }
 .dot.a { background: var(--hr-secondary); }
 
+/* ---------- COUNCIL BOARD (who holds the 7 seats) ----------
+   Same glass shell as the race board (.race-wrap) so the two read as one family:
+   frosted panel + aurora, per-card --accent theming off the holder bracket, staggered
+   entrance on --i. Elected cards carry a term bar filled in by js/council.js. */
+.cb-board {
+  position: relative; overflow: hidden; isolation: isolate;
+  margin-top: 26px; padding: 24px; border-radius: var(--hr-radius-2xl);
+  border: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(40,39,45,.72), rgba(20,19,23,.86));
+  backdrop-filter: blur(10px);
+  box-shadow: var(--hr-shadow-3), inset 0 1px 0 rgba(255,255,255,.06);
+}
+.cb-board > * { position: relative; z-index: 1; }
+.cb-board .apply-aurora { z-index: 0; opacity: .4; }
+
+.cb-group + .cb-group { margin-top: 26px; }
+/* Chip + meta, with a hairline running out to the edge of the panel */
+.cb-group-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.cb-group-head::after { content: ""; flex: 1 1 40px; height: 1px; background: var(--hr-line); }
+.cb-gchip {
+  font-family: var(--hr-sans); font-weight: 900; font-size: 10.5px;
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase;
+  padding: 5px 12px; border-radius: var(--hr-radius-pill);
+}
+.cb-gchip.is-elected   { background: var(--hr-primary);   color: var(--hr-on-primary); }
+.cb-gchip.is-appointed { background: var(--hr-secondary); color: #fff; }
+.cb-gmeta { font-size: 12px; font-weight: 700; color: var(--hr-fg-3); }
+
+.cb-grid { list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.cb-card {
+  --accent: var(--hr-primary); --accent-soft: var(--hr-primary-25);
+  position: relative; overflow: hidden; isolation: isolate;
+  /* Column so .cb-term can be pushed to the bottom: the term line then sits on the
+     same baseline across a row however many lines a name or role runs to. */
+  display: flex; flex-direction: column;
+  padding: 16px; border-radius: var(--hr-radius-lg);
+  background: rgba(0,0,0,.28); border: 1px solid var(--hr-line);
+  transition: transform .25s, border-color .25s, box-shadow .25s;
+  opacity: 0; transform: translateY(12px);
+  animation: apply-rise .55s cubic-bezier(.2,.7,.2,1) forwards;
+  animation-delay: calc(.07s * var(--i) + .15s);
+}
+.cb-card > * { position: relative; z-index: 1; }
+.cb-card[data-tier="single"] { --accent: var(--hr-primary);   --accent-soft: var(--hr-primary-25); }
+.cb-card[data-tier="mid"]    { --accent: var(--hr-secondary); --accent-soft: var(--hr-secondary-25); }
+.cb-card[data-tier="whale"]  { --accent: var(--hr-banana);    --accent-soft: var(--hr-banana-25); }
+/* Appointed: lavender for the two Pocket Worlds seats (matching the legend), mint for
+   the holder appointee — they're a holder first. */
+.cb-card.is-appointed           { --accent: var(--hr-secondary); --accent-soft: var(--hr-secondary-25); }
+.cb-card.is-appointed.is-holder { --accent: var(--hr-primary);   --accent-soft: var(--hr-primary-25); }
+.cb-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  box-shadow: 0 0 30px var(--accent-soft);
+}
+.cb-glow {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(80% 60% at 50% 0%, var(--accent-soft), transparent 70%); opacity: .5;
+}
+
+.cb-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+/* The seat chip clips its own overflow (it carries the shine sweep), so it must never wrap */
+.cb-top .apply-tier { white-space: nowrap; }
+/* Monogram medallion — decorative stand-in for a portrait, tinted to the seat accent */
+.cb-mono {
+  flex: 0 0 auto; width: 38px; height: 38px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-family: var(--hr-sans); font-weight: 900; font-size: 17px; line-height: 1;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 0 18px var(--accent-soft);
+}
+.cb-name {
+  font-family: var(--hr-sans); font-weight: 900; font-size: 17px; line-height: 1.15;
+  letter-spacing: var(--hr-tracking-tight); color: var(--hr-fg-0);
+  overflow-wrap: break-word;
+}
+.cb-role { margin: 6px 0 14px; font-size: 12.5px; line-height: 1.45; color: var(--hr-fg-2); }
+
+.cb-term { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--hr-line); }
+.cb-term-row { display: flex; flex-direction: column; gap: 3px; }
+.cb-term-k {
+  font-family: var(--hr-sans); font-weight: 900; font-size: 10px;
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase; color: var(--hr-fg-3);
+}
+.cb-term-v { font-size: 12px; font-weight: 700; color: var(--hr-fg-1); }
+.cb-term-bar { height: 6px; margin-top: 9px; border-radius: var(--hr-radius-pill); background: rgba(255,255,255,.06); overflow: hidden; }
+.cb-term-bar i {
+  display: block; height: 100%; width: var(--w, 0%); border-radius: var(--hr-radius-pill);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 45%, transparent), var(--accent));
+  box-shadow: 0 0 14px var(--accent-soft);
+  transform-origin: left; transform: scaleX(0);
+  animation: poll-fill .9s cubic-bezier(.2,.7,.2,1) .4s forwards;
+}
+.cb-term-left { display: block; margin-top: 7px; font-size: 11.5px; font-weight: 800; color: var(--accent); }
+.cb-term-left:empty { display: none; }
+.cb-card.is-appointed .cb-term-left { font-weight: 600; color: var(--hr-fg-3); }
+
+.cb-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  margin-top: 22px; font-size: 12.5px; line-height: 1.5; color: var(--hr-fg-2);
+}
+.cb-foot > span { flex: 1 1 320px; }
+.cb-foot-btn { margin-top: 0; flex: 0 0 auto; }
+
+/* One card per row on phones: two-up leaves no room for the seat chip beside the
+   monogram, and the longer chips ("Holder appointee") end up clipped. */
+@media (max-width: 560px) {
+  .cb-board { padding: 18px 14px; }
+  .cb-grid { grid-template-columns: 1fr; }
+  .cb-foot-btn { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cb-card { opacity: 1; transform: none; animation: none !important; }
+  .cb-card:hover { transform: none; }
+  .cb-term-bar i { transform: none; animation: none !important; }
+}
+
 /* ---------- FACTS STRIP ---------- */
 .facts { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 12px; margin-top: 26px; }
 .fact {

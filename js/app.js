@@ -13,6 +13,7 @@ import { loadGen2, rerenderGen2 } from './gen2.js';
 import { initGuideDemos, rerenderGuideDemos } from './guide-demos.js';
 import { loadCollections, rerenderCollections } from './collections.js';
 import { loadTraits, rerenderTraits } from './traits.js';
+import { initCouncilBoard, rerenderCouncilBoard } from './council.js';
 import { initPerks, rerenderPerks } from './perks.js';
 import { initSafety, rerenderSafety } from './safety.js';
 import { rerenderProfile } from './profile.js';
@@ -33,6 +34,7 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
     rerenderCollections();
     rerenderTraits();
     rerenderGuideDemos();
+    rerenderCouncilBoard();
     rerenderPerks();
     rerenderSafety();
     rerenderProfile();
@@ -312,6 +314,10 @@ document.querySelectorAll('[data-mkt-toggle]').forEach(group => {
 // visible; rerendered after initI18n() resolves and on language switch.
 initGuideDemos();
 
+// Council board — the roster is static markup; this fills in each seat's term dates
+// and progress (refreshed once translations resolve and on each language switch).
+initCouncilBoard();
+
 // Perks tab — coin yield calculator (static markup, so it wires up immediately;
 // number formatting and aria labels are refreshed once translations resolve).
 initPerks();
@@ -413,6 +419,7 @@ initI18n().then(() => {
   rerenderCollections();
   rerenderTraits();
   rerenderGuideDemos();
+  rerenderCouncilBoard();
   rerenderPerks();
   rerenderSafety();
   rerenderProfile();
