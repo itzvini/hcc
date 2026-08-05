@@ -456,11 +456,25 @@ Writes `tools/outfit-items.json` (with Highrise ids, local only) and the tracked
 **`creature-outfits.json`** — item name, category, rarity and the slug its tile is baked under,
 and **no ids**. The server reads that at boot, hands the pieces to the Outfit tiles, and
 synthesises a slot per garment category (Tops, Bottoms, Shoes, Socks, Skirts, Full body) so each
-of the 186 items also gets a tile of its own. Those slots sit behind their own chips rather than
+of the 186 garments also gets a tile of its own. Those slots sit behind their own chips rather than
 in "every slot": a look and its four garments shown together would say the same thing twice, and
 the count of real traits would stop meaning anything. A piece's numbers are its outfit's, which is
 exact — an item belongs to one look, so the Creatures wearing that look are the ones wearing the
 item — and its marketplace link filters on the outfit, since no trait exists for a single garment.
+
+**The ten 1/1 characters bring 73 more pieces that no trait slot can show.** Their tokens carry
+**three** attributes — Body, Outfit, Rarity — where an ordinary Creature carries fourteen
+(verified on #3295 "Zedd" and #4191 "Calcifer"). Their eyes, mouth, nose, brows, hair, horns and
+aura were drawn as real Highrise items and then never written into the metadata, so the Eyes slot
+genuinely has no 1/1 value in it and can't have one: that's the collection's data, not the site's.
+Listing them as pieces of the look is the only honest place for them — a trait value would carry a
+marketplace link matching nothing and a rarity figure with no base. They're shown, not clickable,
+because there is no slot to open. Their renders are worn mannequins like the trait items, so they
+crop to `PIECE_WINDOW` by category rather than to their alpha bounds. One piece has no tile at
+all: **Calcifer Glow**'s whole render peaks at alpha 70 over RGB 67 — an additive glow meant to sit
+over the Creature, a black square on its own — so the card names it and shows a placeholder.
+Fixing the slots themselves is upstream work: Highrise would have to write the missing attributes
+into those ten tokens.
 
 ### Where the tile art comes from
 

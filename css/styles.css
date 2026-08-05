@@ -1974,7 +1974,9 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
   border: 1px solid var(--hr-line); background: var(--hr-bg-1);
   transition: transform .18s, border-color .18s;
 }
-.ctr-piece:hover .ctr-shot,
+/* A bespoke part of a 1/1 look: nothing to open, so it doesn't behave like a button */
+.ctr-piece.is-static { cursor: default; }
+.ctr-piece:not(.is-static):hover .ctr-shot,
 .ctr-piece:focus-visible .ctr-shot {
   transform: translateY(-2px);
   border-color: color-mix(in srgb, var(--accent) 50%, transparent);

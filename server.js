@@ -1925,6 +1925,11 @@ function buildTraitShowcase(coll, artMap) {
 
 // The Outfit slot, turned inside out: one slot per garment category, one tile per piece.
 //
+// GARMENT_SLOTS is the whole of it, on purpose. The ten 1/1 looks also carry bespoke eyes, mouths,
+// horns and auras — 73 pieces the collection's metadata never recorded — and those get NO slot of
+// their own: a chip labelled "Eyes 8" beside the real "Eyes 63" would read as eight more traits
+// when the collection has none of them. They appear inside their look's card and nowhere else.
+//
 // A piece's numbers are its outfit's, and honestly so — an item belongs to exactly one outfit, so
 // the Creatures wearing that outfit are precisely the Creatures wearing the item. The card says
 // which outfit it came out of, and the marketplace link filters on that outfit, because the

@@ -535,6 +535,120 @@
   ],
   "site": [
     {
+      "date": "August 5, 2026",
+      "title": "Meet your Council",
+      "body": "A new board on the Council tab shows who holds all seven seats: the four you elected in June and the three appointed for continuity, each with their role and term. Terms run six months, so the board refreshes when you vote again.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "5 de ago. de 2026",
+          "title": "Conheça o seu Conselho",
+          "body": "Um novo quadro na aba Conselho mostra quem ocupa as sete cadeiras: as quatro que você elegeu em junho e as três designadas para dar continuidade, cada uma com seu papel e mandato. Os mandatos duram seis meses, então o quadro se renova quando você vota de novo."
+        },
+        "es": {
+          "date": "5 ago. 2026",
+          "title": "Conoce a tu Consejo",
+          "body": "Un nuevo panel en la pestaña Consejo muestra quién ocupa los siete asientos: los cuatro que elegiste en junio y los tres designados para dar continuidad, cada uno con su rol y mandato. Los mandatos duran seis meses, así que el panel se renueva cuando vuelves a votar."
+        },
+        "fr": {
+          "date": "5 août 2026",
+          "title": "Rencontre ton Conseil",
+          "body": "Un nouveau tableau sur l'onglet Conseil montre qui occupe les sept sièges : les quatre que tu as élus en juin et les trois désignés pour la continuité, chacun avec son rôle et son mandat. Les mandats durent six mois, donc le tableau se renouvelle quand tu revotes."
+        },
+        "de": {
+          "date": "5. August 2026",
+          "title": "Lern deinen Council kennen",
+          "body": "Ein neues Board im Council-Tab zeigt, wer alle sieben Sitze hält: die vier, die ihr im Juni gewählt habt, und die drei für die Kontinuität ernannten, jeder mit Rolle und Amtszeit. Die Amtszeiten laufen sechs Monate, also aktualisiert sich das Board, wenn ihr wieder wählt."
+        },
+        "ru": {
+          "date": "5 августа 2026",
+          "title": "Знакомьтесь: ваш Совет",
+          "body": "Новая доска на вкладке «Совет» показывает, кто занимает все семь мест: четверых, которых вы выбрали в июне, и троих назначенных для преемственности, у каждого своя роль и срок. Сроки длятся шесть месяцев, поэтому доска обновляется, когда вы голосуете снова."
+        },
+        "tr": {
+          "date": "5 Ağustos 2026",
+          "title": "Konsey'inle tanış",
+          "body": "Konsey sekmesindeki yeni bir pano, yedi koltuğu kimin tuttuğunu gösteriyor: haziranda seçtiğin dördü ve süreklilik için atanan üçü, her biri rolü ve görev süresiyle. Görev süreleri altı ay sürüyor, yani tekrar oy verdiğinde pano yenileniyor."
+        }
+      }
+    },
+    {
+      "date": "August 4, 2026",
+      "title": "Creature Traits showcase",
+      "body": "A new Creature Traits page lays out every trait in the collection, slot by slot, exactly as it looks in game. Open any trait to see how many Creatures wear it and what it's selling for, then jump to the marketplace with that trait already filtered. Outfit traits open up to show the individual pieces they're made of. Find it under Collections.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "4 de ago. de 2026",
+          "title": "Vitrine de Creature Traits",
+          "body": "Uma nova página Creature Traits mostra cada trait da coleção, slot por slot, exatamente como aparece no jogo. Abra qualquer trait para ver quantas Creatures o usam e por quanto está à venda, e depois vá para o marketplace com aquele trait já filtrado. Os traits de outfit abrem para mostrar as peças individuais que os compõem. Encontre em Collections."
+        },
+        "es": {
+          "date": "4 ago. 2026",
+          "title": "Vitrina de Creature Traits",
+          "body": "Una nueva página Creature Traits muestra cada trait de la colección, slot por slot, tal como se ve en el juego. Abre cualquier trait para ver cuántas Creatures lo llevan y por cuánto está a la venta, y luego ve al marketplace con ese trait ya filtrado. Los traits de outfit se abren para mostrar las piezas individuales que los componen. Encuéntrala en Collections."
+        },
+        "fr": {
+          "date": "4 août 2026",
+          "title": "Vitrine des Creature Traits",
+          "body": "Une nouvelle page Creature Traits présente chaque trait de la collection, slot par slot, exactement comme il apparaît dans le jeu. Ouvre n'importe quel trait pour voir combien de Creatures le portent et à quel prix il se vend, puis file au marketplace avec ce trait déjà filtré. Les traits d'outfit s'ouvrent pour montrer les pièces qui les composent. À trouver dans Collections."
+        },
+        "de": {
+          "date": "4. August 2026",
+          "title": "Creature-Traits-Schaufenster",
+          "body": "Eine neue Creature-Traits-Seite zeigt jeden Trait der Sammlung, Slot für Slot, genau so, wie er im Spiel aussieht. Öffne einen Trait, um zu sehen, wie viele Creatures ihn tragen und für wie viel er verkauft wird, und spring dann in den Marktplatz, mit diesem Trait schon gefiltert. Outfit-Traits klappen auf und zeigen die einzelnen Teile, aus denen sie bestehen. Zu finden unter Collections."
+        },
+        "ru": {
+          "date": "4 августа 2026",
+          "title": "Витрина Creature Traits",
+          "body": "Новая страница Creature Traits показывает каждый трейт коллекции, слот за слотом, ровно так, как он выглядит в игре. Откройте любой трейт, чтобы увидеть, сколько Creatures его носят и за сколько он продаётся, а затем перейдите в маркетплейс с уже включённым фильтром по этому трейту. Трейты outfit раскрываются и показывают отдельные предметы, из которых состоят. Ищите на вкладке Collections."
+        },
+        "tr": {
+          "date": "4 Ağustos 2026",
+          "title": "Creature Traits vitrini",
+          "body": "Yeni bir Creature Traits sayfası, koleksiyondaki her trait'i slot slot, oyundaki göründüğü gibi sergiliyor. Herhangi bir trait'i aç, kaç Creature'ın onu taşıdığını ve kaça satıldığını gör, sonra o trait önceden filtrelenmiş halde pazara geç. Outfit trait'leri açılıp onları oluşturan tek tek parçaları gösteriyor. Collections altında bulabilirsin."
+        }
+      }
+    },
+    {
+      "date": "July 27, 2026",
+      "title": "Collections: the whole archive",
+      "body": "A new Collections tab lays out every drop, grab, store collection, and giveaway the club has ever released, in the order it happened. Open any release to see the items that came with it. Older releases whose exact date is lost are marked approximate, so a best guess never reads as a fact.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "27 de jul. de 2026",
+          "title": "Collections: o arquivo completo",
+          "body": "Uma nova aba Collections reúne cada drop, grab, coleção de loja e giveaway que o clube já lançou, na ordem em que aconteceram. Abra qualquer lançamento para ver os itens que vieram com ele. Lançamentos antigos cuja data exata se perdeu aparecem marcados como aproximados, para que um palpite nunca passe por fato."
+        },
+        "es": {
+          "date": "27 jul. 2026",
+          "title": "Collections: el archivo completo",
+          "body": "Una nueva pestaña Collections reúne cada drop, grab, colección de tienda y giveaway que el club ha lanzado, en el orden en que ocurrieron. Abre cualquier lanzamiento para ver los artículos que venían con él. Los lanzamientos antiguos cuya fecha exacta se perdió aparecen marcados como aproximados, para que una suposición nunca pase por un hecho."
+        },
+        "fr": {
+          "date": "27 juil. 2026",
+          "title": "Collections : toutes les archives",
+          "body": "Un nouvel onglet Collections rassemble chaque drop, grab, collection de boutique et giveaway que le club a sortis, dans l'ordre où ils sont arrivés. Ouvre n'importe quelle sortie pour voir les objets qui l'accompagnaient. Les anciennes sorties dont la date exacte est perdue sont marquées comme approximatives, pour qu'une supposition ne passe jamais pour un fait."
+        },
+        "de": {
+          "date": "27. Juli 2026",
+          "title": "Collections: das ganze Archiv",
+          "body": "Ein neuer Collections-Tab führt jeden Drop, Grab, jede Store-Kollektion und jedes Giveaway auf, das der Club je herausgebracht hat, in der Reihenfolge, in der es passierte. Öffne eine Veröffentlichung, um die Items zu sehen, die dabei waren. Ältere Veröffentlichungen, deren genaues Datum verloren ist, sind als ungefähr markiert, damit eine Schätzung nie wie eine Tatsache wirkt."
+        },
+        "ru": {
+          "date": "27 июля 2026",
+          "title": "Collections: весь архив",
+          "body": "Новая вкладка Collections собирает каждый drop, grab, магазинную коллекцию и giveaway, что клуб когда-либо выпускал, в порядке появления. Откройте любой релиз, чтобы увидеть предметы, вышедшие вместе с ним. Старые релизы, точная дата которых потеряна, помечены как приблизительные, чтобы догадка никогда не выдавалась за факт."
+        },
+        "tr": {
+          "date": "27 Temmuz 2026",
+          "title": "Collections: tüm arşiv",
+          "body": "Yeni bir Collections sekmesi, kulübün şimdiye kadar çıkardığı her drop'u, grab'i, mağaza koleksiyonunu ve giveaway'i, gerçekleştikleri sıraya göre bir araya getiriyor. Herhangi bir çıkışı açıp onunla gelen eşyaları gör. Kesin tarihi kaybolmuş eski çıkışlar yaklaşık olarak işaretleniyor, böylece bir tahmin asla gerçek gibi görünmüyor."
+        }
+      }
+    },
+    {
       "date": "July 20, 2026",
       "title": "Holder profiles",
       "body": "Claim your own holder profile, an opt-in showcase page for your collection. It shows your Highrise-linked wallets, your Creatures and LAND, and a switch between everything you hold and just what's listed for sale. Filter by trait or wallet, and share it with one link. Profiles stay off until you turn yours on, and you can switch it back off anytime.",

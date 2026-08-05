@@ -3,16 +3,16 @@
  "outfits": {
   "Bell Sleeve Outfit": [
    {
-    "c": "pants",
-    "n": "Embelished Black Creature Joggers",
-    "r": "e",
-    "s": "pants--embelished-black-creature-joggers"
-   },
-   {
     "c": "shirt",
     "n": "Embelished Black Bell Sleeve Top",
     "r": "e",
     "s": "shirt--embelished-black-bell-sleeve-top"
+   },
+   {
+    "c": "pants",
+    "n": "Embelished Black Creature Joggers",
+    "r": "e",
+    "s": "pants--embelished-black-creature-joggers"
    },
    {
     "c": "shoes",
@@ -23,42 +23,42 @@
   ],
   "Belted Trench Dress Outfit": [
    {
-    "c": "pants",
-    "n": "Black with White Bow Undies",
-    "r": "e",
-    "s": "pants--black-with-white-bow-undies"
-   },
-   {
     "c": "shirt",
     "n": "Black Belted Trench Dress",
     "r": "l",
     "s": "shirt--black-belted-trench-dress"
    },
    {
-    "c": "shoes",
-    "n": "Simple Black Button Buckle Clogs",
+    "c": "pants",
+    "n": "Black with White Bow Undies",
     "r": "e",
-    "s": "shoes--simple-black-button-buckle-clogs"
+    "s": "pants--black-with-white-bow-undies"
    },
    {
     "c": "sock",
     "n": "Short Fishnet Socks",
     "r": "e",
     "s": "sock--short-fishnet-socks"
+   },
+   {
+    "c": "shoes",
+    "n": "Simple Black Button Buckle Clogs",
+    "r": "e",
+    "s": "shoes--simple-black-button-buckle-clogs"
    }
   ],
   "Biker Shorts Outfit": [
-   {
-    "c": "pants",
-    "n": "Embellished Creature Biker Shorts",
-    "r": "e",
-    "s": "pants--embellished-creature-biker-shorts"
-   },
    {
     "c": "shirt",
     "n": "White Stitch Sleeve Creature Sweater",
     "r": "e",
     "s": "shirt--white-stitch-sleeve-creature-sweater"
+   },
+   {
+    "c": "pants",
+    "n": "Embellished Creature Biker Shorts",
+    "r": "e",
+    "s": "pants--embellished-creature-biker-shorts"
    },
    {
     "c": "shoes",
@@ -69,16 +69,16 @@
   ],
   "Burnt Sweater Outfit": [
    {
-    "c": "pants",
-    "n": "Ripped Creature Jeans with Chain",
-    "r": "e",
-    "s": "pants--ripped-creature-jeans-with-chain"
-   },
-   {
     "c": "shirt",
     "n": "Embelished Black Burnt Sweater Top",
     "r": "e",
     "s": "shirt--embelished-black-burnt-sweater-top"
+   },
+   {
+    "c": "pants",
+    "n": "Ripped Creature Jeans with Chain",
+    "r": "e",
+    "s": "pants--ripped-creature-jeans-with-chain"
    },
    {
     "c": "shoes",
@@ -89,10 +89,34 @@
   ],
   "Calcifer": [
    {
-    "c": "pants",
-    "n": "Calcifer Pants",
+    "c": "hair_front",
+    "n": "Calcifer Flame Hair",
     "r": "l",
-    "s": "pants--calcifer-pants"
+    "s": "hair-front--calcifer-flame-hair"
+   },
+   {
+    "c": "eye",
+    "n": "Calcifer Eyes",
+    "r": "l",
+    "s": "eye--calcifer-eyes"
+   },
+   {
+    "c": "nose",
+    "n": "Calcifer Nose",
+    "r": "l",
+    "s": "nose--calcifer-nose"
+   },
+   {
+    "c": "mouth",
+    "n": "Calcifer Mouth",
+    "r": "l",
+    "s": "mouth--calcifer-mouth"
+   },
+   {
+    "c": "freckle",
+    "n": "Calcifer Mask",
+    "r": "l",
+    "s": "freckle--calcifer-mask"
    },
    {
     "c": "shirt",
@@ -101,30 +125,54 @@
     "s": "shirt--calcifer-shirt"
    },
    {
-    "c": "shoes",
-    "n": "Calcifer Platforms",
+    "c": "pants",
+    "n": "Calcifer Pants",
     "r": "l",
-    "s": "shoes--calcifer-platforms"
+    "s": "pants--calcifer-pants"
    },
    {
     "c": "sock",
     "n": "Calcifer Socks",
     "r": "l",
     "s": "sock--calcifer-socks"
+   },
+   {
+    "c": "shoes",
+    "n": "Calcifer Platforms",
+    "r": "l",
+    "s": "shoes--calcifer-platforms"
+   },
+   {
+    "c": "handbag",
+    "n": "Calcifer Lantern",
+    "r": "l",
+    "s": "handbag--calcifer-lantern"
+   },
+   {
+    "c": "aura",
+    "n": "Calcifer Sparks Aura",
+    "r": "l",
+    "s": "aura--calcifer-sparks-aura"
+   },
+   {
+    "c": "aura",
+    "n": "Calcifer Glow",
+    "r": "l",
+    "s": "aura--calcifer-glow"
    }
   ],
   "Cargo Goth Outfit": [
-   {
-    "c": "pants",
-    "n": "Black and White Goth Cargos",
-    "r": "e",
-    "s": "pants--black-and-white-goth-cargos"
-   },
    {
     "c": "shirt",
     "n": "Embelished Layered Creature T",
     "r": "e",
     "s": "shirt--embelished-layered-creature-t"
+   },
+   {
+    "c": "pants",
+    "n": "Black and White Goth Cargos",
+    "r": "e",
+    "s": "pants--black-and-white-goth-cargos"
    },
    {
     "c": "shoes",
@@ -135,16 +183,16 @@
   ],
   "Colorful Bell Sleeve Outfit": [
    {
-    "c": "pants",
-    "n": "Green Embelished Creature Joggers",
-    "r": "l",
-    "s": "pants--green-embelished-creature-joggers"
-   },
-   {
     "c": "shirt",
     "n": "Colorful Embelsihed Bell Sleeve Top",
     "r": "l",
     "s": "shirt--colorful-embelsihed-bell-sleeve-top"
+   },
+   {
+    "c": "pants",
+    "n": "Green Embelished Creature Joggers",
+    "r": "l",
+    "s": "pants--green-embelished-creature-joggers"
    },
    {
     "c": "shoes",
@@ -155,42 +203,42 @@
   ],
   "Colorful Belted Trench Dress Outfit": [
    {
-    "c": "pants",
-    "n": "White with Black Bow Undies",
-    "r": "l",
-    "s": "pants--white-with-black-bow-undies"
-   },
-   {
     "c": "shirt",
     "n": "Embelished Belted Trench Dress",
     "r": "l",
     "s": "shirt--embelished-belted-trench-dress"
    },
    {
-    "c": "shoes",
-    "n": "White and Black Button Buckle Clogs",
+    "c": "pants",
+    "n": "White with Black Bow Undies",
     "r": "l",
-    "s": "shoes--white-and-black-button-buckle-clogs"
+    "s": "pants--white-with-black-bow-undies"
    },
    {
     "c": "sock",
     "n": "Knee High Fishnet Socks",
     "r": "l",
     "s": "sock--knee-high-fishnet-socks"
+   },
+   {
+    "c": "shoes",
+    "n": "White and Black Button Buckle Clogs",
+    "r": "l",
+    "s": "shoes--white-and-black-button-buckle-clogs"
    }
   ],
   "Colorful Biker Shorts Outfit": [
-   {
-    "c": "pants",
-    "n": "Green and Black Creature Biker Shorts",
-    "r": "l",
-    "s": "pants--green-and-black-creature-biker-shorts"
-   },
    {
     "c": "shirt",
     "n": "Green Stitch Sleeve Creature Sweater",
     "r": "l",
     "s": "shirt--green-stitch-sleeve-creature-sweater"
+   },
+   {
+    "c": "pants",
+    "n": "Green and Black Creature Biker Shorts",
+    "r": "l",
+    "s": "pants--green-and-black-creature-biker-shorts"
    },
    {
     "c": "shoes",
@@ -201,16 +249,16 @@
   ],
   "Colorful Burnt Sweater Outfit": [
    {
-    "c": "pants",
-    "n": "Ripped Creature Jeans with Purple Chain",
-    "r": "l",
-    "s": "pants--ripped-creature-jeans-with-purple-chain"
-   },
-   {
     "c": "shirt",
     "n": "Purple Burnt Sweater Top",
     "r": "l",
     "s": "shirt--purple-burnt-sweater-top"
+   },
+   {
+    "c": "pants",
+    "n": "Ripped Creature Jeans with Purple Chain",
+    "r": "l",
+    "s": "pants--ripped-creature-jeans-with-purple-chain"
    },
    {
     "c": "shoes",
@@ -221,16 +269,16 @@
   ],
   "Colorful Cargo Goth Outfit": [
    {
-    "c": "pants",
-    "n": "Purple Goth Cargos",
-    "r": "l",
-    "s": "pants--purple-goth-cargos"
-   },
-   {
     "c": "shirt",
     "n": "Purple Layered Creature T",
     "r": "l",
     "s": "shirt--purple-layered-creature-t"
+   },
+   {
+    "c": "pants",
+    "n": "Purple Goth Cargos",
+    "r": "l",
+    "s": "pants--purple-goth-cargos"
    },
    {
     "c": "shoes",
@@ -241,42 +289,42 @@
   ],
   "Colorful Dress and Thigh Highs Outfit": [
    {
-    "c": "pants",
-    "n": "Purple Undies",
-    "r": "l",
-    "s": "pants--purple-undies"
-   },
-   {
     "c": "shirt",
     "n": "Purple Web Creature Club Dress",
     "r": "l",
     "s": "shirt--purple-web-creature-club-dress"
    },
    {
-    "c": "shoes",
-    "n": "Purple Web Creature Platform Boots",
+    "c": "pants",
+    "n": "Purple Undies",
     "r": "l",
-    "s": "shoes--purple-web-creature-platform-boots"
+    "s": "pants--purple-undies"
    },
    {
     "c": "sock",
     "n": "Ripped Creature Fishnet Stockings",
     "r": "l",
     "s": "sock--ripped-creature-fishnet-stockings"
+   },
+   {
+    "c": "shoes",
+    "n": "Purple Web Creature Platform Boots",
+    "r": "l",
+    "s": "shoes--purple-web-creature-platform-boots"
    }
   ],
   "Colorful Grunge Goth Outfit": [
-   {
-    "c": "pants",
-    "n": "Purple Plaid Grunge Goth Slacks",
-    "r": "l",
-    "s": "pants--purple-plaid-grunge-goth-slacks"
-   },
    {
     "c": "shirt",
     "n": "Purple Layered Grunge Goth Hoodie",
     "r": "l",
     "s": "shirt--purple-layered-grunge-goth-hoodie"
+   },
+   {
+    "c": "pants",
+    "n": "Purple Plaid Grunge Goth Slacks",
+    "r": "l",
+    "s": "pants--purple-plaid-grunge-goth-slacks"
    },
    {
     "c": "shoes",
@@ -287,42 +335,42 @@
   ],
   "Colorful Relaxed Goth Outfit": [
    {
-    "c": "pants",
-    "n": "Teal Embelished Relaxed Goth Pants",
-    "r": "l",
-    "s": "pants--teal-embelished-relaxed-goth-pants"
-   },
-   {
     "c": "shirt",
     "n": "Teal Relaxed Goth Top",
     "r": "l",
     "s": "shirt--teal-relaxed-goth-top"
    },
    {
-    "c": "shoes",
-    "n": "Teal Creature Platform Slides",
+    "c": "pants",
+    "n": "Teal Embelished Relaxed Goth Pants",
     "r": "l",
-    "s": "shoes--teal-creature-platform-slides"
+    "s": "pants--teal-embelished-relaxed-goth-pants"
    },
    {
     "c": "sock",
     "n": "Black and Teal Striped Creature Socks",
     "r": "l",
     "s": "sock--black-and-teal-striped-creature-socks"
+   },
+   {
+    "c": "shoes",
+    "n": "Teal Creature Platform Slides",
+    "r": "l",
+    "s": "shoes--teal-creature-platform-slides"
    }
   ],
   "Colorful Ripped Crop": [
-   {
-    "c": "pants",
-    "n": "Teal Black Jumbo Jeans",
-    "r": "l",
-    "s": "pants--teal-black-jumbo-jeans"
-   },
    {
     "c": "shirt",
     "n": "Teal Ripped Creature Crop",
     "r": "l",
     "s": "shirt--teal-ripped-creature-crop"
+   },
+   {
+    "c": "pants",
+    "n": "Teal Black Jumbo Jeans",
+    "r": "l",
+    "s": "pants--teal-black-jumbo-jeans"
    },
    {
     "c": "shoes",
@@ -333,16 +381,16 @@
   ],
   "Colorful Suspender Outfit": [
    {
-    "c": "pants",
-    "n": "Embelished Creature Slacks",
-    "r": "l",
-    "s": "pants--embelished-creature-slacks"
-   },
-   {
     "c": "shirt",
     "n": "Black and White Suspender Top",
     "r": "l",
     "s": "shirt--black-and-white-suspender-top"
+   },
+   {
+    "c": "pants",
+    "n": "Embelished Creature Slacks",
+    "r": "l",
+    "s": "pants--embelished-creature-slacks"
    },
    {
     "c": "shoes",
@@ -353,42 +401,42 @@
   ],
   "Colorful Sweater Goth Outfit": [
    {
-    "c": "pants",
-    "n": "Black and Teal Creature Shorts",
-    "r": "l",
-    "s": "pants--black-and-teal-creature-shorts"
-   },
-   {
     "c": "shirt",
     "n": "Colorful Embelished Goth Sweater",
     "r": "l",
     "s": "shirt--colorful-embelished-goth-sweater"
    },
    {
-    "c": "shoes",
-    "n": "Colorful Creature Slouchy Socks",
+    "c": "pants",
+    "n": "Black and Teal Creature Shorts",
     "r": "l",
-    "s": "shoes--colorful-creature-slouchy-socks"
+    "s": "pants--black-and-teal-creature-shorts"
    },
    {
     "c": "sock",
     "n": "Purple and Black Creature Stockings",
     "r": "l",
     "s": "sock--purple-and-black-creature-stockings"
+   },
+   {
+    "c": "shoes",
+    "n": "Colorful Creature Slouchy Socks",
+    "r": "l",
+    "s": "shoes--colorful-creature-slouchy-socks"
    }
   ],
   "Colorful Torn Crop Outfit": [
-   {
-    "c": "pants",
-    "n": "Black Wide Leg Pants and Green Fishents",
-    "r": "l",
-    "s": "pants--black-wide-leg-pants-and-green-fishents"
-   },
    {
     "c": "shirt",
     "n": "Teal Torn Long Sleeve Crop",
     "r": "l",
     "s": "shirt--teal-torn-long-sleeve-crop"
+   },
+   {
+    "c": "pants",
+    "n": "Black Wide Leg Pants and Green Fishents",
+    "r": "l",
+    "s": "pants--black-wide-leg-pants-and-green-fishents"
    },
    {
     "c": "shoes",
@@ -399,10 +447,40 @@
   ],
   "Dimitri": [
    {
-    "c": "pants",
-    "n": "Dimitri Pants",
+    "c": "hat",
+    "n": "Dimitri Pierced Ears",
     "r": "l",
-    "s": "pants--dimitri-pants"
+    "s": "hat--dimitri-pierced-ears"
+   },
+   {
+    "c": "eyebrow",
+    "n": "Dimitri Brows",
+    "r": "l",
+    "s": "eyebrow--dimitri-brows"
+   },
+   {
+    "c": "eye",
+    "n": "Dimitri Eyes",
+    "r": "l",
+    "s": "eye--dimitri-eyes"
+   },
+   {
+    "c": "nose",
+    "n": "Dimitri Nose",
+    "r": "l",
+    "s": "nose--dimitri-nose"
+   },
+   {
+    "c": "mouth",
+    "n": "Dimitri Mouth",
+    "r": "l",
+    "s": "mouth--dimitri-mouth"
+   },
+   {
+    "c": "freckle",
+    "n": "Dimitri Mask",
+    "r": "l",
+    "s": "freckle--dimitri-mask"
    },
    {
     "c": "shirt",
@@ -411,19 +489,31 @@
     "s": "shirt--dimitri-coat"
    },
    {
+    "c": "pants",
+    "n": "Dimitri Pants",
+    "r": "l",
+    "s": "pants--dimitri-pants"
+   },
+   {
     "c": "shoes",
     "n": "Dimitri Feet",
     "r": "l",
     "s": "shoes--dimitri-feet"
+   },
+   {
+    "c": "bag",
+    "n": "Dimitri Wings",
+    "r": "l",
+    "s": "bag--dimitri-wings"
+   },
+   {
+    "c": "aura",
+    "n": "Dimitri Midnight Aura",
+    "r": "l",
+    "s": "aura--dimitri-midnight-aura"
    }
   ],
   "Dress and Thigh Highs Outfit": [
-   {
-    "c": "pants",
-    "n": "White Undies",
-    "r": "l",
-    "s": "pants--white-undies"
-   },
    {
     "c": "shirt",
     "n": "Web Creature Club Dress",
@@ -431,19 +521,49 @@
     "s": "shirt--web-creature-club-dress"
    },
    {
-    "c": "shoes",
-    "n": "Web Creature Platform Boots",
+    "c": "pants",
+    "n": "White Undies",
     "r": "l",
-    "s": "shoes--web-creature-platform-boots"
+    "s": "pants--white-undies"
    },
    {
     "c": "sock",
     "n": "Creature Fishnet Stockings",
     "r": "l",
     "s": "sock--creature-fishnet-stockings"
+   },
+   {
+    "c": "shoes",
+    "n": "Web Creature Platform Boots",
+    "r": "l",
+    "s": "shoes--web-creature-platform-boots"
    }
   ],
   "Drip": [
+   {
+    "c": "hat",
+    "n": "Drip Hood",
+    "r": "l",
+    "s": "hat--drip-hood"
+   },
+   {
+    "c": "eye",
+    "n": "Drip Eyes",
+    "r": "l",
+    "s": "eye--drip-eyes"
+   },
+   {
+    "c": "mouth",
+    "n": "Drip Mouth",
+    "r": "l",
+    "s": "mouth--drip-mouth"
+   },
+   {
+    "c": "shirt",
+    "n": "Drip Sweater",
+    "r": "l",
+    "s": "shirt--drip-sweater"
+   },
    {
     "c": "pants",
     "n": "Drip Body",
@@ -451,18 +571,60 @@
     "s": "pants--drip-body"
    },
    {
-    "c": "shirt",
-    "n": "Drip Sweater",
+    "c": "aura",
+    "n": "Drip Goo Aura",
     "r": "l",
-    "s": "shirt--drip-sweater"
+    "s": "aura--drip-goo-aura"
    }
   ],
   "Fenris Jr.": [
    {
-    "c": "pants",
-    "n": "Fenris Jr. Pants",
+    "c": "hair_front",
+    "n": "Fenris Jr. Messy Pony",
     "r": "l",
-    "s": "pants--fenris-jr-pants"
+    "s": "hair-front--fenris-jr-messy-pony"
+   },
+   {
+    "c": "hat",
+    "n": "Fenris Jr. Pierced Ears",
+    "r": "l",
+    "s": "hat--fenris-jr-pierced-ears"
+   },
+   {
+    "c": "eyebrow",
+    "n": "Fenris Jr. Brows",
+    "r": "l",
+    "s": "eyebrow--fenris-jr-brows"
+   },
+   {
+    "c": "eye",
+    "n": "Fenris Jr. Eyes",
+    "r": "l",
+    "s": "eye--fenris-jr-eyes"
+   },
+   {
+    "c": "nose",
+    "n": "Fenris Jr. Nose",
+    "r": "l",
+    "s": "nose--fenris-jr-nose"
+   },
+   {
+    "c": "mouth",
+    "n": "Fenris Jr. Mouth",
+    "r": "l",
+    "s": "mouth--fenris-jr-mouth"
+   },
+   {
+    "c": "freckle",
+    "n": "Fenris Jr. Mask",
+    "r": "l",
+    "s": "freckle--fenris-jr-mask"
+   },
+   {
+    "c": "freckle",
+    "n": "Fenris Jr. Furrowed Brow",
+    "r": "l",
+    "s": "freckle--fenris-jr-furrowed-brow"
    },
    {
     "c": "shirt",
@@ -471,24 +633,36 @@
     "s": "shirt--fenris-jr-jacket"
    },
    {
+    "c": "pants",
+    "n": "Fenris Jr. Pants",
+    "r": "l",
+    "s": "pants--fenris-jr-pants"
+   },
+   {
     "c": "shoes",
     "n": "Fenris Jr. Kicks",
     "r": "l",
     "s": "shoes--fenris-jr-kicks"
+   },
+   {
+    "c": "aura",
+    "n": "Fenris Jr. Full Moon Aura",
+    "r": "l",
+    "s": "aura--fenris-jr-full-moon-aura"
    }
   ],
   "Grunge Goth Outfit": [
-   {
-    "c": "pants",
-    "n": "Plaid Grunge Goth Slacks",
-    "r": "e",
-    "s": "pants--plaid-grunge-goth-slacks"
-   },
    {
     "c": "shirt",
     "n": "Plaid Layered Grunge Goth Hoodie",
     "r": "e",
     "s": "shirt--plaid-layered-grunge-goth-hoodie"
+   },
+   {
+    "c": "pants",
+    "n": "Plaid Grunge Goth Slacks",
+    "r": "e",
+    "s": "pants--plaid-grunge-goth-slacks"
    },
    {
     "c": "shoes",
@@ -499,42 +673,42 @@
   ],
   "Legendary Belted Trench Dress Outfit": [
    {
-    "c": "pants",
-    "n": "Red with Black Bow Undies",
-    "r": "l",
-    "s": "pants--red-with-black-bow-undies"
-   },
-   {
     "c": "shirt",
     "n": "Pink Belted Trench Dress",
     "r": "l",
     "s": "shirt--pink-belted-trench-dress"
    },
    {
-    "c": "shoes",
-    "n": "White Button Buckle Clogs",
+    "c": "pants",
+    "n": "Red with Black Bow Undies",
     "r": "l",
-    "s": "shoes--white-button-buckle-clogs"
+    "s": "pants--red-with-black-bow-undies"
    },
    {
     "c": "sock",
     "n": "White Knee High Layered Fishnet Socks",
     "r": "l",
     "s": "sock--white-knee-high-layered-fishnet-socks"
+   },
+   {
+    "c": "shoes",
+    "n": "White Button Buckle Clogs",
+    "r": "l",
+    "s": "shoes--white-button-buckle-clogs"
    }
   ],
   "Legendary Suspender Outfit": [
-   {
-    "c": "pants",
-    "n": "White Creature Creature Slacks",
-    "r": "l",
-    "s": "pants--white-creature-creature-slacks"
-   },
    {
     "c": "shirt",
     "n": "Embelished Teal Suspender Top",
     "r": "l",
     "s": "shirt--embelished-teal-suspender-top"
+   },
+   {
+    "c": "pants",
+    "n": "White Creature Creature Slacks",
+    "r": "l",
+    "s": "pants--white-creature-creature-slacks"
    },
    {
     "c": "shoes",
@@ -545,25 +719,121 @@
   ],
   "Lilith": [
    {
+    "c": "hair_front",
+    "n": "Lilith Duo-Tone Bob",
+    "r": "l",
+    "s": "hair-front--lilith-duo-tone-bob"
+   },
+   {
+    "c": "hat",
+    "n": "Lilith Pierced Ears",
+    "r": "l",
+    "s": "hat--lilith-pierced-ears"
+   },
+   {
+    "c": "eyebrow",
+    "n": "Lilith Brows",
+    "r": "l",
+    "s": "eyebrow--lilith-brows"
+   },
+   {
+    "c": "eye",
+    "n": "Lilith Eyes",
+    "r": "l",
+    "s": "eye--lilith-eyes"
+   },
+   {
+    "c": "nose",
+    "n": "Lilith Nose",
+    "r": "l",
+    "s": "nose--lilith-nose"
+   },
+   {
+    "c": "mouth",
+    "n": "Lilith Mouth",
+    "r": "l",
+    "s": "mouth--lilith-mouth"
+   },
+   {
+    "c": "freckle",
+    "n": "Lilith Cross Freckles",
+    "r": "l",
+    "s": "freckle--lilith-cross-freckles"
+   },
+   {
     "c": "shirt",
     "n": "Lilith Blouse",
     "r": "l",
     "s": "shirt--lilith-blouse"
    },
    {
-    "c": "shoes",
-    "n": "Lilith Boots",
-    "r": "l",
-    "s": "shoes--lilith-boots"
-   },
-   {
     "c": "skirt",
     "n": "Lilith Skirt",
     "r": "l",
     "s": "skirt--lilith-skirt"
+   },
+   {
+    "c": "shoes",
+    "n": "Lilith Boots",
+    "r": "l",
+    "s": "shoes--lilith-boots"
    }
   ],
   "Mummy Mary": [
+   {
+    "c": "hair_front",
+    "n": "Mummy Mary Locs",
+    "r": "l",
+    "s": "hair-front--mummy-mary-locs"
+   },
+   {
+    "c": "hat",
+    "n": "Mummy Mary Earrings",
+    "r": "l",
+    "s": "hat--mummy-mary-earrings"
+   },
+   {
+    "c": "hat",
+    "n": "Mummy Mary Face Bandages",
+    "r": "l",
+    "s": "hat--mummy-mary-face-bandages"
+   },
+   {
+    "c": "eyebrow",
+    "n": "Mummy Mary Brows",
+    "r": "l",
+    "s": "eyebrow--mummy-mary-brows"
+   },
+   {
+    "c": "eye",
+    "n": "Mummy Mary Eyes",
+    "r": "l",
+    "s": "eye--mummy-mary-eyes"
+   },
+   {
+    "c": "nose",
+    "n": "Mummy Mary Nose",
+    "r": "l",
+    "s": "nose--mummy-mary-nose"
+   },
+   {
+    "c": "mouth",
+    "n": "Mummy Mary Mouth",
+    "r": "l",
+    "s": "mouth--mummy-mary-mouth"
+   },
+   {
+    "c": "freckle",
+    "n": "Mummy Mary Face Stitches",
+    "r": "l",
+    "s": "freckle--mummy-mary-face-stitches"
+   },
+   {
+    "c": "shirt",
+    "n": "Mummy Mary Bandages",
+    "r": "l",
+    "s": "shirt--mummy-mary-bandages"
+   },
    {
     "c": "pants",
     "n": "Mummy Mary Bandaged Legs",
@@ -571,19 +841,13 @@
     "s": "pants--mummy-mary-bandaged-legs"
    },
    {
-    "c": "shirt",
-    "n": "Mummy Mary Bandages",
+    "c": "aura",
+    "n": "Mummy Mary Hieroglyphs Aura",
     "r": "l",
-    "s": "shirt--mummy-mary-bandages"
+    "s": "aura--mummy-mary-hieroglyphs-aura"
    }
   ],
   "Relaxed Goth Outfit": [
-   {
-    "c": "pants",
-    "n": "Embelished Relaxed Goth Pants",
-    "r": "e",
-    "s": "pants--embelished-relaxed-goth-pants"
-   },
    {
     "c": "shirt",
     "n": "Black and White Relaxed Goth Top",
@@ -591,30 +855,36 @@
     "s": "shirt--black-and-white-relaxed-goth-top"
    },
    {
-    "c": "shoes",
-    "n": "White Creature Platform Slides",
+    "c": "pants",
+    "n": "Embelished Relaxed Goth Pants",
     "r": "e",
-    "s": "shoes--white-creature-platform-slides"
+    "s": "pants--embelished-relaxed-goth-pants"
    },
    {
     "c": "sock",
     "n": "Black and White Striped Creature Socks",
     "r": "e",
     "s": "sock--black-and-white-striped-creature-socks"
+   },
+   {
+    "c": "shoes",
+    "n": "White Creature Platform Slides",
+    "r": "e",
+    "s": "shoes--white-creature-platform-slides"
    }
   ],
   "Ripped Crop": [
-   {
-    "c": "pants",
-    "n": "Embelished Black Jumbo Jeans",
-    "r": "e",
-    "s": "pants--embelished-black-jumbo-jeans"
-   },
    {
     "c": "shirt",
     "n": "Black and White Ripped Creature Crop",
     "r": "e",
     "s": "shirt--black-and-white-ripped-creature-crop"
+   },
+   {
+    "c": "pants",
+    "n": "Embelished Black Jumbo Jeans",
+    "r": "e",
+    "s": "pants--embelished-black-jumbo-jeans"
    },
    {
     "c": "shoes",
@@ -625,16 +895,16 @@
   ],
   "Simple Bell Sleeve Outfit": [
    {
-    "c": "pants",
-    "n": "Black Creature Joggers",
-    "r": "r",
-    "s": "pants--black-creature-joggers"
-   },
-   {
     "c": "shirt",
     "n": "Black Simple Bell Sleeve Top",
     "r": "r",
     "s": "shirt--black-simple-bell-sleeve-top"
+   },
+   {
+    "c": "pants",
+    "n": "Black Creature Joggers",
+    "r": "r",
+    "s": "pants--black-creature-joggers"
    },
    {
     "c": "shoes",
@@ -645,16 +915,16 @@
   ],
   "Simple Biker Shorts Outfit": [
    {
-    "c": "pants",
-    "n": "Creature Biker Shorts",
-    "r": "r",
-    "s": "pants--creature-biker-shorts"
-   },
-   {
     "c": "shirt",
     "n": "Black Stitch Sleeve Creature Sweater",
     "r": "r",
     "s": "shirt--black-stitch-sleeve-creature-sweater"
+   },
+   {
+    "c": "pants",
+    "n": "Creature Biker Shorts",
+    "r": "r",
+    "s": "pants--creature-biker-shorts"
    },
    {
     "c": "shoes",
@@ -665,16 +935,16 @@
   ],
   "Simple Burnt Sweater Outfit": [
    {
-    "c": "pants",
-    "n": "Ripped Creature Jeans",
-    "r": "r",
-    "s": "pants--ripped-creature-jeans"
-   },
-   {
     "c": "shirt",
     "n": "Black Burnt Sweater Top",
     "r": "r",
     "s": "shirt--black-burnt-sweater-top"
+   },
+   {
+    "c": "pants",
+    "n": "Ripped Creature Jeans",
+    "r": "r",
+    "s": "pants--ripped-creature-jeans"
    },
    {
     "c": "shoes",
@@ -685,16 +955,16 @@
   ],
   "Simple Cargo Goth Outfit": [
    {
-    "c": "pants",
-    "n": "Simple Goth Cargos",
-    "r": "r",
-    "s": "pants--simple-goth-cargos"
-   },
-   {
     "c": "shirt",
     "n": "Black Layered Creature T",
     "r": "r",
     "s": "shirt--black-layered-creature-t"
+   },
+   {
+    "c": "pants",
+    "n": "Simple Goth Cargos",
+    "r": "r",
+    "s": "pants--simple-goth-cargos"
    },
    {
     "c": "shoes",
@@ -705,42 +975,42 @@
   ],
   "Simple Dress and Thigh Highs Outfit": [
    {
-    "c": "pants",
-    "n": "Black Undies",
-    "r": "l",
-    "s": "pants--black-undies"
-   },
-   {
     "c": "shirt",
     "n": "Creature Club Dress",
     "r": "l",
     "s": "shirt--creature-club-dress"
    },
    {
-    "c": "shoes",
-    "n": "Creature Platform Boots",
+    "c": "pants",
+    "n": "Black Undies",
     "r": "l",
-    "s": "shoes--creature-platform-boots"
+    "s": "pants--black-undies"
    },
    {
     "c": "sock",
     "n": "Simple Creature Fishnet Stockings",
     "r": "l",
     "s": "sock--simple-creature-fishnet-stockings"
+   },
+   {
+    "c": "shoes",
+    "n": "Creature Platform Boots",
+    "r": "l",
+    "s": "shoes--creature-platform-boots"
    }
   ],
   "Simple Grunge Goth Outfit": [
-   {
-    "c": "pants",
-    "n": "Simple Grunge Goth Slacks",
-    "r": "r",
-    "s": "pants--simple-grunge-goth-slacks"
-   },
    {
     "c": "shirt",
     "n": "Layered Grunge Goth Hoodie",
     "r": "r",
     "s": "shirt--layered-grunge-goth-hoodie"
+   },
+   {
+    "c": "pants",
+    "n": "Simple Grunge Goth Slacks",
+    "r": "r",
+    "s": "pants--simple-grunge-goth-slacks"
    },
    {
     "c": "shoes",
@@ -751,42 +1021,42 @@
   ],
   "Simple Relaxed Goth Outfit": [
    {
-    "c": "pants",
-    "n": "Black Relaxed Goth Pants",
-    "r": "e",
-    "s": "pants--black-relaxed-goth-pants"
-   },
-   {
     "c": "shirt",
     "n": "Black Relaxed Goth Top",
     "r": "e",
     "s": "shirt--black-relaxed-goth-top"
    },
    {
-    "c": "shoes",
-    "n": "Black Creature Platform Slides",
+    "c": "pants",
+    "n": "Black Relaxed Goth Pants",
     "r": "e",
-    "s": "shoes--black-creature-platform-slides"
+    "s": "pants--black-relaxed-goth-pants"
    },
    {
     "c": "sock",
     "n": "White and Black Striped Creature Socks",
     "r": "e",
     "s": "sock--white-and-black-striped-creature-socks"
+   },
+   {
+    "c": "shoes",
+    "n": "Black Creature Platform Slides",
+    "r": "e",
+    "s": "shoes--black-creature-platform-slides"
    }
   ],
   "Simple Ripped Crop": [
-   {
-    "c": "pants",
-    "n": "Black Jumbo Jeans",
-    "r": "r",
-    "s": "pants--black-jumbo-jeans"
-   },
    {
     "c": "shirt",
     "n": "Black Ripped Creature Crop",
     "r": "r",
     "s": "shirt--black-ripped-creature-crop"
+   },
+   {
+    "c": "pants",
+    "n": "Black Jumbo Jeans",
+    "r": "r",
+    "s": "pants--black-jumbo-jeans"
    },
    {
     "c": "shoes",
@@ -797,42 +1067,42 @@
   ],
   "Simple Sweater Goth Outfit": [
    {
-    "c": "pants",
-    "n": "Creature Shorts",
-    "r": "r",
-    "s": "pants--creature-shorts"
-   },
-   {
     "c": "shirt",
     "n": "Simple Black Goth Sweater",
     "r": "r",
     "s": "shirt--simple-black-goth-sweater"
    },
    {
-    "c": "shoes",
-    "n": "Black Creature Slouchy Socks",
+    "c": "pants",
+    "n": "Creature Shorts",
     "r": "r",
-    "s": "shoes--black-creature-slouchy-socks"
+    "s": "pants--creature-shorts"
    },
    {
     "c": "sock",
     "n": "Black Creature Stockings",
     "r": "r",
     "s": "sock--black-creature-stockings"
+   },
+   {
+    "c": "shoes",
+    "n": "Black Creature Slouchy Socks",
+    "r": "r",
+    "s": "shoes--black-creature-slouchy-socks"
    }
   ],
   "Simple Torn Crop Outfit": [
-   {
-    "c": "pants",
-    "n": "Belted Black Wide Leg Pants",
-    "r": "r",
-    "s": "pants--belted-black-wide-leg-pants"
-   },
    {
     "c": "shirt",
     "n": "Black Torn Long Sleeve Crop",
     "r": "e",
     "s": "shirt--black-torn-long-sleeve-crop"
+   },
+   {
+    "c": "pants",
+    "n": "Belted Black Wide Leg Pants",
+    "r": "r",
+    "s": "pants--belted-black-wide-leg-pants"
    },
    {
     "c": "shoes",
@@ -843,10 +1113,40 @@
   ],
   "Squatch": [
    {
-    "c": "pants",
-    "n": "Squatch Legs",
+    "c": "hair_front",
+    "n": "Squatch Hair",
     "r": "l",
-    "s": "pants--squatch-legs"
+    "s": "hair-front--squatch-hair"
+   },
+   {
+    "c": "hat",
+    "n": "Squatch Pierced Ears",
+    "r": "l",
+    "s": "hat--squatch-pierced-ears"
+   },
+   {
+    "c": "eyebrow",
+    "n": "Squatch Brows",
+    "r": "l",
+    "s": "eyebrow--squatch-brows"
+   },
+   {
+    "c": "eye",
+    "n": "Squatch Eyes",
+    "r": "l",
+    "s": "eye--squatch-eyes"
+   },
+   {
+    "c": "nose",
+    "n": "Squatch Nose",
+    "r": "l",
+    "s": "nose--squatch-nose"
+   },
+   {
+    "c": "mouth",
+    "n": "Squatch Mouth",
+    "r": "l",
+    "s": "mouth--squatch-mouth"
    },
    {
     "c": "shirt",
@@ -855,13 +1155,43 @@
     "s": "shirt--squatch-top"
    },
    {
+    "c": "pants",
+    "n": "Squatch Legs",
+    "r": "l",
+    "s": "pants--squatch-legs"
+   },
+   {
     "c": "shoes",
     "n": "Squatch Feet",
     "r": "l",
     "s": "shoes--squatch-feet"
+   },
+   {
+    "c": "aura",
+    "n": "Squatch Forest Aura",
+    "r": "l",
+    "s": "aura--squatch-forest-aura"
    }
   ],
   "Suezie": [
+   {
+    "c": "hat",
+    "n": "Suezie Horns",
+    "r": "l",
+    "s": "hat--suezie-horns"
+   },
+   {
+    "c": "hat",
+    "n": "Suezie Mask",
+    "r": "l",
+    "s": "hat--suezie-mask"
+   },
+   {
+    "c": "shirt",
+    "n": "Suezie Shirt",
+    "r": "l",
+    "s": "shirt--suezie-shirt"
+   },
    {
     "c": "pants",
     "n": "Suezie Body",
@@ -869,24 +1199,24 @@
     "s": "pants--suezie-body"
    },
    {
-    "c": "shirt",
-    "n": "Suezie Shirt",
+    "c": "aura",
+    "n": "Suezie Spiral Aura",
     "r": "l",
-    "s": "shirt--suezie-shirt"
+    "s": "aura--suezie-spiral-aura"
    }
   ],
   "Super Bell Sleeve Outfit": [
-   {
-    "c": "pants",
-    "n": "Green and Blue Embelished Creature Joggers",
-    "r": "l",
-    "s": "pants--green-and-blue-embelished-creature-joggers"
-   },
    {
     "c": "shirt",
     "n": "Blue Bell Sleeve Top",
     "r": "l",
     "s": "shirt--blue-bell-sleeve-top"
+   },
+   {
+    "c": "pants",
+    "n": "Green and Blue Embelished Creature Joggers",
+    "r": "l",
+    "s": "pants--green-and-blue-embelished-creature-joggers"
    },
    {
     "c": "shoes",
@@ -897,42 +1227,42 @@
   ],
   "Super Belted Trench Dress Outfit": [
    {
-    "c": "pants",
-    "n": "Black with Red Bow Undies",
-    "r": "l",
-    "s": "pants--black-with-red-bow-undies"
-   },
-   {
     "c": "shirt",
     "n": "Red Belted Trench Dress",
     "r": "l",
     "s": "shirt--red-belted-trench-dress"
    },
    {
-    "c": "shoes",
-    "n": "Red Button Buckle Clogs",
+    "c": "pants",
+    "n": "Black with Red Bow Undies",
     "r": "l",
-    "s": "shoes--red-button-buckle-clogs"
+    "s": "pants--black-with-red-bow-undies"
    },
    {
     "c": "sock",
     "n": "Knee High Layered Fishnet Socks",
     "r": "l",
     "s": "sock--knee-high-layered-fishnet-socks"
+   },
+   {
+    "c": "shoes",
+    "n": "Red Button Buckle Clogs",
+    "r": "l",
+    "s": "shoes--red-button-buckle-clogs"
    }
   ],
   "Super Biker Shorts Outfit": [
-   {
-    "c": "pants",
-    "n": "Blue Creature Biker Shorts",
-    "r": "l",
-    "s": "pants--blue-creature-biker-shorts"
-   },
    {
     "c": "shirt",
     "n": "Blue Stitch Sleeve Creature Sweater",
     "r": "l",
     "s": "shirt--blue-stitch-sleeve-creature-sweater"
+   },
+   {
+    "c": "pants",
+    "n": "Blue Creature Biker Shorts",
+    "r": "l",
+    "s": "pants--blue-creature-biker-shorts"
    },
    {
     "c": "shoes",
@@ -943,16 +1273,16 @@
   ],
   "Super Burnt Sweater Outfit": [
    {
-    "c": "pants",
-    "n": "Striped Ripped Creature Jeans",
-    "r": "l",
-    "s": "pants--striped-ripped-creature-jeans"
-   },
-   {
     "c": "shirt",
     "n": "Blue Burnt Sweater Top",
     "r": "l",
     "s": "shirt--blue-burnt-sweater-top"
+   },
+   {
+    "c": "pants",
+    "n": "Striped Ripped Creature Jeans",
+    "r": "l",
+    "s": "pants--striped-ripped-creature-jeans"
    },
    {
     "c": "shoes",
@@ -963,16 +1293,16 @@
   ],
   "Super Cargo Goth Outfit": [
    {
-    "c": "pants",
-    "n": "Pastel Goth Cargos",
-    "r": "l",
-    "s": "pants--pastel-goth-cargos"
-   },
-   {
     "c": "shirt",
     "n": "Pink Layered Creature T",
     "r": "l",
     "s": "shirt--pink-layered-creature-t"
+   },
+   {
+    "c": "pants",
+    "n": "Pastel Goth Cargos",
+    "r": "l",
+    "s": "pants--pastel-goth-cargos"
    },
    {
     "c": "shoes",
@@ -983,42 +1313,42 @@
   ],
   "Super Dress and Thigh Highs Outfit": [
    {
-    "c": "pants",
-    "n": "Teal Undies",
-    "r": "l",
-    "s": "pants--teal-undies"
-   },
-   {
     "c": "shirt",
     "n": "Teal Web Creature Club Dress",
     "r": "l",
     "s": "shirt--teal-web-creature-club-dress"
    },
    {
-    "c": "shoes",
-    "n": "Pastel Web Creature Platform Boots",
+    "c": "pants",
+    "n": "Teal Undies",
     "r": "l",
-    "s": "shoes--pastel-web-creature-platform-boots"
+    "s": "pants--teal-undies"
    },
    {
     "c": "sock",
     "n": "White Creature Fishnet Stockings",
     "r": "l",
     "s": "sock--white-creature-fishnet-stockings"
+   },
+   {
+    "c": "shoes",
+    "n": "Pastel Web Creature Platform Boots",
+    "r": "l",
+    "s": "shoes--pastel-web-creature-platform-boots"
    }
   ],
   "Super Grunge Goth Outfit": [
-   {
-    "c": "pants",
-    "n": "Teal Plaid Grunge Goth Slacks",
-    "r": "l",
-    "s": "pants--teal-plaid-grunge-goth-slacks"
-   },
    {
     "c": "shirt",
     "n": "Teal Layered Grunge Goth Hoodie",
     "r": "l",
     "s": "shirt--teal-layered-grunge-goth-hoodie"
+   },
+   {
+    "c": "pants",
+    "n": "Teal Plaid Grunge Goth Slacks",
+    "r": "l",
+    "s": "pants--teal-plaid-grunge-goth-slacks"
    },
    {
     "c": "shoes",
@@ -1029,42 +1359,42 @@
   ],
   "Super Relaxed Goth Outfit": [
    {
-    "c": "pants",
-    "n": "Blue and Black Relaxed Goth Pants",
-    "r": "l",
-    "s": "pants--blue-and-black-relaxed-goth-pants"
-   },
-   {
     "c": "shirt",
     "n": "Purple Relaxed Goth Top",
     "r": "l",
     "s": "shirt--purple-relaxed-goth-top"
    },
    {
-    "c": "shoes",
-    "n": "Purple Creature Platform Slides",
+    "c": "pants",
+    "n": "Blue and Black Relaxed Goth Pants",
     "r": "l",
-    "s": "shoes--purple-creature-platform-slides"
+    "s": "pants--blue-and-black-relaxed-goth-pants"
    },
    {
     "c": "sock",
     "n": "Blue and Purple Striped Creature Socks",
     "r": "l",
     "s": "sock--blue-and-purple-striped-creature-socks"
+   },
+   {
+    "c": "shoes",
+    "n": "Purple Creature Platform Slides",
+    "r": "l",
+    "s": "shoes--purple-creature-platform-slides"
    }
   ],
   "Super Ripped Crop": [
-   {
-    "c": "pants",
-    "n": "Purple Jumbo Jeans",
-    "r": "l",
-    "s": "pants--purple-jumbo-jeans"
-   },
    {
     "c": "shirt",
     "n": "Black and Purple Ripped Creature Crop",
     "r": "l",
     "s": "shirt--black-and-purple-ripped-creature-crop"
+   },
+   {
+    "c": "pants",
+    "n": "Purple Jumbo Jeans",
+    "r": "l",
+    "s": "pants--purple-jumbo-jeans"
    },
    {
     "c": "shoes",
@@ -1075,16 +1405,16 @@
   ],
   "Super Suspender Outfit": [
    {
-    "c": "pants",
-    "n": "Black and White Creature Slacks",
-    "r": "l",
-    "s": "pants--black-and-white-creature-slacks"
-   },
-   {
     "c": "shirt",
     "n": "Teal Suspender Top",
     "r": "l",
     "s": "shirt--teal-suspender-top"
+   },
+   {
+    "c": "pants",
+    "n": "Black and White Creature Slacks",
+    "r": "l",
+    "s": "pants--black-and-white-creature-slacks"
    },
    {
     "c": "shoes",
@@ -1095,42 +1425,42 @@
   ],
   "Super Sweater Goth Outfit": [
    {
-    "c": "pants",
-    "n": "Pastel Creature Shorts",
-    "r": "l",
-    "s": "pants--pastel-creature-shorts"
-   },
-   {
     "c": "shirt",
     "n": "Super Colorful Goth Sweater",
     "r": "l",
     "s": "shirt--super-colorful-goth-sweater"
    },
    {
-    "c": "shoes",
-    "n": "Pastel Creature Slouchy Socks",
+    "c": "pants",
+    "n": "Pastel Creature Shorts",
     "r": "l",
-    "s": "shoes--pastel-creature-slouchy-socks"
+    "s": "pants--pastel-creature-shorts"
    },
    {
     "c": "sock",
     "n": "Pastel Creature Stockings",
     "r": "l",
     "s": "sock--pastel-creature-stockings"
+   },
+   {
+    "c": "shoes",
+    "n": "Pastel Creature Slouchy Socks",
+    "r": "l",
+    "s": "shoes--pastel-creature-slouchy-socks"
    }
   ],
   "Super Torn Crop Outfit": [
-   {
-    "c": "pants",
-    "n": "Purple Wide Leg Pants and Fishents",
-    "r": "l",
-    "s": "pants--purple-wide-leg-pants-and-fishents"
-   },
    {
     "c": "shirt",
     "n": "Teal and Purple Long Sleeve Torn Crop",
     "r": "l",
     "s": "shirt--teal-and-purple-long-sleeve-torn-crop"
+   },
+   {
+    "c": "pants",
+    "n": "Purple Wide Leg Pants and Fishents",
+    "r": "l",
+    "s": "pants--purple-wide-leg-pants-and-fishents"
    },
    {
     "c": "shoes",
@@ -1141,16 +1471,16 @@
   ],
   "Suspender Outfit": [
    {
-    "c": "pants",
-    "n": "Creature Slacks",
-    "r": "e",
-    "s": "pants--creature-slacks"
-   },
-   {
     "c": "shirt",
     "n": "Black Suspender Top",
     "r": "e",
     "s": "shirt--black-suspender-top"
+   },
+   {
+    "c": "pants",
+    "n": "Creature Slacks",
+    "r": "e",
+    "s": "pants--creature-slacks"
    },
    {
     "c": "shoes",
@@ -1161,42 +1491,42 @@
   ],
   "Sweater Goth Outfit": [
    {
-    "c": "pants",
-    "n": "Black and White Creature Shorts",
-    "r": "e",
-    "s": "pants--black-and-white-creature-shorts"
-   },
-   {
     "c": "shirt",
     "n": "Embelished Black Goth Sweater",
     "r": "e",
     "s": "shirt--embelished-black-goth-sweater"
    },
    {
-    "c": "shoes",
-    "n": "Striped Creature Slouchy Socks",
+    "c": "pants",
+    "n": "Black and White Creature Shorts",
     "r": "e",
-    "s": "shoes--striped-creature-slouchy-socks"
+    "s": "pants--black-and-white-creature-shorts"
    },
    {
     "c": "sock",
     "n": "Black and White Creature Stockings",
     "r": "e",
     "s": "sock--black-and-white-creature-stockings"
+   },
+   {
+    "c": "shoes",
+    "n": "Striped Creature Slouchy Socks",
+    "r": "e",
+    "s": "shoes--striped-creature-slouchy-socks"
    }
   ],
   "Torn Crop Outfit": [
-   {
-    "c": "pants",
-    "n": "Black Wide Leg Pants and Fishents",
-    "r": "e",
-    "s": "pants--black-wide-leg-pants-and-fishents"
-   },
    {
     "c": "shirt",
     "n": "Black and White Torn Long Sleeve Crop",
     "r": "e",
     "s": "shirt--black-and-white-torn-long-sleeve-crop"
+   },
+   {
+    "c": "pants",
+    "n": "Black Wide Leg Pants and Fishents",
+    "r": "e",
+    "s": "pants--black-wide-leg-pants-and-fishents"
    },
    {
     "c": "shoes",
@@ -1207,18 +1537,108 @@
   ],
   "U.F.Bro": [
    {
+    "c": "hat",
+    "n": "U.F.Bro Antennae",
+    "r": "l",
+    "s": "hat--u-f-bro-antennae"
+   },
+   {
+    "c": "hat",
+    "n": "U.F.Bro Gage Ears",
+    "r": "l",
+    "s": "hat--u-f-bro-gage-ears"
+   },
+   {
+    "c": "eye",
+    "n": "U.F.Bro Eyes",
+    "r": "l",
+    "s": "eye--u-f-bro-eyes"
+   },
+   {
+    "c": "nose",
+    "n": "U.F.Bro Nose",
+    "r": "l",
+    "s": "nose--u-f-bro-nose"
+   },
+   {
+    "c": "mouth",
+    "n": "U.F.Bro Mouth",
+    "r": "l",
+    "s": "mouth--u-f-bro-mouth"
+   },
+   {
+    "c": "freckle",
+    "n": "U.F.Bro Mask",
+    "r": "l",
+    "s": "freckle--u-f-bro-mask"
+   },
+   {
+    "c": "freckle",
+    "n": "U.F.Bro Third Eye",
+    "r": "l",
+    "s": "freckle--u-f-bro-third-eye"
+   },
+   {
     "c": "fullsuit",
     "n": "U.F.Bro Ship",
     "r": "l",
     "s": "fullsuit--u-f-bro-ship"
+   },
+   {
+    "c": "aura",
+    "n": "U.F.Bro Shooting Stars Aura",
+    "r": "l",
+    "s": "aura--u-f-bro-shooting-stars-aura"
    }
   ],
   "Zedd": [
    {
-    "c": "pants",
-    "n": "Zedd Pants",
+    "c": "hair_front",
+    "n": "Zedd Punk Brain Hair",
     "r": "l",
-    "s": "pants--zedd-pants"
+    "s": "hair-front--zedd-punk-brain-hair"
+   },
+   {
+    "c": "hat",
+    "n": "Zedd Gage Ears",
+    "r": "l",
+    "s": "hat--zedd-gage-ears"
+   },
+   {
+    "c": "eyebrow",
+    "n": "Zedd Brows",
+    "r": "l",
+    "s": "eyebrow--zedd-brows"
+   },
+   {
+    "c": "eye",
+    "n": "Zedd Eyes",
+    "r": "l",
+    "s": "eye--zedd-eyes"
+   },
+   {
+    "c": "nose",
+    "n": "Zedd Nose",
+    "r": "l",
+    "s": "nose--zedd-nose"
+   },
+   {
+    "c": "mouth",
+    "n": "Zedd Mouth",
+    "r": "l",
+    "s": "mouth--zedd-mouth"
+   },
+   {
+    "c": "freckle",
+    "n": "Zedd Torn Skin",
+    "r": "l",
+    "s": "freckle--zedd-torn-skin"
+   },
+   {
+    "c": "freckle",
+    "n": "Zedd Furrowed Brow",
+    "r": "l",
+    "s": "freckle--zedd-furrowed-brow"
    },
    {
     "c": "shirt",
@@ -1227,10 +1647,28 @@
     "s": "shirt--zedd-ripped-shirt"
    },
    {
+    "c": "pants",
+    "n": "Zedd Pants",
+    "r": "l",
+    "s": "pants--zedd-pants"
+   },
+   {
     "c": "shoes",
     "n": "Zedd Kicks",
     "r": "l",
     "s": "shoes--zedd-kicks"
+   },
+   {
+    "c": "handbag",
+    "n": "Zedd Plushie",
+    "r": "e",
+    "s": "handbag--zedd-plushie"
+   },
+   {
+    "c": "aura",
+    "n": "Zedd \"Z\" Splatter Aura",
+    "r": "l",
+    "s": "aura--zedd-z-splatter-aura"
    }
   ]
  },

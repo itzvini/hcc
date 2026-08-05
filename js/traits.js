@@ -304,17 +304,25 @@ function piecesHtml(val) {
   if (!val.items?.length) return '';
   return `<div class="ctr-pieces">
     <span class="ctr-pieces-h">${esc(t('ctr.insp.pieces').replace('{n}', num(val.items.length)))}</span>
-    <div class="ctr-pieces-row">
-      ${val.items.map(x => `<button class="ctr-piece" type="button" data-piece="${esc(x.c)}"
-        data-piece-v="${esc(x.n)}" title="${esc(x.n)}">
-        <span class="ctr-shot">${x.art
-          ? `<img src="/api/collections/art/trait/${encodeURIComponent(x.art)}.webp" alt="" loading="lazy" decoding="async">`
-          : '<span class="ctr-piece-none" aria-hidden="true">?</span>'}</span>
-        <span class="ctr-piece-n">${esc(x.n)}</span>
-        <span class="ctr-piece-c">${esc(slotName(x.c))}</span>
-      </button>`).join('')}
-    </div>
+    <div class="ctr-pieces-row">${val.items.map(pieceHtml).join('')}</div>
   </div>`;
+}
+
+// A garment has a slot of its own, so its tile opens it. A 1/1 character's bespoke parts — eyes,
+// mouth, horns, aura — have none: their tokens never carried those attributes, so the collection
+// has no trait to browse. Those are shown and not clickable, rather than a button that goes
+// nowhere.
+function pieceHtml(x) {
+  const jump = !!typeOf(x.c);
+  const tag = jump ? 'button' : 'span';
+  return `<${tag} class="ctr-piece${jump ? '' : ' is-static'}" title="${esc(x.n)}"${jump
+    ? ` type="button" data-piece="${esc(x.c)}" data-piece-v="${esc(x.n)}"` : ''}>
+    <span class="ctr-shot">${x.art
+      ? `<img src="/api/collections/art/trait/${encodeURIComponent(x.art)}.webp" alt="" loading="lazy" decoding="async">`
+      : '<span class="ctr-piece-none" aria-hidden="true">?</span>'}</span>
+    <span class="ctr-piece-n">${esc(x.n)}</span>
+    <span class="ctr-piece-c">${esc(slotName(x.c))}</span>
+  </${tag}>`;
 }
 
 // One block per slot when browsing everything, so the grid reads as a face rather than a
