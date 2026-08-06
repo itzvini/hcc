@@ -535,44 +535,6 @@
   ],
   "site": [
     {
-      "date": "August 5, 2026",
-      "title": "Meet your Council",
-      "body": "A new board on the Council tab shows who holds all seven seats: the four you elected in June and the three appointed for continuity, each with their role and term. Terms run six months, so the board refreshes when you vote again.",
-      "tag": "update",
-      "i18n": {
-        "pt": {
-          "date": "5 de ago. de 2026",
-          "title": "Conheça o seu Conselho",
-          "body": "Um novo quadro na aba Conselho mostra quem ocupa as sete cadeiras: as quatro que você elegeu em junho e as três designadas para dar continuidade, cada uma com seu papel e mandato. Os mandatos duram seis meses, então o quadro se renova quando você vota de novo."
-        },
-        "es": {
-          "date": "5 ago. 2026",
-          "title": "Conoce a tu Consejo",
-          "body": "Un nuevo panel en la pestaña Consejo muestra quién ocupa los siete asientos: los cuatro que elegiste en junio y los tres designados para dar continuidad, cada uno con su rol y mandato. Los mandatos duran seis meses, así que el panel se renueva cuando vuelves a votar."
-        },
-        "fr": {
-          "date": "5 août 2026",
-          "title": "Rencontre ton Conseil",
-          "body": "Un nouveau tableau sur l'onglet Conseil montre qui occupe les sept sièges : les quatre que tu as élus en juin et les trois désignés pour la continuité, chacun avec son rôle et son mandat. Les mandats durent six mois, donc le tableau se renouvelle quand tu revotes."
-        },
-        "de": {
-          "date": "5. August 2026",
-          "title": "Lern deinen Council kennen",
-          "body": "Ein neues Board im Council-Tab zeigt, wer alle sieben Sitze hält: die vier, die ihr im Juni gewählt habt, und die drei für die Kontinuität ernannten, jeder mit Rolle und Amtszeit. Die Amtszeiten laufen sechs Monate, also aktualisiert sich das Board, wenn ihr wieder wählt."
-        },
-        "ru": {
-          "date": "5 августа 2026",
-          "title": "Знакомьтесь: ваш Совет",
-          "body": "Новая доска на вкладке «Совет» показывает, кто занимает все семь мест: четверых, которых вы выбрали в июне, и троих назначенных для преемственности, у каждого своя роль и срок. Сроки длятся шесть месяцев, поэтому доска обновляется, когда вы голосуете снова."
-        },
-        "tr": {
-          "date": "5 Ağustos 2026",
-          "title": "Konsey'inle tanış",
-          "body": "Konsey sekmesindeki yeni bir pano, yedi koltuğu kimin tuttuğunu gösteriyor: haziranda seçtiğin dördü ve süreklilik için atanan üçü, her biri rolü ve görev süresiyle. Görev süreleri altı ay sürüyor, yani tekrar oy verdiğinde pano yenileniyor."
-        }
-      }
-    },
-    {
       "date": "August 4, 2026",
       "title": "Creature Traits showcase",
       "body": "A new Creature Traits page lays out every trait in the collection, slot by slot, exactly as it looks in game. Open any trait to see how many Creatures wear it and what it's selling for, then jump to the marketplace with that trait already filtered. Outfit traits open up to show the individual pieces they're made of. Find it under Collections.",

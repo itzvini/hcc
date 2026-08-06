@@ -183,9 +183,15 @@ document.querySelector('.nav-logo')?.addEventListener('click', () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
-// Landing hub cards — jump to a tab and return to the top
+// Landing hub cards and footer links — jump to a tab and return to the top.
+// The footer uses real <a href="/roadmap"> so the links are crawlable and open in a
+// new tab on ctrl/middle-click; a plain click switches tab in place instead.
 document.querySelectorAll('[data-goto]').forEach(el => {
-  el.addEventListener('click', () => {
+  el.addEventListener('click', e => {
+    if (el.tagName === 'A') {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+      e.preventDefault();
+    }
     selectTab(el.dataset.goto);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
