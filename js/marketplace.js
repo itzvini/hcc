@@ -2529,7 +2529,7 @@ function gasAssistHtml(g) {
   }
   if (g.assistPhase === 'error') {
     return `<div class="trade-gas-assist is-err" role="status">
-      <span class="trade-gas-assist-ic" aria-hidden="true">⚠</span><span>${esc(assistErrText(g.assistErr, a.policy))}</span>
+      <span class="trade-gas-assist-ic" aria-hidden="true">⚠</span><span>${esc(assistErrText(g.assistErr))}</span>
     </div>`;
   }
 
@@ -2567,7 +2567,7 @@ function gasAssistHtml(g) {
   if (GAS_USED_REASONS.has(a.reason) || a.reason === 'assets_used') {
     return `<div class="trade-gas-assist is-muted">
       <span class="trade-gas-assist-ic" aria-hidden="true">⛽</span>
-      <span>${esc(assistErrText(a.reason, a.policy))}</span>
+      <span>${esc(assistErrText(a.reason))}</span>
     </div>`;
   }
 
@@ -2595,20 +2595,18 @@ const assistErrKey = reason =>
   : reason === 'assets_used' ? 'trade.gas.assist.err.assets'
   : reason === 'blocked' ? 'trade.gas.assist.err.blocked'
   : 'trade.gas.assist.err.generic';
-// The taint message names the window, so it needs the policy the message is describing.
-const assistErrText = (reason, policy) =>
-  t(assistErrKey(reason)).replace('{d}', String(policy?.taintDays ?? 30));
+const assistErrText = reason => t(assistErrKey(reason));
 
-// The terms, in three plain lines: where it goes, that it's one-off, and how long it puts
-// the Creatures out of action. The taint window comes from the server so the copy can't
-// drift from the rule it is describing.
+// The terms, in three plain lines: where it goes, that it's one-off, and that it puts the
+// Creatures out of action for a time. Deliberately no day count anywhere the member can
+// see it: naming a window invites people to count down a rule that only ever bites someone
+// trying to claim twice. It says there is a period, not how long.
 function gasAssistTermsHtml(a) {
   const n = Number(a.creatures) || 0;
-  const days = String(a.policy?.taintDays ?? 30);
   const rows = [
     ['→', t('trade.gas.assist.once.where').replace('{w}', shortWallet(a.wallet || ''))],
     ['1', t('trade.gas.assist.once.who')],
-    ['🔒', (n === 1 ? t('trade.gas.assist.once.nft1') : t('trade.gas.assist.once.nft')).replace('{n}', String(n)).replace('{d}', days)],
+    ['🔒', (n === 1 ? t('trade.gas.assist.once.nft1') : t('trade.gas.assist.once.nft')).replace('{n}', String(n))],
   ];
   return `<ul class="trade-gas-once">
     ${rows.map(([ic, line]) => `<li><span class="trade-gas-once-ic" aria-hidden="true">${esc(ic)}</span><span>${esc(line)}</span></li>`).join('')}

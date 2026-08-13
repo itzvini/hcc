@@ -3097,8 +3097,9 @@ async function handleMarketplaceApi(request, response, url) {
   // nothing about who its owner is, so nothing is trusted to it. Identity comes from the
   // session (Discord account + the Highrise account behind it), and eligibility comes from
   // the Creatures that wallet holds, read from the chain. A claim is once per LIFETIME on
-  // the Discord account, the Highrise account and the wallet, and it permanently spends
-  // every Creature in that wallet, so a fresh wallet or a moved Creature buys nothing.
+  // the Discord account, the Highrise account and the wallet, and it taints every Creature
+  // in that wallet for a window, so a fresh wallet or a moved Creature buys nothing. The
+  // member is told the window exists but never how long it runs — see gasAssistTermsHtml.
 
   // Can this member get their gas covered right now? Safe to call signed out; the answer
   // is then simply { available: false, reason: 'not_signed_in' }.

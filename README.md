@@ -692,6 +692,10 @@ The gates, in order:
    tainted. Deliberately **not** permanent: a Creature outlives its owner's claim, so marking
    it for life would hand whoever buys it next a dead claim they never made. 30 days makes
    bag-splitting pointless without damaging the asset.
+   **The member is told the window exists, never how long it runs** (see `gasAssistTermsHtml`
+   in [js/marketplace.js](js/marketplace.js)). Naming a number only invites people to count
+   it down over a rule that bites nobody trading normally, so `gasFaucet.policy()` doesn't
+   carry it and the copy doesn't either. Don't put it back.
 8. **Site-wide daily cap** (`GAS_FAUCET_DAILY_CAP`, default 200) as a circuit breaker, and
    a **float reserve** so a misconfigured target can't drain the wallet.
 
