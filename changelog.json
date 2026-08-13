@@ -1,6 +1,82 @@
 {
   "club": [
     {
+      "date": "August 12, 2026",
+      "title": "Ghost Town drop",
+      "body": "HCC revealed its next drop: Ghost Town, a 13-item set. The lore: a boomtown that ran out of things to get excited about, slowly dissolving into glowing green slime as its people turn into gooey, translucent ghosts. Dropping soon.",
+      "tag": "announcement",
+      "i18n": {
+        "pt": {
+          "date": "12 de ago. de 2026",
+          "title": "Drop Ghost Town",
+          "body": "O HCC revelou seu próximo drop: Ghost Town, um conjunto de 13 itens. A história: uma cidade em expansão que ficou sem novidades para empolgar, dissolvendo-se aos poucos em uma gosma verde brilhante enquanto seus moradores viram fantasmas translúcidos e gosmentos. Chega em breve."
+        },
+        "es": {
+          "date": "12 ago. 2026",
+          "title": "Drop Ghost Town",
+          "body": "HCC reveló su próximo drop: Ghost Town, un conjunto de 13 items. La historia: un pueblo en auge que se quedó sin novedades que lo entusiasmaran y se fue disolviendo en una baba verde brillante mientras sus habitantes se vuelven fantasmas translúcidos y viscosos. Llega pronto."
+        },
+        "fr": {
+          "date": "12 août 2026",
+          "title": "Drop Ghost Town",
+          "body": "HCC a dévoilé son prochain drop : Ghost Town, un ensemble de 13 objets. L'histoire : une ville prospère qui n'avait plus rien pour l'enthousiasmer et s'est lentement dissoute en une bave verte lumineuse, ses habitants devenant des fantômes translucides et gluants. Bientôt disponible."
+        },
+        "de": {
+          "date": "12. August 2026",
+          "title": "Ghost-Town-Drop",
+          "body": "HCC hat seinen nächsten Drop enthüllt: Ghost Town, ein Set aus 13 Items. Die Story: eine Boomtown, der die aufregenden Neuigkeiten ausgingen und die sich langsam in glühend grünen Schleim auflöste, während ihre Bewohner zu glibberigen, durchscheinenden Geistern werden. Kommt bald."
+        },
+        "ru": {
+          "date": "12 августа 2026",
+          "title": "Дроп Ghost Town",
+          "body": "HCC показал свой следующий дроп: Ghost Town, набор из 13 предметов. Сюжет: шумный городок, которому стало нечем себя увлечь, медленно растворился в светящейся зелёной слизи, а его жители превратились в тягучих полупрозрачных призраков. Уже скоро."
+        },
+        "tr": {
+          "date": "12 Ağustos 2026",
+          "title": "Ghost Town drop'u",
+          "body": "HCC bir sonraki drop'unu tanıttı: Ghost Town, 13 parçalık bir set. Hikâye: heyecanlanacak bir şeyi kalmayan, giderek parlak yeşil bir sümüğe dönüşen ve sakinleri yapış yapış, yarı saydam hayaletlere dönüşen bir kasaba. Çok yakında."
+        }
+      }
+    },
+    {
+      "date": "August 8, 2026",
+      "title": "New Gen 2 build order",
+      "body": "The Gen 2 build order shifted. Pets lead, the order you voted for, then the other creature sets, with the Yogurt Zombies now closing things out so the team can bring everything it learns on the earlier sets back to them. A new artist has joined to start on the pets.",
+      "tag": "announcement",
+      "i18n": {
+        "pt": {
+          "date": "8 de ago. de 2026",
+          "title": "Nova ordem de produção do Gen 2",
+          "body": "A ordem de produção do Gen 2 mudou. Os pets vêm primeiro, a ordem que você votou, depois os outros conjuntos de creatures, com os Yogurt Zombies fechando agora, para que o time possa levar tudo o que aprender nos conjuntos anteriores de volta para eles. Um novo artista entrou para começar os pets."
+        },
+        "es": {
+          "date": "8 ago. 2026",
+          "title": "Nuevo orden de producción de Gen 2",
+          "body": "El orden de producción de Gen 2 cambió. Los pets van primero, el orden que votaste, luego los demás conjuntos de creatures, y los Yogurt Zombies cierran ahora, para que el equipo pueda llevar todo lo que aprenda en los conjuntos anteriores de vuelta a ellos. Un nuevo artista se sumó para empezar los pets."
+        },
+        "fr": {
+          "date": "8 août 2026",
+          "title": "Nouvel ordre de production Gen 2",
+          "body": "L'ordre de production de Gen 2 a changé. Les pets d'abord, l'ordre que tu as voté, puis les autres ensembles de creatures, les Yogurt Zombies fermant désormais la marche pour que l'équipe puisse ramener vers eux tout ce qu'elle apprend sur les ensembles précédents. Un nouvel artiste a rejoint l'équipe pour commencer les pets."
+        },
+        "de": {
+          "date": "8. August 2026",
+          "title": "Neue Gen-2-Reihenfolge",
+          "body": "Die Gen-2-Produktionsreihenfolge hat sich geändert. Die Pets kommen zuerst, die Reihenfolge, für die ihr gestimmt habt, dann die anderen Creature-Sets, und die Yogurt Zombies bilden jetzt den Abschluss, damit das Team alles, was es an den früheren Sets lernt, zu ihnen zurückbringen kann. Ein neuer Artist ist dazugekommen, um mit den Pets zu starten."
+        },
+        "ru": {
+          "date": "8 августа 2026",
+          "title": "Новый порядок производства Gen 2",
+          "body": "Порядок производства Gen 2 изменился. Петы идут первыми, как вы и проголосовали, затем остальные наборы creatures, а Yogurt Zombies теперь замыкают очередь, чтобы команда могла принести к ним всё, чему научится на предыдущих наборах. К команде присоединился новый художник, чтобы взяться за петов."
+        },
+        "tr": {
+          "date": "8 Ağustos 2026",
+          "title": "Yeni Gen 2 üretim sırası",
+          "body": "Gen 2 üretim sırası değişti. Önce pets geliyor, oyladığın sıra, ardından diğer creature setleri, Yogurt Zombies ise artık en sona alınıyor ki ekip önceki setlerde öğrendiği her şeyi onlara taşıyabilsin. Pets üzerinde başlamak için ekibe yeni bir sanatçı katıldı."
+        }
+      }
+    },
+    {
       "date": "July 16, 2026",
       "title": "Second Council meeting",
       "body": "The second Player Council meeting wrapped, and the full recap is public. The headlines: Creature Coins stay holder-only, so earning them keeps meaning something. Gen 2's trait lineup is locked, and the team put a public 12-month timeline on finishing it, with pets first. Grabs stay hybrid too: every one still spins with Creature Coins, and gold is the pricier option. Full notes are in the Discord announcements.",
@@ -534,6 +610,82 @@
     }
   ],
   "site": [
+    {
+      "date": "August 13, 2026",
+      "title": "We'll cover your gas",
+      "body": "New to Immutable and short on IMX for network fees? If you hold a Creature, the gas is on us. Sign in, tap once, and a little IMX lands in your connected wallet in seconds, enough for dozens of trades, with nothing to sign or approve. Whatever you were in the middle of, buying, selling, or moving a Creature, picks right back up. One claim per holder.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "13 de ago. de 2026",
+          "title": "A gente cobre o seu gas",
+          "body": "Novo na Immutable e sem IMX para as taxas de rede? Se você tem uma Creature, o gas é por nossa conta. Entre, toque uma vez, e um pouco de IMX chega à sua carteira conectada em segundos, o suficiente para dezenas de trocas, sem nada para assinar ou aprovar. O que você estava fazendo, comprando, vendendo ou movendo uma Creature, continua de onde parou. Um resgate por holder."
+        },
+        "es": {
+          "date": "13 ago. 2026",
+          "title": "Nosotros cubrimos tu gas",
+          "body": "¿Nuevo en Immutable y sin IMX para las tarifas de red? Si tienes una Creature, el gas corre por nuestra cuenta. Inicia sesión, toca una vez, y un poco de IMX llega a tu wallet conectada en segundos, suficiente para docenas de intercambios, sin nada que firmar ni aprobar. Lo que estabas haciendo, comprar, vender o mover una Creature, sigue donde lo dejaste. Un reclamo por holder."
+        },
+        "fr": {
+          "date": "13 août 2026",
+          "title": "On couvre ton gas",
+          "body": "Nouveau sur Immutable et sans IMX pour les frais de réseau ? Si tu détiens une Creature, le gas est pour nous. Connecte-toi, appuie une fois, et un peu d'IMX arrive dans ton wallet connecté en quelques secondes, de quoi faire des dizaines d'échanges, sans rien à signer ni approuver. Ce que tu étais en train de faire, acheter, vendre ou déplacer une Creature, reprend là où tu t'étais arrêté. Une demande par holder."
+        },
+        "de": {
+          "date": "13. August 2026",
+          "title": "Wir übernehmen dein Gas",
+          "body": "Neu auf Immutable und kein IMX für die Netzwerkgebühren? Wenn du eine Creature hältst, geht das Gas auf uns. Melde dich an, tippe einmal, und ein bisschen IMX landet in Sekunden in deiner verbundenen Wallet, genug für Dutzende Trades, ohne etwas zu signieren oder freizugeben. Was du gerade gemacht hast, eine Creature kaufen, verkaufen oder bewegen, läuft genau da weiter. Ein Anspruch pro Holder."
+        },
+        "ru": {
+          "date": "13 августа 2026",
+          "title": "Мы оплатим ваш gas",
+          "body": "Впервые на Immutable и нет IMX на комиссии сети? Если у вас есть Creature, gas за наш счёт. Войдите, нажмите один раз, и немного IMX окажется в вашем подключённом кошельке за секунды, хватит на десятки сделок, ничего подписывать или одобрять не нужно. То, что вы делали, покупали, продавали или переводили Creature, продолжится с того же места. Один запрос на холдера."
+        },
+        "tr": {
+          "date": "13 Ağustos 2026",
+          "title": "Gas'ini biz karşılıyoruz",
+          "body": "Immutable'da yenisin ve ağ ücretleri için IMX'in mi yok? Bir Creature tutuyorsan gas bizden. Giriş yap, bir kez dokun, ve biraz IMX birkaç saniyede bağlı cüzdanına düşsün, düzinelerce takas için yeter, imzalanacak ya da onaylanacak hiçbir şey yok. Ne yapıyorduysan, bir Creature alma, satma ya da taşıma, kaldığın yerden devam eder. Holder başına bir talep."
+        }
+      }
+    },
+    {
+      "date": "August 5, 2026",
+      "title": "See what a Creature is made of",
+      "body": "Open any Creature in the Marketplace to see the full set of items it's made of, each part laid out with its own art. It's the per-Creature companion to the Creature Traits page.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "5 de ago. de 2026",
+          "title": "Veja do que uma Creature é feita",
+          "body": "Abra qualquer Creature no marketplace para ver o conjunto completo de itens que a compõem, cada parte exibida com sua própria arte. É o complemento, Creature por Creature, da página Creature Traits."
+        },
+        "es": {
+          "date": "5 ago. 2026",
+          "title": "Mira de qué está hecha una Creature",
+          "body": "Abre cualquier Creature en el marketplace para ver el conjunto completo de items que la componen, cada parte con su propia arte. Es el complemento, Creature por Creature, de la página Creature Traits."
+        },
+        "fr": {
+          "date": "5 août 2026",
+          "title": "Vois de quoi une Creature est faite",
+          "body": "Ouvre n'importe quelle Creature dans le marketplace pour voir l'ensemble complet des objets qui la composent, chaque pièce présentée avec sa propre illustration. C'est le complément, Creature par Creature, de la page Creature Traits."
+        },
+        "de": {
+          "date": "5. August 2026",
+          "title": "Sieh, woraus eine Creature besteht",
+          "body": "Öffne eine beliebige Creature im Marktplatz und sieh den vollständigen Satz Items, aus denen sie besteht, jedes Teil mit eigener Grafik. Es ist das Gegenstück pro Creature zur Creature-Traits-Seite."
+        },
+        "ru": {
+          "date": "5 августа 2026",
+          "title": "Посмотрите, из чего состоит Creature",
+          "body": "Откройте любую Creature в маркетплейсе, чтобы увидеть полный набор предметов, из которых она состоит, каждая часть со своим артом. Это дополнение к странице Creature Traits, но со стороны конкретной Creature."
+        },
+        "tr": {
+          "date": "5 Ağustos 2026",
+          "title": "Bir Creature'ın nelerden oluştuğunu gör",
+          "body": "Pazarda herhangi bir Creature'ı aç ve onu oluşturan eşyaların tamamını gör, her parça kendi görseliyle. Creature Traits sayfasının Creature başına tamamlayıcısı."
+        }
+      }
+    },
     {
       "date": "August 4, 2026",
       "title": "Creature Traits showcase",
