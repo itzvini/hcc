@@ -651,8 +651,9 @@ exactly zero IMX** and 65% below the 0.01 IMX threshold, so this is the common c
 edge case.
 
 Note the sizing: **0.01 IMX would not reliably cover one purchase** (a single heavy buy has
-been seen at 0.016 IMX). The default grant is 0.05 IMX, about $0.008, which is roughly 12
-buys or 80 transfers.
+been seen at 0.016 IMX). The default grant is 0.02 IMX, about $0.003, which is roughly 5
+buys or 30 transfers. That clears the worst buy we have measured, but only just, so this is
+the first number to raise if grants start running out mid-trade.
 
 ### How it works
 
@@ -679,7 +680,7 @@ The gates, in order:
    below. Nothing is signed or approved by the member.
 3. **That wallet must hold at least one Creature**, read live from the chain.
 4. **Must be below `GAS_FAUCET_TRIGGER_IMX`** (default 0.01), read live from the chain.
-   Grants top up *to* the target, so 0.009 IMX gets 0.041, not a flat 0.05.
+   Grants top up *to* the target, so 0.009 IMX gets 0.011, not a flat 0.02.
 5. **Sanctions screen** on the destination — see below.
 6. **Once per lifetime**, on all four of:
    - the Discord account (`gas_grants.discord_id`)
@@ -726,7 +727,7 @@ Operational rules:
 
 - Use a **dedicated wallet holding nothing but the float**. Never a wallet with Creatures,
   ETH, or any other asset in it.
-- Keep it small. 50 IMX (~$8) covers 1,000 grants. Top up by hand; don't automate refills.
+- Keep it small. 50 IMX (~$8) covers 2,500 grants. Top up by hand; don't automate refills.
 - `GAS_FAUCET_KEY` goes in Railway **Variables** only. It is never logged (the boot line
   prints the public address and the float, never the key).
 - The boot log reports the float on every deploy and flags it when low. Watch for
@@ -746,7 +747,7 @@ relaxes the fail-closed rule and is for local dev only.
 Ship the code first, leave it dark, then:
 
 1. **Get a compliance/legal sign-off.** This distributes a crypto asset from a Pocket
-   Worlds wallet to members worldwide. The amount ($0.008) doesn't change the analysis.
+   Worlds wallet to members worldwide. The amount ($0.003) doesn't change the analysis.
    Confirm the sanctions screen and the audit trail satisfy them, and ask whether any
    geo-restriction is wanted on top.
 2. **Pin `ETH_RPC_URL` to a provider you control.** The sanctions screen is only as
@@ -766,7 +767,7 @@ Ship the code first, leave it dark, then:
 | --- | --- | --- |
 | `GAS_FAUCET_ENABLED` | *(off)* | `1` to arm it. Without this, nothing pays out. |
 | `GAS_FAUCET_KEY` | — | Faucet wallet private key (32-byte hex). Railway Variables only. |
-| `GAS_FAUCET_TARGET_IMX` | `0.05` | Top up *to* this balance. |
+| `GAS_FAUCET_TARGET_IMX` | `0.02` | Top up *to* this balance. |
 | `GAS_FAUCET_TRIGGER_IMX` | `0.01` | Only help wallets below this. |
 | `GAS_FAUCET_RESERVE_IMX` | `2` | Never spend the float below this. |
 | `GAS_FAUCET_DAILY_CAP` | `200` | Site-wide payouts per 24h. |
