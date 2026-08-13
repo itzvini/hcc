@@ -997,9 +997,24 @@ async function fetchCashoutQuote() {
     st.quote = body;
     // The move is signed on zkEVM, where gas is native IMX — flag a short wallet now
     // instead of letting MetaMask fail the confirm with a cryptic alert.
+    // Re-read the gas balance instead of trusting the one taken when the modal opened.
+    // Between then and now they may have bridged, bought or been granted IMX — precisely
+    // what the panel below tells them to go and do — and a stale read would leave the
+    // panel up and the Move button dead after they had already fixed it.
+    const freshImx = await readNative(account).catch(() => null);
+    if (cashoutSeq !== seq || cashoutState !== st) return;
+    if (freshImx != null) st.imxWei = freshImx;
+
     const needImx = cashoutImxNeeded(body);
-    st.err = (needImx != null && st.imxWei != null && st.imxWei < needImx) ? 'gas' : null;
+    const gasShort = needImx != null && st.imxWei != null && st.imxWei < needImx;
+    st.err = gasShort ? 'gas' : null;
     patchCashoutMove();
+    // Saying "you haven't got enough IMX" and greying out the button is a dead end. Load the
+    // real ways out instead. `needImx` goes with it so the free-gas offer can hide itself:
+    // a bridge out needs more gas than a grant covers, and burning someone's one claim
+    // without unblocking them is worse than not offering.
+    if (gasShort) showGasHelp('cashout', queueCashoutQuote, needImx);
+    else if (gasState?.ctx === 'cashout') { gasState = null; patchCashoutMove(); }
   } catch {
     if (cashoutSeq !== seq || cashoutState !== st) return;
     st.quote = null; st.err = 'quote';
@@ -1036,7 +1051,9 @@ function cashoutQuoteAreaHtml() {
       <div class="trade-bridge-line">${esc(t('trade.cashout.move.quoteLine').replace('{y}', fmtEthFiat(q.toEth)))}</div>
       <div class="trade-bridge-meta">${esc(meta)}</div>
       ${gasShort ? `<div class="trade-status is-error"><span aria-hidden="true">⛽</span><span>${esc(t('trade.cashout.move.gasShort').replace('{x}', fmtImx(weiToEth(needImx))).replace('{y}', fmtImx(weiToEth(cashoutState?.imxWei ?? 0n))))}</span></div>` : ''}
-      <button class="trade-funds-btn" data-act="cashout-now" type="button" ${gasShort || busy ? 'disabled' : ''}>${esc(t('trade.cashout.move.btn'))}</button>
+      ${gasShort && gasState?.ctx === 'cashout'
+        ? gasHelpHtml()
+        : `<button class="trade-funds-btn" data-act="cashout-now" type="button" ${gasShort || busy ? 'disabled' : ''}>${esc(t('trade.cashout.move.btn'))}</button>`}
       ${isCashout(bridgeJob) ? bridgeStatusHtml() : ''}
     </div>`;
 }
@@ -2512,13 +2529,13 @@ function gasAssistHtml(g) {
   }
   if (g.assistPhase === 'error') {
     return `<div class="trade-gas-assist is-err" role="status">
-      <span class="trade-gas-assist-ic" aria-hidden="true">⚠</span><span>${esc(t(assistErrKey(g.assistErr)))}</span>
+      <span class="trade-gas-assist-ic" aria-hidden="true">⚠</span><span>${esc(assistErrText(g.assistErr, a.policy))}</span>
     </div>`;
   }
 
   // The offer, with the whole deal stated before the button. The rule is unusual enough
   // (once ever, and it spends the Creatures) that burying it would be a nasty surprise.
-  if (a.available) {
+  if (a.available && assistCovers(g, a)) {
     return `<div class="trade-gas-assist is-offer">
       <div class="trade-gas-assist-head">
         <span class="trade-gas-assist-ic" aria-hidden="true">⛽</span>
@@ -2550,11 +2567,24 @@ function gasAssistHtml(g) {
   if (GAS_USED_REASONS.has(a.reason) || a.reason === 'assets_used') {
     return `<div class="trade-gas-assist is-muted">
       <span class="trade-gas-assist-ic" aria-hidden="true">⛽</span>
-      <span>${esc(t(assistErrKey(a.reason)))}</span>
+      <span>${esc(assistErrText(a.reason, a.policy))}</span>
     </div>`;
   }
 
   return '';
+}
+
+// Would a grant actually unblock this action? A claim is once per member for good, so
+// spending it on something that leaves them still short is the worst possible outcome:
+// they'd have burned their one claim and still be stuck. When we know the real requirement
+// (cash-out, which needs a bridge-sized amount) and it's above what we top up to, the offer
+// stays hidden and the panel's bridge / card routes take over. Actions that need a rounding
+// error of gas pass needWei: null and are never affected.
+function assistCovers(g, a) {
+  if (g?.needWei == null) return true;
+  const target = Number(a?.policy?.targetImx);
+  if (!Number.isFinite(target)) return true;
+  return target >= Number(g.needWei) / 1e18;
 }
 
 // One claim per member, ever, checked against three identities. They all mean the same
@@ -2565,14 +2595,20 @@ const assistErrKey = reason =>
   : reason === 'assets_used' ? 'trade.gas.assist.err.assets'
   : reason === 'blocked' ? 'trade.gas.assist.err.blocked'
   : 'trade.gas.assist.err.generic';
+// The taint message names the window, so it needs the policy the message is describing.
+const assistErrText = (reason, policy) =>
+  t(assistErrKey(reason)).replace('{d}', String(policy?.taintDays ?? 30));
 
-// The terms, in three plain lines: where it goes, that it's one-off, and what it spends.
+// The terms, in three plain lines: where it goes, that it's one-off, and how long it puts
+// the Creatures out of action. The taint window comes from the server so the copy can't
+// drift from the rule it is describing.
 function gasAssistTermsHtml(a) {
   const n = Number(a.creatures) || 0;
+  const days = String(a.policy?.taintDays ?? 30);
   const rows = [
     ['→', t('trade.gas.assist.once.where').replace('{w}', shortWallet(a.wallet || ''))],
     ['1', t('trade.gas.assist.once.who')],
-    ['🔒', (n === 1 ? t('trade.gas.assist.once.nft1') : t('trade.gas.assist.once.nft')).replace('{n}', String(n))],
+    ['🔒', (n === 1 ? t('trade.gas.assist.once.nft1') : t('trade.gas.assist.once.nft')).replace('{n}', String(n)).replace('{d}', days)],
   ];
   return `<ul class="trade-gas-once">
     ${rows.map(([ic, line]) => `<li><span class="trade-gas-once-ic" aria-hidden="true">${esc(ic)}</span><span>${esc(line)}</span></li>`).join('')}
@@ -2768,8 +2804,11 @@ async function ensureGasQuote(g) {
 // `retry` is what the member was actually trying to do when they ran out of gas. Once the
 // IMX lands we run it for them: telling someone to "try again" immediately after we fixed
 // the only thing stopping them is a pointless extra click.
-async function showGasHelp(ctx, retry = null) {
-  gasState = { ctx, retry, imxBal: null, mainnetEthWei: null, mainnetImxWei: null, from: null, quote: 'loading', assist: 'checking', assistPhase: null };
+// `needWei` is how much gas this particular action actually needs, when we know it. Most
+// actions need a rounding error and leave it null; cash-out needs a real amount, and a free
+// grant that still leaves someone short is worse than not offering one (see assistCovers).
+async function showGasHelp(ctx, retry = null, needWei = null) {
+  gasState = { ctx, retry, needWei, imxBal: null, mainnetEthWei: null, mainnetImxWei: null, from: null, quote: 'loading', assist: 'checking', assistPhase: null };
   patchGas();
   const [imxBal, elsewhere, assist] = await Promise.all([
     readNative(account),
@@ -2790,7 +2829,7 @@ async function showGasHelp(ctx, retry = null) {
   // Any other outcome quotes the fallback immediately, as before.
   const canAssist = !!assist?.available;
   gasState = {
-    ctx, retry, imxBal, mainnetEthWei, mainnetImxWei, from, assist,
+    ctx, retry, needWei, imxBal, mainnetEthWei, mainnetImxWei, from, assist,
     assistPhase: null, assistErr: null, assistTx: null,
     quote: canAssist ? 'unfetched' : 'loading',
   };
@@ -2866,6 +2905,11 @@ function patchGas() {
   if (!gasState) return;
   if (gasState.ctx === 'buy')  return patchModal();
   if (gasState.ctx === 'sell') return patchSellStatus();
+  // Bidding and accepting a bid both render from two surfaces at once (the token modal and
+  // the browse/sell strip), so they repaint the same pair their own status lines do.
+  if (gasState.ctx === 'offer')   { patchModal(); patchCollStrip(); return; }
+  if (gasState.ctx === 'accept')  { patchModal(); patchSellView(); return; }
+  if (gasState.ctx === 'cashout') return patchCashoutMove();
   if (gasState.ctx === 'transfer') {
     // #trade-status is hidden until it carries an is-* state class; for the full panel we
     // drop that class so the slot shows as a plain block (handleTransferSubmit restores
@@ -3623,6 +3667,9 @@ function offerStatusHtml() {
   // Offer is short on zkEVM ETH — reuse the Buy flow's warm funds panel (balances +
   // one-tap bridge / card top-off), themed for the offer intent.
   if (offerState.phase === 'funds') return fundsHelpHtml(offerState);
+  // Backing the bid is one thing; paying for the approval that a first-time bid needs is
+  // another, and it's paid in IMX.
+  if (offerState.phase === 'gas')   return gasHelpHtml();
   if (offerState.phase === 'error') return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(offerState.msg)}</span></div>`;
   return `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t(STEP[offerState.phase]))}</span></div>`;
 }
@@ -3648,6 +3695,9 @@ function acceptStatusHtml() {
         </div>
       </div>`;
   }
+  // Selling into a bid is an on-chain fulfilment on zkEVM, so it always costs IMX — and a
+  // holder with an empty wallet being offered money is exactly who gets stuck here.
+  if (acceptState.phase === 'gas')   return gasHelpHtml();
   if (acceptState.phase === 'error') return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(acceptState.msg)}</span></div>`;
   return `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t(STEP[acceptState.phase]))}</span></div>`;
 }
@@ -4123,6 +4173,15 @@ async function handleMakeOffer(tokenId, priceRaw, ctx) {
     let signature = null;
     for (const action of (data.actions || [])) {
       if (action.type === 'TRANSACTION') {
+        // A first-time bid needs an ERC-20 approval, which is a real zkEVM write and costs
+        // native IMX. A repeat bid is signature-only and free, so the gate lives here rather
+        // than up front — checking earlier would block bidders who need no gas at all.
+        const imxBal = await readNative(account);
+        if (imxBal != null && imxBal < GAS_MIN_WEI) {
+          setOffer('gas');
+          showGasHelp('offer', () => handleMakeOffer(tokenId, priceRaw, ctx));
+          return;
+        }
         setOffer('approve');
         const hash = await eth().request({ method: 'eth_sendTransaction', params: [{ from: account, to: action.to, data: action.data, value: action.value && action.value !== '0x0' ? action.value : undefined }] });
         setOffer('approveWait');
@@ -4245,6 +4304,16 @@ async function handleAcceptOffer(offerId, tokenId) {
   const fillToken = tokenId ?? (offer?.collection ? sellSel : null);
   const amountToFill = offer && offer.units > 1 ? '1' : null;
   try {
+    // Accepting is always an on-chain fulfilment on zkEVM (plus approvals on a first sale),
+    // so it always costs native IMX. Check before the prepare round trip, not after: a
+    // holder with an empty wallet being offered money is the single most likely person to
+    // be stuck here, and the old path handed them a raw MetaMask failure.
+    const imxBal = await readNative(account);
+    if (imxBal != null && imxBal < GAS_MIN_WEI) {
+      setAccept('gas');
+      showGasHelp('accept', () => handleAcceptOffer(offerId, tokenId));
+      return;
+    }
     // Up to a couple of passes: the first prepare may return ERC-20 / NFT approvals that
     // must be MINED before the fulfilment can be built — accepting a bid pulls the routed
     // creator royalty from the seller's ERC-20, so a first-time seller has an approval
@@ -6265,6 +6334,16 @@ function imxAmountWarnHtml() {
   const coin = xferCoinDef();
   const max = xferImxMaxWei();
   const typed = String(xferImxAmount ?? '').trim();
+  // Sending IMX needs IMX for its own fee, so a wallet at or under the reserve has a Max of
+  // zero and no amount it can type. Without this the member gets a dead Send button and no
+  // reason for it — every OTHER coin routes to the gas panel, so this one says so too.
+  if (coin.native && max != null && max === 0n && xferBals[coin.key] != null) {
+    return `<div class="trade-status is-error">
+      <span aria-hidden="true">⛽</span>
+      <span>${esc(t('trade.xfer.imx.err.noGas'))}</span>
+      <button type="button" class="trade-flt-clearall" data-act="xfer-gas">${esc(t('trade.xfer.imx.err.noGas.btn'))}</button>
+    </div>`;
+  }
   if (!typed || max == null || !/^[\d.,]+$/.test(typed) || xferImxAmountWei() != null) return '';
   return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(t('trade.xfer.imx.err.over').replace('{x}', fmtCoinUnits(max, coin)))}</span></div>`;
 }
@@ -7290,6 +7369,8 @@ function onClick(e) {
     case 'gas-assist':     return handleGasAssist();
     case 'xfer-mode':      return setXferMode(target.dataset.mode);
     case 'xfer-coin':      return setXferCoin(target.dataset.coin);
+    // Sending IMX when you have none: same panel every other coin gets.
+    case 'xfer-gas':       return showGasHelp('transfer', retryForm('#trade-transfer-form', handleImxSend));
     case 'imx-max':        return imxMaxClick();
     case 'xfer-net-ack':
       xferNetAck = !xferNetAck;

@@ -669,7 +669,8 @@ wallet drainers imitate.
 
 **A claim is once per member, for good.** Not a cooldown, not a monthly allowance: one
 payment, then never again. That's what makes it safe to pay whichever wallet the member has
-connected instead of demanding a particular one.
+connected instead of demanding a particular one. The *Creatures* are only tainted for 30
+days, though — see below for why that one is deliberately not permanent.
 
 The gates, in order:
 
@@ -682,29 +683,32 @@ The gates, in order:
 4. **Must be below `GAS_FAUCET_TRIGGER_IMX`** (default 0.01), read live from the chain.
    Grants top up *to* the target, so 0.009 IMX gets 0.011, not a flat 0.02.
 5. **Sanctions screen** on the destination — see below.
-6. **Once per lifetime**, on all four of:
+6. **Once per lifetime**, on all three identities:
    - the Discord account (`gas_grants.discord_id`)
    - the Highrise account behind it (`gas_grants.highrise_id`)
    - the paid wallet (`gas_grants.wallet`)
-   - **every Creature in that wallet** at the moment of the claim (`gas_asset_locks`), so a
-     claim needs at least one Creature that has never been used for one
-7. **Site-wide daily cap** (`GAS_FAUCET_DAILY_CAP`, default 200) as a circuit breaker, and
+7. **Every Creature in that wallet is tainted for 30 days** (`gas_asset_locks.tainted_until`,
+   `GAS_FAUCET_TAINT_DAYS`), and a claim needs at least one Creature that isn't currently
+   tainted. Deliberately **not** permanent: a Creature outlives its owner's claim, so marking
+   it for life would hand whoever buys it next a dead claim they never made. 30 days makes
+   bag-splitting pointless without damaging the asset.
+8. **Site-wide daily cap** (`GAS_FAUCET_DAILY_CAP`, default 200) as a circuit breaker, and
    a **float reserve** so a misconfigured target can't drain the wallet.
 
 ### Why paying an arbitrary connected wallet is safe
 
 Because the claim is bound to the **asset**, not the wallet. Connecting a different wallet
-gains nothing: the Discord and Highrise accounts are already spent. Using a different
-Discord account gains nothing: the Creature is already spent, and the lock follows the
-token, so selling or moving it doesn't reset anything. To claim twice you would need a
-second Highrise account *and* a second Creature that has never been claimed on — at which
-point you are simply a second holder, which is who this is for.
+gains nothing: the Discord and Highrise accounts are already spent, for good. Using a
+different Discord account gains nothing inside the taint window: the taint follows the
+token, so shuffling Creatures between wallets doesn't reset it. To claim twice you would
+need a second Highrise account *and* a Creature that isn't tainted — at which point you are
+simply a second holder, which is who this is for.
 
 The member does choose the destination, since it's their connected wallet. That's their own
 one and only claim to spend, so there is nothing to steal from anyone else, and the address
 comes from the injected provider on our own page rather than a text field.
 
-All four checks and the insert run in one transaction under advisory locks on the account,
+All the checks and the insert run in one transaction under advisory locks on the account,
 the Highrise id and the wallet, so two tabs can't both pass the gate.
 
 A grant row is written *before* signing, and deleted again if the send fails, so a broken
@@ -712,7 +716,8 @@ RPC never burns someone's one and only claim. `gas_grants` is the permanent payo
 `gas.granted` / `gas.blocked` / `gas.send_failed` / `gas.faucet_empty` land in `audit_log`.
 
 The rule is stated in the UI before the button — where the IMX goes, that it's one-off, and
-that it marks the wallet's Creatures as used. Nobody should discover this after clicking.
+how long it puts the wallet's Creatures out of action. Nobody should discover this after
+clicking, and the day count is read from the server so the copy can't drift from the rule.
 
 ### The hot wallet
 
@@ -770,6 +775,7 @@ Ship the code first, leave it dark, then:
 | `GAS_FAUCET_TARGET_IMX` | `0.02` | Top up *to* this balance. |
 | `GAS_FAUCET_TRIGGER_IMX` | `0.01` | Only help wallets below this. |
 | `GAS_FAUCET_RESERVE_IMX` | `2` | Never spend the float below this. |
+| `GAS_FAUCET_TAINT_DAYS` | `30` | How long a claim blocks the Creatures it was made on. |
 | `GAS_FAUCET_DAILY_CAP` | `200` | Site-wide payouts per 24h. |
 | `SANCTIONS_DENYLIST` | *(empty)* | Extra addresses to refuse, comma-separated. |
 | `SANCTIONS_FAIL_OPEN` | *(off)* | Local dev only. Allows payment when screening is down. |
