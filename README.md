@@ -722,13 +722,16 @@ Ship the code first, leave it dark, then:
    Worlds wallet to members worldwide. The amount ($0.008) doesn't change the analysis.
    Confirm the sanctions screen and the audit trail satisfy them, and ask whether any
    geo-restriction is wanted on top.
-2. Generate a fresh key for a wallet that has never held anything else. Fund it with a
+2. **Pin `ETH_RPC_URL` to a provider you control.** The sanctions screen is only as
+   trustworthy as the node that answers it. The default is a public endpoint: it fails
+   closed if that's unreachable, but a compromised one could answer "not sanctioned".
+3. Generate a fresh key for a wallet that has never held anything else. Fund it with a
    small float.
-3. Set `GAS_FAUCET_KEY`, then `GAS_FAUCET_ENABLED=1`, and confirm the boot log reports
+4. Set `GAS_FAUCET_KEY`, then `GAS_FAUCET_ENABLED=1`, and confirm the boot log reports
    `LIVE` with the float you expect.
-4. Confirm the market analytics ignore self-trades before launch. Free gas makes
+5. Confirm the market analytics ignore self-trades before launch. Free gas makes
    wash-trading cheaper, and the site publishes floor and volume figures.
-5. Watch `gas_grants` for the first day.
+6. Watch `gas_grants` for the first day.
 
 ### Environment
 
