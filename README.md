@@ -629,6 +629,152 @@ The **Market** tab shows floor prices and weekly sale-price history for Creature
 All data is fetched server-side and cached for 30 minutes (`/api/market`), so no
 database is needed — history is recomputed from on-chain/marketplace sales each refresh.
 
+## Gas assist (we pay the member's gas)
+
+**Ships dark. It does nothing until `GAS_FAUCET_ENABLED=1` and a funded key are set, and it
+should not be switched on until the compliance sign-off below is done.**
+
+### The problem
+
+IMX is the native gas coin on Immutable zkEVM, so every action needs a little of it.
+Measured on our own contract in August 2026:
+
+| Action | Gas cost | USD at IMX ≈ $0.157 |
+| --- | --- | --- |
+| `safeTransferFrom` (send a Creature) | 0.0005 – 0.0007 IMX | ~$0.0001 |
+| `fulfillAvailableAdvancedOrders` (buy) | 0.004 IMX avg, 0.016 IMX worst seen | ~$0.0006 |
+
+A holder with an empty wallet can't sell, transfer or even gift their Creature, and getting
+IMX from scratch costs about $30 through a card on-ramp. Spending $30 to unlock $0.0006 of
+gas is the whole problem. A sample of the 600 largest holder wallets found **61% holding
+exactly zero IMX** and 65% below the 0.01 IMX threshold, so this is the common case, not an
+edge case.
+
+Note the sizing: **0.01 IMX would not reliably cover one purchase** (a single heavy buy has
+been seen at 0.016 IMX). The default grant is 0.05 IMX, about $0.008, which is roughly 12
+buys or 80 transfers.
+
+### How it works
+
+Just-in-time, not a faucet page. When a member hits Buy / Sell / Transfer with an empty
+wallet, the existing gas panel offers to cover it (`showGasHelp` in
+[js/marketplace.js](js/marketplace.js)); the bridge and card on-ramp stay as the fallback.
+There is no standalone "claim free crypto" page, and deliberately so: that shape is what
+wallet drainers imitate.
+
+- `GET /api/market/creatures/gas/assist` — may this member be covered right now.
+- `POST /api/market/creatures/gas/assist` — do it. Re-checks every gate against the chain
+  and the ledger; the GET is a UI hint, never an authorisation.
+
+The gates, in order:
+
+1. **Discord session required.** One Highrise account is the identity, not one wallet.
+2. **Paid only to the Highrise-linked wallet.** The `address` in the request is used to
+   detect "you have a different wallet connected" and is *never* the destination, so a
+   tampered body cannot redirect a payment. Nothing is signed or connected by the member.
+3. **Must hold at least one Creature**, read live from the chain.
+4. **Must be below `GAS_FAUCET_TRIGGER_IMX`** (default 0.01), read live from the chain.
+   Grants top up *to* the target, so 0.009 IMX gets 0.041, not a flat 0.05.
+5. **Sanctions screen** on the destination — see below.
+6. **Cooldowns**, all set together by one grant so splitting a bag buys nothing:
+   per Discord account, per wallet, and per Creature (every Creature the wallet holds at
+   that moment goes on cooldown). Default 30 days.
+7. **Site-wide daily cap** (`GAS_FAUCET_DAILY_CAP`, default 200) as a circuit breaker, and
+   a **float reserve** so a misconfigured target can't drain the wallet.
+
+A grant row is written *before* signing, and deleted again if the send fails, so a broken
+RPC never costs a member their cooldown. `gas_grants` is the permanent payout ledger;
+`gas.granted` / `gas.blocked` / `gas.send_failed` / `gas.faucet_empty` land in `audit_log`.
+
+### The hot wallet
+
+This is the **only** place in the codebase that holds a private key or signs a transaction.
+Everything else is non-custodial: the member's wallet signs and the server only reads. To
+keep that boundary sharp, [lib/zk-tx.js](lib/zk-tx.js) can only send native IMX to an
+address — `data` is hard-coded empty and there is no calldata parameter, so it cannot call a
+contract, grant an approval, or move a token. If something later needs those, give it its
+own reviewed module rather than widening this one.
+
+Operational rules:
+
+- Use a **dedicated wallet holding nothing but the float**. Never a wallet with Creatures,
+  ETH, or any other asset in it.
+- Keep it small. 50 IMX (~$8) covers 1,000 grants. Top up by hand; don't automate refills.
+- `GAS_FAUCET_KEY` goes in Railway **Variables** only. It is never logged (the boot line
+  prints the public address and the float, never the key).
+- The boot log reports the float on every deploy and flags it when low. Watch for
+  `[gas-faucet] float exhausted` in the logs.
+
+### Sanctions screening (required)
+
+[lib/sanctions.js](lib/sanctions.js) screens every destination against the OFAC SDN list via
+Chainalysis's free on-chain sanctions oracle, queried on Ethereum mainnet through
+`ETH_RPC_URL` (it isn't deployed on zkEVM; an address is the same address on both chains).
+No API key. It **fails closed** — a screen we can't complete refuses the payment.
+`SANCTIONS_DENYLIST` is a manual comma-separated block list on top. `SANCTIONS_FAIL_OPEN=1`
+relaxes the fail-closed rule and is for local dev only.
+
+### Before switching it on
+
+Ship the code first, leave it dark, then:
+
+1. **Get a compliance/legal sign-off.** This distributes a crypto asset from a Pocket
+   Worlds wallet to members worldwide. The amount ($0.008) doesn't change the analysis.
+   Confirm the sanctions screen and the audit trail satisfy them, and ask whether any
+   geo-restriction is wanted on top.
+2. Generate a fresh key for a wallet that has never held anything else. Fund it with a
+   small float.
+3. Set `GAS_FAUCET_KEY`, then `GAS_FAUCET_ENABLED=1`, and confirm the boot log reports
+   `LIVE` with the float you expect.
+4. Confirm the market analytics ignore self-trades before launch. Free gas makes
+   wash-trading cheaper, and the site publishes floor and volume figures.
+5. Watch `gas_grants` for the first day.
+
+### Environment
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `GAS_FAUCET_ENABLED` | *(off)* | `1` to arm it. Without this, nothing pays out. |
+| `GAS_FAUCET_KEY` | — | Faucet wallet private key (32-byte hex). Railway Variables only. |
+| `GAS_FAUCET_TARGET_IMX` | `0.05` | Top up *to* this balance. |
+| `GAS_FAUCET_TRIGGER_IMX` | `0.01` | Only help wallets below this. |
+| `GAS_FAUCET_RESERVE_IMX` | `2` | Never spend the float below this. |
+| `GAS_FAUCET_COOLDOWN_DAYS` | `30` | Per account, per wallet and per Creature. |
+| `GAS_FAUCET_DAILY_CAP` | `200` | Site-wide payouts per 24h. |
+| `SANCTIONS_DENYLIST` | *(empty)* | Extra addresses to refuse, comma-separated. |
+| `SANCTIONS_FAIL_OPEN` | *(off)* | Local dev only. Allows payment when screening is down. |
+
+### Testing locally
+
+`server.js` calls `process.loadEnvFile()` unconditionally, so running it from the repo root
+**always** loads `.env` — and the local `.env` points at the production database. To test
+against the in-memory store, run it from another directory with its own `.env`:
+
+```bash
+mkdir -p /tmp/hcc-test && cd /tmp/hcc-test
+cat > .env <<'EOF'
+DEV_LOGIN=1
+GAS_FAUCET_ENABLED=1
+GAS_FAUCET_KEY=<a throwaway key>
+PORT=3198
+EOF
+node /path/to/hcc-player-council/server.js     # logs "using in-memory store"
+```
+
+Then sign in as a holder that genuinely has a Creature and no gas, and hit the endpoints:
+
+```bash
+curl -c c.txt "localhost:3198/api/auth/dev-login?user=Test&creatures=1&wallet=0x<real holder>"
+curl -b c.txt "localhost:3198/api/market/creatures/gas/assist?address=0x<same wallet>"
+```
+
+An unfunded faucet key returns `faucet_empty` and consumes no cooldown, so the whole path
+is safe to exercise without moving real value.
+
+Credit: [Sam](https://www.communityhr.live/imxfaucet) (@Community on HR) built the first
+IMX faucet for HCC middlemen and suggested we run one too. Ours is a separate
+implementation on our own infrastructure; we don't link members to third-party faucets.
+
 ## Apply & Vote (the First Election)
 
 The **Council › Apply & Vote** sub-tab (`/council/vote` — the old `/apply` links

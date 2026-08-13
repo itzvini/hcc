@@ -4064,6 +4064,107 @@ button.trade-net:hover { box-shadow: 0 0 12px var(--hr-banana-25); }
   box-shadow: var(--hr-shadow-3), inset 0 1px 0 rgba(255,255,255,.06);
   animation: trade-flt-pop-in .18s cubic-bezier(.2,.7,.2,1) both;
 }
+/* The popover survives a filter repaint as a NEW node (the dropdown list is rebuilt on every
+   pick), which would replay the enter under the user's cursor. JS marks the rebuilt-but-
+   already-open one — see keepFacetPopStill in js/marketplace.js. */
+.trade-flt-pop.is-static { animation: none; }
+
+/* Transfer tab: Creatures | IMX switch, and the IMX amount card that replaces the picked-
+   Creatures strip. Reuses the amount row from the cash-out/Add-funds screens so all three
+   money inputs on the site look and behave identically. */
+/* Sized off the action tabs above it, not off the tiny market segs — this switch heads a
+   whole column, so it carries the same weight as `.trade-tabs`. `align-self` matters: the
+   side column is a flex column, so an inline-flex child still stretches edge to edge and
+   leaves two small buttons adrift in a 380px pill. Spacing is the parent's gap alone. */
+.trade-xfer-seg {
+  align-self: flex-start;
+  display: inline-flex; gap: 4px; padding: 4px; margin: 0;
+  border-radius: var(--hr-radius-pill);
+  background: rgba(0,0,0,.32); border: 1px solid var(--hr-line);
+}
+.trade-xfer-seg .seg-btn {
+  min-width: 108px; min-height: 38px;
+  padding: 10px 22px; font-size: 13.5px; font-weight: 800; letter-spacing: .01em;
+}
+.trade-xfer-seg .seg-btn.is-active {
+  font-weight: 900;
+  box-shadow: 0 0 18px var(--hr-primary-25), inset 0 1px 0 rgba(255,255,255,.25);
+}
+.trade-imx-card {
+  padding: 16px; border-radius: var(--hr-radius-lg);
+  background: linear-gradient(180deg, rgba(255,141,93,.10), rgba(0,0,0,.28));
+  border: 1px solid rgba(255,141,93,.30);
+}
+.trade-imx-card .trade-cashout-balline { margin-top: 10px; }
+.trade-imx-card .trade-funds-foot { margin-top: 8px; }
+.trade-imx-card .trade-status { margin-top: 10px; }
+.trade-imx-card.is-done {
+  display: flex; gap: 10px; align-items: center;
+  border-color: rgba(81,255,165,.45);
+  background: linear-gradient(180deg, rgba(81,255,165,.12), rgba(0,0,0,.3));
+}
+.trade-imx-card.is-done b { display: block; font-family: var(--hr-sans); font-weight: 800; font-size: 14px; color: var(--hr-fg-0); }
+.trade-imx-card.is-done span { font-size: 12.5px; color: var(--hr-fg-1); line-height: 1.5; }
+.trade-imx-ic {
+  flex: 0 0 auto; width: 26px; height: 26px; display: grid; place-items: center;
+  border-radius: 50%; font-size: 13px; font-weight: 900;
+  background: var(--hr-primary); color: var(--hr-on-primary);
+}
+.trade-imx-again { margin-left: auto; flex: 0 0 auto; font-size: 12px; padding: 7px 14px; }
+/* Which network this is on — stated on the card, not buried in a tooltip. Bridged ETH/USDC
+   on zkEVM are not the mainnet tokens, and an exchange deposit address will usually swallow
+   them without a trace, so the chain is named next to the amount the whole time. */
+.trade-coin-net {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 12px;
+  padding: 8px 12px; border-radius: var(--hr-radius-pill);
+  background: rgba(0,0,0,.34); border: 1px solid var(--hr-line);
+  font-family: var(--hr-sans); font-weight: 800; font-size: 11.5px;
+  letter-spacing: .03em; text-transform: uppercase; color: var(--hr-fg-2);
+}
+.trade-coin-net img { border-radius: 50%; flex: 0 0 auto; }
+.trade-coin-chips { display: flex; gap: 8px; margin: 0 0 14px; }
+.trade-coin-chip {
+  flex: 1 1 0; min-width: 0; cursor: pointer; padding: 9px 8px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  border-radius: var(--hr-radius-md); border: 1px solid var(--hr-line-strong);
+  background: rgba(0,0,0,.3); color: var(--hr-fg-2);
+  transition: transform .15s, border-color .15s, background-color .15s, color .15s;
+}
+.trade-coin-chip:hover { transform: translateY(-1px); border-color: rgba(81,255,165,.4); color: var(--hr-fg-0); }
+.trade-coin-chip.is-on { border-color: rgba(81,255,165,.6); background: var(--hr-primary-25); color: var(--hr-primary); }
+.trade-coin-sym { font-family: var(--hr-sans); font-weight: 900; font-size: 13px; }
+.trade-coin-bal { font-size: 11px; opacity: .8; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The network confirmation. Reads as a warning until it's ticked, then settles to mint. */
+.trade-net-ack {
+  display: flex; gap: 10px; align-items: flex-start; margin: 12px 0;
+  padding: 12px; cursor: pointer;
+  border-radius: var(--hr-radius-md);
+  border: 1px solid rgba(255,141,93,.45); background: rgba(255,141,93,.09);
+  font-size: 12px; color: var(--hr-fg-1); line-height: 1.5;
+  transition: border-color .15s, background-color .15s;
+}
+.trade-net-ack b { display: block; color: var(--hr-fg-0); font-family: var(--hr-sans); font-weight: 800; font-size: 12.5px; margin-bottom: 3px; }
+.trade-net-ack input { flex: 0 0 auto; margin-top: 2px; width: 17px; height: 17px; accent-color: var(--hr-primary); cursor: pointer; }
+.trade-net-ack.is-on { border-color: rgba(81,255,165,.45); background: rgba(81,255,165,.08); }
+@media (max-width: 640px) { .trade-coin-chips { flex-wrap: wrap; } .trade-coin-chip { flex: 1 1 30%; } }
+@media (prefers-reduced-motion: reduce) { .trade-coin-chip:hover { transform: none; } }
+
+.trade-imx-explain {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 16px; border-radius: var(--hr-radius-lg);
+  background: rgba(0,0,0,.28); border: 1px solid var(--hr-line);
+}
+.trade-imx-explain-ic {
+  flex: 0 0 auto; width: 34px; height: 34px; display: grid; place-items: center;
+  border-radius: 50%; font-size: 17px;
+  background: rgba(255,141,93,.16);
+}
+.trade-imx-explain b { font-family: var(--hr-sans); font-weight: 800; font-size: 14.5px; color: var(--hr-fg-0); }
+.trade-imx-explain p { margin: 4px 0 0; font-size: 13px; color: var(--hr-fg-1); line-height: 1.55; }
+@media (max-width: 640px) {
+  .trade-xfer-seg { align-self: stretch; display: flex; width: 100%; }
+  .trade-xfer-seg .seg-btn { flex: 1; min-width: 0; padding: 12px 10px; }
+}
 @keyframes trade-flt-pop-in { from { opacity: 0; transform: translateY(-5px) scale(.98); } to { opacity: 1; transform: none; } }
 .trade-flt-opt {
   display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px 10px;
@@ -4933,6 +5034,88 @@ a.trade-buy-btn { display: inline-flex; }
 }
 .trade-gas-slot { margin-top: 14px; }
 
+/* Gas assist — "we'll cover it". This is the good news in the panel, so it gets the mint
+   primary treatment rather than the amber fuel accent: a frosted card with a slow aurora
+   sweep, so the free-gas offer reads as the headline and the bridge/on-ramp fallbacks read
+   as the alternative. States: is-offer (the ask), is-busy (sending/landing), is-done
+   (success), is-err / is-muted (fall back to funding yourself). */
+.trade-gas-assist {
+  position: relative; overflow: hidden;
+  margin-top: 4px; padding: 14px;
+  border-radius: var(--hr-radius-md);
+  border: 1px solid rgba(81,255,165,.34);
+  background: linear-gradient(180deg, rgba(81,255,165,.12), rgba(0,0,0,.3));
+  backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 10px 26px rgba(0,0,0,.28);
+}
+.trade-gas-assist.is-offer::after {
+  content: ''; position: absolute; inset: -40% -10%;
+  background: radial-gradient(closest-side, rgba(81,255,165,.22), transparent 70%);
+  pointer-events: none; animation: gasAssistAurora 7s ease-in-out infinite;
+}
+@keyframes gasAssistAurora {
+  0%, 100% { transform: translate3d(-18%, -8%, 0) scale(1); opacity: .55; }
+  50%      { transform: translate3d(18%, 8%, 0) scale(1.12); opacity: .85; }
+}
+.trade-gas-assist-head { position: relative; display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px; }
+.trade-gas-assist-head div { display: flex; flex-direction: column; gap: 3px; }
+.trade-gas-assist b { font-family: var(--hr-sans); font-weight: 800; font-size: 14px; color: var(--hr-fg-0); }
+.trade-gas-assist span { font-size: 12.5px; color: var(--hr-fg-1); line-height: 1.5; }
+.trade-gas-assist code {
+  font-size: 11.5px; padding: 1px 6px; border-radius: 6px;
+  background: rgba(0,0,0,.35); border: 1px solid var(--hr-line); color: var(--hr-fg-1);
+}
+.trade-gas-assist-ic {
+  flex: 0 0 auto; width: 24px; height: 24px; display: grid; place-items: center;
+  border-radius: 50%; font-size: 12px; font-weight: 900;
+  background: rgba(81,255,165,.16); color: var(--hr-primary);
+}
+/* The one button that matters here — mint, not the amber bridge orange. */
+.trade-funds-btn.is-assist {
+  position: relative;
+  background: linear-gradient(135deg, #7CFFC0, var(--hr-primary));
+  color: var(--hr-on-primary);
+  box-shadow: 0 8px 22px rgba(81,255,165,.34);
+}
+.trade-funds-btn.is-assist:hover {
+  color: var(--hr-on-primary);
+  box-shadow: 0 12px 30px rgba(81,255,165,.5);
+}
+/* Shine sweep on the CTA, so it catches the eye without shouting. */
+.trade-funds-btn.is-assist::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,.45) 50%, transparent 65%);
+  transform: translateX(-120%);
+  animation: gasAssistShine 3.4s ease-in-out infinite;
+}
+@keyframes gasAssistShine {
+  0%, 62% { transform: translateX(-120%); }
+  100%    { transform: translateX(120%); }
+}
+.trade-gas-assist.is-busy,
+.trade-gas-assist.is-muted { display: flex; gap: 10px; align-items: center; border-color: var(--hr-line-strong); background: rgba(0,0,0,.3); }
+.trade-gas-assist.is-busy div,
+.trade-gas-assist.is-err div { display: flex; flex-direction: column; gap: 3px; }
+.trade-gas-assist.is-done {
+  display: flex; gap: 10px; align-items: center;
+  border-color: rgba(81,255,165,.5);
+}
+.trade-gas-assist.is-done .trade-gas-assist-ic { background: var(--hr-primary); color: var(--hr-on-primary); }
+.trade-gas-assist.is-err {
+  display: flex; gap: 10px; align-items: flex-start;
+  border-color: rgba(255,141,93,.4); background: rgba(255,141,93,.08);
+}
+.trade-gas-assist.is-err .trade-gas-assist-ic { background: rgba(255,141,93,.18); color: #FF8D5D; }
+.trade-gas-assist .apply-discord-btn { width: 100%; }
+@media (max-width: 480px) {
+  .trade-gas-assist { padding: 12px; }
+  .trade-gas-assist b { font-size: 13.5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trade-gas-assist.is-offer::after { animation: none; }
+  .trade-funds-btn.is-assist::after { animation: none; opacity: 0; }
+}
+
 /* Info tip (ⓘ): hover on desktop, tap (JS .is-open) on touch. Non-crucial detail
    lives here so the always-visible copy stays minimal. */
 .trade-tip { position: relative; display: inline-flex; vertical-align: middle; }
@@ -5163,6 +5346,26 @@ a.trade-buy-btn { display: inline-flex; }
 }
 .trade-cashout-max:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 0 12px rgba(81,255,165,.3); }
 .trade-cashout-max:disabled { opacity: .45; cursor: default; }
+
+/* Quick-pick amounts above the IMX gas box. Presets carry most of the traffic; the input
+   below is there for anyone who wants an exact figure. The pressed chip is mint to match
+   the input's focus ring, so the pair reads as one control. */
+.trade-gas-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
+.trade-gas-chip {
+  cursor: pointer; flex: 1 1 auto; min-width: 56px; padding: 9px 14px;
+  border-radius: var(--hr-radius-pill); border: 1px solid var(--hr-line-strong);
+  background: rgba(0,0,0,.32); color: var(--hr-fg-1);
+  font-family: var(--hr-sans); font-weight: 800; font-size: 14px;
+  transition: transform .15s, border-color .15s, background-color .15s, color .15s, box-shadow .15s;
+}
+.trade-gas-chip:hover { transform: translateY(-1px); border-color: rgba(81,255,165,.45); color: var(--hr-fg-0); }
+.trade-gas-chip.is-on {
+  border-color: rgba(81,255,165,.6); background: var(--hr-primary-25); color: var(--hr-primary);
+  box-shadow: 0 0 14px rgba(81,255,165,.22);
+}
+@media (prefers-reduced-motion: reduce) {
+  .trade-gas-chip:hover { transform: none; }
+}
 .trade-cashout-balline { margin: 7px 2px 12px; text-align: left; font-size: 12px; color: var(--hr-fg-2); }
 .trade-cashout-card .trade-bridge-quote { text-align: left; }
 .trade-cashout-card .trade-safety-actions { margin-top: 14px; }

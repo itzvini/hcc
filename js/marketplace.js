@@ -62,6 +62,7 @@ const SEL_BALANCE_OF    = '0x70a08231'; // balanceOf(address)
 const SEL_OWNER_OF      = '0x6352211e'; // ownerOf(uint256)
 const SEL_WETH_WITHDRAW = '0x2e1a7d4d'; // withdraw(uint256) — unwrap WETH → native ETH (1:1)
 const SEL_APPROVE       = '0x095ea7b3'; // approve(address,uint256) — ERC-20, for the cash-out router
+const SEL_ERC20_TRANSFER = '0xa9059cbb'; // transfer(address,uint256) — plain ERC-20 send
 const SEL_ALLOWANCE     = '0xdd62ed3e'; // allowance(address,address)
 const ZERO = '0x0000000000000000000000000000000000000000';
 const METAMASK_IMG = '/img/brands/metamask.svg';
@@ -99,6 +100,13 @@ const GAS_OK_WEI  = 5n * 10n ** 15n;   // ≥ 0.005 IMX → "you're set for gas"
 const GAS_TARGET_IMX = 5;              // one-tap top-up target, in IMX (tunable) — a lot of
                                        // runway (gas is fractions of a cent/tx) while still
                                        // clearing typical bridge minimums; deep-link covers the rest
+// Quick picks for the Add-funds gas step, alongside a free-text amount for anything else.
+// 5 stays the default (it's the one-tap target everywhere else) and the floor of the picks:
+// the bridge fee is roughly flat at ~$0.09, so a 1 IMX top-up would spend over half the
+// money on fees. Anyone with nothing at all is better served by the free gas assist, and
+// the box below still takes a smaller number for anyone who insists.
+const GAS_PRESETS_IMX = [5, 10, 25, 50];
+const GAS_MAX_IMX = 50;                // matches the server-side cap on /bridge/gas/quote
 // Fiat on-ramp ("top up with card") — for a wallet that holds nothing anywhere, so there's
 // nothing to bridge: they need to ACQUIRE crypto. The card path is a Transak deep-link built
 // server-side (/api/market/onramp) with the destination NETWORK pinned and the buy amount
@@ -357,6 +365,61 @@ let transferSel = null;    // derived single selection (transferSet.size === 1 ?
 let transferCheck = null;      // null | 'loading' | {addr, valid, reason?, checksum, contract, active, activityKnown, creatures}
 let transferAck = false;       // explicit confirmation for never-used addresses
 let transferCheckTimer = null;
+// The Transfer tab sends either Creatures or money. Same recipient box, same safety check,
+// same Send button — only WHAT moves differs. All three coins live on Immutable zkEVM, so
+// this mode is offered for Creatures only (LAND settles on Ethereum).
+//
+// DECIMALS ARE NOT ALL 18. Bridged USDC on zkEVM has 6, verified on-chain. Everything below
+// goes through parseUnits/formatUnits with the coin's own `dec` — never a bare 1e18, or a
+// "10 USDC" send becomes 10,000,000,000,000 USDC-worth of units (or reverts, if you're lucky).
+const XFER_COINS = {
+  imx:  { key: 'imx',  sym: 'IMX',  dec: 18, native: true,  token: null },
+  eth:  { key: 'eth',  sym: 'ETH',  dec: 18, native: false, token: IMX_ETH_TOKEN },
+  usdc: { key: 'usdc', sym: 'USDC', dec: 6,  native: false, token: IMX_USDC_TOKEN },
+};
+const XFER_COIN_ORDER = ['imx', 'eth', 'usdc'];
+
+let xferMode = 'items';        // 'items' | 'coin'
+let xferCoin = 'imx';          // which of XFER_COINS is being sent
+let xferImxAmount = '';        // the typed amount, as entered
+let xferBals = { imx: null, eth: null, usdc: null }; // wallet balances in each coin's own units
+let xferImxState = null;       // null | {phase:'send'|'wait'|'done'|'error', msg?, hash?, amount?, sym?}
+// Explicit, per-send confirmation that the user knows WHICH NETWORK this lands on.
+// This is the most expensive mistake available here: the ETH and USDC on Immutable zkEVM are
+// bridged tokens, NOT the mainnet originals, and IMX here is the native coin rather than the
+// Ethereum ERC-20. Exchange and broker deposit addresses almost always accept only Ethereum
+// mainnet, and anything sent to one over zkEVM is normally unrecoverable. So we say so in
+// plain words and make them tick it, fresh, every time the coin or the recipient changes.
+let xferNetAck = false;
+// A native IMX send pays its own gas, so Max has to hold some back — 21000 gas at ~11 gwei
+// is ~0.00023 IMX, and this leaves room for a spike plus enough not to strand the wallet at
+// zero. ERC-20 sends (ETH, USDC) burn IMX for gas instead, so their Max is the full balance.
+const IMX_SEND_RESERVE_WEI = 2n * 10n ** 15n; // 0.002 IMX
+
+const xferCoinDef = () => XFER_COINS[xferCoin] || XFER_COINS.imx;
+
+// Decimal string → base units for a token with `dec` decimals. Null when unparseable/zero.
+function parseUnits(text, dec) {
+  const v = String(text ?? '').trim().replace(',', '.');
+  const m = new RegExp(`^(\\d{1,12})(?:\\.(\\d{1,${dec}}))?$`).exec(v);
+  if (!m) return null;
+  const units = BigInt(m[1]) * 10n ** BigInt(dec) + BigInt((m[2] || '').padEnd(dec, '0'));
+  return units > 0n ? units : null;
+}
+// Base units → full-precision decimal string (no rounding — Max must send the exact balance).
+function formatUnits(units, dec) {
+  if (units == null) return '0';
+  const s = units.toString().padStart(dec + 1, '0');
+  const frac = dec ? s.slice(-dec).replace(/0+$/, '') : '';
+  const whole = dec ? s.slice(0, -dec) : s;
+  return frac ? `${whole}.${frac}` : whole;
+}
+// Display amount for a coin, e.g. "1.5 IMX" / "12.34 USDC".
+function fmtCoinUnits(units, coin) {
+  if (units == null) return '—';
+  const n = Number(formatUnits(units, coin.dec));
+  return `${n.toLocaleString(undefined, { maximumFractionDigits: coin.dec === 6 ? 2 : 4 })} ${coin.sym}`;
+}
 let sellState = null;      // {phase, msg?, hash?}: prepare|approve|approveWait|sign|create|done|error
 let cancelBusy = null;     // listingId currently being cancelled
 const SELL_BUSY_PHASES = new Set(['prepare', 'approve', 'approveWait', 'sign', 'create']);
@@ -453,10 +516,19 @@ function fmtFiat(eth) {
   const rate = currency === 'usd' ? 1 : fxRates[currency];
   if (rate == null) return '';
   const val = Number(eth) * ethUsd * rate;
+  // Whole units are right for prices, but they turn any sub-unit amount into "US$ 0",
+  // which reads as broken rather than cheap (a 1 IMX gas top-up is ~$0.16). So show cents
+  // below 1, and say "under a cent" rather than "0.00" for the truly tiny.
+  const abs = Math.abs(val);
+  const digits = abs > 0 && abs < 1 ? 2 : 0;
   try {
-    return `≈ ${new Intl.NumberFormat(undefined, { style: 'currency', currency: currency.toUpperCase(), maximumFractionDigits: 0 }).format(val)}`;
+    const money = (n, d) => new Intl.NumberFormat(undefined, { style: 'currency', currency: currency.toUpperCase(), maximumFractionDigits: d, minimumFractionDigits: d }).format(n);
+    // Format the threshold itself rather than patching the string: this locale writes
+    // "0,01", so a search-and-replace for "0.00" would silently miss.
+    if (abs > 0 && abs < 0.005) return `< ${money(val < 0 ? -0.01 : 0.01, 2)}`;
+    return `≈ ${money(val, digits)}`;
   } catch {
-    return `≈ ${Math.round(val).toLocaleString()} ${currency.toUpperCase()}`;
+    return `≈ ${(digits ? val.toFixed(2) : Math.round(val)).toLocaleString?.() ?? val.toFixed(digits)} ${currency.toUpperCase()}`;
   }
 }
 
@@ -688,6 +760,10 @@ function fmtEthFiat(eth) {
 }
 const weiToEth = wei => (wei == null ? null : Number(wei) / 1e18);
 
+// A bridge fee in whole cents. The server rounds to 2dp, so a 10-cent fee arrives as the
+// number 0.1 and String() would print "$0.1" — always show both digits.
+const fmtFeeUsd = n => Number(n).toFixed(2);
+
 // --- Wallet actions ---
 async function ensureNetwork() {
   try {
@@ -803,16 +879,18 @@ function openSafetyGuide() {
 //  • LAND: WETH on Ethereum — already the right network, but WETH ≠ ETH (many exchanges
 //    won't credit a WETH deposit). Safe path: unwrap to ETH first, then send.
 // An intent-first modal routes them to the right path for the active collection.
-function cashoutHtml() {
-  if (!cashoutOpen) return '';
-  const inner = cashoutStep === 'move' ? cashoutMoveInner()
+function cashoutInner() {
+  return cashoutStep === 'move' ? cashoutMoveInner()
     : cashoutStep === 'guide'
       ? (coll === 'land' ? cashoutLandGuideInner() : cashoutGuideInner())
       : cashoutIntentInner();
+}
+function cashoutHtml() {
+  if (!cashoutOpen) return '';
   return `
     <div class="trade-modal trade-cashout" role="dialog" aria-modal="true" aria-label="${esc(t('trade.cashout.aria'))}">
       <div class="trade-modal-backdrop" data-act="cashout-close"></div>
-      <div class="trade-safety-card trade-cashout-card">${inner}</div>
+      <div class="trade-safety-card trade-cashout-card">${cashoutInner()}</div>
     </div>`;
 }
 function cashoutIntentInner() {
@@ -876,7 +954,9 @@ async function openCashoutMove() {
   cashoutStep = 'move';
   cashoutState = { phase: 'load', balWei: null, imxWei: null, amount: '', quote: null, err: null };
   patchCashout();
-  try { if (!onZk()) await ensureNetwork(); } catch { /* reads below fail soft to em-dashes */ }
+  // switchToChain, not ensureNetwork: it flags the chainChanged echo as ours, so the
+  // handler doesn't full-render and tear this modal down while it's loading.
+  try { if (!onZk()) await switchToChain(ZK_CHAIN_ID_HEX); } catch { /* reads below fail soft to em-dashes */ }
   const st = cashoutState;
   const [balWei, imxWei] = await Promise.all([readErc20(IMX_ETH_TOKEN, account), readNative(account)]);
   if (cashoutState !== st || cashoutStep !== 'move') return; // closed / navigated away
@@ -944,7 +1024,7 @@ function cashoutQuoteAreaHtml() {
   // zkEVM) direction. A real cash-out executed in 72s while the quote claimed ~23 min —
   // an ETA that wrong reads as "something's broken" to a nervous seller.
   const meta = [
-    q.feeUsd != null ? t('trade.bridge.quote.fees').replace('{f}', String(q.feeUsd)) : null,
+    q.feeUsd != null ? t('trade.bridge.quote.fees').replace('{f}', fmtFeeUsd(q.feeUsd)) : null,
     t('trade.cashout.move.mins'),
     t('trade.bridge.quote.by'),
   ].filter(Boolean).join(' · ');
@@ -1036,7 +1116,7 @@ async function runCashout() {
     bridgeJob = { phase: 'switch', dir: 'out', kind: 'cashout', account, mins: null, startedAt: Date.now(), fromSym: 'ETH', toSym: 'ETH', fromEth: q.fromEth, toEth: q.toEth };
     patchCashout();
     patchBridgeBanner();
-    await ensureNetwork(); // the SOURCE chain this time — Immutable zkEVM (usually a no-op)
+    await switchToChain(ZK_CHAIN_ID_HEX); // the SOURCE chain this time — Immutable zkEVM (usually a no-op)
     // The router pulls the ETH ERC-20 from the wallet, so it needs an allowance — exactly
     // the quoted amount, no open-ended approvals.
     const fromWei = BigInt(q.fromWei);
@@ -1089,9 +1169,14 @@ function cashoutLandGuideInner() {
 function syncTradeModalClass() {
   document.body.classList.toggle('trade-modal-open', cashoutOpen || topupOpen || !!modalToken || !!pendingAccept);
 }
+// Contents only — see patchTopup for why replacing the card node is the bug.
 function patchCashout() {
-  const slot = root()?.querySelector('#trade-cashout-slot');
-  if (slot) slot.innerHTML = cashoutHtml();
+  const card = cashoutOpen ? root()?.querySelector('#trade-cashout-slot .trade-cashout-card') : null;
+  if (card) card.innerHTML = cashoutInner();
+  else {
+    const slot = root()?.querySelector('#trade-cashout-slot');
+    if (slot) slot.innerHTML = cashoutHtml();
+  }
   syncTradeModalClass();
 }
 
@@ -1104,18 +1189,29 @@ function patchCashout() {
 // the existing exact-output gas quote + one-tap machinery).
 const TOPUP_RESERVE_WEI = BigInt(Math.round(BRIDGE_GAS_RESERVE_ETH * 1e6)) * 10n ** 12n;
 
+function topupInner() {
+  return topupStep === 'eth' ? topupEthInner() : topupStep === 'gas' ? topupGasInner() : topupIntentInner();
+}
 function topupHtml() {
   if (!topupOpen) return '';
-  const inner = topupStep === 'eth' ? topupEthInner() : topupStep === 'gas' ? topupGasInner() : topupIntentInner();
   return `
     <div class="trade-modal trade-cashout" role="dialog" aria-modal="true" aria-label="${esc(t('trade.topup.aria'))}">
       <div class="trade-modal-backdrop" data-act="topup-close"></div>
-      <div class="trade-safety-card trade-cashout-card">${inner}</div>
+      <div class="trade-safety-card trade-cashout-card">${topupInner()}</div>
     </div>`;
 }
+// Swap the card's CONTENTS, never the card itself. `.trade-safety-card` carries the
+// `apply-rise` entrance animation, so replacing that node replays the 0.45s rise — and this
+// runs on every balance refresh, step change and quote result, which is what made the panel
+// look like it kept re-opening on its own. Falls back to writing the whole slot when the
+// shell isn't up yet (first open) or when closing.
 function patchTopup() {
-  const slot = root()?.querySelector('#trade-topup-slot');
-  if (slot) slot.innerHTML = topupHtml();
+  const card = topupOpen ? root()?.querySelector('#trade-topup-slot .trade-cashout-card') : null;
+  if (card) card.innerHTML = topupInner();
+  else {
+    const slot = root()?.querySelector('#trade-topup-slot');
+    if (slot) slot.innerHTML = topupHtml();
+  }
   syncTradeModalClass();
 }
 // Patch only the quote area + balance line — the amount input keeps focus while typing.
@@ -1124,6 +1220,11 @@ function patchTopupMove() {
   if (slot) slot.innerHTML = topupQuoteAreaHtml();
   const bal = root()?.querySelector('#trade-topup-balline');
   if (bal) bal.innerHTML = topupBalLineHtml();
+}
+// Same idea for the gas step's amount box.
+function patchTopupGas() {
+  const slot = root()?.querySelector('#trade-topup-gasqslot');
+  if (slot) slot.innerHTML = topupGasQuoteAreaHtml();
 }
 
 // Balances on BOTH chains: mainnet via the server (the wallet sits on zkEVM and can't
@@ -1212,7 +1313,7 @@ function topupQuoteAreaHtml() {
   if (!q) return '';
   const mins = q.durationSeconds ? Math.max(1, Math.ceil(q.durationSeconds / 60)) : null;
   const meta = [
-    q.feeUsd != null ? t('trade.bridge.quote.fees').replace('{f}', String(q.feeUsd)) : null,
+    q.feeUsd != null ? t('trade.bridge.quote.fees').replace('{f}', fmtFeeUsd(q.feeUsd)) : null,
     mins != null ? t('trade.bridge.quote.mins').replace('{m}', String(mins)) : null,
     t('trade.bridge.quote.by'),
   ].filter(Boolean).join(' · ');
@@ -1332,34 +1433,108 @@ async function runTopupEth() {
   return runBridge(q, { kind: 'eth', needWei });
 }
 
-// IMX gas option: reuses the exact-output gas quote (~5 IMX target) and one-tap flow the
-// Buy/Sell/Transfer panels already use — just reachable before anything fails for gas.
+// IMX gas option: an exact-OUTPUT quote ("bring me this much IMX"), so the member picks the
+// amount they want to land on zkEVM and we work backwards to what they send. Reuses the
+// one-tap flow the Buy/Sell/Transfer panels already use, just reachable before anything
+// fails for gas.
 async function openTopupGas() {
   const st = topupState;
   if (!st || st.phase !== 'ready') return;
   topupStep = 'gas';
   st.err = null;
+  st.gasErr = null;
+  if (!st.gasAmount) st.gasAmount = String(GAS_TARGET_IMX); // default, editable
   st.gasFrom = st.mainnetImxWei != null && st.mainnetImxWei > 0n ? 'imx'
     : st.mainnetEthWei != null && st.mainnetEthWei > TOPUP_RESERVE_WEI ? 'eth' : null;
   if (!st.gasFrom) { st.gasQuote = null; patchTopup(); return; }
-  st.gasQuote = 'loading';
   patchTopup();
+  fetchTopupGasQuote();
+}
+
+// The requested IMX as wei, or null when the box doesn't hold a usable number.
+function topupGasAmountWei() {
+  const v = String(topupState?.gasAmount ?? '').trim().replace(',', '.');
+  const m = /^(\d{1,6})(?:\.(\d{1,18}))?$/.exec(v);
+  if (!m) return null;
+  const wei = BigInt(m[1]) * 10n ** 18n + BigInt((m[2] || '').padEnd(18, '0'));
+  return wei > 0n ? wei : null;
+}
+
+// A touch slower than the ETH step's 500ms on purpose: this is an exact-OUTPUT quote, so
+// Squid may need up to three sequential calls to converge on one answer. Typing "12.5"
+// would otherwise spend nine calls against a rate limit shared by every user on the site.
+function queueTopupGasQuote(ms = 800) {
+  clearTimeout(topupQuoteTimer);
+  topupQuoteTimer = setTimeout(() => fetchTopupGasQuote(), ms);
+}
+
+// Quote the chosen amount, then check they can actually afford to send it. Without that
+// last step a member could ask for 25 IMX holding a dollar of ETH, get a clean-looking
+// quote, and only find out when MetaMask failed the transaction cryptically.
+async function fetchTopupGasQuote({ retried = false } = {}) {
+  const st = topupState;
+  if (!st || topupStep !== 'gas' || !st.gasFrom) return;
   const seq = ++topupSeq;
+  const wei = topupGasAmountWei();
+  if (wei == null) {
+    st.gasQuote = null;
+    st.gasErr = String(st.gasAmount ?? '').trim() ? 'amount' : null;
+    return patchTopupGas();
+  }
+  if (wei > BigInt(GAS_MAX_IMX) * 10n ** 18n) {
+    st.gasQuote = null; st.gasErr = 'over';
+    return patchTopupGas();
+  }
+  st.gasQuote = 'loading'; st.gasErr = null;
+  patchTopupGas();
   try {
     const res = await fetch('/api/market/creatures/bridge/gas/quote', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address: account, needImx: String(GAS_TARGET_IMX), from: st.gasFrom }),
+      body: JSON.stringify({ address: account, needImx: weiToEthStr(wei), from: st.gasFrom }),
       signal: AbortSignal.timeout(30000),
     });
-    const body = res.ok ? await res.json().catch(() => null) : null;
-    if (topupSeq !== seq || topupState !== st || topupStep !== 'gas') return;
-    st.gasQuote = body && body.tx ? body : null;
-    patchTopup();
+    const body = await res.json().catch(() => null);
+    if (topupSeq !== seq || topupState !== st || topupStep !== 'gas') return; // superseded
+    if (!res.ok || !body?.tx) {
+      // Squid's rate limit is per integrator id and therefore shared across all our
+      // users, so a 429 usually means "someone else just quoted", not "this won't work".
+      // The server already backs off internally; give it one more window here rather than
+      // showing a dead end. Same treatment showGasHelp gives its own quote.
+      if (body?.error === 'rate_limited' && !retried) {
+        await new Promise(r => setTimeout(r, 1500));
+        if (topupSeq !== seq || topupState !== st || topupStep !== 'gas') return;
+        return fetchTopupGasQuote({ retried: true });
+      }
+      st.gasQuote = null;
+      st.gasErr = body?.error === 'not_configured' ? 'fallback'
+        : body?.error === 'no_route' ? 'small'
+        : body?.error === 'rate_limited' ? 'rate' : 'quote';
+      return patchTopupGas();
+    }
+    st.gasQuote = body;
+    st.gasErr = gasAffordability(st, body);
+    patchTopupGas();
   } catch {
     if (topupSeq !== seq || topupState !== st) return;
-    st.gasQuote = null;
-    patchTopup();
+    st.gasQuote = null; st.gasErr = 'quote';
+    patchTopupGas();
   }
+}
+
+// Can this wallet cover the move it's about to sign? Returns an error key or null.
+// Sending mainnet ETH: the wallet pays tx.value plus that transaction's own L1 gas.
+// Sending mainnet IMX (an ERC-20): it needs the IMX itself, and still some ETH for gas.
+function gasAffordability(st, q) {
+  try {
+    if (st.gasFrom === 'eth') {
+      const need = BigInt(q.tx.value || '0x0') + TOPUP_RESERVE_WEI;
+      return st.mainnetEthWei != null && st.mainnetEthWei < need ? 'fees' : null;
+    }
+    const fromWei = BigInt(Math.round((Number(q.fromEth) || 0) * 1e6)) * 10n ** 12n;
+    if (st.mainnetImxWei != null && fromWei > 0n && st.mainnetImxWei < fromWei) return 'overImx';
+    if (st.mainnetEthWei != null && st.mainnetEthWei < TOPUP_RESERVE_WEI) return 'fees';
+    return null;
+  } catch { return null; }
 }
 function topupGasInner() {
   if (isGasBridge(bridgeJob) && CARD_PHASES.has(bridgeJob.phase)) {
@@ -1369,55 +1544,114 @@ function topupGasInner() {
       <p class="trade-safety-foot">${esc(t('trade.topup.foot'))}</p>`;
   }
   const st = topupState || {};
-  const g = st.gasQuote;
   const gasOk = st.imxWei != null && st.imxWei >= GAS_OK_WEI;
   const balLine = st.phase === 'load'
     ? `<span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.cashout.move.balLoading'))}`
     : esc(t(gasOk ? 'trade.topup.gas.balOk' : 'trade.topup.gas.bal').replace('{x}', fmtImx(weiToEth(st.imxWei ?? 0n))));
-  let area;
-  if (g === 'loading') {
-    area = `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.bridge.quote.loading'))}</div>`;
-  } else if (g && g.tx) {
-    const mins = g.durationSeconds ? Math.max(1, Math.ceil(g.durationSeconds / 60)) : null;
-    const meta = [
-      g.feeUsd != null ? t('trade.bridge.quote.fees').replace('{f}', String(g.feeUsd)) : null,
-      mins != null ? t('trade.bridge.quote.mins').replace('{m}', String(mins)) : null,
-      t('trade.bridge.quote.by'),
-    ].filter(Boolean).join(' · ');
-    const fromTxt = st.gasFrom === 'imx' ? fmtImx(g.fromEth) : fmtEthFiat(g.fromEth);
-    const busy = bridgeJob && !BRIDGE_TERMINAL.has(bridgeJob.phase);
-    area = `
-      <div class="trade-bridge-quote">
-        <div class="trade-bridge-line">${esc(t('trade.gas.bridge.line').replace('{x}', fromTxt).replace('{y}', fmtImx(g.toEth)))}</div>
-        <div class="trade-bridge-meta">${esc(meta)}</div>
-        <button class="trade-funds-btn" data-act="topup-gas-now" type="button" ${busy ? 'disabled' : ''}>${esc(t('trade.gas.bridge.now'))}</button>
-        ${isGasBridge(bridgeJob) ? bridgeStatusHtml() : ''}
-      </div>`;
-  } else if (!st.gasFrom && st.phase === 'ready') {
-    // Nothing on Ethereum to bridge or swap — the card on-ramp delivers IMX straight
-    // to Immutable zkEVM.
-    area = `
+
+  // Nothing on Ethereum to bridge or swap — no amount to pick, so skip straight to the
+  // card on-ramp, which delivers IMX to Immutable zkEVM directly.
+  if (!st.gasFrom && st.phase === 'ready') {
+    return `
+      <span class="apply-pill">${esc(t('trade.topup.badge'))}</span>
+      <h3 class="trade-safety-h">${esc(t('trade.topup.gas.h'))}</h3>
+      <p class="trade-safety-p">${esc(t('trade.topup.gas.p'))}</p>
+      <p class="trade-cashout-balline">${balLine}</p>
       <p class="trade-cashout-balline">${esc(t('trade.topup.gas.none'))}</p>
-      <button class="trade-funds-btn" data-act="onramp" data-chain="zkevm" data-token="IMX" type="button">${esc(t('trade.onramp.btn'))} ↗</button>`;
-  } else {
-    // Quote failed / not configured — the matching manual deep-link.
-    area = `<a class="trade-funds-btn" href="${st.gasFrom === 'imx' ? GAS_BRIDGE_URL_IMX : GAS_BRIDGE_URL}" target="_blank" rel="noopener">${esc(t('trade.gas.getBtn'))} ↗</a>`;
+      <button class="trade-funds-btn" data-act="onramp" data-chain="zkevm" data-token="IMX" type="button">${esc(t('trade.onramp.btn'))} ↗</button>
+      <div class="trade-safety-actions">
+        <button class="apply-btn-ghost" data-act="topup-back" type="button">${esc(t('trade.cashout.back'))}</button>
+      </div>
+      <p class="trade-safety-foot">${esc(t('trade.topup.foot'))}</p>`;
   }
+
+  const current = String(st.gasAmount ?? '').trim();
+  const chips = GAS_PRESETS_IMX.map(n => `
+    <button class="trade-gas-chip${current === String(n) ? ' is-on' : ''}" data-act="topup-gas-preset" data-imx="${n}"
+      type="button" aria-pressed="${current === String(n)}">${esc(n.toLocaleString())}</button>`).join('');
+
   return `
     <span class="apply-pill">${esc(t('trade.topup.badge'))}</span>
     <h3 class="trade-safety-h">${esc(t('trade.topup.gas.h'))}</h3>
     <p class="trade-safety-p">${esc(t('trade.topup.gas.p'))}</p>
     <p class="trade-cashout-balline">${balLine}</p>
-    ${area}
+    <label class="trade-cashout-amtlbl" for="trade-topup-gas-amt">${esc(t('trade.topup.gas.amount'))}</label>
+    <div class="trade-gas-chips" role="group" aria-label="${esc(t('trade.topup.gas.presets'))}">${chips}</div>
+    <div class="trade-cashout-amtrow">
+      <input id="trade-topup-gas-amt" class="trade-cashout-amt" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"
+        value="${esc(current)}" placeholder="${GAS_TARGET_IMX}" ${st.phase === 'load' ? 'disabled' : ''}>
+      <span class="trade-cashout-unit" aria-hidden="true">IMX</span>
+    </div>
+    <div id="trade-topup-gasqslot">${topupGasQuoteAreaHtml()}</div>
     <div class="trade-safety-actions">
       <button class="apply-btn-ghost" data-act="topup-back" type="button">${esc(t('trade.cashout.back'))}</button>
     </div>
     <p class="trade-safety-foot">${esc(t('trade.topup.foot'))}</p>`;
 }
+
+// The quote + CTA for the gas step. Split out of topupGasInner so a keystroke repaints
+// only this, leaving the amount input (and its caret) alone.
+function topupGasQuoteAreaHtml() {
+  const st = topupState || {};
+  const g = st.gasQuote;
+  if (st.gasErr === 'fallback') {
+    return `<a class="trade-funds-btn" href="${st.gasFrom === 'imx' ? GAS_BRIDGE_URL_IMX : GAS_BRIDGE_URL}" target="_blank" rel="noopener">${esc(t('trade.gas.getBtn'))} ↗</a>`;
+  }
+  // Errors that mean "there's no quote to show".
+  const HARD = {
+    amount: 'trade.cashout.move.err.amount',
+    over: 'trade.topup.gas.err.over',
+    small: 'trade.cashout.move.err.small',
+    rate: 'trade.err.rate',
+    quote: 'trade.cashout.move.err.quote',
+  };
+  if (st.gasErr && HARD[st.gasErr]) {
+    const msg = t(HARD[st.gasErr]).replace('{x}', fmtImx(GAS_MAX_IMX));
+    return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(msg)}</span></div>`;
+  }
+  if (g === 'loading') return `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.bridge.quote.loading'))}</div>`;
+  if (!g || !g.tx) return '';
+
+  const mins = g.durationSeconds ? Math.max(1, Math.ceil(g.durationSeconds / 60)) : null;
+  const meta = [
+    g.feeUsd != null ? t('trade.bridge.quote.fees').replace('{f}', fmtFeeUsd(g.feeUsd)) : null,
+    mins != null ? t('trade.bridge.quote.mins').replace('{m}', String(mins)) : null,
+    t('trade.bridge.quote.by'),
+  ].filter(Boolean).join(' · ');
+  const fromTxt = st.gasFrom === 'imx' ? fmtImx(g.fromEth) : fmtEthFiat(g.fromEth);
+  // Soft errors: the quote is real, they just can't afford to sign it. Show both.
+  const short = st.gasErr === 'fees' ? 'trade.topup.gas.err.fees'
+    : st.gasErr === 'overImx' ? 'trade.topup.gas.err.overImx' : null;
+  const busy = bridgeJob && !BRIDGE_TERMINAL.has(bridgeJob.phase);
+  return `
+    <div class="trade-bridge-quote">
+      <div class="trade-bridge-line">${esc(t('trade.gas.bridge.line').replace('{x}', fromTxt).replace('{y}', fmtImx(g.toEth)))}</div>
+      <div class="trade-bridge-meta">${esc(meta)}</div>
+      ${short ? `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(t(short).replace('{x}', fmtImx(weiToEth(st.mainnetImxWei ?? 0n))))}</span></div>` : ''}
+      <button class="trade-funds-btn" data-act="topup-gas-now" type="button" ${short || busy ? 'disabled' : ''}>${esc(t('trade.gas.bridge.now'))}</button>
+      ${isGasBridge(bridgeJob) ? bridgeStatusHtml() : ''}
+    </div>`;
+}
+
+// Pick a preset: fill the box, mark the chip, re-quote at once (no debounce — a click is
+// a finished decision, unlike a half-typed number).
+function topupGasPreset(imx) {
+  const st = topupState;
+  if (!st || !imx) return;
+  st.gasAmount = String(imx);
+  clearTimeout(topupQuoteTimer);
+  patchTopup(); // full repaint so the chip's pressed state moves
+  fetchTopupGasQuote();
+}
+
 function runTopupGas() {
   const st = topupState;
   if (!st?.gasQuote || st.gasQuote === 'loading') return;
-  const needWei = BigInt(Math.round(GAS_TARGET_IMX * 1e6)) * 10n ** 12n;
+  if (st.gasErr) return; // can't afford the move — the button is disabled, belt and braces
+  // Arrival target for the tracker: what they asked for, or the quote's own figure if the
+  // box somehow no longer parses.
+  const asked = topupGasAmountWei();
+  const needWei = asked ?? BigInt(Math.round((Number(st.gasQuote.toEth) || GAS_TARGET_IMX) * 1e6)) * 10n ** 12n;
   return runBridge(st.gasQuote, { kind: 'gas', needWei, fromSym: st.gasFrom === 'imx' ? 'IMX' : 'ETH', toSym: 'IMX' });
 }
 
@@ -2078,7 +2312,7 @@ function fundsHelpHtml(f = buyState) {
       const q = f.quote;
       const mins = q.durationSeconds ? Math.max(1, Math.ceil(q.durationSeconds / 60)) : null;
       const meta = [
-        q.feeUsd != null ? t('trade.bridge.quote.fees').replace('{f}', String(q.feeUsd)) : null,
+        q.feeUsd != null ? t('trade.bridge.quote.fees').replace('{f}', fmtFeeUsd(q.feeUsd)) : null,
         mins != null ? t('trade.bridge.quote.mins').replace('{m}', String(mins)) : null,
         t('trade.bridge.quote.by'),
       ].filter(Boolean).join(' · ');
@@ -2239,6 +2473,97 @@ function gasBridgeStatusHtml() {
 // The panel itself. Mirrors fundsHelpHtml's bridge branch but for native IMX. Source is
 // chosen in showGasHelp: 'imx' bridges the mainnet IMX the user already holds (cheapest),
 // 'eth' swaps a little mainnet ETH, null → no one-tap (prefilled Squid deep-link).
+// Does the assist card stand alone? While we're offering to cover the gas, or actually
+// covering it, the bridge/on-ramp options are noise — the member needs one button. They
+// come back if the assist errors out.
+function gasAssistExclusive(g) {
+  if (!g) return false;
+  if (g.assistPhase && g.assistPhase !== 'error') return true;
+  return !g.assistPhase && g.assist && g.assist.available === true;
+}
+
+// The "we'll cover it" card. Returns '' when there's nothing to say (not signed in with a
+// wallet, already funded, on cooldown) — the normal funding options carry those cases.
+function gasAssistHtml(g) {
+  if (!g || g.assist === 'checking') return '';
+  const a = g.assist || {};
+
+  // In flight, or finished.
+  if (g.assistPhase === 'sending' || g.assistPhase === 'landing') {
+    const key = g.assistPhase === 'sending' ? 'trade.gas.assist.sending' : 'trade.gas.assist.landing';
+    return `<div class="trade-gas-assist is-busy" role="status">
+      <span class="trade-mini-spin" aria-hidden="true"></span>
+      <span>${esc(t(key))}</span>
+    </div>`;
+  }
+  if (g.assistPhase === 'done') {
+    return `<div class="trade-gas-assist is-done" role="status">
+      <span class="trade-gas-assist-ic" aria-hidden="true">✓</span>
+      <div><b>${esc(t('trade.gas.assist.done.h'))}</b><span>${esc(t('trade.gas.assist.done.p'))}</span></div>
+    </div>`;
+  }
+  if (g.assistPhase === 'slow') {
+    return `<div class="trade-gas-assist is-busy" role="status">
+      <span class="trade-gas-assist-ic" aria-hidden="true">⏳</span>
+      <div><b>${esc(t('trade.gas.assist.slow.h'))}</b><span>${esc(t('trade.gas.assist.slow.p'))}</span></div>
+    </div>`;
+  }
+  if (g.assistPhase === 'error') {
+    const key = g.assistErr === 'cooldown' ? 'trade.gas.assist.err.cooldown'
+      : g.assistErr === 'wallet_mismatch' ? 'trade.gas.assist.err.mismatch'
+      : g.assistErr === 'blocked' ? 'trade.gas.assist.err.blocked'
+      : 'trade.gas.assist.err.generic';
+    return `<div class="trade-gas-assist is-err" role="status">
+      <span class="trade-gas-assist-ic" aria-hidden="true">⚠</span><span>${esc(t(key))}</span>
+    </div>`;
+  }
+
+  // The offer.
+  if (a.available) {
+    return `<div class="trade-gas-assist is-offer">
+      <div class="trade-gas-assist-head">
+        <span class="trade-gas-assist-ic" aria-hidden="true">⛽</span>
+        <div><b>${esc(t('trade.gas.assist.h'))}</b><span>${esc(t('trade.gas.assist.p'))}</span></div>
+      </div>
+      <button class="trade-funds-btn is-assist" data-act="gas-assist" type="button">${esc(t('trade.gas.assist.btn'))}</button>
+      <p class="trade-funds-foot">${esc(t('trade.gas.assist.foot'))}</p>
+    </div>`;
+  }
+
+  // Signed out, but this is exactly the member the assist exists for — say so and offer
+  // the one-click sign-in. This is the highest-value moment to ask.
+  if (a.reason === 'not_signed_in') {
+    return `<div class="trade-gas-assist is-offer">
+      <div class="trade-gas-assist-head">
+        <span class="trade-gas-assist-ic" aria-hidden="true">⛽</span>
+        <div><b>${esc(t('trade.gas.assist.signin.h'))}</b><span>${esc(t('trade.gas.assist.signin.p'))}</span></div>
+      </div>
+      <a class="apply-discord-btn is-sm" href="/api/auth/discord/login?return=/trade">
+        <span class="apply-discord-logo">${DISCORD_SVG}</span>
+        <span class="apply-discord-label">${esc(t('trade.gas.assist.signin.btn'))}</span>
+      </a>
+    </div>`;
+  }
+
+  // Signed in, holds a Creature, but a different wallet is connected — tell them which.
+  if (a.reason === 'wallet_mismatch' && a.wallet) {
+    return `<div class="trade-gas-assist is-err">
+      <span class="trade-gas-assist-ic" aria-hidden="true">⚠</span>
+      <span>${esc(t('trade.gas.assist.err.mismatch'))} <code>${esc(shortWallet(a.wallet))}</code></span>
+    </div>`;
+  }
+
+  // On cooldown — worth naming, so they don't hunt for a button that isn't there.
+  if (a.reason === 'cooldown') {
+    return `<div class="trade-gas-assist is-muted">
+      <span class="trade-gas-assist-ic" aria-hidden="true">⛽</span>
+      <span>${esc(t('trade.gas.assist.err.cooldown'))}</span>
+    </div>`;
+  }
+
+  return '';
+}
+
 function gasHelpHtml() {
   // A gas bridge is underway/finished — the tracker card IS the panel now (no duplicate
   // "Almost there" header or quote line above it, and no double frame).
@@ -2248,6 +2573,16 @@ function gasHelpHtml() {
   const imx = fmtWeiEth(g.imxBal);
   const fromImx = g.from === 'imx'; // source asset for the one-tap (and the matching copy)
 
+  const assist = gasAssistHtml(g);
+  // We're handling it — one card, one button, no competing options.
+  if (gasAssistExclusive(g)) {
+    return `
+      <div class="trade-funds trade-gas">
+        <div class="trade-funds-h"><span aria-hidden="true">⛽</span> ${esc(t('trade.gas.h'))} ${tipHtml('trade.gas.p')}</div>
+        ${assist}
+      </div>`;
+  }
+
   let bridgeArea;
   if (g.from && g.quote === 'loading') {
     bridgeArea = `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.bridge.quote.loading'))}</div>`;
@@ -2255,7 +2590,7 @@ function gasHelpHtml() {
     const q = g.quote;
     const mins = q.durationSeconds ? Math.max(1, Math.ceil(q.durationSeconds / 60)) : null;
     const meta = [
-      q.feeUsd != null ? t('trade.bridge.quote.fees').replace('{f}', String(q.feeUsd)) : null,
+      q.feeUsd != null ? t('trade.bridge.quote.fees').replace('{f}', fmtFeeUsd(q.feeUsd)) : null,
       mins != null ? t('trade.bridge.quote.mins').replace('{m}', String(mins)) : null,
       t('trade.bridge.quote.by'),
     ].filter(Boolean).join(' · ');
@@ -2292,9 +2627,100 @@ function gasHelpHtml() {
           <span>${esc(t('trade.funds.have'))} ${esc(imx)} IMX · ${esc(t('trade.funds.gasHint'))}</span>
         </div></li>
       </ul>
+      ${assist}
       ${note ? `<p class="trade-funds-net">${esc(note)}</p>` : ''}
       ${bridgeArea}
     </div>`;
+}
+
+// --- Gas assist: we cover it ---------------------------------------------------------
+// Gas on zkEVM costs a fraction of a cent, but acquiring the IMX to pay it from an empty
+// wallet costs ~$30 and an hour. So for signed-in Creature holders we just pay it, and
+// the bridge/on-ramp below becomes the fallback rather than the only road. The server
+// pays the wallet linked to the member's Highrise account and nothing else — see the
+// gas-assist routes in server.js.
+
+// Ask whether this member can have their gas covered. Never throws; a null answer just
+// means the assist card doesn't render and the normal funding options show instead.
+async function fetchGasAssist() {
+  try {
+    // Encode it: `account` comes from the injected provider, and an address is the one
+    // untrusted value we splice into a URL here. The server compares it against the
+    // linked wallet either way, but a stray `&` shouldn't get to invent a query param.
+    const r = await fetch(`/api/market/creatures/gas/assist?address=${encodeURIComponent(account)}`, { headers: { Accept: 'application/json' } });
+    return r.ok ? await r.json() : null;
+  } catch { return null; }
+}
+
+// Claim it, then wait for the IMX to actually land before telling the member they're set.
+// zkEVM blocks are ~2s, so this normally resolves in one or two polls.
+async function handleGasAssist() {
+  const g = gasState;
+  if (!g || g.assistPhase === 'sending' || g.assistPhase === 'done') return;
+  g.assistPhase = 'sending';
+  g.assistErr = null;
+  patchGas();
+
+  let body = null;
+  try {
+    const r = await fetch('/api/market/creatures/gas/assist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ address: account }),
+    });
+    body = await r.json().catch(() => null);
+    if (!r.ok) throw Object.assign(new Error('assist failed'), { reason: body?.error });
+  } catch (err) {
+    if (gasState !== g) return;
+    g.assistPhase = 'error';
+    // Cooldowns arrive as three separate reasons; they read the same to a member.
+    const reason = err.reason || 'unavailable';
+    g.assistErr = /cooldown/.test(reason) ? 'cooldown' : reason;
+    // Whatever went wrong, the member still needs gas — make sure the fallback is quoted.
+    ensureGasQuote(g);
+    patchGas();
+    return;
+  }
+
+  if (gasState !== g) return;
+  g.assistPhase = 'landing';
+  g.assistTx = body?.txHash || null;
+  patchGas();
+
+  // Poll for the balance to credit. Cap the wait: the transaction is already broadcast,
+  // so a slow read shouldn't leave the panel spinning forever.
+  const deadline = Date.now() + 90000;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 2500));
+    if (gasState !== g) return;
+    const bal = await readNative(account).catch(() => null);
+    if (gasState !== g) return;
+    if (bal != null && bal >= GAS_MIN_WEI) {
+      g.imxBal = bal;
+      g.assistPhase = 'done';
+      patchGas();
+      return;
+    }
+  }
+  // Broadcast but not seen yet — say so honestly rather than claiming success.
+  g.assistPhase = 'slow';
+  patchGas();
+}
+
+// Quote the self-funded fallback (bridge from mainnet) if it hasn't been quoted yet.
+// Skipped while the assist path is offered, so we don't spend a Squid call on a member
+// who's about to get their gas for free.
+async function ensureGasQuote(g) {
+  if (!g || g.quote !== 'unfetched') return; // already quoted, quoting, or known unavailable
+  if (!g.from) { g.quote = null; patchGas(); return; }
+  g.quote = 'loading';
+  patchGas();
+  let q = await fetchGasQuote(g.from);
+  if (q == null && gasState === g) {
+    await new Promise(r => setTimeout(r, 1200));
+    if (gasState === g) q = await fetchGasQuote(g.from);
+  }
+  if (gasState === g) { g.quote = q; patchGas(); }
 }
 
 // Read the zkEVM IMX balance + what the wallet holds on mainnet (IMX first, then ETH),
@@ -2302,11 +2728,12 @@ function gasHelpHtml() {
 // Renders into whichever surface the calling flow lives in (Buy modal, or the inline
 // Sell/Transfer status slot).
 async function showGasHelp(ctx) {
-  gasState = { ctx, imxBal: null, mainnetEthWei: null, mainnetImxWei: null, from: null, quote: 'loading' };
+  gasState = { ctx, imxBal: null, mainnetEthWei: null, mainnetImxWei: null, from: null, quote: 'loading', assist: 'checking', assistPhase: null };
   patchGas();
-  const [imxBal, elsewhere] = await Promise.all([
+  const [imxBal, elsewhere, assist] = await Promise.all([
     readNative(account),
     fetch(`/api/market/creatures/eth-elsewhere/${account}`).then(r => r.ok ? r.json() : null).catch(() => null),
+    fetchGasAssist(),
   ]);
   if (gasState?.ctx !== ctx) return; // user moved on
   const mainnetEthWei = elsewhere?.mainnetEthWei ?? null;
@@ -2317,9 +2744,18 @@ async function showGasHelp(ctx) {
   try { hasImxL1 = mainnetImxWei != null && BigInt(mainnetImxWei) > 0n; } catch { hasImxL1 = false; }
   try { hasEth = mainnetEthWei != null && BigInt(mainnetEthWei) > 0n; } catch { hasEth = false; }
   const from = hasImxL1 ? 'imx' : hasEth ? 'eth' : null;
-  gasState = { ctx, imxBal, mainnetEthWei, mainnetImxWei, from, quote: 'loading' };
+  // When we can cover the gas, that IS the answer — hold the self-funded quote back
+  // ('unfetched') so a member who's one click from free gas doesn't burn a Squid call.
+  // Any other outcome quotes the fallback immediately, as before.
+  const canAssist = !!assist?.available;
+  gasState = {
+    ctx, imxBal, mainnetEthWei, mainnetImxWei, from, assist,
+    assistPhase: null, assistErr: null, assistTx: null,
+    quote: canAssist ? 'unfetched' : 'loading',
+  };
   patchGas();
 
+  if (canAssist) return;
   if (!from) { gasState.quote = null; patchGas(); return; }
   // The server already retries Squid's 429s (the shared integrator id rate-limits easily), but
   // give it a second window here too: a null quote is what drops the user to the empty Squid
@@ -2666,10 +3102,20 @@ async function fetchBridgeStatus(job) {
     return r.ok ? await r.json() : null;
   } catch { return null; }
 }
+// The live job for a given transaction, or null once it's finished / been replaced.
+//
+// Identity is the TX HASH, never the object: setBridgeJob assigns a brand-new object on
+// every update (`bridgeJob = {...bridgeJob, ...fields}`), so an `=== job` check goes false
+// the instant anything about the job changes — including its own stage advancing. That is
+// what froze the tracker: the first stage update made the poll loop believe it had been
+// superseded, so it stopped, and only the visibilitychange kick moved it again.
+const liveBridge = hash => (bridgeJob?.hash && bridgeJob.hash === hash && bridgeJob.phase === 'waiting') ? bridgeJob : null;
+
 // Apply a status payload to the active job. Returns true when the bridge is resolved (done /
 // error) or the job is no longer active — i.e. the tracking loop should stop.
-function applyBridgeStatus(job, s) {
-  if (bridgeJob !== job || job.phase !== 'waiting') return true; // superseded — stop tracking
+function applyBridgeStatus(hash, s) {
+  const job = liveBridge(hash);
+  if (!job) return true; // finished or superseded — stop tracking
   if (s.stage === 'failed' || s.stage === 'failed_src') { setBridgeJob({ phase: 'error', msg: t('trade.bridge.failed'), axelarUrl: s.axelarUrl || job.axelarUrl }); return true; }
   if (s.stage === 'needs_gas') { setBridgeJob({ phase: 'error', msg: t('trade.bridge.needsGas'), axelarUrl: s.axelarUrl || job.axelarUrl }); return true; }
   // Squid reports the funds have landed on zkEVM — complete NOW rather than waiting on the
@@ -2692,49 +3138,67 @@ function wireBridgeVisibility() {
     const job = bridgeJob;
     if (!job?.hash || job.phase !== 'waiting') return;
     const s = await fetchBridgeStatus(job);
-    if (s) applyBridgeStatus(job, s);
+    if (s) applyBridgeStatus(job.hash, s);
   });
 }
 
 // The tracking loop — independent of any screen. Resumable: runs off bridgeJob alone,
 // so it works identically right after sending and after a page reload mid-bridge.
+let trackingHash = null; // the tx one loop is already following
 async function trackBridge() {
-  const job = bridgeJob;
-  if (!job?.hash) return;
+  const start = bridgeJob;
+  if (!start?.hash) return;
+  const hash = start.hash; // the loop's identity for the whole run — see liveBridge()
+  if (trackingHash === hash) return; // a loop is already on this one; don't double the polling
+  trackingHash = hash;
   startBridgeTicker();
   wireBridgeVisibility();
-  const needWei = BigInt(job.needWei);
+  const needWei = BigInt(start.needWei);
+  // Only immutable fields come off the starting snapshot; everything mutable is re-read
+  // from liveBridge(hash) inside the loop.
+  const { startedAt, mins } = start;
   // Wait ≥25 min (or 2× ETA) from when the bridge STARTED, with a 10-min floor from
   // now so a just-resumed old job still gets a fair polling window.
-  const deadline = Math.max(job.startedAt + Math.max(25 * 60 * 1000, (job.mins || 0) * 120000), Date.now() + 10 * 60 * 1000);
+  const deadline = Math.max(startedAt + Math.max(25 * 60 * 1000, (mins || 0) * 120000), Date.now() + 10 * 60 * 1000);
   let tick = 0;
   // A read through the wallet provider can HANG indefinitely (zkEVM RPC slow/unresponsive, or
   // the tab backgrounded) — that must never stall the loop, or the reliable server-side status
   // poll never runs and the tracker sticks until a reload (the reported bug). So cap every
   // wallet read, and poll status FIRST.
   const readWithTimeout = (p, ms) => Promise.race([Promise.resolve(p).catch(() => null), new Promise(res => setTimeout(() => res(null), ms))]);
-  while (Date.now() < deadline) {
-    if (bridgeJob !== job || job.phase !== 'waiting') return;
-    // PRIMARY signal — server-side Squid status. Every ~20s, and BEFORE the wallet read so a
-    // slow read can't keep it from ever running.
-    if (tick % 2 === 0) {
-      const s = await fetchBridgeStatus(job);
-      if (s && applyBridgeStatus(job, s)) return;
-      if (bridgeJob !== job || job.phase !== 'waiting') return;
+  try {
+    while (Date.now() < deadline) {
+      // Re-read the job every pass: it's a fresh object after each update, so anything held
+      // across an await is stale by definition.
+      let cur = liveBridge(hash);
+      if (!cur) return;
+      // PRIMARY signal — server-side Squid status. Every ~20s, and BEFORE the wallet read so a
+      // slow read can't keep it from ever running.
+      if (tick % 2 === 0) {
+        const s = await fetchBridgeStatus(cur);
+        if (s && applyBridgeStatus(hash, s)) return;
+        cur = liveBridge(hash);
+        if (!cur) return;
+      }
+      // SECONDARY signal — the balance actually crediting (covers the rare case Squid's status
+      // lags the chain). Capped so a hung provider read can't freeze the loop. Not for
+      // cash-outs: their destination balance lives on Ethereum mainnet, which the wallet
+      // (sitting on zkEVM) can't read — Squid's status is the only signal there.
+      if (cur.dir !== 'out' && needWei > 0n) {
+        const read = isGasBridge(cur) ? readNative(cur.account) : readErc20(IMX_ETH_TOKEN, cur.account);
+        const bal = await readWithTimeout(read, 9000);
+        if (!liveBridge(hash)) return;
+        if (bal != null && bal >= needWei) return setBridgeJob({ phase: 'done', stage: 'arrived' });
+      }
+      tick++;
+      await new Promise(r => setTimeout(r, 10000));
     }
-    // SECONDARY signal — the balance actually crediting (covers the rare case Squid's status
-    // lags the chain). Capped so a hung provider read can't freeze the loop. Not for
-    // cash-outs: their destination balance lives on Ethereum mainnet, which the wallet
-    // (sitting on zkEVM) can't read — Squid's status is the only signal there.
-    if (job.dir !== 'out' && needWei > 0n) {
-      const read = isGasBridge(job) ? readNative(job.account) : readErc20(IMX_ETH_TOKEN, job.account);
-      const bal = await readWithTimeout(read, 9000);
-      if (bal != null && bal >= needWei) return setBridgeJob({ phase: 'done', stage: 'arrived' });
-    }
-    tick++;
-    await new Promise(r => setTimeout(r, 10000));
+    if (liveBridge(hash)) setBridgeJob({ phase: 'slow' });
+  } finally {
+    // Release the slot however we leave — resolved, superseded, or timed out — so a resume
+    // can pick this transaction up again.
+    if (trackingHash === hash) trackingHash = null;
   }
-  if (bridgeJob === job && job.phase === 'waiting') setBridgeJob({ phase: 'slow' });
 }
 
 // Send the prepared Squid bridge tx, then hand off to the resumable tracker. Shared by
@@ -2747,14 +3211,18 @@ async function runBridge(q, { kind, needWei, fromSym = 'ETH', toSym = 'ETH' }) {
     bridgeJob = { phase: 'switch', account, mins: null, startedAt: Date.now(), kind, fromSym, toSym, fromEth: q.fromEth, toEth: q.toEth };
     patchModal();
     patchGas();
-    await eth().request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1' }] });
+    // Both hops go through switchToChain, NOT the raw request: it sets expectedChainHex so
+    // the chainChanged echo is recognised as ours. Switching directly made the handler treat
+    // it as an external change and run a full render(), which tore down and rebuilt this very
+    // modal (twice per bridge, once per hop) — the "Add funds re-opens itself" bug.
+    await switchToChain('0x1');
     setBridgeJob({ phase: 'confirm' });
     const hash = await eth().request({
       method: 'eth_sendTransaction',
       params: [{ from: account, to: q.tx.to, data: q.tx.data, value: q.tx.value, ...(q.tx.gas ? { gas: q.tx.gas } : {}) }],
     });
     setBridgeJob({ phase: 'back', hash });
-    await ensureNetwork(); // back to Immutable zkEVM
+    await switchToChain(ZK_CHAIN_ID_HEX); // back to Immutable zkEVM
     const mins = q.durationSeconds ? Math.max(1, Math.ceil(q.durationSeconds / 60)) : null;
     setBridgeJob({
       phase: 'waiting', hash, mins, startedAt: Date.now(), stage: 'submitted', kind,
@@ -3158,27 +3626,36 @@ function askAccept(offerId, tokenId) {
   pendingAccept = { kind: 'creature', offerId, tokenId: tokenId ?? null, netEth: offer.netEth };
   patchConfirmAccept();
 }
+function confirmAcceptInner() {
+  if (!pendingAccept) return '';
+  return `
+    <span class="trade-confirm-ico" aria-hidden="true">⚡</span>
+    <h3 class="trade-confirm-h">${esc(t('trade.confirm.h'))}</h3>
+    <p class="trade-confirm-amt">${esc(fmtEthFiat(pendingAccept.netEth))}</p>
+    <p class="trade-confirm-sub">${esc(t(pendingAccept.kind === 'land' ? 'trade.confirm.sub.land' : 'trade.confirm.sub'))}</p>
+    <p class="trade-confirm-note">${esc(t('trade.confirm.note'))}</p>
+    <div class="trade-confirm-actions">
+      <button class="apply-btn-ghost" data-act="accept-cancel" type="button">${esc(t('trade.confirm.cancel'))}</button>
+      <button class="trade-send" data-act="accept-confirm" type="button">${esc(t('trade.confirm.ok'))}</button>
+    </div>`;
+}
 function confirmAcceptHtml() {
   if (!pendingAccept) return '';
   return `
     <div class="trade-modal trade-confirm" role="dialog" aria-modal="true" aria-label="${esc(t('trade.confirm.aria'))}">
       <div class="trade-modal-backdrop" data-act="accept-cancel"></div>
-      <div class="trade-confirm-card">
-        <span class="trade-confirm-ico" aria-hidden="true">⚡</span>
-        <h3 class="trade-confirm-h">${esc(t('trade.confirm.h'))}</h3>
-        <p class="trade-confirm-amt">${esc(fmtEthFiat(pendingAccept.netEth))}</p>
-        <p class="trade-confirm-sub">${esc(t(pendingAccept.kind === 'land' ? 'trade.confirm.sub.land' : 'trade.confirm.sub'))}</p>
-        <p class="trade-confirm-note">${esc(t('trade.confirm.note'))}</p>
-        <div class="trade-confirm-actions">
-          <button class="apply-btn-ghost" data-act="accept-cancel" type="button">${esc(t('trade.confirm.cancel'))}</button>
-          <button class="trade-send" data-act="accept-confirm" type="button">${esc(t('trade.confirm.ok'))}</button>
-        </div>
-      </div>
+      <div class="trade-confirm-card">${confirmAcceptInner()}</div>
     </div>`;
 }
+// Contents only while it's up — `.trade-confirm-card` carries apply-rise, so rebuilding the
+// node replays the entrance every time the payout figure refreshes. Same fix as patchTopup.
 function patchConfirmAccept() {
-  const slot = root()?.querySelector('#trade-confirm-slot');
-  if (slot) slot.innerHTML = confirmAcceptHtml();
+  const card = pendingAccept ? root()?.querySelector('#trade-confirm-slot .trade-confirm-card') : null;
+  if (card) card.innerHTML = confirmAcceptInner();
+  else {
+    const slot = root()?.querySelector('#trade-confirm-slot');
+    if (slot) slot.innerHTML = confirmAcceptHtml();
+  }
   document.body.classList.toggle('trade-modal-open', !!pendingAccept || !!modalToken);
 }
 
@@ -4128,13 +4605,26 @@ function browseToolbarHtml() {
 // Re-render the dynamic parts of the filter UI (facet counts, chips, badges) WITHOUT
 // touching the text inputs — focus and caret must survive every keystroke. The parts
 // live in two places now (sidebar + toolbar), so query each by id from the root.
+// A facet dropdown list has to be rebuilt wholesale on every pick (the badges and per-value
+// counts all move), which re-creates any OPEN popover and replays its 0.18s enter. The
+// popover was already on screen, so that reads as it closing and reopening under the cursor
+// — the thing the outside-click handler above is explicitly trying to avoid ("picking three
+// Eyes values shouldn't take three reopens"). Suppress the replay when the SAME facet stays
+// open; a popover that genuinely just appeared still animates.
+function keepFacetPopStill(container, wasOpenType, nowOpenType) {
+  if (!container || !wasOpenType || wasOpenType !== nowOpenType) return;
+  container.querySelector('.trade-flt-pop')?.classList.add('is-static');
+}
+const openFacetInDom = r => r?.querySelector('.trade-flt-dd.is-open .trade-flt-ddbtn')?.dataset.type || null;
+
 function patchFilters() {
   const r = root();
   if (!r || !isBrowseView()) return;
+  const wasOpen = openFacetInDom(r);
   const sc  = r.querySelector('#flt-scope');   if (sc)  sc.innerHTML = scopeSegHtml();
   const rar = r.querySelector('#flt-rar');     if (rar) rar.innerHTML = rarityChipsHtml();
   const tier = r.querySelector('#flt-tier');   if (tier) tier.innerHTML = tierChipsHtml();
-  const tr  = r.querySelector('#flt-traits');  if (tr)  tr.innerHTML = traitDropsHtml();
+  const tr  = r.querySelector('#flt-traits');  if (tr)  { tr.innerHTML = traitDropsHtml(); keepFacetPopStill(tr, wasOpen, openFacet); }
   const act = r.querySelector('#flt-active');  if (act) act.innerHTML = activeChipsHtml();
   const wb  = r.querySelector('#trade-wallet-slot'); if (wb) wb.innerHTML = walletBannerHtml();
   const tog = r.querySelector('.trade-flt-toggle');
@@ -4350,9 +4840,10 @@ function invToolbarHtml() {
 // caret survive every keystroke), mirroring how patchFilters works for Browse.
 function patchInvFilter() {
   const r = root(); if (!r) return;
+  const wasOpen = openFacetInDom(r);
   invFacets = computeInvFacets();
   const rar = r.querySelector('#inv-rar');    if (rar) rar.innerHTML = invRarityChipsHtml();
-  const tr  = r.querySelector('#inv-traits'); if (tr)  tr.innerHTML = invTraitDropsHtml();
+  const tr  = r.querySelector('#inv-traits'); if (tr)  { tr.innerHTML = invTraitDropsHtml(); keepFacetPopStill(tr, wasOpen, openFacet); }
   const act = r.querySelector('#inv-active'); if (act) act.innerHTML = invActiveChipsHtml();
   const tog = r.querySelector('.trade-flt-toggle');
   if (tog) tog.innerHTML = `${esc(t('trade.filter.toggle'))}${invFltCount() ? `<span class="trade-flt-badge">${invFltCount()}</span>` : ''}`;
@@ -5588,19 +6079,51 @@ function transferCheckHtml() {
 function transferSendAllowed() {
   const c = transferCheck;
   const running = massState && massState.kind === 'transfer' && massState.phase === 'run';
-  return transferSet.size >= 1 && !running && c && c !== 'loading' && c.valid && (c.active || transferAck);
+  const recipientOk = !running && c && c !== 'loading' && c.valid && (c.active || transferAck);
+  if (xferMode === 'coin') {
+    const busy = xferImxState && (xferImxState.phase === 'send' || xferImxState.phase === 'wait');
+    return !!recipientOk && !busy && xferNetAck && xferImxAmountWei() != null;
+  }
+  return transferSet.size >= 1 && !!recipientOk;
 }
+
+// The typed amount in the selected coin's base units, or null when it's unparseable, zero,
+// or more than the wallet can actually send.
+function xferImxAmountWei() {
+  const coin = xferCoinDef();
+  const units = parseUnits(xferImxAmount, coin.dec);
+  if (units == null) return null;
+  const max = xferImxMaxWei();
+  if (max != null && units > max) return null;
+  return units;
+}
+// The most this wallet can send of the selected coin. Native IMX has to keep back its own
+// gas; an ERC-20 pays gas in IMX, so the whole balance is sendable.
+function xferImxMaxWei() {
+  const coin = xferCoinDef();
+  const bal = xferBals[coin.key];
+  if (bal == null) return null;
+  if (!coin.native) return bal;
+  const max = bal - IMX_SEND_RESERVE_WEI;
+  return max > 0n ? max : 0n;
+}
+
+// IMX mode is a Creatures-only thing: it's the zkEVM gas coin, and LAND settles on Ethereum.
+const imxSendAvailable = () => coll === 'creatures';
 
 function transferViewHtml() {
   if (!account || !onRightChain()) return walletGateHtml();
+  if (!imxSendAvailable() && xferMode === 'coin') xferMode = 'items'; // switched to LAND while sending coins
   invFacets = computeInvFacets();
-  // Same workbench split as Sell. Recipient input, check rows, send button and status
+
+  // Same workbench split as Sell, in BOTH modes. Money mode used to drop the picker and the
+  // whole filter rail with it, which read as the page breaking rather than as a mode change:
+  // only the action column should swap. Recipient input, check rows, send button and status
   // must all stay inside the form — handleTransferSubmit queries them through it.
   const wb = `
     <div class="trade-workbench">
       <div class="trade-wb-main">
-        <h4 class="trade-form-h">${esc(t(skey('trade.transfer.h')))} ${tipHtml(skey('trade.transfer.p'))}</h4>
-        <span class="trade-field-label">${esc(t(skey('trade.transfer.pick')))}</span>
+        <div id="trade-xfer-head">${transferHeadHtml()}</div>
         <div id="trade-pick-wrap">${transferPickerHtml()}</div>
       </div>
       <div class="trade-wb-side" id="trade-transfer-side">${transferSideHtml()}</div>
@@ -5611,22 +6134,158 @@ function transferViewHtml() {
     : wb;
 }
 
+// The heading above the picker. It's all that changes in the main column between modes, so
+// it sits in its own slot and a mode switch repaints only this — the grid keeps its scroll
+// position and the filter rail never flickers.
+function transferHeadHtml() {
+  if (xferMode !== 'coin') {
+    return `<h4 class="trade-form-h">${esc(t(skey('trade.transfer.h')))} ${tipHtml(skey('trade.transfer.p'))}</h4>
+      <span class="trade-field-label">${esc(t(skey('trade.transfer.pick')))}</span>`;
+  }
+  return `<h4 class="trade-form-h">${esc(t('trade.xfer.imx.h'))} ${tipHtml('trade.xfer.imx.p')}</h4>
+    <div class="trade-imx-explain">
+      <span class="trade-imx-explain-ic" aria-hidden="true">⛽</span>
+      <div>
+        <b>${esc(t('trade.xfer.imx.what.h'))}</b>
+        <p>${esc(t('trade.xfer.imx.what.p'))}</p>
+      </div>
+    </div>
+    <span class="trade-field-label">${esc(t('trade.xfer.inv.label'))} ${tipHtml('trade.xfer.inv.tip')}</span>`;
+}
+function patchTransferHead() {
+  const el = root()?.querySelector('#trade-xfer-head');
+  if (el) el.innerHTML = transferHeadHtml();
+}
+
+// Creatures | Money. Only shown when both are actually sendable from this wallet's chain.
+function xferModeSegHtml() {
+  if (!imxSendAvailable()) return '';
+  const opt = (v, label) => `
+    <button type="button" role="tab" class="seg-btn ${xferMode === v ? 'is-active' : ''}"
+      aria-selected="${xferMode === v}" data-act="xfer-mode" data-mode="${v}">${esc(t(label))}</button>`;
+  return `<div class="trade-seg trade-xfer-seg" role="tablist" aria-label="${esc(t('trade.xfer.mode.aria'))}">
+    ${opt('items', 'trade.xfer.mode.items')}${opt('coin', 'trade.xfer.mode.coin')}
+  </div>`;
+}
+
+// The amount card that stands in for the picked-Creatures strip when sending IMX.
+function transferImxCardHtml() {
+  const st = xferImxState;
+  if (st && st.phase === 'done') {
+    // Offer the way back to the amount box — otherwise a second send means toggling modes.
+    return `<div class="trade-imx-card is-done">
+      <span class="trade-imx-ic" aria-hidden="true">✓</span>
+      <div><b>${esc(t('trade.xfer.imx.sent.h').replace('{x}', fmtCoinUnits(st.amount, XFER_COINS[st.sym?.toLowerCase()] || xferCoinDef())))}</b>
+      <span>${esc(t('trade.xfer.imx.sent.p'))}</span></div>
+      <button class="apply-btn-ghost trade-imx-again" data-act="imx-again" type="button">${esc(t('trade.xfer.imx.again'))}</button>
+    </div>`;
+  }
+  const coin = xferCoinDef();
+  const max = xferImxMaxWei();
+  const bal = xferBals[coin.key];
+  const balTxt = bal == null
+    ? `<span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.cashout.move.balLoading'))}`
+    : esc(t('trade.xfer.imx.bal').replace('{x}', fmtCoinUnits(bal, coin)));
+  const typed = String(xferImxAmount ?? '').trim();
+  // Balance on each chip, so picking a coin is an informed choice rather than a guess.
+  const chips = XFER_COIN_ORDER.map(k => {
+    const c = XFER_COINS[k];
+    const b = xferBals[k];
+    const on = xferCoin === k;
+    return `<button type="button" class="trade-coin-chip${on ? ' is-on' : ''}" data-act="xfer-coin" data-coin="${k}"
+      role="tab" aria-selected="${on}">
+      <span class="trade-coin-sym">${esc(c.sym)}</span>
+      <span class="trade-coin-bal">${b == null ? '…' : esc(fmtCoinUnits(b, c).replace(' ' + c.sym, ''))}</span>
+    </button>`;
+  }).join('');
+  return `<div class="trade-imx-card">
+    <div class="trade-coin-net">
+      <img src="/img/brands/immutable.png" alt="" width="18" height="18" />
+      <span>${esc(t('trade.xfer.coin.network'))}</span>
+    </div>
+    <div class="trade-coin-chips" role="tablist" aria-label="${esc(t('trade.xfer.coin.aria'))}">${chips}</div>
+    <label class="trade-cashout-amtlbl" for="trade-imx-amt">${esc(t('trade.xfer.imx.amount'))}</label>
+    <div class="trade-cashout-amtrow">
+      <input id="trade-imx-amt" class="trade-cashout-amt" type="text" inputmode="decimal" autocomplete="off"
+        spellcheck="false" value="${esc(typed)}" placeholder="0.0" />
+      <span class="trade-cashout-unit" aria-hidden="true">${esc(coin.sym)}</span>
+      <button class="trade-cashout-max" data-act="imx-max" type="button" ${max && max > 0n ? '' : 'disabled'}>${esc(t('trade.cashout.move.max'))}</button>
+    </div>
+    <p class="trade-cashout-balline">${balTxt}</p>
+    <div id="trade-imx-warn">${imxAmountWarnHtml()}</div>
+    <p class="trade-funds-foot">${esc(t(coin.native ? 'trade.xfer.imx.reserve' : 'trade.xfer.coin.gasNote'))}</p>
+  </div>`;
+}
+
+// An amount over the sendable max is the one error worth naming inline; everything else
+// just leaves the Send button off. Lives in its own slot so a keystroke can repaint the
+// warning without rebuilding the input (which would drop focus and the caret).
+function imxAmountWarnHtml() {
+  const coin = xferCoinDef();
+  const max = xferImxMaxWei();
+  const typed = String(xferImxAmount ?? '').trim();
+  if (!typed || max == null || !/^[\d.,]+$/.test(typed) || xferImxAmountWei() != null) return '';
+  return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(t('trade.xfer.imx.err.over').replace('{x}', fmtCoinUnits(max, coin)))}</span></div>`;
+}
+
+// Keystroke-level repaint: the warning slot and the Send button only.
+function patchImxAmountUi() {
+  const r = root();
+  const warn = r?.querySelector('#trade-imx-warn');
+  if (warn) warn.innerHTML = imxAmountWarnHtml();
+  const btn = r?.querySelector('#trade-transfer-form #trade-send');
+  if (btn) btn.disabled = !transferSendAllowed();
+}
+
 // The Transfer action column: a strip of the picked Creatures (any number), one shared
 // recipient + safety check, and a count-aware Send button. One item behaves exactly like
 // the old single transfer; 2+ runs the batch (one confirmation each). Recipient stays put.
 function transferSideHtml() {
   const to = ''; // the input value is preserved by patchTransferSide, not re-seeded here
   const n = transferSet.size;
-  const label = n >= 2 ? t('trade.mass.transfer.btn').replace('{n}', String(n)) : t(skey('trade.transfer.btn'));
+  const imx = xferMode === 'coin';
+  const label = imx
+    ? t('trade.xfer.imx.btn')
+    : n >= 2 ? t('trade.mass.transfer.btn').replace('{n}', String(n)) : t(skey('trade.transfer.btn'));
+  const statusInner = imx
+    ? imxSendStatusHtml()
+    : (massState && massState.kind === 'transfer' ? massStatusHtml() : '');
   return `
-    <div id="trade-transfer-selected">${transferSelectedHtml()}</div>
+    ${xferModeSegHtml()}
+    <div id="trade-transfer-selected">${imx ? transferImxCardHtml() : transferSelectedHtml()}</div>
     <form class="trade-form" id="trade-transfer-form" novalidate>
       <label class="trade-field"><span>${esc(t(skey('trade.field.recipient')))}</span>
         <input id="trade-to" type="text" value="${esc(to)}" placeholder="0x…" autocomplete="off" spellcheck="false" /></label>
       <div id="trade-to-check" aria-live="polite">${transferCheckHtml()}</div>
+      ${imx ? xferNetAckHtml() : ''}
       <button class="trade-send" id="trade-send" type="submit" ${transferSendAllowed() ? '' : 'disabled'}>${esc(label)} <span aria-hidden="true">→</span></button>
-      <div class="trade-status" id="trade-status" role="status" aria-live="polite">${massState && massState.kind === 'transfer' ? massStatusHtml() : ''}</div>
+      <div class="trade-status" id="trade-status" role="status" aria-live="polite">${statusInner}</div>
     </form>`;
+}
+
+// The network confirmation. Deliberately not a passive notice: sending bridged zkEVM ETH or
+// USDC to an exchange deposit address that only watches Ethereum mainnet is the one mistake
+// here that costs real money and cannot be undone, so it takes a tick, every time.
+function xferNetAckHtml() {
+  const coin = xferCoinDef();
+  return `<label class="trade-net-ack${xferNetAck ? ' is-on' : ''}">
+    <input type="checkbox" data-act="xfer-net-ack" ${xferNetAck ? 'checked' : ''} />
+    <span>
+      <b>${esc(t('trade.xfer.coin.ack.h').replace('{c}', coin.sym))}</b>
+      ${esc(t('trade.xfer.coin.ack.p').replace('{c}', coin.sym))}
+    </span>
+  </label>`;
+}
+
+// Status line for an IMX send. Mirrors the Creature transfer's states so the column reads
+// the same whichever mode you're in.
+function imxSendStatusHtml() {
+  const st = xferImxState;
+  if (!st) return '';
+  if (st.phase === 'error') return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(st.msg)}</span></div>`;
+  if (st.phase === 'done') return `<div class="trade-status is-ok"><span aria-hidden="true">✓</span><span>${esc(t('trade.xfer.imx.sent.p'))}</span></div>`;
+  const key = st.phase === 'send' ? 'trade.xfer.imx.confirm' : 'trade.xfer.imx.sending';
+  return `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t(key))}</span></div>`;
 }
 
 // Strip of picked-to-transfer items (thumb + number + remove ×), or a prompt when empty —
@@ -5696,6 +6355,7 @@ function patchTransferCheck() {
 function queueTransferCheck(raw) {
   clearTimeout(transferCheckTimer);
   transferAck = false;
+  xferNetAck = false; // new destination, new network confirmation
   const addr = (raw || '').trim();
   if (!addr) { transferCheck = null; patchTransferCheck(); return; }
   transferCheck = 'loading'; patchTransferCheck();
@@ -6175,6 +6835,106 @@ function patchTransferStatus() {
 // Transfer the picked Creatures/parcels to ONE recipient. Unifies single + mass: one item
 // behaves exactly like the old single transfer (one confirmation), 2+ runs sequentially with
 // progress. Each is its own on-chain tx; a rejection or failure keeps the rest picked.
+// Switch the Transfer tab between sending Creatures and sending IMX. Reads the balance on
+// entering IMX mode; the recipient box and its check survive the switch untouched.
+async function setXferMode(mode) {
+  const next = mode === 'coin' && imxSendAvailable() ? 'coin' : 'items';
+  if (next === xferMode) return;
+  xferMode = next;
+  xferImxState = null;
+  xferNetAck = false;
+  if (next === 'coin') { xferBals = { imx: null, eth: null, usdc: null }; }
+  patchTransferHead();
+  patchTransferSide();
+  if (next === 'coin') refreshXferBalances();
+}
+
+// Picking from the inventory while the money card is up is an unambiguous "send this one
+// instead" — flip the column rather than leaving the pick with nowhere to land.
+function pickLeavesCoinMode() {
+  if (xferMode !== 'coin' || !transferSet.size) return false;
+  setXferMode('items');
+  return true;
+}
+
+// All three zkEVM balances at once, so the coin chips can show what's actually there.
+async function refreshXferBalances() {
+  const [imx, eth, usdc] = await Promise.all([
+    readNative(account).catch(() => null),
+    readErc20(IMX_ETH_TOKEN, account).catch(() => null),
+    readErc20(IMX_USDC_TOKEN, account).catch(() => null),
+  ]);
+  if (xferMode !== 'coin') return;
+  xferBals = { imx, eth, usdc };
+  patchTransferSide();
+}
+
+// Switch which coin is being sent. The typed amount is cleared: "5" means something very
+// different in USDC than in ETH, and silently reinterpreting it is how people overpay.
+function setXferCoin(k) {
+  if (!XFER_COINS[k] || k === xferCoin) return;
+  xferCoin = k;
+  xferImxAmount = '';
+  xferImxState = null;
+  xferNetAck = false; // a different coin is a different risk — confirm it again
+  patchTransferSide();
+}
+
+function imxMaxClick() {
+  const max = xferImxMaxWei();
+  if (max == null || max <= 0n) return;
+  xferImxAmount = formatUnits(max, xferCoinDef().dec);
+  const input = root()?.querySelector('#trade-imx-amt');
+  if (input) input.value = xferImxAmount;
+  patchImxAmountUi();
+}
+
+// Send native IMX to another wallet. Non-custodial and contract-free: the user's own wallet
+// signs a plain value transfer, exactly like sending from MetaMask directly. The recipient
+// goes through the SAME safety check as a Creature transfer, because the mistake is the
+// same one and just as irreversible.
+async function handleImxSend(form) {
+  if (xferImxState && (xferImxState.phase === 'send' || xferImxState.phase === 'wait')) return;
+  const set = (phase, extra) => { xferImxState = { phase, ...extra }; patchTransferSide(); };
+  const to = (form.querySelector('#trade-to')?.value || '').trim().toLowerCase();
+  const coin = xferCoinDef();
+  const wei = xferImxAmountWei();
+  // The button is disabled unless these hold, but state can race a click.
+  if (!IS_ADDR.test(to)) return set('error', { msg: t('trade.err.badAddr') });
+  if (to === account)    return set('error', { msg: t('trade.err.self') });
+  if (to === ZERO)       return set('error', { msg: t('trade.err.zero') });
+  if (wei == null)       return set('error', { msg: t('trade.xfer.imx.err.amount') });
+  if (!transferSendAllowed() || transferCheck?.addr?.toLowerCase() !== to) return set('error', { msg: t('trade.err.badAddr') });
+
+  if (!xferNetAck) return set('error', { msg: t('trade.xfer.coin.err.ack') });
+
+  set('send', {});
+  try {
+    await switchToChain(ZK_CHAIN_ID_HEX); // all three coins live on Immutable zkEVM
+    // An ERC-20 send burns native IMX for gas. Catch that here rather than letting MetaMask
+    // fail it cryptically — and the gas panel can now just cover it for them.
+    if (!coin.native) {
+      const gas = await readNative(account);
+      if (gas != null && gas < GAS_MIN_WEI) { xferImxState = null; showGasHelp('transfer'); return; }
+    }
+    const params = coin.native
+      ? { from: account, to, value: '0x' + wei.toString(16) }
+      : { from: account, to: coin.token, data: SEL_ERC20_TRANSFER + word(to) + word(wei) };
+    const hash = await eth().request({ method: 'eth_sendTransaction', params: [params] });
+    set('wait', { hash });
+    await waitForReceipt(hash);
+    set('done', { hash, amount: wei, sym: coin.sym });
+    xferImxAmount = '';
+    xferNetAck = false;
+    refreshXferBalances();
+    refreshBalance();
+  } catch (err) {
+    if (isUserReject(err)) { xferImxState = null; patchTransferSide(); return; }
+    console.error('IMX send failed:', err);
+    set('error', { msg: friendlyError(err) });
+  }
+}
+
 async function handleMassTransfer(form) {
   if (massState && massState.kind === 'transfer' && massState.phase === 'run') return;
   const to = (form.querySelector('#trade-to').value || '').trim().toLowerCase();
@@ -6384,10 +7144,13 @@ function onClick(e) {
       return patchSellSide();
     case 'transfer-pick':
       toggleTransferPick(target.dataset.token);
-      return patchTransferSide();
+      if (!pickLeavesCoinMode()) patchTransferSide();
+      return;
     case 'mass-all':
       massToggleAll();
-      return tradeTab === 'transfer' ? patchTransferSide() : patchSellSide();
+      if (tradeTab !== 'transfer') return patchSellSide();
+      if (!pickLeavesCoinMode()) patchTransferSide();
+      return;
     case 'mass-clear':
       clearSelection();
       return tradeTab === 'transfer' ? patchTransferSide() : patchSellSide();
@@ -6462,6 +7225,7 @@ function onClick(e) {
       topupStep = 'eth';
       return patchTopup();
     case 'topup-gas':      return openTopupGas();
+    case 'topup-gas-preset': return topupGasPreset(Number(target.dataset.imx));
     case 'topup-max':      return topupMaxClick();
     case 'topup-now':      return runTopupEth();
     case 'topup-gas-now':  return runTopupGas();
@@ -6476,6 +7240,14 @@ function onClick(e) {
     case 'cancel-land-offer': return handleCancelLandOffer(target.dataset.offer);
     case 'bridge-now':     return handleBridgeNow();
     case 'gas-bridge-now': return handleGasBridgeNow();
+    case 'gas-assist':     return handleGasAssist();
+    case 'xfer-mode':      return setXferMode(target.dataset.mode);
+    case 'xfer-coin':      return setXferCoin(target.dataset.coin);
+    case 'imx-max':        return imxMaxClick();
+    case 'xfer-net-ack':
+      xferNetAck = !xferNetAck;
+      return patchTransferSide();
+    case 'imx-again':      xferImxState = null; xferImxAmount = ''; return patchTransferSide();
     case 'onramp':         return openOnramp(target.dataset.chain, target.dataset.token, Number(target.dataset.fiat) || 0);
     case 'bridge-dismiss': return dismissBridge();
     case 'mmwarn-dismiss':
@@ -6550,7 +7322,7 @@ function onClick(e) {
   }
 }
 function onSubmit(e) {
-  if (e.target?.id === 'trade-transfer-form') { e.preventDefault(); handleMassTransfer(e.target); }
+  if (e.target?.id === 'trade-transfer-form') { e.preventDefault(); (xferMode === 'coin' ? handleImxSend : handleMassTransfer)(e.target); }
   if (e.target?.id === 'trade-sell-form')      { e.preventDefault(); handleSell(e.target); }
   if (e.target?.id === 'trade-mass-sell-form') { e.preventDefault(); handleMassSell(); }
   if (e.target?.id === 'trade-offer-form') {
@@ -6644,6 +7416,26 @@ function onInput(e) {
   }
   if (e.target?.id === 'trade-topup-amt') {
     if (topupState) { topupState.amount = e.target.value; queueTopupQuote(); }
+    return;
+  }
+  if (e.target?.id === 'trade-imx-amt') {
+    xferImxAmount = e.target.value;
+    patchImxAmountUi(); // never patchTransferSide here — it would rebuild this very input
+    return;
+  }
+  if (e.target?.id === 'trade-topup-gas-amt') {
+    if (topupState) {
+      topupState.gasAmount = e.target.value;
+      // Un-press any preset chip the typed value no longer matches, without repainting
+      // the input itself.
+      const v = String(e.target.value).trim();
+      for (const chip of root()?.querySelectorAll('.trade-gas-chip') || []) {
+        const on = chip.dataset.imx === v;
+        chip.classList.toggle('is-on', on);
+        chip.setAttribute('aria-pressed', String(on));
+      }
+      queueTopupGasQuote();
+    }
     return;
   }
   if (e.target?.id === 'inv-q') {
@@ -6750,18 +7542,55 @@ function wireEsc() {
   });
 }
 
+// Is a modal or an in-flight flow on screen? render() replaces the entire subtree, so
+// running it while one of these is up tears the overlay down and builds a fresh one:
+// entrance animations replay, inputs lose focus and their caret, and a panel the user is
+// mid-way through looks like it re-opened by itself. When something is open we patch the
+// affected surfaces instead of re-rendering the world.
+function overlayOpen() {
+  return !!(modalToken || topupOpen || cashoutOpen || safetyOpen
+    || (bridgeJob && !BRIDGE_TERMINAL.has(bridgeJob.phase)));
+}
+
+// Repaint everything a chain change can affect, without touching the DOM around it.
+function patchChainSurfaces() {
+  patchWalletBar();
+  patchBridgeBanner();
+  if (modalToken) patchModal();
+  if (topupOpen) patchTopup();
+  if (cashoutOpen) patchCashout();
+  patchGas();
+}
+
 function wireProviderEvents() {
   const p = eth();
   if (!p || p._hccTradeWired) return;
   p._hccTradeWired = true;
-  p.on?.('accountsChanged', accs => { account = (accs[0] || '').toLowerCase() || null; resetSellerState(); render(); });
+  p.on?.('accountsChanged', accs => {
+    const next = (accs[0] || '').toLowerCase() || null;
+    // MetaMask re-fires this on unlock, on permission changes, and sometimes for no visible
+    // reason at all — with the SAME account. Re-rendering on those is pure disruption.
+    if (next === account) return;
+    account = next;
+    // A different wallet invalidates every balance we're holding, and those panels are the
+    // one place another account's figures could linger on screen. Drop them.
+    topupState = null; cashoutState = null; gasState = null;
+    resetSellerState();
+    render(); // a real account change does invalidate the whole view
+  });
   p.on?.('chainChanged', cid => {
     const c = String(cid || '').toLowerCase();
+    if (c === String(chainId || '').toLowerCase()) return; // no actual change; ignore the echo
     chainId = c;
     // The echo of a switch WE initiated: the initiating flow patches the affected bits
     // itself — skip the full re-render (and don't wipe the seller loads it just started).
     if (expectedChainHex === c) { expectedChainHex = null; patchWalletBar(); return; }
+    expectedChainHex = null; // landed somewhere we didn't ask for — the expectation is stale
     resetSellerState();
+    // Switched in MetaMask by hand, mid-flow. Reflect it, but don't demolish what's open:
+    // a bridge is often *why* the chain changed, and rebuilding the panel underneath it is
+    // how a confirmed transaction ends up looking like it never happened.
+    if (overlayOpen()) { patchChainSurfaces(); return; }
     render();
   });
 }

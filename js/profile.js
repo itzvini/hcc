@@ -541,9 +541,16 @@ function patchGrid() {
 function patchFilters() {
   const el = root();
   if (!el || !data || data === 'notfound') return;
+  // See marketplace.js keepFacetPopStill: rebuilding the dropdown list re-creates an open
+  // popover and replays its enter animation, which reads as it reopening under the cursor.
+  const wasOpen = el.querySelector('.trade-flt-dd.is-open .trade-flt-ddbtn')?.dataset.type || null;
   const rar = el.querySelector('#hp-flt-rar'); if (rar) rar.innerHTML = rarityChipsHtml();
   const tier = el.querySelector('#hp-flt-tier'); if (tier) tier.innerHTML = tierChipsHtml();
-  const tr = el.querySelector('#hp-flt-traits'); if (tr) tr.innerHTML = traitDropsHtml();
+  const tr = el.querySelector('#hp-flt-traits');
+  if (tr) {
+    tr.innerHTML = traitDropsHtml();
+    if (wasOpen && wasOpen === openFacet) tr.querySelector('.trade-flt-pop')?.classList.add('is-static');
+  }
   const act = el.querySelector('#hp-active'); if (act) act.innerHTML = activeRowHtml();
   const tog = el.querySelector('.hp-flt-toggle');
   if (tog) tog.innerHTML = `${esc(t('trade.filter.toggle'))}${fltCount() ? `<span class="trade-flt-badge">${fltCount()}</span>` : ''}`;
