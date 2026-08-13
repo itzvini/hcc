@@ -3092,9 +3092,13 @@ async function handleMarketplaceApi(request, response, url) {
   // to spend ~$30 acquiring IMX to get it. So we cover it. See lib/gas-faucet.js for the
   // policy and why it's shaped this way.
   //
-  // Both routes pay/quote ONLY the wallet the caller's Highrise account is linked to.
-  // The `address` in the request is used to detect "you've got a different wallet
-  // connected", never as the destination — so a tampered body cannot redirect a payment.
+  // Both routes act on the wallet the member has CONNECTED, passed as `address`. That is
+  // the wallet that needs the gas, so it's the one we pay — but a connected wallet proves
+  // nothing about who its owner is, so nothing is trusted to it. Identity comes from the
+  // session (Discord account + the Highrise account behind it), and eligibility comes from
+  // the Creatures that wallet holds, read from the chain. A claim is once per LIFETIME on
+  // the Discord account, the Highrise account and the wallet, and it permanently spends
+  // every Creature in that wallet, so a fresh wallet or a moved Creature buys nothing.
 
   // Can this member get their gas covered right now? Safe to call signed out; the answer
   // is then simply { available: false, reason: 'not_signed_in' }.
@@ -3106,31 +3110,34 @@ async function handleMarketplaceApi(request, response, url) {
     const session = await db.getSession(auth.parseCookies(request)[auth.SESSION_COOKIE]);
     if (!session) { out('not_signed_in'); return; }
 
-    const elig = session.eligibility || {};
-    const linked = String(elig.ethWallet || '').toLowerCase();
-    if (!elig.linked || !HEX_ADDRESS.test(linked)) { out('no_wallet'); return; }
-
-    // The connected wallet must BE the linked one — that's what makes this safe to pay
-    // without a signature. Returning `linked` is the own-wallet exception: it's already
-    // in this caller's own /api/me payload.
     const asked = String(url.searchParams.get('address') || '').toLowerCase();
-    if (asked && asked !== linked) { out('wallet_mismatch', { wallet: linked }); return; }
+    if (!HEX_ADDRESS.test(asked)) { out('no_wallet'); return; }
 
     try {
-      const [creatures, imxWei, status] = await Promise.all([
-        erc721BalanceOf(ZK_RPC_URL, CREATURE_CONTRACT, linked),
-        gasFaucet.walletBalance(linked),
-        db.gasGrantStatus({ discordId: session.discord_id, wallet: linked, cooldownMs: gasFaucet.COOLDOWN_MS }),
+      const [owned, imxWei] = await Promise.all([
+        getOwnedCreatures(asked),
+        gasFaucet.walletBalance(asked),
       ]);
-      if (creatures < 1) { out('no_creature'); return; }
+      const tokenIds = (owned.items || []).map(c => String(c.tokenId));
+      if (!tokenIds.length) { out('no_creature'); return; }
+
       const amountWei = gasFaucet.amountFor(imxWei);
       if (amountWei === 0n) { out('has_gas'); return; }
-      if (status.nextAt && status.nextAt > Date.now()) { out('cooldown', { nextAt: status.nextAt }); return; }
+
+      const status = await db.gasGrantStatus({
+        discordId: session.discord_id,
+        highriseId: session.profile?.highriseUserId || null,
+        wallet: asked,
+        tokenIds,
+      });
+      if (status.used) { out(status.used); return; }
+      if (status.assetsUsed) { out('assets_used'); return; }
       if (status.grantsToday >= gasFaucet.DAILY_CAP) { out('daily_cap'); return; }
 
       sendJson(response, 200, {
         available: true,
-        wallet: linked,
+        wallet: asked,          // echoing back what they sent, so the UI can name the destination
+        creatures: tokenIds.length,
         amountImx: Number(amountWei) / 1e18,
         policy: gasFaucet.policy(),
       }, { 'Cache-Control': 'no-store' });
@@ -3141,8 +3148,8 @@ async function handleMarketplaceApi(request, response, url) {
     return;
   }
 
-  // Do it. Signs a native IMX transfer from the faucet wallet to the caller's linked
-  // wallet. Every gate is re-checked here against the chain and the ledger — the GET
+  // Do it. Signs a native IMX transfer from the faucet wallet to the wallet the member has
+  // connected. Every gate is re-checked here against the chain and the ledger — the GET
   // above is a UI hint, never an authorisation.
   if (pathname === '/api/market/creatures/gas/assist' && request.method === 'POST') {
     if (!gasFaucet.live()) { sendJson(response, 503, { error: 'disabled' }); return; }
@@ -3150,41 +3157,42 @@ async function handleMarketplaceApi(request, response, url) {
     const session = await db.getSession(auth.parseCookies(request)[auth.SESSION_COOKIE]);
     if (!session) { sendJson(response, 401, { error: 'not_signed_in' }); return; }
 
-    // Tight per-account limit: a legitimate member clicks this once a month, so anything
+    // Tight per-account limit: a legitimate member clicks this once, ever, so anything
     // more is either a stuck UI or someone probing. Also limited per IP.
     const aWait = rateLimited(`gasassist:${session.discord_id}`, 5, 10 * 60 * 1000)
       || rateLimited(`gasassistip:${ip}`, 12, 10 * 60 * 1000);
     if (aWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(aWait) }); return; }
 
-    const elig = session.eligibility || {};
-    const linked = String(elig.ethWallet || '').toLowerCase();
-    if (!elig.linked || !HEX_ADDRESS.test(linked)) { sendJson(response, 403, { error: 'no_wallet' }); return; }
-
     const body = await readJsonBody(request, 4 * 1024);
     const asked = String(body.address || '').toLowerCase();
-    if (asked && asked !== linked) { sendJson(response, 409, { error: 'wallet_mismatch', wallet: linked }); return; }
+    if (!HEX_ADDRESS.test(asked)) { sendJson(response, 400, { error: 'no_wallet' }); return; }
 
     try {
       // Authoritative reads: which Creatures this wallet holds right now, and its real
-      // balance. The token ids matter — a grant cools every one of them.
+      // balance. The token ids are the eligibility gate AND what the claim spends.
       const [owned, imxWei] = await Promise.all([
-        getOwnedCreatures(linked),
-        gasFaucet.walletBalance(linked),
+        getOwnedCreatures(asked),
+        gasFaucet.walletBalance(asked),
       ]);
       // getOwnedCreatures pages to a 500-Creature ceiling. A holder that big is not who
-      // this is for and is bounded by the account + wallet cooldowns anyway, so cooling
-      // the first page-run is enough.
+      // this is for, and the account/Highrise/wallet gates already allow only one claim
+      // each, so locking the first page-run is enough.
       const tokenIds = (owned.items || []).map(c => String(c.tokenId));
       if (!tokenIds.length) { sendJson(response, 403, { error: 'no_creature' }); return; }
 
       const res = await gasFaucet.grant({
-        db, discordId: session.discord_id, wallet: linked, tokenIds, walletImxWei: imxWei,
+        db,
+        discordId: session.discord_id,
+        highriseId: session.profile?.highriseUserId || null,
+        wallet: asked,
+        tokenIds,
+        walletImxWei: imxWei,
       });
       if (!res.ok) {
-        // Cooldowns and the cap are the member's answer to give; the rest are ours to fix.
-        const soft = new Set(['has_gas', 'account_cooldown', 'wallet_cooldown', 'asset_cooldown', 'daily_cap']);
+        // "You've already had it" is the member's answer to give; the rest are ours to fix.
+        const soft = new Set(['has_gas', 'account_used', 'highrise_used', 'wallet_used', 'assets_used', 'daily_cap']);
         const status = soft.has(res.reason) ? 409 : res.reason === 'blocked' ? 403 : 503;
-        sendJson(response, status, { error: res.reason, ...(res.retryAfterMs ? { retryAfterMs: res.retryAfterMs } : {}) });
+        sendJson(response, status, { error: res.reason });
         return;
       }
       sendJson(response, 200, {

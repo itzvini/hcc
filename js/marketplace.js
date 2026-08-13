@@ -2299,8 +2299,8 @@ function fundsHelpHtml(f = buyState) {
 
   // IMX (gas) row — celebrate when they're already covered, gently note it when not.
   const imxRow = hasGas
-    ? `<li class="is-ok"><span class="trade-funds-ic" aria-hidden="true">✓</span><div>${esc(t('trade.funds.imxGood'))}<br><span>${esc(t('trade.funds.have'))} ${esc(imx)} IMX</span></div></li>`
-    : `<li><span class="trade-funds-ic" aria-hidden="true">•</span><div>${esc(t('trade.funds.imxNeed'))}<br><span>${esc(t('trade.funds.have'))} ${esc(imx)} IMX · ${esc(t('trade.funds.gasHint'))}</span></div></li>`;
+    ? `<li class="is-ok"><span class="trade-funds-ic" aria-hidden="true">✓</span><div>${esc(t('trade.funds.imxGood'))}<span class="trade-funds-sub">${esc(t('trade.funds.have'))} ${esc(imx)} IMX</span></div></li>`
+    : `<li><span class="trade-funds-ic" aria-hidden="true">•</span><div>${esc(t('trade.funds.imxNeed'))}<span class="trade-funds-sub">${esc(t('trade.funds.have'))} ${esc(imx)} IMX · ${esc(t('trade.funds.gasHint'))}</span></div></li>`;
 
   // The common, reassuring case: they have enough ETH on mainnet — it just needs to bridge over.
   if (canBridge) {
@@ -2333,8 +2333,8 @@ function fundsHelpHtml(f = buyState) {
         <div class="trade-funds-h"><span aria-hidden="true">💡</span> ${esc(t('trade.funds.bridgeH'))} ${tipHtml('trade.funds.bridgeP')}</div>
         <ul class="trade-funds-list">
           <li><span class="trade-funds-ic" aria-hidden="true">↗</span><div>
-            <b>ETH</b> — ${esc(t('trade.funds.ethTitle'))}<br>
-            <span>${esc(t('trade.funds.youHaveOnEth').replace('{x}', fmtEthFiat(weiToEth(f.mainnetEthWei))))} · ${esc(t('trade.funds.bridgeNeed').replace('{x}', need))}</span>
+            <b>ETH</b> — ${esc(t('trade.funds.ethTitle'))}
+            <span class="trade-funds-sub">${esc(t('trade.funds.youHaveOnEth').replace('{x}', fmtEthFiat(weiToEth(f.mainnetEthWei))))} · ${esc(t('trade.funds.bridgeNeed').replace('{x}', need))}</span>
           </div></li>
           ${imxRow}
         </ul>
@@ -2361,7 +2361,7 @@ function fundsHelpHtml(f = buyState) {
     <div class="trade-funds">
       <div class="trade-funds-h"><span aria-hidden="true">💡</span> ${esc(t(headKey))} ${tipHtml('trade.funds.intro')}</div>
       <ul class="trade-funds-list">
-        <li><span class="trade-funds-ic" aria-hidden="true">•</span><div><b>ETH</b> — ${esc(t(forKey))}<br><span>${esc(t('trade.funds.need'))} ≈ <b>${esc(need)}</b> · ${esc(t('trade.funds.have'))} ${esc(fmtEthFiat(weiToEth(f.ethBal)))} ${esc(t('trade.funds.onZk'))}${ethElsewhere}</span></div></li>
+        <li><span class="trade-funds-ic" aria-hidden="true">•</span><div><b>ETH</b> — ${esc(t(forKey))}<span class="trade-funds-sub">${esc(t('trade.funds.need'))} ≈ <b>${esc(need)}</b> · ${esc(t('trade.funds.have'))} ${esc(fmtEthFiat(weiToEth(f.ethBal)))} ${esc(t('trade.funds.onZk'))}${ethElsewhere}</span></div></li>
         ${imxRow}
       </ul>
       ${shortNote}
@@ -2509,22 +2509,20 @@ function gasAssistHtml(g) {
     </div>`;
   }
   if (g.assistPhase === 'error') {
-    const key = g.assistErr === 'cooldown' ? 'trade.gas.assist.err.cooldown'
-      : g.assistErr === 'wallet_mismatch' ? 'trade.gas.assist.err.mismatch'
-      : g.assistErr === 'blocked' ? 'trade.gas.assist.err.blocked'
-      : 'trade.gas.assist.err.generic';
     return `<div class="trade-gas-assist is-err" role="status">
-      <span class="trade-gas-assist-ic" aria-hidden="true">⚠</span><span>${esc(t(key))}</span>
+      <span class="trade-gas-assist-ic" aria-hidden="true">⚠</span><span>${esc(t(assistErrKey(g.assistErr)))}</span>
     </div>`;
   }
 
-  // The offer.
+  // The offer, with the whole deal stated before the button. The rule is unusual enough
+  // (once ever, and it spends the Creatures) that burying it would be a nasty surprise.
   if (a.available) {
     return `<div class="trade-gas-assist is-offer">
       <div class="trade-gas-assist-head">
         <span class="trade-gas-assist-ic" aria-hidden="true">⛽</span>
         <div><b>${esc(t('trade.gas.assist.h'))}</b><span>${esc(t('trade.gas.assist.p'))}</span></div>
       </div>
+      ${gasAssistTermsHtml(a)}
       <button class="trade-funds-btn is-assist" data-act="gas-assist" type="button">${esc(t('trade.gas.assist.btn'))}</button>
       <p class="trade-funds-foot">${esc(t('trade.gas.assist.foot'))}</p>
     </div>`;
@@ -2545,23 +2543,38 @@ function gasAssistHtml(g) {
     </div>`;
   }
 
-  // Signed in, holds a Creature, but a different wallet is connected — tell them which.
-  if (a.reason === 'wallet_mismatch' && a.wallet) {
-    return `<div class="trade-gas-assist is-err">
-      <span class="trade-gas-assist-ic" aria-hidden="true">⚠</span>
-      <span>${esc(t('trade.gas.assist.err.mismatch'))} <code>${esc(shortWallet(a.wallet))}</code></span>
-    </div>`;
-  }
-
-  // On cooldown — worth naming, so they don't hunt for a button that isn't there.
-  if (a.reason === 'cooldown') {
+  // Already claimed, on any of the three identities, or the Creatures are spent. Worth
+  // naming so they don't hunt for a button that isn't there.
+  if (GAS_USED_REASONS.has(a.reason) || a.reason === 'assets_used') {
     return `<div class="trade-gas-assist is-muted">
       <span class="trade-gas-assist-ic" aria-hidden="true">⛽</span>
-      <span>${esc(t('trade.gas.assist.err.cooldown'))}</span>
+      <span>${esc(t(assistErrKey(a.reason)))}</span>
     </div>`;
   }
 
   return '';
+}
+
+// One claim per member, ever, checked against three identities. They all mean the same
+// thing to whoever is reading it, so they read the same.
+const GAS_USED_REASONS = new Set(['account_used', 'highrise_used', 'wallet_used']);
+const assistErrKey = reason =>
+  GAS_USED_REASONS.has(reason) ? 'trade.gas.assist.err.used'
+  : reason === 'assets_used' ? 'trade.gas.assist.err.assets'
+  : reason === 'blocked' ? 'trade.gas.assist.err.blocked'
+  : 'trade.gas.assist.err.generic';
+
+// The terms, in three plain lines: where it goes, that it's one-off, and what it spends.
+function gasAssistTermsHtml(a) {
+  const n = Number(a.creatures) || 0;
+  const rows = [
+    ['→', t('trade.gas.assist.once.where').replace('{w}', shortWallet(a.wallet || ''))],
+    ['1', t('trade.gas.assist.once.who')],
+    ['🔒', (n === 1 ? t('trade.gas.assist.once.nft1') : t('trade.gas.assist.once.nft')).replace('{n}', String(n))],
+  ];
+  return `<ul class="trade-gas-once">
+    ${rows.map(([ic, line]) => `<li><span class="trade-gas-once-ic" aria-hidden="true">${esc(ic)}</span><span>${esc(line)}</span></li>`).join('')}
+  </ul>`;
 }
 
 function gasHelpHtml() {
@@ -2623,8 +2636,8 @@ function gasHelpHtml() {
       <div class="trade-funds-h"><span aria-hidden="true">⛽</span> ${esc(t('trade.gas.h'))} ${tipHtml('trade.gas.p')}</div>
       <ul class="trade-funds-list">
         <li><span class="trade-funds-ic" aria-hidden="true">•</span><div>
-          <b>IMX</b> — ${esc(t('trade.gas.imxLine'))}<br>
-          <span>${esc(t('trade.funds.have'))} ${esc(imx)} IMX · ${esc(t('trade.funds.gasHint'))}</span>
+          <b>IMX</b> — ${esc(t('trade.gas.imxLine'))}
+          <span class="trade-funds-sub">${esc(t('trade.funds.have'))} ${esc(imx)} IMX · ${esc(t('trade.funds.gasHint'))}</span>
         </div></li>
       </ul>
       ${assist}
@@ -2673,9 +2686,8 @@ async function handleGasAssist() {
   } catch (err) {
     if (gasState !== g) return;
     g.assistPhase = 'error';
-    // Cooldowns arrive as three separate reasons; they read the same to a member.
-    const reason = err.reason || 'unavailable';
-    g.assistErr = /cooldown/.test(reason) ? 'cooldown' : reason;
+    // assistErrKey folds the three "already claimed" reasons into one message.
+    g.assistErr = err.reason || 'unavailable';
     // Whatever went wrong, the member still needs gas — make sure the fallback is quoted.
     ensureGasQuote(g);
     patchGas();
@@ -6241,7 +6253,13 @@ function patchImxAmountUi() {
 // recipient + safety check, and a count-aware Send button. One item behaves exactly like
 // the old single transfer; 2+ runs the batch (one confirmation each). Recipient stays put.
 function transferSideHtml() {
-  const to = ''; // the input value is preserved by patchTransferSide, not re-seeded here
+  // Normally the input value is preserved by patchTransferSide rather than re-seeded here.
+  // The exception is a view restored after Discord sign-in: nobody has typed it yet, so
+  // every render has to carry it until they do — a full render() (the seller inventory
+  // finishing, say) rebuilds this column and would otherwise blank it. The input handler
+  // drops pendingRecipient the moment they type, so this can't fight a real edit.
+  const to = pendingRecipient || '';
+  if (pendingRecipient && !transferCheck) queueTransferCheck(pendingRecipient);
   const n = transferSet.size;
   const imx = xferMode === 'coin';
   const label = imx
@@ -7409,7 +7427,8 @@ function onChange(e) {
   if (modalToken) patchModal();
 }
 function onInput(e) {
-  if (e.target?.id === 'trade-to') return queueTransferCheck(e.target.value);
+  // Their own typing wins over a restored recipient from here on (see transferSideHtml).
+  if (e.target?.id === 'trade-to') { pendingRecipient = null; return queueTransferCheck(e.target.value); }
   if (e.target?.id === 'trade-cashout-amt') {
     if (cashoutState) { cashoutState.amount = e.target.value; queueCashoutQuote(); }
     return;
@@ -7595,6 +7614,71 @@ function wireProviderEvents() {
   });
 }
 
+// --- Coming back from Discord ---------------------------------------------------------
+// Signing in is a full page load out to Discord and back, so everything not in the URL is
+// gone by the time they land: the tab they were on, what they'd picked, where they'd
+// scrolled. The gas-assist card asks people to sign in mid-flow, which makes that loss
+// very visible. So stash the view on the way out and put it back on the way in.
+// sessionStorage: scoped to this tab, dies with it, read exactly once.
+const TRADE_RETURN_KEY = 'hcc-trade-return';
+const TRADE_TABS = new Set(['buy', 'sell', 'transfer', 'sales', 'history']);
+let pendingRecipient = null;
+let pendingScrollY = null;
+
+function stashTradeReturn() {
+  try {
+    sessionStorage.setItem(TRADE_RETURN_KEY, JSON.stringify({
+      at: Date.now(),
+      tab: tradeTab,
+      coll,
+      token: modalToken || null,
+      picks: [...transferSet].slice(0, 200),
+      xferMode,
+      xferCoin,
+      amount: xferImxAmount || '',
+      to: root()?.querySelector('#trade-to')?.value || '',
+      y: Math.round(window.scrollY || 0),
+    }));
+  } catch { /* private mode or full quota — sign-in still works, it just forgets */ }
+}
+
+// One-shot. Anything older than 15 minutes is a stale tab, not a sign-in round trip, and
+// yanking someone back to a view they left an hour ago would be its own bug.
+function takeTradeReturn() {
+  try {
+    const raw = sessionStorage.getItem(TRADE_RETURN_KEY);
+    sessionStorage.removeItem(TRADE_RETURN_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw);
+    return (v && typeof v === 'object' && Date.now() - v.at < 15 * 60 * 1000) ? v : null;
+  } catch { return null; }
+}
+
+// Capture phase, so it still runs if something else handles the click first.
+function wireSignInReturn() {
+  document.addEventListener('click', e => {
+    const a = e.target?.closest?.('a[href*="/api/auth/discord/login"]');
+    if (a && root()?.contains(a)) stashTradeReturn();
+  }, true);
+}
+
+// Scroll needs the page at its full height, and on first paint the grid is still loading,
+// so the browser clamps whatever we ask for. Aim twice: now, and again once the listings
+// land. Returns the second shot, which no-ops if they've scrolled themselves by then.
+function restoreTradeScroll() {
+  if (pendingScrollY == null) return () => {};
+  const y = pendingScrollY;
+  let placed = null;
+  const go = () => { window.scrollTo({ top: y, behavior: 'auto' }); placed = Math.round(window.scrollY); };
+  requestAnimationFrame(go);
+  return () => {
+    if (pendingScrollY == null) return;
+    pendingScrollY = null;
+    if (placed != null && Math.abs(window.scrollY - placed) > 4) return; // they took over
+    requestAnimationFrame(go);
+  };
+}
+
 export async function loadMarketplace() {
   loadedOnce = true;
   try { const c = localStorage.getItem('hcc-trade-cur'); if (c && CURRENCIES.includes(c)) currency = c; } catch { /* fine */ }
@@ -7626,8 +7710,28 @@ export async function loadMarketplace() {
     // the whole collection rather than dropping the visitor on an empty grid.
     if (params.get('scope') === 'all') flt.scope = 'all';
   } catch { /* malformed query — ignore */ }
+
+  // Put them back where they were before the Discord round trip. Everything is validated
+  // on the way in: it's our own data, but it survived a trip through storage.
+  const back = takeTradeReturn();
+  if (back) {
+    if (COLLECTIONS[back.coll]) coll = back.coll;
+    if (TRADE_TABS.has(back.tab)) tradeTab = back.tab;
+    for (const id of (Array.isArray(back.picks) ? back.picks : []).slice(0, 200)) {
+      if (/^\d{1,80}$/.test(String(id))) transferSet.add(String(id));
+    }
+    if (back.xferMode === 'coin') xferMode = 'coin';
+    if (XFER_COINS[back.xferCoin]) xferCoin = back.xferCoin;
+    if (typeof back.amount === 'string') xferImxAmount = back.amount.slice(0, 32);
+    // An explicit ?token= in the URL is a deliberate deep link, so it wins.
+    if (!deepToken && /^\d{1,80}$/.test(String(back.token || ''))) deepToken = String(back.token);
+    if (IS_ADDR.test(String(back.to || '').trim().toLowerCase())) pendingRecipient = String(back.to).trim();
+    if (Number.isFinite(back.y)) pendingScrollY = back.y;
+  }
+
   wireEsc();
   wireTips();
+  wireSignInReturn();
   wireProviderEvents();
   detectWalletBug();
   if (eth()) {
@@ -7648,8 +7752,13 @@ export async function loadMarketplace() {
     }
   }
   render();
-  loadListings(true);
+  const settleScroll = restoreTradeScroll();
+  loadListings(true).finally(settleScroll);
   if (coll === 'creatures') loadCollOffers(); else if (coll === 'land') loadLandCollOffers();
+  // Landing straight on Sell or Transfer (a restored view does that) needs the inventory,
+  // which only the tab click used to trigger.
+  if (tradeTab === 'sell' || tradeTab === 'transfer') maybeLoadSeller();
+  if (tradeTab === 'history') maybeLoadHistory();
   if (deepToken) openDeepLink(deepToken);
 }
 

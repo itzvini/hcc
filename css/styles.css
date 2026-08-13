@@ -4982,12 +4982,26 @@ a.trade-buy-btn { display: inline-flex; }
   .trade-colloffer-hint { margin-left: 0; }
 }
 
-/* Friendly "let's get you set up" panel — calm info tone, NOT an alarm. */
+/* Friendly "let's get you set up" panel — calm info tone, NOT an alarm.
+   One rhythm for the whole panel. Every child used to carry its own margin, and the
+   combinations didn't add up: measured top to bottom the gaps ran 8, 12, 0, 12, 10 — the
+   gas-assist card ended up touching the button below it. A flex column with one gap can't
+   drift like that, so the per-child margins below are zeroed rather than tuned. */
 .trade-funds {
   margin-top: 12px; padding: 16px; border-radius: var(--hr-radius-lg);
+  display: flex; flex-direction: column; gap: 12px;
   background: linear-gradient(180deg, rgba(13,166,252,.08), rgba(0,0,0,.28));
   border: 1px solid rgba(13,166,252,.3);
 }
+.trade-funds > .trade-funds-h,
+.trade-funds > .trade-funds-p,
+.trade-funds > .trade-funds-list,
+.trade-funds > .trade-funds-net,
+.trade-funds > .trade-gas-assist,
+.trade-funds > .trade-bridge-quote { margin: 0; }
+/* The one deliberate exception: a footnote belongs to the button above it, so it sits
+   closer (8px) than the panel's own rhythm. */
+.trade-funds > .trade-funds-foot { margin: -4px 0 0; }
 .trade-funds-h { display: flex; align-items: center; gap: 8px; font-family: var(--hr-sans); font-weight: 800; font-size: 15px; color: var(--hr-fg-0); margin-bottom: 8px; }
 .trade-funds-h span { font-size: 18px; }
 .trade-funds-p { font-size: 13px; color: var(--hr-fg-1); margin: 0 0 12px; line-height: 1.55; }
@@ -5000,8 +5014,11 @@ a.trade-buy-btn { display: inline-flex; }
 }
 .trade-funds-list li b { color: var(--hr-fg-0); }
 .trade-funds-list li.is-ok { border-color: rgba(100,242,169,.4); }
+/* Second line of a funds row ("you have 0 IMX · a tiny amount is plenty"). It used to be a
+   bare <br> at the same size and colour as the line above, so the two ran together. */
+.trade-funds-sub { display: block; margin-top: 4px; font-size: 12px; color: var(--hr-fg-3); }
 .trade-funds-ic {
-  flex: 0 0 auto; width: 20px; height: 20px; margin-top: 1px; display: grid; place-items: center;
+  flex: 0 0 auto; width: 20px; height: 20px; display: grid; place-items: center;
   border-radius: 50%; font-size: 11px; font-weight: 900;
   background: rgba(255,255,255,.08); color: var(--hr-fg-2);
 }
@@ -5057,7 +5074,12 @@ a.trade-buy-btn { display: inline-flex; }
   0%, 100% { transform: translate3d(-18%, -8%, 0) scale(1); opacity: .55; }
   50%      { transform: translate3d(18%, 8%, 0) scale(1.12); opacity: .85; }
 }
-.trade-gas-assist-head { position: relative; display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px; }
+/* Same treatment inside the card: one gap, no per-child margins to fall out of step. The
+   footnote hugs its button here too — it's a child of the card in the offer state, so the
+   `.trade-funds >` rule above doesn't reach it. */
+.trade-gas-assist.is-offer { display: flex; flex-direction: column; gap: 12px; }
+.trade-gas-assist > .trade-funds-foot { margin: -4px 0 0; }
+.trade-gas-assist-head { position: relative; display: flex; gap: 10px; align-items: flex-start; margin: 0; }
 .trade-gas-assist-head div { display: flex; flex-direction: column; gap: 3px; }
 .trade-gas-assist b { font-family: var(--hr-sans); font-weight: 800; font-size: 14px; color: var(--hr-fg-0); }
 .trade-gas-assist span { font-size: 12.5px; color: var(--hr-fg-1); line-height: 1.5; }
@@ -5107,6 +5129,22 @@ a.trade-buy-btn { display: inline-flex; }
 }
 .trade-gas-assist.is-err .trade-gas-assist-ic { background: rgba(255,141,93,.18); color: #FF8D5D; }
 .trade-gas-assist .apply-discord-btn { width: 100%; }
+/* The terms, above the button. A claim is once per lifetime and it permanently spends the
+   Creatures, which is surprising enough that it gets stated plainly rather than tucked
+   into a footnote. Calm, not alarming: this is still the good news in the panel. */
+.trade-gas-once {
+  position: relative; list-style: none; margin: 0; padding: 12px;
+  display: flex; flex-direction: column; gap: 9px;
+  border-radius: var(--hr-radius-md);
+  background: rgba(0,0,0,.32); border: 1px solid rgba(81,255,165,.18);
+}
+.trade-gas-once li { display: flex; gap: 9px; align-items: flex-start; }
+.trade-gas-once li span:last-child { font-size: 12px; line-height: 1.5; color: var(--hr-fg-2); }
+.trade-gas-once-ic {
+  flex: 0 0 auto; width: 18px; height: 18px; margin-top: 1px; display: grid; place-items: center;
+  border-radius: 50%; font-size: 10px; font-weight: 900; line-height: 1;
+  background: rgba(81,255,165,.14); color: var(--hr-primary);
+}
 @media (max-width: 480px) {
   .trade-gas-assist { padding: 12px; }
   .trade-gas-assist b { font-size: 13.5px; }

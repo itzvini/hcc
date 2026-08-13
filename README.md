@@ -666,25 +666,52 @@ wallet drainers imitate.
 - `POST /api/market/creatures/gas/assist` — do it. Re-checks every gate against the chain
   and the ledger; the GET is a UI hint, never an authorisation.
 
+**A claim is once per member, for good.** Not a cooldown, not a monthly allowance: one
+payment, then never again. That's what makes it safe to pay whichever wallet the member has
+connected instead of demanding a particular one.
+
 The gates, in order:
 
-1. **Discord session required.** One Highrise account is the identity, not one wallet.
-2. **Paid only to the Highrise-linked wallet.** The `address` in the request is used to
-   detect "you have a different wallet connected" and is *never* the destination, so a
-   tampered body cannot redirect a payment. Nothing is signed or connected by the member.
-3. **Must hold at least one Creature**, read live from the chain.
+1. **Discord session required.** The session carries the two identities that matter: the
+   Discord account and the Highrise account behind it.
+2. **Paid to the wallet the member has connected**, passed as `address`. A connected wallet
+   proves nothing about who owns it, so nothing is trusted to it — see the trust model
+   below. Nothing is signed or approved by the member.
+3. **That wallet must hold at least one Creature**, read live from the chain.
 4. **Must be below `GAS_FAUCET_TRIGGER_IMX`** (default 0.01), read live from the chain.
    Grants top up *to* the target, so 0.009 IMX gets 0.041, not a flat 0.05.
 5. **Sanctions screen** on the destination — see below.
-6. **Cooldowns**, all set together by one grant so splitting a bag buys nothing:
-   per Discord account, per wallet, and per Creature (every Creature the wallet holds at
-   that moment goes on cooldown). Default 30 days.
+6. **Once per lifetime**, on all four of:
+   - the Discord account (`gas_grants.discord_id`)
+   - the Highrise account behind it (`gas_grants.highrise_id`)
+   - the paid wallet (`gas_grants.wallet`)
+   - **every Creature in that wallet** at the moment of the claim (`gas_asset_locks`), so a
+     claim needs at least one Creature that has never been used for one
 7. **Site-wide daily cap** (`GAS_FAUCET_DAILY_CAP`, default 200) as a circuit breaker, and
    a **float reserve** so a misconfigured target can't drain the wallet.
 
+### Why paying an arbitrary connected wallet is safe
+
+Because the claim is bound to the **asset**, not the wallet. Connecting a different wallet
+gains nothing: the Discord and Highrise accounts are already spent. Using a different
+Discord account gains nothing: the Creature is already spent, and the lock follows the
+token, so selling or moving it doesn't reset anything. To claim twice you would need a
+second Highrise account *and* a second Creature that has never been claimed on — at which
+point you are simply a second holder, which is who this is for.
+
+The member does choose the destination, since it's their connected wallet. That's their own
+one and only claim to spend, so there is nothing to steal from anyone else, and the address
+comes from the injected provider on our own page rather than a text field.
+
+All four checks and the insert run in one transaction under advisory locks on the account,
+the Highrise id and the wallet, so two tabs can't both pass the gate.
+
 A grant row is written *before* signing, and deleted again if the send fails, so a broken
-RPC never costs a member their cooldown. `gas_grants` is the permanent payout ledger;
+RPC never burns someone's one and only claim. `gas_grants` is the permanent payout ledger;
 `gas.granted` / `gas.blocked` / `gas.send_failed` / `gas.faucet_empty` land in `audit_log`.
+
+The rule is stated in the UI before the button — where the IMX goes, that it's one-off, and
+that it marks the wallet's Creatures as used. Nobody should discover this after clicking.
 
 ### The hot wallet
 
@@ -742,7 +769,6 @@ Ship the code first, leave it dark, then:
 | `GAS_FAUCET_TARGET_IMX` | `0.05` | Top up *to* this balance. |
 | `GAS_FAUCET_TRIGGER_IMX` | `0.01` | Only help wallets below this. |
 | `GAS_FAUCET_RESERVE_IMX` | `2` | Never spend the float below this. |
-| `GAS_FAUCET_COOLDOWN_DAYS` | `30` | Per account, per wallet and per Creature. |
 | `GAS_FAUCET_DAILY_CAP` | `200` | Site-wide payouts per 24h. |
 | `SANCTIONS_DENYLIST` | *(empty)* | Extra addresses to refuse, comma-separated. |
 | `SANCTIONS_FAIL_OPEN` | *(off)* | Local dev only. Allows payment when screening is down. |
@@ -771,7 +797,7 @@ curl -c c.txt "localhost:3198/api/auth/dev-login?user=Test&creatures=1&wallet=0x
 curl -b c.txt "localhost:3198/api/market/creatures/gas/assist?address=0x<same wallet>"
 ```
 
-An unfunded faucet key returns `faucet_empty` and consumes no cooldown, so the whole path
+An unfunded faucet key returns `faucet_empty` and spends nobody's claim, so the whole path
 is safe to exercise without moving real value.
 
 Credit: [Sam](https://www.communityhr.live/imxfaucet) (@Community on HR) built the first
