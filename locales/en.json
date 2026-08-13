@@ -379,6 +379,7 @@
   "trade.gas.assist.landing": "On its way. This takes a few seconds.",
   "trade.gas.assist.done.h": "You're set for gas",
   "trade.gas.assist.done.p": "Go ahead and try again.",
+  "trade.gas.assist.done.resume": "Picking up where you left off…",
   "trade.gas.assist.slow.h": "Your gas is on the way",
   "trade.gas.assist.slow.p": "It's sent, but it hasn't shown up yet. Give it a moment, then try again.",
   "trade.gas.assist.err.used": "You've already had this one. It's one claim per member and yours is used.",

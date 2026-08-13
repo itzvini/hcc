@@ -4593,7 +4593,16 @@ body.trade-sheet-open { overflow: hidden; }
 /* Mass-transfer selection strip: the picked Creatures about to be sent to one address. */
 .trade-xfer-selected { padding: 12px 14px; border-radius: var(--hr-radius-lg); border: 1px solid rgba(81,255,165,.4); background: linear-gradient(180deg, rgba(81,255,165,.09), rgba(81,255,165,.02)); }
 .trade-xfer-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
-.trade-xfer-chips { display: flex; flex-wrap: wrap; gap: 8px; max-height: 210px; overflow-y: auto; }
+/* `overflow-y: auto` also clips the horizontal axis (the spec won't let one axis scroll
+   while the other stays visible), and the remove button deliberately overhangs its thumb
+   by 6px — so it was being sliced off along the top and right edge of the scroll box. Pad
+   the scroll box to give the overhang room, and pull the padding back out with a matching
+   negative margin so the chips still line up with the label above them. */
+.trade-xfer-chips {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  max-height: 210px; overflow-y: auto;
+  padding: 8px 8px 0; margin: -8px -8px 0;
+}
 .trade-xfer-chip { position: relative; width: 58px; }
 .trade-xfer-thumb { width: 58px; height: 58px; border-radius: var(--hr-radius-md); overflow: hidden; background: var(--hr-bg-2); border: 1px solid var(--hr-line); }
 .trade-xfer-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -5116,7 +5125,10 @@ a.trade-buy-btn { display: inline-flex; }
 }
 .trade-gas-assist.is-busy,
 .trade-gas-assist.is-muted { display: flex; gap: 10px; align-items: center; border-color: var(--hr-line-strong); background: rgba(0,0,0,.3); }
+/* Heading + line stacked. is-done was missing here, so its two strings ran together on
+   one line ("You're set for gasGo ahead and try again."). */
 .trade-gas-assist.is-busy div,
+.trade-gas-assist.is-done div,
 .trade-gas-assist.is-err div { display: flex; flex-direction: column; gap: 3px; }
 .trade-gas-assist.is-done {
   display: flex; gap: 10px; align-items: center;

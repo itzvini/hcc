@@ -2497,9 +2497,11 @@ function gasAssistHtml(g) {
     </div>`;
   }
   if (g.assistPhase === 'done') {
+    // We're about to re-run what they were doing, so don't tell them to do it themselves.
+    const p = g.retry ? 'trade.gas.assist.done.resume' : 'trade.gas.assist.done.p';
     return `<div class="trade-gas-assist is-done" role="status">
       <span class="trade-gas-assist-ic" aria-hidden="true">✓</span>
-      <div><b>${esc(t('trade.gas.assist.done.h'))}</b><span>${esc(t('trade.gas.assist.done.p'))}</span></div>
+      <div><b>${esc(t('trade.gas.assist.done.h'))}</b><span>${esc(t(p))}</span></div>
     </div>`;
   }
   if (g.assistPhase === 'slow') {
@@ -2711,6 +2713,7 @@ async function handleGasAssist() {
       g.imxBal = bal;
       g.assistPhase = 'done';
       patchGas();
+      resumeAfterGas(g);
       return;
     }
   }
@@ -2718,6 +2721,29 @@ async function handleGasAssist() {
   g.assistPhase = 'slow';
   patchGas();
 }
+
+// Pick up whatever the gas shortfall interrupted. A beat first, so "you're set for gas"
+// registers before the wallet prompt appears on top of it.
+function resumeAfterGas(g) {
+  if (typeof g.retry !== 'function') return;
+  setTimeout(() => {
+    if (gasState !== g) return; // they moved on; don't drag them back
+    const retry = g.retry;
+    g.retry = null;             // once only — a retry that fails again must not loop
+    gasState = null;
+    // The transfer panel borrows #trade-status for the gas card and strips its state class
+    // (see patchGas). Hand it back before the action starts writing progress into it.
+    if (g.ctx === 'transfer') {
+      const el = root()?.querySelector('#trade-status');
+      if (el) { el.className = 'trade-status'; el.innerHTML = ''; }
+    }
+    retry();
+  }, 1400);
+}
+
+// Re-runs a form action against the LIVE form rather than the node captured when it failed:
+// the panel is rebuilt in between, so the original node is detached by the time we retry.
+const retryForm = (sel, fn) => () => { const f = root()?.querySelector(sel); if (f) fn(f); };
 
 // Quote the self-funded fallback (bridge from mainnet) if it hasn't been quoted yet.
 // Skipped while the assist path is offered, so we don't spend a Squid call on a member
@@ -2739,8 +2765,11 @@ async function ensureGasQuote(g) {
 // pick the cheapest one-tap source, and quote an exact-output top-up of GAS_TARGET_IMX.
 // Renders into whichever surface the calling flow lives in (Buy modal, or the inline
 // Sell/Transfer status slot).
-async function showGasHelp(ctx) {
-  gasState = { ctx, imxBal: null, mainnetEthWei: null, mainnetImxWei: null, from: null, quote: 'loading', assist: 'checking', assistPhase: null };
+// `retry` is what the member was actually trying to do when they ran out of gas. Once the
+// IMX lands we run it for them: telling someone to "try again" immediately after we fixed
+// the only thing stopping them is a pointless extra click.
+async function showGasHelp(ctx, retry = null) {
+  gasState = { ctx, retry, imxBal: null, mainnetEthWei: null, mainnetImxWei: null, from: null, quote: 'loading', assist: 'checking', assistPhase: null };
   patchGas();
   const [imxBal, elsewhere, assist] = await Promise.all([
     readNative(account),
@@ -2761,7 +2790,7 @@ async function showGasHelp(ctx) {
   // Any other outcome quotes the fallback immediately, as before.
   const canAssist = !!assist?.available;
   gasState = {
-    ctx, imxBal, mainnetEthWei, mainnetImxWei, from, assist,
+    ctx, retry, imxBal, mainnetEthWei, mainnetImxWei, from, assist,
     assistPhase: null, assistErr: null, assistTx: null,
     quote: canAssist ? 'unfetched' : 'loading',
   };
@@ -3439,14 +3468,14 @@ async function handleBuy(listingId) {
       // Short on USDC → offer a card on-ramp that delivers USDC to zkEVM (if Transak lists it),
       // prefilled with the shortfall in dollars.
       if (usdcBal != null && usdcBal < needUnits) { setBuy('error', { msg: t('trade.err.needUsdc').replace('{x}', fmtListingAmt(it)), onramp: { chain: 'zkevm', token: 'USDC', fiat: onrampFiatUsd(Math.max(1, need - Number(usdcBal) / 1e6)) } }); return; }
-      if (imxBal != null && imxBal < GAS_MIN_WEI) { setBuy('gas'); showGasHelp('buy'); return; }
+      if (imxBal != null && imxBal < GAS_MIN_WEI) { setBuy('gas'); showGasHelp('buy', () => handleBuy(listingId)); return; }
     } else {
       const [zkEthBal, imxBal] = await Promise.all([readErc20(IMX_ETH_TOKEN, account), readNative(account)]);
       const needWei = BigInt(Math.round((it.totalEth ?? it.priceEth) * 1e6)) * 10n ** 12n;
       if (zkEthBal != null && zkEthBal < needWei) { await showFundsHelp(it); return; }
       // Has the ETH but no gas — the exact wall in the Discord report. Same guided IMX
       // top-up the Sell/Transfer flows now use, instead of a terse "add some IMX".
-      if (imxBal != null && imxBal < GAS_MIN_WEI) { setBuy('gas'); showGasHelp('buy'); return; }
+      if (imxBal != null && imxBal < GAS_MIN_WEI) { setBuy('gas'); showGasHelp('buy', () => handleBuy(listingId)); return; }
     }
 
     // Up to a couple of passes: a first-time buyer's ERC-20 spend approval must be MINED
@@ -6578,7 +6607,7 @@ async function handleSell(form) {
         // gasless and must never be blocked). No gas → guided top-up instead of MetaMask's
         // phantom "not enough IMX".
         const imxBal = await readNative(account);
-        if (imxBal != null && imxBal < GAS_MIN_WEI) { setSell('gas'); showGasHelp('sell'); return; }
+        if (imxBal != null && imxBal < GAS_MIN_WEI) { setSell('gas'); showGasHelp('sell', retryForm('#trade-sell-form', handleSell)); return; }
         setSell('approve');
         const hash = await eth().request({
           method: 'eth_sendTransaction',
@@ -6732,7 +6761,7 @@ async function handleMassSell() {
       massState.ok++; patchMassStatus();
     } catch (err) {
       if (isUserReject(err)) break; // stop the run; keep the rest picked so they can resume
-      if (err?.gas) { massState = null; showGasHelp('sell'); patchSellSide(); return; }
+      if (err?.gas) { massState = null; showGasHelp('sell', handleMassSell); patchSellSide(); return; }
       console.error('Mass list failed for', job.tokenId, err);
       massState.failed.push(job.tokenId); patchMassStatus();
     }
@@ -6933,7 +6962,7 @@ async function handleImxSend(form) {
     // fail it cryptically — and the gas panel can now just cover it for them.
     if (!coin.native) {
       const gas = await readNative(account);
-      if (gas != null && gas < GAS_MIN_WEI) { xferImxState = null; showGasHelp('transfer'); return; }
+      if (gas != null && gas < GAS_MIN_WEI) { xferImxState = null; showGasHelp('transfer', retryForm('#trade-transfer-form', handleImxSend)); return; }
     }
     const params = coin.native
       ? { from: account, to, value: '0x' + wei.toString(16) }
@@ -6974,7 +7003,7 @@ async function handleMassTransfer(form) {
   // MetaMask "not enough IMX" popups mid-batch. (LAND settles on mainnet ETH — separate path.)
   if (coll === 'creatures') {
     const imxBal = await readNative(account);
-    if (imxBal != null && imxBal < GAS_MIN_WEI) { massState = null; showGasHelp('transfer'); return; }
+    if (imxBal != null && imxBal < GAS_MIN_WEI) { massState = null; showGasHelp('transfer', retryForm('#trade-transfer-form', handleMassTransfer)); return; }
   }
   for (const tokenId of items) {
     massState.i++; patchTransferStatus();
