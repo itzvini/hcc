@@ -144,9 +144,68 @@ let health = { creatures: null, land: null };
 function applyHealth(data, respColl) {
   const h = data?.health;
   if (!h || !respColl) return;
+  const was = health[respColl]?.state;
   health[respColl] = h;
+  if (h.state === 'live') {
+    // Recovered. Drop the backoff so the next wobble is retried promptly, and if the user
+    // was staring at an outage banner, put the real data back without making them ask.
+    healthPollAttempt[respColl] = 0;
+    stopHealthPoll(respColl);
+    if (was && was !== 'live' && respColl === coll) refreshAfterRecovery();
+  } else if (h.state !== 'checking') {
+    scheduleHealthPoll(respColl); // keep checking on our own until it comes back
+  }
   if (respColl === coll) patchDegradedBanner();
 }
+
+// --- Automatic recovery -------------------------------------------------------
+// The banner must never be a dead end that waits for a click. While a market is down we
+// re-check it on a backoff and clear it ourselves the moment it answers. "Check now" stays
+// as an impatience button, not as the only way out.
+const healthPollTimer = { creatures: null, land: null };
+const healthPollAttempt = { creatures: 0, land: 0 };
+
+function stopHealthPoll(c) {
+  if (healthPollTimer[c]) { clearTimeout(healthPollTimer[c]); healthPollTimer[c] = null; }
+}
+
+function scheduleHealthPoll(c) {
+  if (healthPollTimer[c]) return;                 // one timer per collection
+  const delay = Math.min(30000, 5000 * 2 ** healthPollAttempt[c]); // 5s, 10s, 20s, 30s…
+  healthPollAttempt[c]++;
+  healthPollTimer[c] = setTimeout(async () => {
+    healthPollTimer[c] = null;
+    if (!root()) return;                          // left the marketplace entirely
+    // Don't burn a struggling upstream's budget for a tab nobody is looking at.
+    if (document.hidden) { scheduleHealthPoll(c); return; }
+    try {
+      const path = c === 'creatures'
+        ? '/api/market/creatures/offers/collection'
+        : '/api/market/land/offers/collection';
+      const res = await fetch(path, { headers: { Accept: 'application/json' } });
+      applyHealth(await res.json().catch(() => null), c);
+    } catch {
+      scheduleHealthPoll(c);                      // still unreachable, try again later
+    }
+  }, delay);
+}
+
+// Came back to life: reload what the outage denied us, for the active collection only.
+function refreshAfterRecovery() {
+  loadBrowse(true, true);
+  if (coll === 'creatures') { loadCollOffers(); if (account) loadMyOffers(); }
+  else { loadLandCollOffers(); if (account) loadLandMyOffers(); }
+}
+
+// A tab returning to the foreground is the cheapest possible recovery signal, and the one
+// users actually generate: they switch away, the outage ends, they switch back.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden || !root()) return;
+  for (const c of ['creatures', 'land']) {
+    const st = health[c]?.state;
+    if (st && st !== 'live') { stopHealthPoll(c); healthPollAttempt[c] = 0; scheduleHealthPoll(c); }
+  }
+});
 
 const hOf = (c = coll) => health[c] || null;
 // Missing health (an older response, or a route that carries none) is treated as healthy:
@@ -739,7 +798,10 @@ function fmtAge(ms) {
 
 function degradedBannerHtml() {
   const h = hOf();
-  if (!h || h.state === 'live') return '';
+  // Nothing to say while we have never heard back ('live' by default), and nothing to say
+  // while the server is merely retrying ('checking'). The banner is a claim that the market
+  // is unreachable, so it only goes up once that is actually established.
+  if (!h || h.state === 'live' || h.state === 'checking') return '';
   const down = h.state === 'down';
   // The other market's state, so the banner can point at something that still works.
   const other = coll === 'creatures' ? 'land' : 'creatures';
@@ -748,7 +810,7 @@ function degradedBannerHtml() {
   const age = h.ageMs != null ? fmtAge(h.ageMs) : '';
   return `
     <div class="trade-degraded ${down ? 'is-down' : 'is-stale'}" role="status" aria-live="polite">
-      <span aria-hidden="true">${down ? '⛔' : '⏸'}</span>
+      <span aria-hidden="true">${down ? '⚠' : '⏸'}</span>
       <div class="trade-degraded-body">
         <strong>${esc(t(skey(down ? 'trade.health.down.h' : 'trade.health.degraded.h')))}</strong>
         <span>${esc(t(skey(down ? 'trade.health.down.p' : 'trade.health.degraded.p')))}</span>

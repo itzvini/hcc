@@ -5471,11 +5471,14 @@ a.trade-buy-btn { display: inline-flex; }
   border: 1px solid rgba(255,249,95,.4);
 }
 .trade-degraded.is-stale > span:first-child { color: var(--hr-banana); }
+/* Deliberately amber, not red. Red reads as "you did something wrong" or "your funds are
+   at risk", and neither is true: an upstream is unreachable, nothing has been charged and
+   nothing is lost. It is the same family as the stale state, one step firmer. */
 .trade-degraded.is-down {
-  background: color-mix(in srgb, var(--hr-alert, #ff6b6b) 10%, rgba(0,0,0,.34));
-  border: 1px solid color-mix(in srgb, var(--hr-alert, #ff6b6b) 45%, transparent);
+  background: color-mix(in srgb, var(--hr-banana) 12%, rgba(0,0,0,.34));
+  border: 1px solid rgba(255,249,95,.55);
 }
-.trade-degraded.is-down > span:first-child { color: var(--hr-alert, #ff6b6b); }
+.trade-degraded.is-down > span:first-child { color: var(--hr-banana); }
 .trade-degraded-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 260px; }
 .trade-degraded-body strong { font-size: 13.5px; }
 .trade-degraded-body > span { font-weight: 500; opacity: .92; }
