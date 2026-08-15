@@ -616,5 +616,9 @@ function reveal(box) {
       obs.unobserve(e.target);
     });
   }, { rootMargin: '100000px 0px 0px 0px' });
-  box.querySelectorAll('.col-reveal:not(.is-in)').forEach(el => io.observe(el));
+  // .is-watched waives the CSS reveal failsafe for tiles this observer holds.
+  box.querySelectorAll('.col-reveal:not(.is-in)').forEach(el => {
+    el.classList.add('is-watched');
+    io.observe(el);
+  });
 }

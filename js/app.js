@@ -1,22 +1,62 @@
-import { initI18n, setLanguage, t } from './i18n.js';
-import { loadHoldersChart } from './holders.js';
-import { loadMarketChart, rerenderMarket } from './market.js';
-import { loadChangelog, rerenderChangelog } from './changelog.js';
-import { loadApply, rerenderApply } from './apply.js';
-import { loadElection, rerenderElection } from './election.js';
-import { loadBallot, rerenderBallot } from './ballot.js';
-import { loadVote, rerenderVote } from './vote.js';
-import { loadMarketplace, rerenderMarketplace, openProfileView, closeProfileView } from './marketplace.js';
-import { loadPolls, rerenderPolls } from './polls.js';
-import { loadAnnouncements, rerenderAnnouncements } from './announcements.js';
-import { loadGen2, rerenderGen2 } from './gen2.js';
-import { initGuideDemos, rerenderGuideDemos } from './guide-demos.js';
-import { loadCollections, rerenderCollections } from './collections.js';
-import { loadTraits, rerenderTraits } from './traits.js';
-import { initCouncilBoard, rerenderCouncilBoard } from './council.js';
-import { initPerks, rerenderPerks } from './perks.js';
-import { initSafety, rerenderSafety } from './safety.js';
-import { rerenderProfile } from './profile.js';
+// Feature modules load on their own, and one that fails takes only itself down.
+// These were static imports, which made every feature a single point of failure for
+// the whole site: one 404 or 502 on any of the nineteen files threw away the entire
+// module graph, so nothing below ever ran — no tabs, no routing, no scroll reveals.
+// A visitor saw a page whose nav did nothing and whose sections stayed blank. Now
+// the shell boots no matter which features do.
+//
+// lazy() hands back deferred stand-ins: calling one queues the real function behind
+// its module's fetch, so every call site below reads exactly as it did with imports.
+function lazy(path) {
+  const loading = import(path).catch(error => {
+    console.error(`[app] ${path} did not load — its features stay off.`, error);
+    return null;
+  });
+  return new Proxy({}, {
+    get: (_target, name) => (...args) => loading.then(mod => {
+      if (!mod) return undefined;
+      if (typeof mod[name] !== 'function') {
+        console.error(`[app] ${path} exports no "${String(name)}".`);
+        return undefined;
+      }
+      return mod[name](...args);
+    }),
+  });
+}
+
+// i18n is the one dependency the shell calls synchronously (t(), when it labels the
+// compact mobile nav), so it keeps a live binding instead. Until it lands — or if it
+// never does — t() echoes the key back, which selectTab() already reads as "keep the
+// label that's in the markup".
+let i18n = null;
+const i18nReady = import('./i18n.js')
+  .then(mod => (i18n = mod))
+  .catch(error => {
+    console.error('[app] i18n.js did not load — the page keeps its built-in English.', error);
+    return null;
+  });
+const t = key => (i18n ? i18n.t(key) : key);
+const setLanguage = lang => i18nReady.then(() => i18n && i18n.setLanguage(lang));
+const initI18n = () => i18nReady.then(() => (i18n ? i18n.initI18n() : null));
+
+const { loadHoldersChart } = lazy('./holders.js');
+const { loadMarketChart, rerenderMarket } = lazy('./market.js');
+const { loadChangelog, rerenderChangelog } = lazy('./changelog.js');
+const { loadApply, rerenderApply } = lazy('./apply.js');
+const { loadElection, rerenderElection } = lazy('./election.js');
+const { loadBallot, rerenderBallot } = lazy('./ballot.js');
+const { loadVote, rerenderVote } = lazy('./vote.js');
+const { loadMarketplace, rerenderMarketplace, openProfileView, closeProfileView } = lazy('./marketplace.js');
+const { loadPolls, rerenderPolls } = lazy('./polls.js');
+const { loadAnnouncements, rerenderAnnouncements } = lazy('./announcements.js');
+const { loadGen2, rerenderGen2 } = lazy('./gen2.js');
+const { initGuideDemos, rerenderGuideDemos } = lazy('./guide-demos.js');
+const { loadCollections, rerenderCollections } = lazy('./collections.js');
+const { loadTraits, rerenderTraits } = lazy('./traits.js');
+const { initCouncilBoard, rerenderCouncilBoard } = lazy('./council.js');
+const { initPerks, rerenderPerks } = lazy('./perks.js');
+const { initSafety, rerenderSafety } = lazy('./safety.js');
+const { rerenderProfile } = lazy('./profile.js');
 
 // Language switcher — re-render dynamic views after language change
 document.querySelectorAll('.lang-btn').forEach(btn => {
@@ -472,7 +512,10 @@ if (g2MotionOK && 'IntersectionObserver' in window && g2Reveals.length) {
     entry.target.querySelectorAll('[data-countup]').forEach(g2CountUp);
     g2io.unobserve(entry.target);
   }), { threshold: 0.15 });
-  g2Reveals.forEach(el => g2io.observe(el));
+  // .is-watched calls off the CSS failsafe: this observer has the element, so it
+  // doesn't need rescuing. Tag only what actually reaches observe(), so anything
+  // this file never got to still gets shown by CSS alone.
+  g2Reveals.forEach(el => { el.classList.add('is-watched'); g2io.observe(el); });
 } else {
   g2Reveals.forEach(el => el.classList.add('is-in'));
 }

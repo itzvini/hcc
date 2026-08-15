@@ -1341,11 +1341,22 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
 .g2-focus p { margin-top: 4px; font-size: 14px; color: var(--hr-fg-1); line-height: 1.55; }
 
 /* Scroll-in reveal — hidden only when motion is welcome; reduced-motion users
-   (and any browser without the observer) see everything in place. */
+   (and any browser without the observer) see everything in place.
+
+   The hidden state expires unless something is watching. Content that only JS can
+   reveal is content one failed request can erase: a 502 on any app.js dependency
+   used to leave these blocks at opacity 0 for good, and scrolling couldn't help
+   because no observer existed. The observer now tags what it watches with
+   .is-watched, so anything still untagged a few seconds in was abandoned, and
+   reveal-failsafe brings it back with no JS involved. A healthy page tags every
+   block within milliseconds and the failsafe never runs, which keeps it from
+   showing an off-screen card early and making it re-animate on the way in. */
 @media (prefers-reduced-motion: no-preference) {
   .g2-reveal:not(.is-in) { opacity: 0; }
+  .g2-reveal:not(.is-in):not(.is-watched) { animation: reveal-failsafe 1ms linear 4s forwards; }
   .g2-reveal.is-in { animation: apply-rise .7s cubic-bezier(.16,.84,.3,1) backwards; animation-delay: var(--d, 0s); }
 }
+@keyframes reveal-failsafe { to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   .g2-chip-dot, .g2-phase.is-now::before,
   .g2-stop.is-live .g2-stop-node { animation: none !important; }
@@ -1810,8 +1821,12 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
 }
 .col-reset:hover { background: var(--hr-primary-press); }
 
+/* Same failsafe as .g2-reveal above: these tiles are built and observed by
+   collections.js / traits.js, so anything that stops that observer would otherwise
+   leave a grid of invisible cards behind. */
 @media (prefers-reduced-motion: no-preference) {
   .col-reveal:not(.is-in) { opacity: 0; }
+  .col-reveal:not(.is-in):not(.is-watched) { animation: reveal-failsafe 1ms linear 4s forwards; }
   .col-reveal.is-in { animation: apply-rise .6s cubic-bezier(.16,.84,.3,1) backwards; animation-delay: var(--d, 0s); }
 }
 @media (prefers-reduced-motion: reduce) {

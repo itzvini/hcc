@@ -6102,6 +6102,16 @@ const server = http.createServer((request, response) => {
   });
 });
 
+// Outlast the edge proxy's idle timeout. Node closes a keep-alive socket after 5s by
+// default; Railway's proxy pools connections for longer, so it could hand a request to
+// a socket we were already closing. That request is simply lost, and the proxy answers
+// 502 once it gives up ~15s later — random assets on a normal page load, which is
+// enough to break the module that reveals the page. Keeping our side open longer means
+// the proxy, not us, decides when a pooled connection ends. headersTimeout must stay
+// above keepAliveTimeout or Node reaps the connection it just agreed to hold.
+server.keepAliveTimeout = 65000;
+server.headersTimeout   = 66000;
+
 server.listen(port, host, () => {
   console.log(`HCC Player Council site running on http://${host}:${port}`);
   // Gas assist state at boot — the float is the thing that silently runs out, so say it
