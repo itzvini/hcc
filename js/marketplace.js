@@ -131,6 +131,29 @@ let busy    = false;
 let pendingFlash = null; // one-shot banner surfaced on next render
 let loadedOnce = false;
 
+// --- Upstream health, per collection -----------------------------------------
+// The server reports whether it could actually reach the market behind each collection.
+// Kept per collection so an Immutable outage never paints over the LAND tab, and vice
+// versa. `trading` is authoritative and comes from the server: do NOT re-derive it here,
+// because the server knows which upstream backs the WRITE path and the client does not.
+let health = { creatures: null, land: null };
+
+// Apply a health envelope from a response. `respColl` MUST be the collection captured when
+// the request was SENT, not the active one: a slow Creature response landing after the user
+// switched tabs would otherwise paint a Creature outage over a healthy LAND view.
+function applyHealth(data, respColl) {
+  const h = data?.health;
+  if (!h || !respColl) return;
+  health[respColl] = h;
+  if (respColl === coll) patchDegradedBanner();
+}
+
+const hOf = (c = coll) => health[c] || null;
+// Missing health (an older response, or a route that carries none) is treated as healthy:
+// refusing to trade on absent information would pause a market that is actually fine.
+const tradingPaused = (c = coll) => hOf(c)?.trading === false;
+const collState = (c = coll) => hOf(c)?.state || 'live';
+
 // Browse state
 let listings = [];
 let listingsCursor = null;
@@ -310,7 +333,8 @@ let profileViewSlug = null;
 
 // Offers state. tokenOffers = bids on the open modal's token; collOffers = standing
 // collection-wide ("floor") offers, best first; myOffers = the user's own active offers.
-let tokenOffers = null;    // null = loading/not loaded
+let tokenOffers = null;    // null = loading/not loaded OR the read failed (see tokenOffersError)
+let tokenOffersError = false;  // true = we couldn't read this token's book — not "no offers"
 let collOffers = null;
 let collOffersError = false; // true = last load failed → empty strip means "couldn't load", not "none"
 let collOffersRetryTimer = null; // pending auto-retry after a failed load (self-heals the strip)
@@ -321,7 +345,10 @@ let landCollOffersError = false;
 let landCollOffersRetryTimer = null;
 let landCollOffersRetryAttempt = 0;
 let landMyOffers = null;   // the connected wallet's own active LAND offers (for cancel)
+let landMyOffersError = false; // true = the read failed; null above means "unknown", not "none"
 let myOffers = null;
+let myOffersError = false;     // ditto for Creatures. render() checks it so a failed load
+                               // isn't retried on every repaint.
 let offerState = null;     // staged make-offer: prepare|approve|approveWait|sign|create|done|error
 let offerCtx = null;       // where the make-offer flow is running: 'modal' | 'browse'
 let landOfferState = null; // staged LAND make-offer (separate: mainnet + WETH wrap/approve)
@@ -696,6 +723,100 @@ function walletNoticeHtml() {
 function patchWalletNotice() {
   const el = root()?.querySelector('#trade-mmwarn-slot');
   if (el) el.innerHTML = walletNoticeHtml();
+}
+
+// --- Degraded-market banner ---------------------------------------------------
+// Shown when the market behind the ACTIVE collection can't be reached. Deliberately not
+// dismissable: unlike the MetaMask notice, hiding this one would leave the user looking at
+// prices that may already be gone, with no clue that they're frozen.
+function fmtAge(ms) {
+  if (!Number.isFinite(ms)) return '';
+  const mins = Math.floor(ms / 60000);
+  if (mins < 1) return t('trade.health.ageNow');
+  if (mins < 60) return t('trade.health.ageMin').replace('{n}', String(mins));
+  return t('trade.health.ageHr').replace('{n}', String(Math.floor(mins / 60)));
+}
+
+function degradedBannerHtml() {
+  const h = hOf();
+  if (!h || h.state === 'live') return '';
+  const down = h.state === 'down';
+  // The other market's state, so the banner can point at something that still works.
+  const other = coll === 'creatures' ? 'land' : 'creatures';
+  const otherOk = (health[other]?.state ?? 'live') === 'live';
+
+  const age = h.ageMs != null ? fmtAge(h.ageMs) : '';
+  return `
+    <div class="trade-degraded ${down ? 'is-down' : 'is-stale'}" role="status" aria-live="polite">
+      <span aria-hidden="true">${down ? '⛔' : '⏸'}</span>
+      <div class="trade-degraded-body">
+        <strong>${esc(t(skey(down ? 'trade.health.down.h' : 'trade.health.degraded.h')))}</strong>
+        <span>${esc(t(skey(down ? 'trade.health.down.p' : 'trade.health.degraded.p')))}</span>
+        ${!down && age ? `<span class="trade-degraded-age">${esc(t('trade.health.degraded.age').replace('{t}', age))}</span>` : ''}
+        ${otherOk ? `<span>${esc(t(skey('trade.health.otherOk')))}</span>` : ''}
+      </div>
+      ${tipHtml(skey('trade.health.detail'))}
+      ${otherOk ? `<button class="trade-degraded-switch" data-act="coll" data-coll="${esc(other)}" type="button">${esc(t(skey('trade.health.switch')))}</button>` : ''}
+      <button class="trade-degraded-retry" data-act="health-retry" type="button">${esc(t('trade.health.retryBtn'))}</button>
+    </div>`;
+}
+function patchDegradedBanner() {
+  const el = root()?.querySelector('#trade-degraded-slot');
+  if (el) el.innerHTML = degradedBannerHtml();
+  applyTradingPause();
+}
+
+// Disable every marketplace-write control while this collection's upstream is down.
+//
+// Deliberately a single DOM sweep rather than a condition threaded through all ~13 render
+// sites: those sites are spread across the file and several are re-rendered by targeted
+// patch functions, so one missed spot silently re-enables a button on the next keystroke.
+// One sweep, re-run after every patch, cannot miss a site.
+//
+// It only ever touches buttons whose data-act is in WRITE_ACTS, so bridging, gas assist,
+// the on-ramp, cash-out, top-up and transfers all keep working. Those are exactly what a
+// user stuck mid-flow needs during an outage.
+function applyTradingPause() {
+  const r = root();
+  if (!r) return;
+  const paused = tradingPaused();
+  const reason = t(skey('trade.health.btnTitle'));
+  r.querySelectorAll('[data-act]').forEach(el => {
+    if (!WRITE_ACTS.has(el.dataset.act)) return;
+    if (paused) {
+      // Remember whether the control was already disabled for its own reason (busy, empty
+      // selection), so un-pausing restores that state instead of blanket-enabling it.
+      if (el.dataset.pausePrev == null) el.dataset.pausePrev = el.disabled ? '1' : '0';
+      el.disabled = true;
+      // A disabled button announces nothing but "dimmed" — say why, for screen readers too.
+      el.setAttribute('title', reason);
+      el.setAttribute('aria-label', reason);
+    } else if (el.dataset.pausePrev != null) {
+      el.disabled = el.dataset.pausePrev === '1';
+      delete el.dataset.pausePrev;
+      el.removeAttribute('title');
+      el.removeAttribute('aria-label');
+    }
+  });
+  // Submit buttons live inside forms and carry no data-act, so they need the same pass.
+  r.querySelectorAll('form[data-writes] button[type="submit"]').forEach(btn => {
+    if (paused) {
+      if (btn.dataset.pausePrev == null) btn.dataset.pausePrev = btn.disabled ? '1' : '0';
+      btn.disabled = true;
+      btn.setAttribute('title', reason);
+    } else if (btn.dataset.pausePrev != null) {
+      btn.disabled = btn.dataset.pausePrev === '1';
+      delete btn.dataset.pausePrev;
+      btn.removeAttribute('title');
+    }
+  });
+  // One inline line per open flow, using the status slots and the banana "not an error"
+  // treatment that already exist.
+  r.querySelectorAll('[data-pause-note]').forEach(el => {
+    el.innerHTML = paused
+      ? `<div class="trade-status is-warn">${esc(t(skey('trade.health.inline')))}</div>`
+      : '';
+  });
 }
 
 // Map a wallet/provider error to a friendly, actionable message — never a raw revert.
@@ -1790,12 +1911,15 @@ async function loadBrowse(reset = true, quiet = false) {
   clearTimeout(browseIndexTimer); // a fresh request supersedes any pending poll
   const hadFilters = fltActive(); // captured at request time, applied at response time
   const ds = browseDataset();
+  const reqColl = coll; // captured at send time, so a late response can't paint the wrong tab
   if (!quiet) { listingsLoading = true; patchGrid(); patchFilters(); }
   try {
     const qs = browseQuery(page);
     const res = await fetch(`${ds.api}${qs ? '?' + qs : ''}`, { headers: { Accept: 'application/json' } });
+    // A 503 still carries a health envelope, so parse before deciding.
+    const data = await res.json().catch(() => null);
+    applyHealth(data, reqColl);
     if (!res.ok) throw new Error('http ' + res.status);
-    const data = await res.json();
     if (rid !== browseReqId || ds.api !== browseDataset().api) return; // superseded — newer request (or view) owns the grid
     if (data.ethUsd != null) ethUsd = data.ethUsd;
     if (data.fxRates) fxRates = data.fxRates;
@@ -3571,10 +3695,17 @@ async function handleBuy(listingId) {
 
 async function loadCollOffers() {
   clearTimeout(collOffersRetryTimer); collOffersRetryTimer = null; // supersede any pending auto-retry
+  const reqColl = 'creatures'; // captured at send time — see applyHealth
   try {
     const res = await fetch('/api/market/creatures/offers/collection', { headers: { Accept: 'application/json' } });
+    // A 503 still carries a health envelope, so read the body before deciding.
+    const data = await res.json().catch(() => null);
+    applyHealth(data, reqColl);
     if (!res.ok) throw new Error(`offers/collection HTTP ${res.status}`);
-    collOffers = (await res.json()).offers || [];
+    // `offers: null` means the server could not read the book. That is NOT an empty book,
+    // and must not overwrite what we already have with "none right now".
+    if (data?.offers == null) throw new Error('offers unavailable');
+    collOffers = data.offers;
     collOffersError = false;
     collOffersRetryAttempt = 0; // healthy again — reset the backoff
   } catch (err) {
@@ -3608,8 +3739,12 @@ async function loadLandCollOffers() {
   clearTimeout(landCollOffersRetryTimer); landCollOffersRetryTimer = null;
   try {
     const res = await fetch('/api/market/land/offers/collection', { headers: { Accept: 'application/json' } });
+    const data = await res.json().catch(() => null);
+    applyHealth(data, 'land');
     if (!res.ok) throw new Error(`land offers/collection HTTP ${res.status}`);
-    landCollOffers = (await res.json()).offers || [];
+    // Same rule as the Creature book: null means we could not read it, not "none standing".
+    if (data?.offers == null) throw new Error('land offers unavailable');
+    landCollOffers = data.offers;
     landCollOffersError = false;
     landCollOffersRetryAttempt = 0;
   } catch (err) {
@@ -3630,29 +3765,58 @@ function scheduleLandCollOffersRetry() {
     if (coll === 'land' && root()) loadLandCollOffers();
   }, delay);
 }
+// The user's own offers. On failure these stay UNKNOWN (null + an error flag), never [].
+// An empty list here reads as "you have nothing standing", which invites someone to bid
+// again on top of a bid they already have out. `myOffersError` exists so render() can tell
+// "never loaded" from "tried and failed" and doesn't re-fire the load forever.
 async function loadMyOffers() {
-  if (!account) { myOffers = null; return; }
+  if (!account) { myOffers = null; myOffersError = false; return; }
+  const reqAccount = account, reqColl = 'creatures'; // captured at send time
   try {
-    const res = await fetch(`/api/market/creatures/offers/mine/${account}`, { headers: { Accept: 'application/json' } });
-    myOffers = res.ok ? ((await res.json()).offers || []) : [];
-  } catch { myOffers = []; }
+    const res = await fetch(`/api/market/creatures/offers/mine/${reqAccount}`, { headers: { Accept: 'application/json' } });
+    const data = await res.json().catch(() => null);
+    if (reqAccount !== account) return;              // user switched wallets mid-flight
+    applyHealth(data, reqColl);
+    if (!res.ok || data?.offers == null) throw new Error(`offers/mine HTTP ${res.status}`);
+    myOffers = data.offers;
+    myOffersError = false;
+  } catch (err) {
+    console.error('Load my offers failed:', err.message);
+    if (reqAccount === account) { myOffers = null; myOffersError = true; }
+  }
   patchCollStrip();
 }
 async function loadLandMyOffers() {
-  if (!account) { landMyOffers = null; return; }
+  if (!account) { landMyOffers = null; landMyOffersError = false; return; }
+  const reqAccount = account, reqColl = 'land';
   try {
-    const res = await fetch(`/api/market/land/offers/mine/${account}`, { headers: { Accept: 'application/json' } });
-    landMyOffers = res.ok ? ((await res.json()).offers || []) : [];
-  } catch { landMyOffers = []; }
+    const res = await fetch(`/api/market/land/offers/mine/${reqAccount}`, { headers: { Accept: 'application/json' } });
+    const data = await res.json().catch(() => null);
+    if (reqAccount !== account) return;
+    applyHealth(data, reqColl);
+    if (!res.ok || data?.offers == null) throw new Error(`land offers/mine HTTP ${res.status}`);
+    landMyOffers = data.offers;
+    landMyOffersError = false;
+  } catch (err) {
+    console.error('Load LAND my offers failed:', err.message);
+    if (reqAccount === account) { landMyOffers = null; landMyOffersError = true; }
+  }
   patchLandOfferStrip();
 }
 async function loadTokenOffers(tokenId) {
   tokenOffers = null;
+  tokenOffersError = false;
   try {
     const res = await fetch(`/api/market/creatures/offers/token/${encodeURIComponent(tokenId)}`, { headers: { Accept: 'application/json' } });
-    const offers = res.ok ? ((await res.json()).offers || []) : [];
-    if (String(modalToken) === String(tokenId)) { tokenOffers = offers; patchModal(); }
-  } catch { if (String(modalToken) === String(tokenId)) { tokenOffers = []; patchModal(); } }
+    const data = await res.json().catch(() => null);
+    applyHealth(data, 'creatures');
+    if (!res.ok || data?.offers == null) throw new Error(`offers/token HTTP ${res.status}`);
+    if (String(modalToken) === String(tokenId)) { tokenOffers = data.offers; patchModal(); }
+  } catch (err) {
+    console.error('Load token offers failed:', err.message);
+    // Unknown, not empty: a seller reads this book to decide whether to accept.
+    if (String(modalToken) === String(tokenId)) { tokenOffers = null; tokenOffersError = true; patchModal(); }
+  }
 }
 
 function offerStatusHtml() {
@@ -3746,6 +3910,7 @@ function patchConfirmAccept() {
     if (slot) slot.innerHTML = confirmAcceptHtml();
   }
   document.body.classList.toggle('trade-modal-open', !!pendingAccept || !!modalToken);
+  applyTradingPause();
 }
 
 // Add the zkEVM ETH token to MetaMask so a seller can actually SEE their proceeds (it's an
@@ -3905,7 +4070,11 @@ async function handleAcceptLandOffer(orderHash, protocolAddress, tokenId, netEth
 // Offer rows for the token modal: list + accept (owner) or make-an-offer (everyone else).
 function modalOffersHtml(meta) {
   const isOwner = account && meta?.owner && meta.owner === account;
-  const rows = tokenOffers === null
+  // null means loading OR we couldn't read the book. Those look identical to the user
+  // otherwise, and "no offers" would be an outright false statement in the second case.
+  const rows = tokenOffersError
+    ? `<div class="trade-modal-loading">${esc(t('trade.health.offersUnknown'))}</div>`
+    : tokenOffers === null
     ? `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.offers.loading'))}</div>`
     : (tokenOffers.length
         ? `<ul class="trade-offer-list">${tokenOffers.slice(0, 3).map((o, i) => `
@@ -3923,7 +4092,7 @@ function modalOffersHtml(meta) {
   const isUsdcOffer = offerCurrency === 'usdc';
   const offerPh = isUsdcOffer ? '250' : (offerUnit === 'eth' ? t('trade.offers.make.ph') : t('trade.offers.make.phFiat'));
   const makeForm = !isOwner && account && onZk()
-    ? `<form class="trade-offer-form" id="trade-offer-form" data-token="${esc(modalToken)}" novalidate>
+    ? `<form class="trade-offer-form" id="trade-offer-form" data-writes data-token="${esc(modalToken)}" novalidate>
         ${offerCurrencyPickerHtml()}
         <input id="trade-offer-price" type="text" inputmode="decimal" placeholder="${esc(offerPh)}" autocomplete="off" />
         ${isUsdcOffer
@@ -3969,7 +4138,7 @@ function collStripHtml() {
           <span class="trade-colloffer-price ${top?.currency === 'usdc' ? 'is-usdc' : ''}">${top ? esc(fmtOfferLine(top)) : esc(t(collOffersError ? 'trade.coll.loadErr' : 'trade.coll.none'))}</span>
         </div>
         ${account && onZk() ? `
-          <form class="trade-offer-form is-inline" id="trade-coll-offer-form" novalidate>
+          <form class="trade-offer-form is-inline" id="trade-coll-offer-form" data-writes novalidate>
             ${offerCurrencyPickerHtml()}
             <input id="trade-coll-offer-price" type="text" inputmode="decimal" placeholder="${esc(isUsdcOffer ? '250' : (offerUnit === 'eth' ? t('trade.offers.make.ph') : t('trade.offers.make.phFiat')))}" autocomplete="off" />
             ${isUsdcOffer
@@ -3986,6 +4155,7 @@ function collStripHtml() {
 function patchCollStrip() {
   const el = root()?.querySelector('#trade-colloffer');
   if (el) el.outerHTML = collStripHtml();
+  applyTradingPause();
 }
 
 // LAND standing-offer strip (read-only, Phase 1): surfaces the top OpenSea collection bid
@@ -4014,7 +4184,7 @@ function landOfferStripHtml() {
           <span class="trade-colloffer-price ${top?.currency === 'usdc' ? 'is-usdc' : ''}">${top ? esc(fmtOfferLine(top)) : esc(t(landCollOffersError ? 'trade.coll.loadErr' : 'trade.coll.none'))}</span>
         </div>
         ${account ? `
-          <form class="trade-offer-form is-inline" id="trade-land-offer-form" novalidate>
+          <form class="trade-offer-form is-inline" id="trade-land-offer-form" data-writes novalidate>
             ${offerCurrencyPickerHtml()}
             <input id="trade-land-offer-price" type="text" inputmode="decimal" placeholder="${esc(isUsdcOffer ? '250' : t('trade.offers.make.ph'))}" autocomplete="off" />
             ${isUsdcOffer ? `<span class="trade-price-unit trade-cur-fixed">USDC</span>` : ''}
@@ -4028,6 +4198,7 @@ function landOfferStripHtml() {
 function patchLandOfferStrip() {
   const el = root()?.querySelector('#trade-landoffer');
   if (el) el.outerHTML = landOfferStripHtml();
+  applyTradingPause();
 }
 
 // Instant-sell card on the Sell tab. Targets the best SPECIFIC offer on the picked
@@ -4414,6 +4585,7 @@ function patchModal() {
   if (modalToken && !m.contains(document.activeElement)) m.querySelector('.trade-modal-close')?.focus();
   // Resolve the holder behind the owner wallet (cached; repaints itself when it lands).
   if (modalToken) maybeLoadHolderProfile(modalOwnerWallet());
+  applyTradingPause();
 }
 
 // --- Wallet bar + actions ---
@@ -5963,7 +6135,7 @@ function sellSingleHtml() {
   // USDC is entered directly in dollars (no ETH/fiat unit conversion); ETH keeps the unit picker.
   return `
     <div id="trade-sell-selected">${sellSelectedHtml()}</div>
-    <form class="trade-form" id="trade-sell-form" novalidate>
+    <form class="trade-form" id="trade-sell-form" data-writes novalidate>
       ${sellCurrencyPickerHtml()}
       <label class="trade-field"><span>${esc(t('trade.sell.price'))}</span>
         <div class="trade-price-row">
@@ -5986,6 +6158,7 @@ function patchSellSide() {
   const side = root()?.querySelector('#trade-sell-side');
   if (side) side.innerHTML = sellSideHtml();
   patchSellTiles();
+  applyTradingPause();
 }
 // Toggle the picker tiles' selected state in place (never rebuilds the picker → scroll survives).
 function patchSellTiles() {
@@ -6068,7 +6241,7 @@ function sellMassHtml() {
         <button type="button" class="apply-btn-ghost" data-act="mass-apply-all">${esc(t('trade.mass.apply'))}</button>
       </div>
       ${isLand ? `<div class="trade-mass-dur">${landSellDurationHtml()}</div>` : ''}
-      <form class="trade-form" id="trade-mass-sell-form" novalidate>
+      <form class="trade-form" id="trade-mass-sell-form" data-writes novalidate>
         <div class="trade-mass-rows">${rows}</div>
         ${totalLine ? `<div class="trade-mass-total">${totalLine}</div>` : ''}
         <button class="trade-send" id="trade-mass-submit" type="submit" ${busy || total <= 0 ? 'disabled' : ''}>
@@ -6102,7 +6275,7 @@ function patchMassStatus() {
   if (el) el.innerHTML = massStatusHtml();
   const btn = root()?.querySelector('#trade-mass-submit');
   const total = massSellTotal();
-  if (btn) btn.disabled = !!(massState && massState.phase === 'run') || total <= 0;
+  if (btn) btn.disabled = !!(massState && massState.phase === 'run') || total <= 0 || tradingPaused();
 }
 
 // LAND listing length (Seaport startTime→endTime). A short expiry means abandoned test
@@ -6607,6 +6780,7 @@ function patchSellInstant() {
   if (tradeTab !== 'sell') return;
   const el = root()?.querySelector('#trade-sell-instant');
   if (el) el.innerHTML = coll === 'land' ? landInstantSellHtml() : instantSellHtml();
+  applyTradingPause();
 }
 
 // Re-render the active Sell view in place, preserving the typed price — a picker
@@ -6624,12 +6798,13 @@ function patchSellView() {
     const net = view.querySelector('#trade-sell-net');
     if (net) net.innerHTML = landSellNetHtml(sellEthFromInput(price));
   }
+  applyTradingPause();
 }
 function patchSellStatus() {
   const st = root()?.querySelector('#trade-sell-status');
   if (st) st.innerHTML = sellStatusHtml();
   const btn = root()?.querySelector('#trade-sell-submit');
-  if (btn) btn.disabled = !!(sellState && SELL_BUSY_PHASES.has(sellState.phase)) || !sellSel;
+  if (btn) btn.disabled = !!(sellState && SELL_BUSY_PHASES.has(sellState.phase)) || !sellSel || tradingPaused();
 }
 function setSell(phase, extra) { sellState = { phase, ...extra }; patchSellStatus(); }
 
@@ -7147,28 +7322,52 @@ async function refreshBalance() {
 }
 
 // --- Render + events ---
+
+// Build one section, and never let its failure take the page with it. The panel is written
+// in a single innerHTML assignment, so before this an exception anywhere in one collection's
+// builders threw before that assignment ran: the boot spinner stayed up, the loaders after
+// it never fired, and a Creature bug blanked LAND too. Now a broken section degrades to a
+// small notice and the rest of the panel, including the collection switcher, still paints.
+function safeSection(fn, fallback = '') {
+  try { return fn(); }
+  catch (err) { console.error('marketplace: section failed to render:', err); return fallback; }
+}
+
 function render() {
   const el = root();
   if (!el) return;
-  el.setAttribute('aria-busy', 'false');
   // Command bar, two deliberate tiers so it never wraps awkwardly: the top row pairs the
   // collection switcher (left) with the wallet bar (right) — context + identity on opposite
   // ends — and the action tabs (+ safety pill) sit on their own row below, with the
   // holder-profile pill anchored at that row's far right (it opens the in-view profile).
-  el.innerHTML = `${flashBanner()}
-    <div class="trade-command">
-      <div class="trade-command-top">${collSwitcherHtml()}${walletBarHtml()}</div>
-      <div class="trade-command-nav">${tradeTabsHtml()}${profileNavPillHtml()}</div>
-    </div>
-    <div id="trade-mmwarn-slot">${walletNoticeHtml()}</div>
-    <div id="trade-bridgebar-slot">${bridgeBannerHtml()}</div>
-    ${viewHtml()}${modalHtml()}${safetyHtml()}<div id="trade-confirm-slot">${confirmAcceptHtml()}</div><div id="trade-cashout-slot">${cashoutHtml()}</div><div id="trade-topup-slot">${topupHtml()}</div>`;
+  try {
+    el.innerHTML = `${safeSection(flashBanner)}
+      <div class="trade-command">
+        <div class="trade-command-top">${safeSection(collSwitcherHtml)}${safeSection(walletBarHtml)}</div>
+        <div class="trade-command-nav">${safeSection(tradeTabsHtml)}${safeSection(profileNavPillHtml)}</div>
+      </div>
+      <div id="trade-mmwarn-slot">${safeSection(walletNoticeHtml)}</div>
+      <div id="trade-degraded-slot">${safeSection(degradedBannerHtml)}</div>
+      <div id="trade-bridgebar-slot">${safeSection(bridgeBannerHtml)}</div>
+      ${safeSection(viewHtml, `<div class="trade-empty">${esc(t('trade.coll.loadErr'))}</div>`)}${safeSection(modalHtml)}${safeSection(safetyHtml)}<div id="trade-confirm-slot">${safeSection(confirmAcceptHtml)}</div><div id="trade-cashout-slot">${safeSection(cashoutHtml)}</div><div id="trade-topup-slot">${safeSection(topupHtml)}</div>`;
+  } catch (err) {
+    // The assignment itself blew up. Paint a shell that still lets the user switch
+    // collections, so one broken market never costs them the other.
+    console.error('marketplace: render failed, painting shell:', err);
+    el.innerHTML = `<div class="trade-command"><div class="trade-command-top">${safeSection(collSwitcherHtml)}</div></div>
+      <div class="trade-empty">${esc(t('trade.coll.loadErr'))}</div>`;
+  }
+  // Only after the DOM is in place: leaving this before the assignment meant a throw left
+  // the boot spinner up while already claiming the panel was ready.
+  el.setAttribute('aria-busy', 'false');
   ensureDelegation();
   if (account && (coll === 'land' || onZk())) {
     refreshBalance();
     maybeLoadSeller();
-    if (coll === 'creatures' && myOffers === null) loadMyOffers();
-    else if (coll === 'land' && landMyOffers === null) loadLandMyOffers();
+    // `=== null` means "never loaded". The error flag stops a failed load from re-firing
+    // on every repaint, which would hammer an already-struggling upstream.
+    if (coll === 'creatures' && myOffers === null && !myOffersError) loadMyOffers();
+    else if (coll === 'land' && landMyOffers === null && !landMyOffersError) loadLandMyOffers();
   }
   // History is read-only by address — load it even when the wallet isn't on the right chain.
   if (account && tradeTab === 'history') maybeLoadHistory();
@@ -7185,6 +7384,7 @@ function render() {
     hpScrollPending = false;
     el.querySelector('.trade-command')?.scrollIntoView({ block: 'start' });
   }
+  applyTradingPause(); // last: every write CTA above is now in the DOM
 }
 
 // Copy a full value (owner wallet, token id) to the clipboard and flash "Copied!" on
@@ -7217,10 +7417,32 @@ async function copyValue(btn) {
   copyFlashTimer = setTimeout(() => btn.classList.remove('is-copied'), 1400);
 }
 
+// Actions that WRITE to a marketplace. Paused while that collection's upstream is down.
+// An explicit list, never a CSS-class sweep: bridging, gas assist, the on-ramp, cash-out,
+// top-up and plain transfers must all keep working during an outage, since they're exactly
+// what an already-stuck user needs. Transfers don't touch the orderbook at all.
+const WRITE_ACTS = new Set([
+  'buy', 'cancel-listing', 'accept-offer', 'accept-confirm',
+  'instant-sell', 'land-instant-sell', 'cancel-offer', 'cancel-land-offer',
+]);
+
 function onClick(e) {
   const target = e.target.closest('[data-act]');
   if (!target) return;
-  switch (target.dataset.act) {
+  const act = target.dataset.act;
+  // Cancelling gets its own line: "paused" must never read as "your listing was withdrawn".
+  if (WRITE_ACTS.has(act) && tradingPaused()) {
+    const isCancel = act.startsWith('cancel-');
+    pendingFlash = t(skey(isCancel ? 'trade.health.cancel' : 'trade.health.inline'));
+    render();
+    return;
+  }
+  switch (act) {
+    case 'health-retry':
+      // Manual re-check from the banner. Reloads whichever books back this collection.
+      if (coll === 'creatures') { loadCollOffers(); loadListings(true); }
+      else { loadLandCollOffers(); loadListings(true); }
+      return;
     case 'open':       return openModal(target.dataset.token);
     case 'close':      return closeModal();
     case 'copy':       return copyValue(target);
@@ -7245,6 +7467,14 @@ function onClick(e) {
       coll = target.dataset.coll;
       try { localStorage.setItem('hcc-trade-coll', coll); } catch { /* fine */ }
       tokenOffers = null;
+      // Clear the "we already tried and failed" latches so switching INTO a collection
+      // always re-checks it. Without this, a market that recovered would still look dead
+      // until a hard reload. The health envelopes stay: they're per collection and the
+      // banner should reflect what we last knew about each.
+      tokenOffersError = false;
+      myOffersError = false;
+      landMyOffersError = false;
+      collOffersRetryAttempt = 0;
       resetBrowseForView(); // clears the grid/filters; scope defaults per the new view
       syncTradeUrl();
       resetSellerState();
@@ -7448,6 +7678,15 @@ function onClick(e) {
   }
 }
 function onSubmit(e) {
+  // A disabled submit button still leaves Enter-in-a-text-field as a way through, so the
+  // pause is enforced here too. Keyed off the same data-writes marker the sweep uses, and
+  // it deliberately excludes the transfer form: moving your own items is not a market write.
+  if (e.target?.hasAttribute?.('data-writes') && tradingPaused()) {
+    e.preventDefault();
+    pendingFlash = t(skey('trade.health.inline'));
+    render();
+    return;
+  }
   if (e.target?.id === 'trade-transfer-form') { e.preventDefault(); (xferMode === 'coin' ? handleImxSend : handleMassTransfer)(e.target); }
   if (e.target?.id === 'trade-sell-form')      { e.preventDefault(); handleSell(e.target); }
   if (e.target?.id === 'trade-mass-sell-form') { e.preventDefault(); handleMassSell(); }
@@ -7585,7 +7824,7 @@ function onInput(e) {
     const total = massSellTotal();
     if (totalEl) totalEl.innerHTML = massTotalLineHtml(total);
     const btn = root()?.querySelector('#trade-mass-submit');
-    if (btn) btn.disabled = !!(massState && massState.phase === 'run') || total <= 0;
+    if (btn) btn.disabled = !!(massState && massState.phase === 'run') || total <= 0 || tradingPaused();
     return;
   }
   if (e.target?.id === 'trade-offer-price' || e.target?.id === 'trade-coll-offer-price') {

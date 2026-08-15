@@ -12,11 +12,15 @@ try { process.loadEnvFile(); } catch { /* no .env — fine */ }
 const db = require('./lib/db');
 const auth = require('./lib/auth');
 const { recoverPersonalSignAddress } = require('./lib/eth-verify');
+const ethRpcLib = require('./lib/eth-rpc'); // ordered mainnet RPC failover (LAND side only)
 const mktOrderbook = require('./lib/marketplace-orderbook');
 const squidBridge = require('./lib/squid-bridge');
 const gasFaucet = require('./lib/gas-faucet');
 const landMarket = require('./lib/land-market');
 const landPets = require('./lib/land-pets');
+const upstreamHealth = require('./lib/upstream-health'); // per-collection upstream state
+const lastKnown = require('./lib/last-known');           // failure-path snapshots only
+const creatureFallback = require('./lib/creature-fallback'); // Blockscout read-only browse fallback
 const slimeIndex = require('./lib/slime-index');
 const { computeEligibility, BRACKETS } = require('./lib/eligibility');
 const { PROPOSITIONS, PROPOSITION_IDS } = require('./lib/propositions');
@@ -163,18 +167,35 @@ async function fetchBlockscoutPages(baseUrl, onBody, extraParams = {}) {
 
 // Minimal eth_call against the given chain RPC. `data` is the ABI-encoded calldata;
 // returns the raw hex result (throws on transport/RPC/revert so callers can degrade).
-async function ethCall(rpcUrl, to, data) {
+//
+// Mainnet calls are routed through lib/eth-rpc.js, which tries several providers in order
+// (Alchemy joins the list when ALCHEMY_API_KEY is set). zkEVM keeps the single-host path:
+// Alchemy does not serve Immutable zkEVM at all, so there is nothing to fail over TO.
+//
+// A revert still throws with `err.rpcError = true` — callers that read a revert as data
+// (estateLandOwnedBy) MUST check that flag rather than catching everything.
+// Which failover list a URL belongs to. Anything that isn't one of the two mainnet hosts
+// (i.e. zkEVM) keeps the direct single-host path.
+const rpcRoleFor = rpcUrl => (rpcUrl === ETH_RPC_URL ? 'read' : rpcUrl === ETH_BALANCE_RPC ? 'fresh' : null);
+
+// One JSON-RPC round trip: mainnet goes through the ordered failover, everything else
+// straight to the given host.
+async function rpcVia(rpcUrl, method, params) {
+  const role = rpcRoleFor(rpcUrl);
+  if (role) return ethRpcLib.ethRpc(method, params, { role, timeoutMs: 15000 });
   const res = await fetch(rpcUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to, data }, 'latest'] }),
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
     signal: AbortSignal.timeout(15000),
   });
-  if (!res.ok) throw new Error(`eth_call HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`${method} HTTP ${res.status}`);
   const body = await res.json();
-  if (body.error) throw new Error(`eth_call: ${body.error.message || JSON.stringify(body.error)}`);
+  if (body.error) throw Object.assign(new Error(`${method}: ${body.error.message || JSON.stringify(body.error)}`), { rpcError: true });
   return body.result;
 }
+
+const ethCall = (rpcUrl, to, data) => rpcVia(rpcUrl, 'eth_call', [{ to, data }, 'latest']);
 
 const padUint = n => BigInt(n).toString(16).padStart(64, '0'); // uint256 arg → 32-byte word
 
@@ -194,17 +215,7 @@ async function ethGetTxReceipt(rpcUrl, hash) {
 
 // Native-coin balance (wei hex) for an address on the given chain RPC. Powers the
 // marketplace's "your ETH is just on the wrong network" helper (mainnet ETH lookup).
-async function ethGetBalance(rpcUrl, address) {
-  const res = await fetch(rpcUrl, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getBalance', params: [address, 'latest'] }),
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!res.ok) throw new Error(`eth_getBalance HTTP ${res.status}`);
-  const body = await res.json();
-  if (body.error) throw new Error(body.error.message || 'eth_getBalance error');
-  return body.result;
-}
+const ethGetBalance = (rpcUrl, address) => rpcVia(rpcUrl, 'eth_getBalance', [address, 'latest']);
 
 // Mask a wallet for logs — never write a full holder address to the server log.
 const maskWallet = a => (a && a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : '(addr)');
@@ -359,9 +370,14 @@ const WALLET_HOLDINGS_TTL_MS = 60 * 1000;
 const HEX_ADDRESS = /^0x[0-9a-f]{40}$/; // a real on-chain address (rejects dev-login placeholders)
 
 // ERC-721 balanceOf for one address on the given chain RPC.
+// An unparseable result is a broken response, not a zero balance. Returning 0 there told
+// callers "this wallet holds nothing", which silently drops a holder's eligibility; throw
+// so the failover in ethCall gets a chance at another provider.
 async function erc721BalanceOf(rpcUrl, contract, address) {
-  const n = parseInt(await ethCall(rpcUrl, contract, SEL_BALANCE_OF + padUint(BigInt(address))), 16);
-  return Number.isFinite(n) ? n : 0;
+  const raw = await ethCall(rpcUrl, contract, SEL_BALANCE_OF + padUint(BigInt(address)));
+  const n = parseInt(raw, 16);
+  if (!Number.isFinite(n)) throw new Error(`balanceOf: unparseable result for ${contract}`);
+  return n;
 }
 
 // LAND parcels locked in estates owned by `address`. Estate parcels live in the estate
@@ -381,7 +397,14 @@ async function estateLandOwnedBy(address) {
     for (let i = 0; i < 1000; i++) {
       let pr;
       try { pr = await ethCall(ETH_RPC_URL, ESTATE_CONTRACT, SEL_ESTATES_TO_PARCELS + padUint(BigInt(estateId)) + padUint(i)); }
-      catch { break; } // out-of-bounds index reverts → end of this estate's parcels
+      catch (err) {
+        // An out-of-bounds index REVERTS, and that revert is how we find the end of this
+        // estate's parcel array — so a revert breaks the loop. A transport failure is not
+        // an answer: breaking on it silently under-counts the holder's LAND (and their
+        // eligibility) as if the estate were smaller. Let it propagate instead.
+        if (err.rpcError) break;
+        throw err;
+      }
       if (!pr || pr === '0x') break;
       parcels++;
     }
@@ -1128,14 +1151,29 @@ function enrichZkOffers(offers, ethUsd) {
 // first by ETH-equivalent. `fn` is one of the orderbook list{Collection,Token,My}Offers; `base`
 // carries nftContract (+ tokenId / accountAddress). Each currency is queried independently so
 // one currency's hiccup can't blank the whole book.
+// Returns { offers, ok, failed } — `failed` is the list of currency keys whose read blew
+// up. A caller MUST NOT treat `offers: []` as "no offers" without checking it: an empty
+// array from a failed read reads to the user as an empty market, which is how someone
+// prices a listing against a book that isn't really empty.
 async function zkOffersAllCurrencies(fn, base, ethUsd) {
   const perCur = await Promise.all(Object.values(ZK_CURRENCIES).map(async cur => {
-    try { const d = await fn({ ...base, sellContract: cur.address, currency: { code: cur.key, decimals: cur.decimals } }); return d.offers || []; }
-    catch (err) { console.error(`offers(${cur.key}) failed:`, err.message); return []; }
+    try {
+      upstreamHealth.throwIfFaulted('creatures', 'offers');
+      const d = await fn({ ...base, sellContract: cur.address, currency: { code: cur.key, decimals: cur.decimals } });
+      return { key: cur.key, offers: d.offers || [] };
+    } catch (err) {
+      console.error(`offers(${cur.key}) failed:`, err.message);
+      return { key: cur.key, offers: null, err };
+    }
   }));
-  const merged = enrichZkOffers(perCur.flat(), ethUsd);
+  const failed = perCur.filter(r => r.offers == null);
+  const ok = perCur.filter(r => r.offers != null);
+  if (failed.length) upstreamHealth.noteFail('creatures', 'offers', upstreamHealth.codeFor(failed[0].err));
+  else upstreamHealth.noteOk('creatures', 'offers');
+
+  const merged = enrichZkOffers(ok.flatMap(r => r.offers), ethUsd);
   merged.sort((a, b) => (b.priceEth ?? 0) - (a.priceEth ?? 0)); // best offer first (ETH-equivalent)
-  return merged;
+  return { offers: merged, ok: ok.map(r => r.key), failed: failed.map(r => r.key) };
 }
 
 // --- Transfer recipient safety checks ---
@@ -1146,26 +1184,10 @@ let ethersLib = null;
 try { ethersLib = require('ethers'); } catch { /* transitive dep of @imtbl/orderbook — present in practice */ }
 
 async function ethGetTxCount(rpcUrl, address) {
-  const res = await fetch(rpcUrl, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getTransactionCount', params: [address, 'latest'] }),
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!res.ok) throw new Error(`eth_getTransactionCount HTTP ${res.status}`);
-  const body = await res.json();
-  if (body.error) throw new Error(body.error.message || 'eth_getTransactionCount error');
-  return parseInt(body.result, 16) || 0;
+  return parseInt(await rpcVia(rpcUrl, 'eth_getTransactionCount', [address, 'latest']), 16) || 0;
 }
 async function ethGetCode(rpcUrl, address) {
-  const res = await fetch(rpcUrl, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getCode', params: [address, 'latest'] }),
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!res.ok) throw new Error(`eth_getCode HTTP ${res.status}`);
-  const body = await res.json();
-  if (body.error) throw new Error(body.error.message || 'eth_getCode error');
-  return body.result || '0x';
+  return (await rpcVia(rpcUrl, 'eth_getCode', [address, 'latest'])) || '0x';
 }
 
 // Addresses where an NFT is irretrievably lost or obviously wrong — hard-blocked.
@@ -2681,14 +2703,62 @@ async function handleMarketplaceApi(request, response, url) {
   const ip = (request.headers['x-forwarded-for'] || '').split(',')[0].trim()
     || request.socket.remoteAddress || 'unknown';
   const isPetRender = /^\/api\/market\/land\/pet\//.test(pathname);
+  // Budget PER COLLECTION, not per client. One shared bucket meant a Creature outage —
+  // which makes the client retry hard — burned the whole allowance and started 429ing the
+  // LAND routes as well, so an Immutable problem looked like an OpenSea problem too.
+  // Keeping the buckets apart is what lets one market stay usable while the other is down.
+  const mktBucket = /^\/api\/market\/land\//.test(pathname) ? 'land'
+    : /^\/api\/market\/creatures\//.test(pathname) ? 'creatures'
+    : 'shared';
   if (!isPetRender) {
-    const wait = rateLimited(`mkt:${ip}`, 90, 60 * 1000);
+    const wait = rateLimited(`mkt:${mktBucket}:${ip}`, 90, 60 * 1000);
     if (wait) { sendJson(response, 429, { error: 'Too many requests.' }, { 'Retry-After': String(wait) }); return; }
   }
 
+  // --- Health envelopes ---------------------------------------------------------
+  // Every market READ answers with `health`, so the client can tell "this market is empty"
+  // from "we could not reach this market". Declared here, above the routes, because both
+  // collections need them and JS const has no hoisting.
+  //
+  // `ok` records the attempt in the ledger as a side effect, so a route only has to say
+  // whether its upstream answered. `snapshotAt` is the age of any remembered data being
+  // served, or null.
+  const srcHealth = (coll, source, ok, snapshotAt = null, code = 'unavailable') => {
+    if (ok) upstreamHealth.noteOk(coll, source);
+    else upstreamHealth.noteFail(coll, source, code);
+    return ok
+      ? { state: 'live', asOf: Date.now(), ageMs: 0, error: null }
+      : upstreamHealth.sourceState(coll, source, snapshotAt);
+  };
+  const errCode = err => (err?.code === 'rate_limited' || Number(err?.status ?? err?.statusCode) === 429 ? 'rate_limited'
+    : err?.code === 'not_configured' ? 'not_configured' : 'unavailable');
+
+  // Creature BROWSE health. Note this deliberately reports only the `listings` source: the
+  // browse index and the order book are different clients, so a browse outage must not
+  // pause trading (`trading` is derived from the offers source, which this route never
+  // touches, and an unknown write source leaves trading open).
+  const creatureBrowseHealth = (ok, snapshotAt = null, code = 'unavailable') =>
+    upstreamHealth.collectionHealth('creatures', { listings: srcHealth('creatures', 'listings', ok, snapshotAt, code) });
+
   if (pathname === '/api/market/creatures/listings') {
-    const data = await getCreatureListings(url.searchParams.get('cursor') || '');
-    sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=30' });
+    const cursor = url.searchParams.get('cursor') || '';
+    const KEY = `creatures:listings:${cursor}`;
+    try {
+      upstreamHealth.throwIfFaulted('creatures', 'listings');
+      const data = await getCreatureListings(cursor);
+      lastKnown.record(KEY, data);
+      sendJson(response, 200, { ...data, health: creatureBrowseHealth(true) }, { 'Cache-Control': 'public, max-age=30' });
+    } catch (err) {
+      console.error('Creature listings failed:', err.message);
+      const snap = lastKnown.read(KEY, upstreamHealth.MAX_AGE_MS.creatures);
+      const health = creatureBrowseHealth(false, snap?.at ?? null, errCode(err));
+      // `fetchedAt` must report when the DATA was read, not when this response was built —
+      // it was the one field quietly asserting freshness we did not have.
+      sendJson(response, snap ? 200 : 503, snap
+        ? { ...snap.data, fetchedAt: new Date(snap.at).toISOString(), items: (snap.data.items || []).map(i => ({ ...i, stale: true })), health }
+        : { error: 'upstream_down', items: null, health },
+        { 'Cache-Control': 'no-store' });
+    }
     return;
   }
 
@@ -2700,8 +2770,51 @@ async function handleMarketplaceApi(request, response, url) {
       const w = rateLimited(`mktwallet:${ip}`, 40, 60 * 1000);
       if (w) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(w) }); return; }
     }
-    const data = await getCreatureBrowse(url.searchParams);
-    sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=15' });
+    const KEY = `creatures:browse:${url.search || ''}`;
+    try {
+      upstreamHealth.throwIfFaulted('creatures', 'listings');
+      const data = await getCreatureBrowse(url.searchParams);
+      lastKnown.record(KEY, data);
+      sendJson(response, 200, { ...data, health: creatureBrowseHealth(true) }, { 'Cache-Control': 'public, max-age=15' });
+    } catch (err) {
+      console.error('Creature browse failed:', err.message);
+      const snap = lastKnown.read(KEY, upstreamHealth.MAX_AGE_MS.creatures);
+      if (snap) {
+        sendJson(response, 200, {
+          ...snap.data,
+          fetchedAt: new Date(snap.at).toISOString(),
+          items: (snap.data.items || []).map(i => ({ ...i, stale: true })),
+          health: creatureBrowseHealth(false, snap.at, errCode(err)),
+        }, { 'Cache-Control': 'no-store' });
+        return;
+      }
+      // No snapshot. A WALLET view can still be rebuilt from chain data via Blockscout,
+      // which is a different host on its own rate limit, so an Immutable outage doesn't
+      // have to cost someone the sight of their own Creatures.
+      //
+      // These rows carry no prices, and their `listed: false` is a placeholder the tile
+      // needs, NOT a statement that the token isn't for sale. That's why this only ever
+      // answers under a degraded envelope with pricesUnavailable set: the banner has to be
+      // the thing that tells the user we couldn't ask.
+      const q = (url.searchParams.get('q') || '').trim().toLowerCase();
+      if (HEX_ADDRESS.test(q) && creatureFallback.available()) {
+        const items = await creatureFallback.ownedBy(q);
+        if (items.length) {
+          console.warn(`Creature browse: served ${items.length} rows for ${maskWallet(q)} from the Blockscout fallback`);
+          sendJson(response, 200, {
+            items, total: items.length, page: 0, hasMore: false,
+            scope: 'all', owner: q, ownedTotal: items.length,
+            pricesUnavailable: true, source: 'blockscout',
+            health: creatureBrowseHealth(false, Date.now(), errCode(err)),
+          }, { 'Cache-Control': 'no-store' });
+          return;
+        }
+      }
+      sendJson(response, 503, {
+        error: 'upstream_down', items: null,
+        health: creatureBrowseHealth(false, null, errCode(err)),
+      }, { 'Cache-Control': 'no-store' });
+    }
     return;
   }
 
@@ -2719,10 +2832,18 @@ async function handleMarketplaceApi(request, response, url) {
   if (pathname === '/api/market/creatures/sales') {
     try {
       const data = await getCreatureSalesHistory(url.searchParams);
-      sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=30' });
+      // Sales are settled history, not a live book: they attach health for context but
+      // must never move `trading`, so they report against the non-pricing `meta` source.
+      sendJson(response, 200, {
+        ...data,
+        health: upstreamHealth.collectionHealth('creatures', { meta: srcHealth('creatures', 'meta', true) }),
+      }, { 'Cache-Control': 'public, max-age=30' });
     } catch (err) {
       console.error('Creature sales history failed:', err.message);
-      sendJson(response, 503, { error: 'unavailable' });
+      sendJson(response, 503, {
+        error: 'unavailable', sales: null,
+        health: upstreamHealth.collectionHealth('creatures', { meta: srcHealth('creatures', 'meta', false, null, errCode(err)) }),
+      }, { 'Cache-Control': 'no-store' });
     }
     return;
   }
@@ -2732,18 +2853,45 @@ async function handleMarketplaceApi(request, response, url) {
   // token. Same wire shape as a /listings item; null when the token isn't listed.
   const listingForMatch = pathname.match(/^\/api\/market\/creatures\/listing\/(\d{1,80})$/);
   if (listingForMatch) {
-    const listIdx = await getBrowseIndex();
-    const found = listIdx.items.find(it => String(it.tokenId) === listingForMatch[1]);
-    let listing = null;
-    if (found) { const { traits, listedAt, ...pub } = found; listing = pub; }
-    sendJson(response, 200, { listing }, { 'Cache-Control': 'public, max-age=15' });
+    try {
+      upstreamHealth.throwIfFaulted('creatures', 'listings');
+      const listIdx = await getBrowseIndex();
+      const found = listIdx.items.find(it => String(it.tokenId) === listingForMatch[1]);
+      let listing = null;
+      if (found) { const { traits, listedAt, ...pub } = found; listing = pub; }
+      sendJson(response, 200, { listing, health: creatureBrowseHealth(true) }, { 'Cache-Control': 'public, max-age=15' });
+    } catch (err) {
+      // A null listing here normally means "not for sale". While the index is unreachable
+      // that would be a lie, and this route feeds ?token= deep links straight from Discord
+      // pings, so answer 503 rather than telling someone their Creature is unlisted.
+      console.error('Creature listing lookup failed:', err.message);
+      sendJson(response, 503, {
+        error: 'upstream_down', listing: null,
+        health: creatureBrowseHealth(false, null, errCode(err)),
+      }, { 'Cache-Control': 'no-store' });
+    }
     return;
   }
 
   const tokenMatch = pathname.match(/^\/api\/market\/creatures\/token\/(\d{1,80})$/);
   if (tokenMatch) {
-    const data = await getCreatureToken(tokenMatch[1]);
-    sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=120' });
+    try {
+      upstreamHealth.throwIfFaulted('creatures', 'meta');
+      const data = await getCreatureToken(tokenMatch[1]);
+      sendJson(response, 200, { ...data, health: upstreamHealth.collectionHealth('creatures', { meta: srcHealth('creatures', 'meta', true) }) },
+        { 'Cache-Control': 'public, max-age=120' });
+    } catch (err) {
+      // Token metadata is immutable per token, so Blockscout is a complete substitute here
+      // rather than a partial one. Prices are not involved, so nothing can mislead.
+      console.error('Creature token lookup failed:', err.message);
+      const meta = creatureFallback.available() ? await creatureFallback.tokenMeta(tokenMatch[1]) : null;
+      const health = upstreamHealth.collectionHealth('creatures', { meta: srcHealth('creatures', 'meta', false, meta ? Date.now() : null, errCode(err)) });
+      if (meta) {
+        sendJson(response, 200, { ...meta, source: 'blockscout', health }, { 'Cache-Control': 'no-store' });
+      } else {
+        sendJson(response, 503, { error: 'upstream_down', health }, { 'Cache-Control': 'no-store' });
+      }
+    }
     return;
   }
 
@@ -2931,27 +3079,93 @@ async function handleMarketplaceApi(request, response, url) {
 
   // Read endpoints (public orderbook data). Each returns a MIXED-currency book — offers in
   // ETH and USDC merged, best first — with an ETH-equivalent + USD estimate on every row.
+  // Health envelope for a Creature offers response. `snapshotAt` is the age of whatever
+  // remembered book we are serving, or null when the data is live / there is none.
+  const creatureOffersHealth = (failed, snapshotAt = null) => {
+    const offersState = failed.length
+      ? upstreamHealth.sourceState('creatures', 'offers', snapshotAt)
+      : { state: 'live', asOf: Date.now(), ageMs: 0, error: null };
+    return upstreamHealth.collectionHealth('creatures', { offers: offersState });
+  };
+
   if (pathname === '/api/market/creatures/offers/collection') {
+    if (!mktOrderbook.available()) {
+      upstreamHealth.noteFail('creatures', 'offers', 'not_configured');
+      sendJson(response, 503, { error: 'upstream_down', offers: null, health: creatureOffersHealth(['eth', 'usdc']) }, { 'Cache-Control': 'no-store' });
+      return;
+    }
     const fx = await getMarketplaceFx();
-    const offers = await zkOffersAllCurrencies(mktOrderbook.listCollectionOffers, { nftContract: CREATURE_CONTRACT }, fx.ethUsd);
-    sendJson(response, 200, { offers: await fundedOffersOnly(offers) }, { 'Cache-Control': 'public, max-age=15' });
+    const { offers, failed } = await zkOffersAllCurrencies(mktOrderbook.listCollectionOffers, { nftContract: CREATURE_CONTRACT }, fx.ethUsd);
+    const KEY = 'creatures:offers:collection';
+
+    if (!failed.length) {
+      const funded = await fundedOffersOnly(offers);
+      lastKnown.record(KEY, funded); // snapshot only ever written on the happy path
+      sendJson(response, 200, { offers: funded, health: creatureOffersHealth([]) }, { 'Cache-Control': 'public, max-age=15' });
+      return;
+    }
+    // Everything failed → serve the remembered book if it is recent enough, clearly marked
+    // stale. Nothing recent → say we do not know, rather than "there are no offers".
+    if (failed.length === Object.keys(ZK_CURRENCIES).length) {
+      const snap = lastKnown.read(KEY, upstreamHealth.MAX_AGE_MS.creatures);
+      const health = creatureOffersHealth(failed, snap?.at ?? null);
+      sendJson(response, snap ? 200 : 503, {
+        offers: snap ? snap.data.map(o => ({ ...o, stale: true })) : null,
+        error: snap ? undefined : 'upstream_down',
+        health,
+      }, { 'Cache-Control': 'no-store' });
+      return;
+    }
+    // One currency answered: the book is real but incomplete. Say so.
+    sendJson(response, 200, {
+      offers: await fundedOffersOnly(offers), partial: true, unavailableCurrencies: failed,
+      health: creatureOffersHealth(failed, Date.now()),
+    }, { 'Cache-Control': 'no-store' });
     return;
   }
   const offersTokenMatch = pathname.match(/^\/api\/market\/creatures\/offers\/token\/(\d{1,80})$/);
   if (offersTokenMatch) {
+    if (!mktOrderbook.available()) {
+      sendJson(response, 503, { error: 'upstream_down', offers: null, health: creatureOffersHealth(['eth', 'usdc']) }, { 'Cache-Control': 'no-store' });
+      return;
+    }
     const fx = await getMarketplaceFx();
-    const offers = await zkOffersAllCurrencies(mktOrderbook.listTokenOffers, { nftContract: CREATURE_CONTRACT, tokenId: offersTokenMatch[1] }, fx.ethUsd);
-    sendJson(response, 200, { offers: await fundedOffersOnly(offers) }, { 'Cache-Control': 'public, max-age=15' });
+    const { offers, failed } = await zkOffersAllCurrencies(mktOrderbook.listTokenOffers, { nftContract: CREATURE_CONTRACT, tokenId: offersTokenMatch[1] }, fx.ethUsd);
+    // No remembered copy for a single token: a stale per-token book is what a seller reads
+    // when deciding to accept, and one wrong row there is a bad trade.
+    if (failed.length === Object.keys(ZK_CURRENCIES).length) {
+      sendJson(response, 503, { error: 'upstream_down', offers: null, health: creatureOffersHealth(failed) }, { 'Cache-Control': 'no-store' });
+      return;
+    }
+    sendJson(response, 200, {
+      offers: await fundedOffersOnly(offers),
+      ...(failed.length ? { partial: true, unavailableCurrencies: failed } : {}),
+      health: creatureOffersHealth(failed, Date.now()),
+    }, { 'Cache-Control': failed.length ? 'no-store' : 'public, max-age=15' });
     return;
   }
   const offersMineMatch = pathname.match(/^\/api\/market\/creatures\/offers\/mine\/(0x[0-9a-f]{40})$/);
   if (offersMineMatch) {
+    if (!mktOrderbook.available()) {
+      sendJson(response, 503, { error: 'upstream_down', offers: null, health: creatureOffersHealth(['eth', 'usdc']) }, { 'Cache-Control': 'no-store' });
+      return;
+    }
     const fx = await getMarketplaceFx();
-    const offers = await zkOffersAllCurrencies(mktOrderbook.listMyOffers, { nftContract: CREATURE_CONTRACT, accountAddress: offersMineMatch[1] }, fx.ethUsd);
+    const { offers, failed } = await zkOffersAllCurrencies(mktOrderbook.listMyOffers, { nftContract: CREATURE_CONTRACT, accountAddress: offersMineMatch[1] }, fx.ethUsd);
+    // `offers: null`, never []. An empty list here renders as "you have no offers out",
+    // which invites the user to re-bid on top of a bid they already have standing.
+    if (failed.length === Object.keys(ZK_CURRENCIES).length) {
+      sendJson(response, 503, { error: 'upstream_down', offers: null, health: creatureOffersHealth(failed) }, { 'Cache-Control': 'no-store' });
+      return;
+    }
     // The user's OWN offers are annotated, not hidden — an unfunded one needs their
     // attention (top up or cancel), not silence.
     const annotated = await annotateOffersFunded(offers);
-    sendJson(response, 200, { offers: annotated.map(({ grossWei, ...rest }) => rest) }, { 'Cache-Control': 'no-store' });
+    sendJson(response, 200, {
+      offers: annotated.map(({ grossWei, ...rest }) => rest),
+      ...(failed.length ? { partial: true, unavailableCurrencies: failed } : {}),
+      health: creatureOffersHealth(failed, Date.now()),
+    }, { 'Cache-Control': 'no-store' });
     return;
   }
 
@@ -3392,12 +3606,40 @@ async function handleMarketplaceApi(request, response, url) {
   }
   // Active collection-wide offers ("standing offers") on LAND, best first. Read-only:
   // surfaces existing OpenSea demand so holders can see the floor bid. WETH-denominated.
+  // Health envelope for a LAND response. `listings` is LAND's write-path source (the same
+  // osFetch the buy/sell routes use), so it is what gates `trading` for this collection.
+  const landHealth = (ok, snapshotAt = null, code = 'unavailable') => {
+    if (ok) upstreamHealth.noteOk('land', 'listings');
+    else upstreamHealth.noteFail('land', 'listings', code);
+    const state = ok
+      ? { state: 'live', asOf: Date.now(), ageMs: 0, error: null }
+      : upstreamHealth.sourceState('land', 'listings', snapshotAt);
+    return upstreamHealth.collectionHealth('land', { listings: state });
+  };
+
   if (pathname === '/api/market/land/offers/collection') {
-    if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
-    const [data, fx] = await Promise.all([landMarket.listCollectionOffers(), getMarketplaceFx()]);
-    // Mixed book (WETH≈ETH + USDC): add an ETH-equivalent + USD estimate, re-rank best first.
-    const offers = enrichZkOffers(data.offers, fx.ethUsd).sort((a, b) => (b.priceEth ?? 0) - (a.priceEth ?? 0));
-    sendJson(response, 200, { offers }, { 'Cache-Control': 'public, max-age=30' });
+    if (!landMarket.configured()) {
+      sendJson(response, 503, { error: 'not_configured', offers: null, health: landHealth(false, null, 'not_configured') }, { 'Cache-Control': 'no-store' });
+      return;
+    }
+    const KEY = 'land:offers:collection';
+    try {
+      upstreamHealth.throwIfFaulted('land', 'listings');
+      const [data, fx] = await Promise.all([landMarket.listCollectionOffers(), getMarketplaceFx()]);
+      // Mixed book (WETH≈ETH + USDC): add an ETH-equivalent + USD estimate, re-rank best first.
+      const offers = enrichZkOffers(data.offers, fx.ethUsd).sort((a, b) => (b.priceEth ?? 0) - (a.priceEth ?? 0));
+      lastKnown.record(KEY, offers);
+      sendJson(response, 200, { offers, health: landHealth(true) }, { 'Cache-Control': 'public, max-age=30' });
+    } catch (err) {
+      console.error('LAND collection offers failed:', err.message);
+      const snap = lastKnown.read(KEY, upstreamHealth.MAX_AGE_MS.land);
+      const health = landHealth(false, snap?.at ?? null, err.code === 'rate_limited' ? 'rate_limited' : 'unavailable');
+      sendJson(response, snap ? 200 : (err.statusCode || 503), {
+        offers: snap ? snap.data.map(o => ({ ...o, stale: true })) : null,
+        ...(snap ? {} : { error: err.code || 'unavailable' }),
+        health,
+      }, { 'Cache-Control': 'no-store' });
+    }
     return;
   }
   // Unified LAND browse: every parcel via its Slime — trait facets, rarity rank,
@@ -3407,8 +3649,26 @@ async function handleMarketplaceApi(request, response, url) {
       const w = rateLimited(`mktwallet:${ip}`, 40, 60 * 1000);
       if (w) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(w) }); return; }
     }
-    const data = await getLandBrowse(url.searchParams);
-    sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=15' });
+    // The parcel catalogue is worth showing even when the OpenSea price layer is missing,
+    // so a failure here degrades the listing data rather than 503ing the whole browse.
+    try {
+      upstreamHealth.throwIfFaulted('land', 'listings');
+      const data = await getLandBrowse(url.searchParams);
+      // getLandBrowse deliberately survives a missing price layer and still returns the
+      // parcel catalogue. That is the right call for browsing, but it must not be reported
+      // as a healthy market: with no OpenSea key every parcel reads as "not for sale".
+      const priced = landMarket.configured();
+      sendJson(response, 200, {
+        ...data,
+        health: priced ? landHealth(true) : landHealth(false, null, 'not_configured'),
+      }, { 'Cache-Control': priced ? 'public, max-age=15' : 'no-store' });
+    } catch (err) {
+      console.error('LAND browse failed:', err.message);
+      sendJson(response, err.statusCode || 503, {
+        error: err.code || 'unavailable',
+        health: landHealth(false, null, err.code === 'rate_limited' ? 'rate_limited' : 'unavailable'),
+      }, { 'Cache-Control': 'no-store' });
+    }
     return;
   }
   // Recent completed LAND sales (OpenSea), filtered like the LAND Browse. Needs the OpenSea
@@ -3687,12 +3947,22 @@ async function handleMarketplaceApi(request, response, url) {
   // keyed to the connected wallet — no-store so it's never shared-cached.
   const landOffersMineMatch = pathname.match(/^\/api\/market\/land\/offers\/mine\/(0x[0-9a-f]{40})$/);
   if (landOffersMineMatch) {
-    if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    if (!landMarket.configured()) {
+      sendJson(response, 503, { error: 'not_configured', offers: null, health: landHealth(false, null, 'not_configured') }, { 'Cache-Control': 'no-store' });
+      return;
+    }
     try {
+      upstreamHealth.throwIfFaulted('land', 'listings');
       const [data, fx] = await Promise.all([landMarket.myOffers(landOffersMineMatch[1]), getMarketplaceFx()]);
-      sendJson(response, 200, { offers: enrichZkOffers(data.offers, fx.ethUsd) }, { 'Cache-Control': 'no-store' });
+      sendJson(response, 200, { offers: enrichZkOffers(data.offers, fx.ethUsd), health: landHealth(true) }, { 'Cache-Control': 'no-store' });
     } catch (err) {
-      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+      // `offers: null`, never [] — see the Creature equivalent. "You have no offers out"
+      // when we simply could not ask invites a duplicate bid.
+      console.error('LAND my offers failed:', err.message);
+      sendJson(response, err.statusCode || 503, {
+        error: err.code || 'unavailable', offers: null,
+        health: landHealth(false, null, err.code === 'rate_limited' ? 'rate_limited' : 'unavailable'),
+      }, { 'Cache-Control': 'no-store' });
     }
     return;
   }
