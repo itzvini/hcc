@@ -5354,7 +5354,9 @@ function discordMessageUrl(messageId) {
 // while the URL is still fresh, and rewrite the attachment to /api/announcements/media/<id>
 // (served by us, never expires). img-src 'self' already allows the same-origin URL.
 const MEDIA_ROUTE = '/api/announcements/media/';
-const MEDIA_PATH_RE = /^\/api\/announcements\/media\/\d{1,25}$/;
+// Key is either a Discord attachment id (pure snowflake) or a `<messageId>-<index>` fallback
+// used when the payload carries no attachment id — both are digits/one hyphen.
+const MEDIA_PATH_RE = /^\/api\/announcements\/media\/\d{1,25}(?:-\d{1,3})?$/;
 const MIRROR_MAX_BYTES = 8 * 1024 * 1024; // 8 MB — announcement images are small; refuse anything larger
 const MIRRORABLE_CT_RE = /^image\/(png|jpe?g|gif|webp|avif)$/i;
 
@@ -5384,18 +5386,24 @@ async function downloadImageBytes(url) {
 // NOTE: embed images (embeds[].image) still use their expiring Discord URL — announcements
 // here are native uploads, not link embeds, so this covers the reported case.
 async function mirrorAnnouncementImages(norm) {
-  for (const att of norm.attachments || []) {
-    if (!att || !att.id || !isImageAttachment(att)) continue; // id is a validated snowflake or null
+  const atts = norm.attachments || [];
+  for (let i = 0; i < atts.length; i++) {
+    const att = atts[i];
+    if (!att || !isImageAttachment(att)) continue;
     const src = safeDiscordImg(att.url);
     if (!src) continue;
+    // Prefer the Discord attachment id (stable across edits; a replaced image gets a new id
+    // → it re-mirrors). Fall back to `<messageId>-<index>` when the payload has no id, so a
+    // missing field can NEVER silently no-op the mirror the way it did before.
+    const key = att.id || `${norm.messageId}-${i}`;
     try {
-      if (!(await db.announcementMediaExists(att.id))) {
+      if (!(await db.announcementMediaExists(key))) {
         const media = await downloadImageBytes(src);
-        await db.saveAnnouncementMedia({ id: att.id, messageId: norm.messageId, ...media });
+        await db.saveAnnouncementMedia({ id: key, messageId: norm.messageId, ...media });
       }
-      att.url = MEDIA_ROUTE + att.id; // point at our permanent copy (only reached once bytes are stored)
+      att.url = MEDIA_ROUTE + key; // point at our permanent copy (only reached once bytes are stored)
     } catch (err) {
-      console.error(`[announcements] image mirror failed for attachment ${att.id}:`, err.message);
+      console.error(`[announcements] image mirror failed for ${key}:`, err.message);
     }
   }
 }
@@ -5584,7 +5592,7 @@ async function handleAnnouncementsApi(request, response, url) {
   // Mirrored attachment image bytes, served from our own domain so they never expire the
   // way Discord's signed CDN URLs do. Bytes are immutable per attachment id; we still send
   // an ETag + must-revalidate (per the caching policy) so repeat loads 304 cheaply.
-  const mediaMatch = pathname.match(/^\/api\/announcements\/media\/(\d{1,25})$/);
+  const mediaMatch = pathname.match(/^\/api\/announcements\/media\/(\d{1,25}(?:-\d{1,3})?)$/);
   if (mediaMatch) {
     if (request.method !== 'GET') { sendJson(response, 405, { error: 'Method not allowed.' }); return; }
     const ip = (request.headers['x-forwarded-for'] || '').split(',')[0].trim() || request.socket.remoteAddress || 'unknown';
