@@ -5357,7 +5357,8 @@ const MEDIA_ROUTE = '/api/announcements/media/';
 // Key is either a Discord attachment id (pure snowflake) or a `<messageId>-<index>` fallback
 // used when the payload carries no attachment id — both are digits/one hyphen.
 const MEDIA_PATH_RE = /^\/api\/announcements\/media\/\d{1,25}(?:-\d{1,3})?$/;
-const MIRROR_MAX_BYTES = 8 * 1024 * 1024; // 8 MB — announcement images are small; refuse anything larger
+const MIRROR_MAX_BYTES = 25 * 1024 * 1024; // 25 MB — Discord's standard upload cap; covers big GIFs/hi-res PNGs.
+// Anything larger falls back to the (expiring) Discord URL rather than storing a huge blob.
 const MIRRORABLE_CT_RE = /^image\/(png|jpe?g|gif|webp|avif)$/i;
 
 // Fetch an image from a (Discord-CDN-validated) URL and return its bytes + a content hash.
