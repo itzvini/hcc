@@ -2259,18 +2259,70 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
       <div class="eyebrow" style="text-align:center;margin-bottom:4px" data-i18n="holders.dist.eyebrow">Holding distribution</div>
       <p style="text-align:center;font-size:.95rem;margin-bottom:0" data-i18n="holders.dist.lead">How many NFTs each wallet holds, broken down by collection.</p>
 
+      <!-- Holding distribution. Bars used to be vertical, which hid the truth: 57 wallets
+           against a 3,025 max drew two pixels tall, so holders read the tail as zero and
+           told us the numbers were wrong. Rails print every count and share at rest, so
+           nothing important sits behind a hover a phone can't do. -->
       <div class="dist-grid">
-        <div class="dist-card">
-          <div class="eyebrow" data-i18n="holders.dist.creatures">🐾 Creatures</div>
-          <canvas id="chart-creature-dist"></canvas>
+        <div class="dist-tile" style="--accent:var(--hr-primary);--accent-soft:var(--hr-primary-25)">
+          <div class="dist-tile-hd">
+            <span class="dist-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7.6 7.2 6.4 4.6M16.4 7.2l1.2-2.6"/><path d="M12 20.5c-4.3 0-7.3-2.9-7.3-6.9S7.7 6.2 12 6.2s7.3 3.4 7.3 7.4-3 6.9-7.3 6.9Z"/><circle cx="9.6" cy="12.4" r="1" fill="currentColor" stroke="none"/><circle cx="14.4" cy="12.4" r="1" fill="currentColor" stroke="none"/><path d="M10.4 16.3c.9.7 2.3.7 3.2 0"/></svg></span>
+            <div class="dist-tile-t">
+              <div class="eyebrow" data-i18n="holders.dist.creatures">Creatures</div>
+              <p class="dist-den" id="dist-den-creatures"></p>
+            </div>
+          </div>
+          <table class="dist-rails">
+            <caption class="dist-cap" data-i18n="holders.dist.cap.creatures">Wallets grouped by how many Creatures they hold</caption>
+            <colgroup><col class="dist-col-key"><col><col class="dist-col-n"></colgroup>
+            <thead>
+              <tr>
+                <th scope="col" colspan="2" data-i18n="holders.dist.col.held">NFTs held</th>
+                <th scope="col"><span class="dist-cap" data-i18n="holders.dist.col.wallets">Wallets</span></th>
+              </tr>
+            </thead>
+            <tbody id="dist-rows-creatures"></tbody>
+          </table>
         </div>
-        <div class="dist-card">
-          <div class="eyebrow" data-i18n="holders.dist.land">🗺️ LAND</div>
-          <canvas id="chart-land-dist"></canvas>
+        <div class="dist-tile" style="--accent:var(--hr-banana);--accent-soft:var(--hr-banana-25)">
+          <div class="dist-tile-hd">
+            <span class="dist-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6 21 8.4 12 13.2 3 8.4 12 3.6Z"/><path d="M3.6 12.6 12 17.1l8.4-4.5"/><path d="M3.6 16.4 12 20.9l8.4-4.5"/></svg></span>
+            <div class="dist-tile-t">
+              <div class="eyebrow" data-i18n="holders.dist.land">LAND</div>
+              <p class="dist-den" id="dist-den-land"></p>
+            </div>
+          </div>
+          <table class="dist-rails">
+            <caption class="dist-cap" data-i18n="holders.dist.cap.land">Wallets grouped by how many LAND parcels they hold</caption>
+            <colgroup><col class="dist-col-key"><col><col class="dist-col-n"></colgroup>
+            <thead>
+              <tr>
+                <th scope="col" colspan="2" data-i18n="holders.dist.col.held">NFTs held</th>
+                <th scope="col"><span class="dist-cap" data-i18n="holders.dist.col.wallets">Wallets</span></th>
+              </tr>
+            </thead>
+            <tbody id="dist-rows-land"></tbody>
+          </table>
         </div>
-        <div class="dist-card">
-          <div class="eyebrow" data-i18n="holders.dist.combined">✨ All HCC assets</div>
-          <canvas id="chart-combined-dist"></canvas>
+        <div class="dist-tile" style="--accent:var(--hr-secondary);--accent-soft:var(--hr-secondary-25)">
+          <div class="dist-tile-hd">
+            <span class="dist-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.8l1.7 4.6 4.6 1.7-4.6 1.7L10 16.4l-1.7-4.6-4.6-1.7 4.6-1.7L10 3.8Z"/><path d="M17.4 14.2l.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9.9-2.3Z"/></svg></span>
+            <div class="dist-tile-t">
+              <div class="eyebrow" data-i18n="holders.dist.combined">All HCC assets</div>
+              <p class="dist-den" id="dist-den-combined"></p>
+            </div>
+          </div>
+          <table class="dist-rails">
+            <caption class="dist-cap" data-i18n="holders.dist.cap.combined">Wallets grouped by how many HCC assets they hold</caption>
+            <colgroup><col class="dist-col-key"><col><col class="dist-col-n"></colgroup>
+            <thead>
+              <tr>
+                <th scope="col" colspan="2" data-i18n="holders.dist.col.held">NFTs held</th>
+                <th scope="col"><span class="dist-cap" data-i18n="holders.dist.col.wallets">Wallets</span></th>
+              </tr>
+            </thead>
+            <tbody id="dist-rows-combined"></tbody>
+          </table>
         </div>
       </div>
 

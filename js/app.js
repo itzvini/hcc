@@ -39,7 +39,7 @@ const t = key => (i18n ? i18n.t(key) : key);
 const setLanguage = lang => i18nReady.then(() => i18n && i18n.setLanguage(lang));
 const initI18n = () => i18nReady.then(() => (i18n ? i18n.initI18n() : null));
 
-const { loadHoldersChart } = lazy('./holders.js');
+const { loadHoldersChart, rerenderHolders } = lazy('./holders.js');
 const { loadMarketChart, rerenderMarket } = lazy('./market.js');
 const { loadChangelog, rerenderChangelog } = lazy('./changelog.js');
 const { loadApply, rerenderApply } = lazy('./apply.js');
@@ -63,6 +63,7 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
   btn.addEventListener('click', () => setLanguage(btn.dataset.lang).then(() => {
     rerenderChangelog();
     rerenderMarket();
+    rerenderHolders();
     rerenderApply();
     rerenderElection();
     rerenderBallot();
@@ -458,6 +459,7 @@ initI18n().then(() => {
   rerenderBallot();
   rerenderVote();
   rerenderMarket();
+  rerenderHolders();
   rerenderMarketplace();
   rerenderPolls();
   rerenderAnnouncements();
