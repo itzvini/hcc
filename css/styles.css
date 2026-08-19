@@ -5505,6 +5505,47 @@ a.trade-buy-btn { display: inline-flex; }
 .trade-cashout-opt-tx b { font-family: var(--hr-sans); font-weight: 800; font-size: 14px; }
 .trade-cashout-opt-tx span { font-size: 12px; color: var(--hr-fg-2); line-height: 1.45; }
 .trade-cashout-opt-arrow { color: var(--hr-primary); font-weight: 900; flex: 0 0 auto; }
+/* Cash-out route picker: two chips above the quote. Named trade-route-pick, NOT
+   trade-cashout-route: that class already exists for the From/To hop wrapper below. */
+/* The selected chip lifts on a mint wash The selected one lifts on a mint wash
+   with an inset highlight, so which route you're pricing reads at a glance. */
+.trade-route-picks {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  margin: 10px 0 12px; text-align: left;
+}
+.trade-route-pick {
+  display: flex; flex-direction: column; gap: 3px; cursor: pointer;
+  padding: 11px 13px; border-radius: var(--hr-radius-md);
+  background: rgba(255,255,255,.035); border: 1px solid var(--hr-line); color: var(--hr-fg-0);
+  font: inherit; text-align: left; transition: transform .15s, border-color .15s, background .15s, box-shadow .15s;
+}
+.trade-route-pick b { font-family: var(--hr-sans); font-weight: 800; font-size: 13px; }
+.trade-route-pick span { font-size: 11.5px; color: var(--hr-fg-2); line-height: 1.4; }
+/* Live price and the up-front requirement, the two facts that actually decide the choice. */
+.trade-route-fee {
+  font-style: normal; font-size: 12px; font-weight: 800; color: var(--hr-fg-0);
+  font-variant-numeric: tabular-nums; margin-top: 2px;
+}
+.trade-route-fee.is-wait { font-weight: 600; color: var(--hr-fg-3); }
+.trade-route-fee.is-off  { font-weight: 600; color: var(--hr-alert); }
+.trade-route-need { font-style: normal; font-size: 11px; font-weight: 700; }
+.trade-route-need.is-ok  { color: var(--hr-primary); }
+.trade-route-need.is-bad { color: var(--hr-accent); }
+.trade-route-pick.is-off { opacity: .55; }
+.trade-route-pick.is-off:hover { transform: none; border-color: var(--hr-line); }
+.trade-route-pick:hover:not(:disabled) { border-color: var(--hr-primary); transform: translateY(-1px); }
+.trade-route-pick.is-on {
+  border-color: var(--hr-primary);
+  background: linear-gradient(180deg, rgba(81,255,165,.12), rgba(81,255,165,.05));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 6px 18px -10px rgba(81,255,165,.55);
+}
+.trade-route-pick.is-on b { color: var(--hr-primary); }
+.trade-route-pick:disabled { opacity: .5; cursor: default; }
+@media (max-width: 420px) { .trade-route-picks { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) {
+  .trade-route-pick { transition: none; }
+  .trade-route-pick:hover:not(:disabled) { transform: none; }
+}
 .trade-cashout-warn {
   display: flex; gap: 10px; align-items: flex-start; text-align: left;
   padding: 13px 15px; margin: 2px 0 16px; border-radius: var(--hr-radius-md);

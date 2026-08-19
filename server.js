@@ -15,11 +15,16 @@ const { recoverPersonalSignAddress } = require('./lib/eth-verify');
 const ethRpcLib = require('./lib/eth-rpc'); // ordered mainnet RPC failover (LAND side only)
 const mktOrderbook = require('./lib/marketplace-orderbook');
 const squidBridge = require('./lib/squid-bridge');
+const layerswapBridge = require('./lib/layerswap-bridge');
 const gasFaucet = require('./lib/gas-faucet');
 const landMarket = require('./lib/land-market');
 const landPets = require('./lib/land-pets');
 const upstreamHealth = require('./lib/upstream-health'); // per-collection upstream state
 const lastKnown = require('./lib/last-known');           // failure-path snapshots only
+// Layerswap's accepted move range: one shared copy, refreshed at most every LS_LIMITS_TTL_MS.
+let lsLimits = { data: null, at: 0, failedAt: 0 };
+const LS_LIMITS_TTL_MS = 5 * 60 * 1000;
+const LS_LIMITS_FAIL_MS = 60 * 1000;
 const creatureFallback = require('./lib/creature-fallback'); // Blockscout read-only browse fallback
 const slimeIndex = require('./lib/slime-index');
 const { computeEligibility, BRACKETS } = require('./lib/eligibility');
@@ -113,6 +118,14 @@ const TRANSAK_ENV             = (process.env.TRANSAK_ENV || 'production').trim()
 const TRANSAK_REFERRER_DOMAIN = (process.env.TRANSAK_REFERRER_DOMAIN || '').trim();
 // Read selectors for the authoritative per-wallet eligibility lookup (see getWalletHoldings).
 const SEL_BALANCE_OF          = '0x70a08231'; // balanceOf(address)
+// Immutable's canonical bridge. Deployed at the SAME address on both chains: the child
+// bridge on zkEVM, the root bridge (which owns the flow-rate guard) on Ethereum.
+const IMX_ROOT_BRIDGE         = '0xBa5E35E26Ae59c7aea6F029B68c6460De2d13eB6';
+const SEL_WITHDRAWAL_QUEUE_ACTIVATED = '0xa6f72cb8'; // withdrawalQueueActivated() -> bool
+const SEL_LARGE_TRANSFER_THRESHOLDS  = '0x84a3291a'; // largeTransferThresholds(address) -> uint256
+// The bridge's stand-in address for native ETH. Not the usual 0xEeee…EeE placeholder: its
+// NATIVE_ETH() returns plain 0xEEE, confirmed identical on both chains.
+const IMX_NATIVE_ETH_SENTINEL = '0000000000000000000000000000000000000000000000000000000000000eee';
 const SEL_OWNER_TOKENS        = '0xbba7723e'; // ownerTokens(address) -> uint256[]
 const SEL_ESTATES_TO_PARCELS  = '0x3890889f'; // estatesToParcels(uint256,uint256) -> uint256
 const ZERO_ADDRESS            = '0x0000000000000000000000000000000000000000';
@@ -2700,8 +2713,7 @@ async function handleMarketplaceApi(request, response, url) {
   // is image-like (a slime grid loads ~24 at once) and carries its OWN, looser limiter
   // below — so it's exempt from this tight per-call API budget, which is sized for the
   // JSON browse/detail calls, not an image wall.
-  const ip = (request.headers['x-forwarded-for'] || '').split(',')[0].trim()
-    || request.socket.remoteAddress || 'unknown';
+  const ip = clientIp(request);
   const isPetRender = /^\/api\/market\/land\/pet\//.test(pathname);
   // Budget PER COLLECTION, not per client. One shared bucket meant a Creature outage —
   // which makes the client retry hard — burned the whole allowance and started 429ing the
@@ -3286,8 +3298,13 @@ async function handleMarketplaceApi(request, response, url) {
     const addr = String(body.address || '').toLowerCase();
     const wei = parseEthToWei(body.needImx);
     if (!HEX_ADDRESS.test(addr)) { sendJson(response, 400, { error: 'bad_address' }); return; }
-    // A gas top-up is a few IMX; cap it so a tampered request can't quote a huge bridge.
-    if (wei == null || wei > 50n * 10n ** 18n) { sendJson(response, 400, { error: 'bad_price' }); return; }
+    // Cap it so a tampered request can't quote an enormous bridge. This was 50 IMX on the
+    // reasoning that "a gas top-up is a few IMX" — true for a buy or a transfer, false for a
+    // canonical cash-out, which prepays the Ethereum-side relay in IMX and ran 54-215 IMX
+    // inside one hour when it was measured. The cap therefore sat below the requirement and
+    // no top-up this endpoint would quote could unblock the member asking for one. Keep in
+    // step with GAS_MAX_IMX in js/marketplace.js.
+    if (wei == null || wei > 300n * 10n ** 18n) { sendJson(response, 400, { error: 'bad_price' }); return; }
     // Source asset: 'imx' bridges the user's existing mainnet IMX straight over (cheapest —
     // no swap); 'eth' (default) swaps a little mainnet ETH into IMX.
     const fromToken = body.from === 'imx' ? squidBridge.IMX_L1 : undefined;
@@ -3440,6 +3457,161 @@ async function handleMarketplaceApi(request, response, url) {
     try {
       sendJson(response, 200, await squidBridge.quoteCashout(wei, addr));
     } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // --- Cash-out via Layerswap (the DEFAULT route) ------------------------------------
+  // The canonical bridge above prepays Ethereum-side gas through Axelar, in IMX, up front:
+  // 54-215 IMX for the same $211 move inside half an hour when it was measured, which
+  // stranded any member holding ETH but no IMX. Layerswap instead takes its fee out of the
+  // ETH, so the only gas needed is an ordinary zkEVM transfer. See lib/layerswap-bridge.js
+  // for the full reasoning and the custody trade-off.
+  //
+  // Quoting and creating are split because creating registers a swap on Layerswap's side.
+  // Quoting runs on every keystroke behind the client's debounce; creating happens once,
+  // when the member commits.
+  if (pathname === '/api/market/creatures/cashout/ls/quote' && request.method === 'POST') {
+    if (!layerswapBridge.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    // Its own bucket: Layerswap costs us nothing per call and has no shared integrator id
+    // to protect, so quoting here must not eat the Squid budget (or be starved by it).
+    const lqWait = rateLimited(`mktls:${ip}`, 30, 60 * 1000);
+    if (lqWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(lqWait) }); return; }
+
+    const body = await readJsonBody(request, 4 * 1024);
+    const addr = String(body.address || '').toLowerCase();
+    const wei = parseEthToWei(body.amountEth);
+    if (!HEX_ADDRESS.test(addr)) { sendJson(response, 400, { error: 'bad_address' }); return; }
+    if (wei == null || wei > 100n * 10n ** 18n) { sendJson(response, 400, { error: 'bad_price' }); return; }
+
+    try {
+      sendJson(response, 200, await layerswapBridge.quoteCashout(wei, addr), { 'Cache-Control': 'no-store' });
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // Mint the transaction the member actually signs. The response carries Layerswap's
+  // calldata verbatim; see createCashout for why it must not be rebuilt. Destination is
+  // pinned to the source address server-side, so this can only ever pay the member's own
+  // wallet on the other chain.
+  if (pathname === '/api/market/creatures/cashout/ls/create' && request.method === 'POST') {
+    if (!layerswapBridge.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    const lcWait = rateLimited(`mktlscreate:${ip}`, 10, 60 * 1000);
+    if (lcWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(lcWait) }); return; }
+
+    const body = await readJsonBody(request, 4 * 1024);
+    const addr = String(body.address || '').toLowerCase();
+    const wei = parseEthToWei(body.amountEth);
+    if (!HEX_ADDRESS.test(addr)) { sendJson(response, 400, { error: 'bad_address' }); return; }
+    if (wei == null || wei > 100n * 10n ** 18n) { sendJson(response, 400, { error: 'bad_price' }); return; }
+
+    try {
+      sendJson(response, 200, await layerswapBridge.createCashout(wei, addr), { 'Cache-Control': 'no-store' });
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // Tracker poll. The swap id is opaque and carries no authority, so this needs no session:
+  // it reveals only the state of a swap whose id you already hold.
+  if (pathname === '/api/market/creatures/cashout/ls/status' && request.method === 'GET') {
+    if (!layerswapBridge.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    const lsWait = rateLimited(`mktlsstatus:${ip}`, 60, 60 * 1000);
+    if (lsWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(lsWait) }); return; }
+    try {
+      sendJson(response, 200, await layerswapBridge.getStatus(url.searchParams.get('id') || ''),
+        { 'Cache-Control': 'no-store' });
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // --- Canonical route health: the two hazards that live on Ethereum -------------------
+  // Immutable's root bridge carries a global flow-rate guard. When it trips, EVERY withdrawal
+  // is held for 24 hours regardless of size, and the member then has to send their own mainnet
+  // transaction to finalise it. It trips on aggregate traffic, so someone withdrawing $20 can
+  // be caught by strangers' volume, and it was active for roughly 92 hours over the first
+  // eight months of 2026. Offering the canonical route blind during that window means promising
+  // "a few minutes" and delivering a day plus a transaction they cannot afford.
+  //
+  // Separately, a single withdrawal above largeTransferThresholds is queued on its own.
+  //
+  // Both are plain view calls on the root bridge, which sits at the SAME address on Ethereum
+  // as the child bridge does on zkEVM. Cached briefly: this is polled per cash-out screen and
+  // the values change rarely.
+  if (pathname === '/api/market/creatures/cashout/canonical/health' && request.method === 'GET') {
+    const KEY = 'cashout:canonical:health';
+    const cached = lastKnown.read(KEY, 60 * 1000);
+    if (cached) { sendJson(response, 200, cached.data, { 'Cache-Control': 'public, max-age=30' }); return; }
+    try {
+      const [queueRaw, thrRaw] = await Promise.all([
+        ethCall(ETH_RPC_URL, IMX_ROOT_BRIDGE, SEL_WITHDRAWAL_QUEUE_ACTIVATED),
+        ethCall(ETH_RPC_URL, IMX_ROOT_BRIDGE, SEL_LARGE_TRANSFER_THRESHOLDS + IMX_NATIVE_ETH_SENTINEL),
+      ]);
+      const out = {
+        queueActive: BigInt(queueRaw || '0x0') !== 0n,
+        thresholdWei: BigInt(thrRaw || '0x0').toString(),
+        checkedAt: new Date().toISOString(),
+      };
+      lastKnown.record(KEY, out);
+      sendJson(response, 200, out, { 'Cache-Control': 'public, max-age=30' });
+    } catch (err) {
+      console.error('Canonical bridge health failed:', err.message);
+      // Unknown must not read as safe. The client treats a null queueActive as "we could not
+      // check" and says so, rather than quietly presenting the route as fine.
+      sendJson(response, 200, { queueActive: null, thresholdWei: null, checkedAt: null },
+        { 'Cache-Control': 'no-store' });
+    }
+    return;
+  }
+
+  // The move sizes Layerswap will accept right now, so the amount box can say so up front
+  // rather than letting someone type a number that can only be refused.
+  // The move sizes Layerswap will accept right now. The answer is the same for everybody and
+  // it moves slowly, so it is held here rather than asked upstream once per caller: without a
+  // cache this route is an open pipe pointed at Layerswap, and anyone could use our own server
+  // to get us rate-limited off the route the cash-out defaults to.
+  //
+  // A dedicated cache rather than a slot in `lastKnown`. That store is a shared 128-key LRU
+  // whose neighbours (creatures:browse:<query>, creatures:listings:<cursor>) mint a new key per
+  // distinct query string, so a couple of minutes of ordinary browsing evicts anything written
+  // only once every five minutes, which is precisely this. A cache that stops existing under
+  // load is worse than none, because it reads as protection.
+  if (pathname === '/api/market/creatures/cashout/ls/limits' && request.method === 'GET') {
+    if (!layerswapBridge.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    const now = Date.now();
+    // Anything we serve that is not a live read says so and says how old it is, the same way
+    // the listings and browse routes label theirs.
+    const stale = () => sendJson(response, 200,
+      { ...lsLimits.data, stale: true, fetchedAt: new Date(lsLimits.at).toISOString() },
+      { 'Cache-Control': 'no-store' });
+
+    if (lsLimits.data && now - lsLimits.at < LS_LIMITS_TTL_MS) {
+      sendJson(response, 200, lsLimits.data, { 'Cache-Control': 'public, max-age=60' });
+      return;
+    }
+    // Upstream failed a moment ago. Lining every caller up behind the same timeout, to be
+    // handed the same stale body at the end of it, is how a cache stops protecting the thing
+    // it exists to protect at exactly the moment that thing is unhealthy.
+    if (lsLimits.data && now - lsLimits.failedAt < LS_LIMITS_FAIL_MS) { stale(); return; }
+
+    const llWait = rateLimited(`mktlslimits:${ip}`, 20, 60 * 1000);
+    // A stale range beats a 429 from a route whose entire job is to state the range.
+    if (llWait && lsLimits.data) { stale(); return; }
+    if (llWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(llWait) }); return; }
+
+    try {
+      const limits = await layerswapBridge.limits();
+      lsLimits = { data: limits, at: Date.now(), failedAt: 0 };
+      sendJson(response, 200, limits, { 'Cache-Control': 'public, max-age=60' });
+    } catch (err) {
+      lsLimits.failedAt = Date.now();
+      if (lsLimits.data) { stale(); return; }
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }
     return;
@@ -4002,6 +4174,46 @@ function sendJson(response, status, obj, extraHeaders = {}) {
   response.end(JSON.stringify(obj));
 }
 
+// Who is calling, for rate-limiting purposes.
+//
+// Every bucket on this site keys off this, so getting it wrong doesn't weaken a limit, it
+// deletes it. The old expression — take the FIRST entry of X-Forwarded-For — read a header
+// the caller writes: send a different forged address per request and you get a fresh bucket
+// each time, so 6-a-minute becomes unlimited. Our proxy APPENDS the address it actually saw,
+// which puts the only trustworthy entry at the RIGHT-hand end, one place per proxy in front
+// of us. So count from the right. TRUSTED_PROXY_HOPS is 1 for Railway; set it to 0 when
+// nothing fronts this process (the header is then pure fiction and the socket is the truth),
+// or 2 if a CDN is ever put in front of Railway.
+// Parsed strictly, because the two ways of being wrong are not symmetric. A blank Railway
+// variable or a typo used to land on 0 — `Number('')` is 0, and `NaN || 0` is 0 — which is the
+// deliberate "nothing fronts this process" setting. Behind a proxy that means every visitor
+// keys to the proxy's own address, so every bucket on the site silently becomes one global
+// counter and a handful of people 429 everybody else, with nothing in the logs to say why.
+// Anything unparseable falls back to the default and says so out loud.
+const TRUSTED_PROXY_HOPS = (() => {
+  const raw = process.env.TRUSTED_PROXY_HOPS;
+  if (raw === undefined || raw === null || String(raw).trim() === '') return 1;
+  const n = Number(String(raw).trim());
+  if (!Number.isInteger(n) || n < 0 || n > 8) {
+    console.error(`[proxy] TRUSTED_PROXY_HOPS is "${raw}", which is not a hop count — using 1. Set it to 0 only when nothing fronts this process.`);
+    return 1;
+  }
+  return n;
+})();
+function clientIp(request) {
+  const socket = request.socket?.remoteAddress || 'unknown';
+  if (!TRUSTED_PROXY_HOPS) return socket;
+  const chain = String(request.headers['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(Boolean);
+  // Fewer entries than there are proxies means this request did not come through them — a
+  // direct hit, a local run, a health probe. The header is then whatever the caller invented,
+  // so ignore it and use the socket.
+  if (chain.length < TRUSTED_PROXY_HOPS) return socket;
+  const hop = chain[chain.length - TRUSTED_PROXY_HOPS];
+  // A proxy only ever writes an address here. Anything else is forged, and letting it become
+  // a bucket key would hand a caller both a fresh limit and a place to store megabytes.
+  return /^[0-9a-fA-F:.[\]]{3,45}$/.test(hop) ? hop : socket;
+}
+
 // Crude in-memory fixed-window rate limiter (resets on restart). Returns the
 // Retry-After seconds if the key is over `max` within `windowMs`, else 0.
 const rateBuckets = new Map();
@@ -4389,8 +4601,7 @@ async function aggregateWalletHoldings(wallets) {
 
 async function handleProfileApi(request, response, url) {
   const { pathname } = url;
-  const ip = (request.headers['x-forwarded-for'] || '').split(',')[0].trim()
-    || request.socket.remoteAddress || 'unknown';
+  const ip = clientIp(request);
 
   // Turn the caller's OWN profile on. Requires a session with a linked Highrise
   // wallet — the wallet is what the page shows, so without one there's no profile.
@@ -5557,7 +5768,7 @@ function shapeAnnouncement(row) {
 // can never change, so there is nothing to go stale.
 async function handleCollectionArt(request, response, variant, artId) {
   if (request.method !== 'GET') { sendJson(response, 405, { error: 'Method not allowed.' }); return; }
-  const ip = (request.headers['x-forwarded-for'] || '').split(',')[0].trim() || request.socket.remoteAddress || 'unknown';
+  const ip = clientIp(request);
   // Deliberately high. One screen of strips is ~60 pictures, scrolling the whole timeline
   // is ~500, and opening a few big grabs adds a few hundred more, so a curious visitor
   // can legitimately ask for over a thousand in a minute — and several people behind one
@@ -5596,7 +5807,7 @@ async function handleAnnouncementsApi(request, response, url) {
   const mediaMatch = pathname.match(/^\/api\/announcements\/media\/(\d{1,25}(?:-\d{1,3})?)$/);
   if (mediaMatch) {
     if (request.method !== 'GET') { sendJson(response, 405, { error: 'Method not allowed.' }); return; }
-    const ip = (request.headers['x-forwarded-for'] || '').split(',')[0].trim() || request.socket.remoteAddress || 'unknown';
+    const ip = clientIp(request);
     const wait = rateLimited(`ann-media:${ip}`, 1200, 60 * 1000); // generous — a full feed load is well under this
     if (wait) { sendJson(response, 429, { error: 'Too many requests.' }, { 'Retry-After': String(wait) }); return; }
 

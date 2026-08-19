@@ -96,6 +96,16 @@ const GAS_BRIDGE_URL = `https://app.squidrouter.com/?chains=1,13371&tokens=${SQU
 const IMX_L1_TOKEN = '0xf57e7e7c23978c3caec3c3548e3d615c346e79ff';
 const GAS_BRIDGE_URL_IMX = `https://app.squidrouter.com/?chains=1,13371&tokens=${IMX_L1_TOKEN},${SQUID_NATIVE}`;
 const GAS_MIN_WEI = 10n ** 15n;        // < 0.001 IMX on hand → surface the gas helper
+// What a Layerswap cash-out actually costs to sign on zkEVM: one ERC-20 transfer, measured at
+// 33,160 gas / ~0.00037 IMX. The route needs no IMX for the FEE, which is the whole point of
+// it, but it is still a transaction — so this is the floor below which "no IMX needed" would
+// be a lie to the very wallet the route exists to rescue.
+const LS_MIN_GAS_WEI = 2n * 10n ** 15n; // 0.002 IMX — several times the measured cost
+// Layerswap quotes, prices and moves in units of 1e-8 ETH (AMOUNT_DP in lib/layerswap-bridge.js),
+// so the amount that reaches the calldata is always this wei figure floored to that step. The
+// commit check has to floor the same way before comparing, or it rejects the truth. See the
+// note in runCashoutLayerswap.
+const LS_AMOUNT_STEP_WEI = 10n ** 10n;  // 1e-8 ETH
 const GAS_OK_WEI  = 5n * 10n ** 15n;   // ≥ 0.005 IMX → "you're set for gas" (matches the buy panel)
 const GAS_TARGET_IMX = 5;              // one-tap top-up target, in IMX (tunable) — a lot of
                                        // runway (gas is fractions of a cent/tx) while still
@@ -106,7 +116,14 @@ const GAS_TARGET_IMX = 5;              // one-tap top-up target, in IMX (tunable
 // money on fees. Anyone with nothing at all is better served by the free gas assist, and
 // the box below still takes a smaller number for anyone who insists.
 const GAS_PRESETS_IMX = [5, 10, 25, 50];
-const GAS_MAX_IMX = 50;                // matches the server-side cap on /bridge/gas/quote
+// The ceiling on any one top-up. It was 50, which was set when "gas" meant a rounding error
+// and nobody had checked it against the one action that needs a real amount: a canonical
+// cash-out prepays the Ethereum-side relay in IMX, and that ran 54-215 IMX in a single hour
+// under observation. So the cap sat BELOW the requirement and no in-site top-up could ever
+// be big enough — the member was told to add IMX by a panel that refused to quote enough of
+// it. 300 clears the worst relay fee seen with room to spare, and still stops a tampered
+// request quoting an enormous bridge. Keep this in step with the server-side cap.
+const GAS_MAX_IMX = 300;               // matches the server-side cap on /bridge/gas/quote
 // Fiat on-ramp ("top up with card") — for a wallet that holds nothing anywhere, so there's
 // nothing to bridge: they need to ACQUIRE crypto. The card path is a Transak deep-link built
 // server-side (/api/market/onramp) with the destination NETWORK pinned and the buy amount
@@ -1018,6 +1035,12 @@ let cashoutStep = 'intent';  // 'intent' → 'move' (Creatures, in-site) | 'guid
 let cashoutState = null;     // move screen: {phase:'load'|'ready', balWei, imxWei, amount, quote, err}
 let cashoutSeq = 0;          // drops stale quote responses when the amount changes mid-flight
 let cashoutQuoteTimer = null;
+// Which way the ETH leaves zkEVM. 'layerswap' is the default because it takes its fee out of
+// the ETH, so it works from a wallet holding no IMX — the state that stranded members on the
+// canonical route (see lib/layerswap-bridge.js). 'canonical' keeps a trust-minimised exit on
+// offer for anyone who holds the IMX to prepay Ethereum-side gas.
+let cashoutRoute = 'layerswap';
+const CASHOUT_ROUTES = ['layerswap', 'canonical'];
 let topupOpen = false;       // the standalone Add-funds modal (mainnet → zkEVM, cash-out's mirror)
 let topupStep = 'intent';    // 'intent' → 'eth' (move mainnet ETH over) | 'gas' (IMX top-up)
 let topupState = null;       // {phase:'load'|'ready', mainnetEthWei, mainnetImxWei, imxWei, zkEthWei, amount, quote, err, gasQuote, gasFrom}
@@ -1176,7 +1199,22 @@ function cashoutAmountWei() {
 // The quoted route tx needs native IMX: its `value` (the cross-chain relay fee) plus a
 // little headroom for the zkEVM execution gas itself (which is fractions of a cent).
 const CASHOUT_IMX_GAS_HEADROOM = 5n * 10n ** 16n; // 0.05 IMX
-function cashoutImxNeeded(q) {
+// How long a canonical quote stays signable. Its tx.value is the Axelar relay deposit, and
+// that tracks Ethereum gas: observed moving from 4.5 to 67.9 IMX across three hours on a
+// single day. Past this, re-quote rather than sign what we last saw.
+const CASHOUT_QUOTE_MAX_AGE_MS = 60 * 1000;
+// The two routes need completely different amounts of native IMX, and this used to answer for
+// both with the canonical figure. On Layerswap there is no relay deposit at all: the move is a
+// plain ERC-20 transfer and the fee comes out of the ETH, so the only IMX in play is ordinary
+// zkEVM gas. Charging it the canonical 0.05 headroom put a gas wall in front of a wallet
+// holding 0.003 IMX while the route chip directly above said "no IMX needed", and — worse —
+// pushed the requirement above what the free grant tops up to, so the one member the grant
+// exists for was told there was nothing we could do.
+// The default reads the route off the quote itself where it says so, and only falls back to
+// the current selection: a quote outlives a chip press, and answering for the wrong route is
+// how a gas wall ends up in front of the route that doesn't have one.
+function cashoutImxNeeded(q, route = (q && q.provider === 'layerswap' ? 'layerswap' : cashoutRoute)) {
+  if (route === 'layerswap') return LS_MIN_GAS_WEI;
   try { return BigInt(q.tx.value || '0x0') + CASHOUT_IMX_GAS_HEADROOM; } catch { return null; }
 }
 
@@ -1186,13 +1224,22 @@ async function openCashoutMove() {
   patchCashout();
   // switchToChain, not ensureNetwork: it flags the chainChanged echo as ours, so the
   // handler doesn't full-render and tear this modal down while it's loading.
-  try { if (!onZk()) await switchToChain(ZK_CHAIN_ID_HEX); } catch { /* reads below fail soft to em-dashes */ }
+  let onChain = true;
+  try { if (!onZk()) await switchToChain(ZK_CHAIN_ID_HEX); } catch { onChain = false; /* reads below fail soft to em-dashes */ }
   const st = cashoutState;
-  const [balWei, imxWei] = await Promise.all([readErc20(IMX_ETH_TOKEN, account), readNative(account)]);
+  // Only read balances once we know which chain the provider is actually on. If the switch
+  // was refused, readNative returns the wallet's MAINNET ETH and we were storing it as the
+  // IMX balance — so the panel would cheerfully report a few ETH of "IMX" and wave a member
+  // through a gas check they cannot pass. Unknown has to stay unknown.
+  if (!onZk()) onChain = false;
+  const [balWei, imxWei] = onChain
+    ? await Promise.all([readErc20(IMX_ETH_TOKEN, account), readNative(account)])
+    : [null, null];
   if (cashoutState !== st || cashoutStep !== 'move') return; // closed / navigated away
   const hasBal = balWei != null && balWei > 0n;
   cashoutState = { ...st, phase: 'ready', balWei, imxWei, amount: hasBal ? weiToEthStr(balWei) : '' };
   patchCashout();
+  refreshCanonicalHealth(cashoutState);
   if (hasBal) fetchCashoutQuote();
 }
 
@@ -1210,7 +1257,9 @@ async function fetchCashoutQuote() {
   st.quote = 'loading'; st.err = null;
   patchCashoutMove();
   try {
-    const res = await fetch('/api/market/creatures/cashout/quote', {
+    const res = await fetch(cashoutRoute === 'layerswap'
+      ? '/api/market/creatures/cashout/ls/quote'
+      : '/api/market/creatures/cashout/quote', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ address: account, amountEth: weiToEthStr(wei) }),
       signal: AbortSignal.timeout(30000),
@@ -1221,17 +1270,60 @@ async function fetchCashoutQuote() {
       st.quote = null;
       // not_configured → no in-site quoting at all; fall back to the external-link guide.
       if (body.error === 'not_configured') { cashoutStep = 'guide'; return patchCashout(); }
-      st.err = body.error === 'no_route' ? 'small' : body.error === 'rate_limited' ? 'rate' : 'quote';
-      return patchCashoutMove();
+      // Layerswap is a solver, so its routes come and go with whoever is holding the float
+      // on the far side. When zkEVM -> Ethereum is not on offer, the fix is not "wait a
+      // moment" — it is the canonical bridge, which is always there. Move them across and
+      // say why, rather than leaving them poking a button that cannot work.
+      if (body.error === 'route_down' && cashoutRoute === 'layerswap') {
+        cashoutRoute = 'canonical';
+        // Record the failure before switching. Without this the comparison map still holds
+        // whatever Layerswap last quoted, so the gas panel's escape card would cheerfully
+        // offer a one-click switch back to the route we just learned is not running.
+        st.cmp = { ...(st.cmp || {}), layerswap: { error: 'route_down' } };
+        st.routeDownNotice = true;
+        st.quote = null; st.err = null;
+        patchCashoutMove();
+        return queueCashoutQuote(0);
+      }
+      st.err = body.error === 'route_down' ? 'routedown'
+        : body.error === 'no_route' ? 'small'
+        : body.error === 'rate_limited' ? 'rate' : 'quote';
+      st.cmp = { ...(st.cmp || {}), [cashoutRoute]: { error: body.error || 'quote' } };
+      refreshRouteCompare(st, wei);
+      patchCashoutMove();
+      return autoPickRoute(st);
     }
     st.quote = body;
+    st.quoteAt = Date.now();
+    // Stamp the amount each price was taken at. st.cmp is keyed by route alone and nothing
+    // clears it when the member edits the box, so without this the gas panel's escape card
+    // could quote the previous amount's fee and offer a switch to a route that cannot fill
+    // the current one at all.
+    st.cmp = { ...(st.cmp || {}), [cashoutRoute]: { ...body, forWei: String(wei) } };
+    refreshRouteCompare(st, wei);
+    // Layerswap takes its fee out of the ETH being moved, so there is no native-coin
+    // PREPAYMENT to check. There is still a transaction to sign, and on zkEVM signing costs
+    // native IMX like anywhere else. This used to skip the check below outright, which handed
+    // a wallet holding exactly zero IMX a green Move button and let MetaMask refuse the
+    // confirm with something unreadable. The requirement is simply much smaller here, and
+    // cashoutImxNeeded now answers per route, so both routes can use one check.
+    //
+    // Getting this right is what makes the free gas grant reach the member it was built for:
+    // 0.002 IMX of transfer gas is well inside what a grant tops up to, where the canonical
+    // relay deposit never was.
     // The move is signed on zkEVM, where gas is native IMX — flag a short wallet now
     // instead of letting MetaMask fail the confirm with a cryptic alert.
     // Re-read the gas balance instead of trusting the one taken when the modal opened.
     // Between then and now they may have bridged, bought or been granted IMX — precisely
     // what the panel below tells them to go and do — and a stale read would leave the
     // panel up and the Move button dead after they had already fixed it.
-    const freshImx = await readNative(account).catch(() => null);
+    // readNative reads whatever chain the wallet is actually on, so this is only evidence
+    // about IMX when the wallet is on zkEVM. openCashoutMove deliberately leaves imxWei null
+    // when the network switch was refused ("unknown has to stay unknown"), and overwriting it
+    // here put a MAINNET ETH balance in the IMX field. Against the canonical bar of tens of
+    // IMX that mostly still failed safe; against the Layerswap bar of 0.002 it does not, so
+    // any wallet carrying ordinary mainnet dust would clear a gas check it cannot pass.
+    const freshImx = onZk() ? await readNative(account).catch(() => null) : null;
     if (cashoutSeq !== seq || cashoutState !== st) return;
     if (freshImx != null) st.imxWei = freshImx;
 
@@ -1252,35 +1344,260 @@ async function fetchCashoutQuote() {
   }
 }
 
+// --- Comparing the two exits -----------------------------------------------------------
+// Both routes get priced against the SAME amount so the member can see what each actually
+// costs right now, rather than picking on a description and finding out afterwards. This is
+// worth the extra request: the two are not reliably ranked. Layerswap's fee is steady near
+// $0.65, while the canonical relay tracks Ethereum gas and has run anywhere from about 4 IMX
+// in a lull to 50+ in a spike on the same day. Which one is cheaper genuinely depends on when
+// you ask.
+//
+// Only the route the member is NOT on is fetched here; the active one already has a full
+// quote. That keeps this to one extra call, which matters because the canonical quote shares
+// a 6/min bucket.
+async function refreshRouteCompare(st, wei) {
+  const other = cashoutRoute === 'layerswap' ? 'canonical' : 'layerswap';
+  const seq = cashoutSeq;
+  try {
+    const res = await fetch(other === 'layerswap'
+      ? '/api/market/creatures/cashout/ls/quote'
+      : '/api/market/creatures/cashout/quote', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: account, amountEth: weiToEthStr(wei) }),
+      signal: AbortSignal.timeout(30000),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (cashoutSeq !== seq || cashoutState !== st) return;
+    st.cmp = { ...(st.cmp || {}), [other]: res.ok ? { ...body, forWei: String(wei) } : { error: body.error || 'quote' } };
+    patchCashoutMove();
+    // The pick waits on BOTH sides being priced, and this is the one that arrives second.
+    // Calling it only from the caller left it evaluating before this fetch had resolved, so
+    // it early-returned, never set its latch, and stayed armed to fire much later — long
+    // after the member had chosen for themselves.
+    autoPickRoute(st);
+  } catch {
+    // No price for that chip, but the pick must not wait forever on an answer that will never
+    // come, or it stays armed and can move the member later.
+    if (cashoutState === st) { st.cmp = { ...(st.cmp || {}), [other]: { error: 'quote' } }; autoPickRoute(st); }
+  }
+}
+
+// The canonical route's two Ethereum-side hazards, read live. Cheap and cached server-side.
+async function refreshCanonicalHealth(st) {
+  try {
+    const r = await fetch('/api/market/creatures/cashout/canonical/health', { signal: AbortSignal.timeout(12000) });
+    if (!r.ok) return;
+    const h = await r.json();
+    if (cashoutState !== st) return;
+    st.canonHealth = h;
+    patchCashoutMove();
+  } catch { /* unknown stays unknown — the chip says so */ }
+}
+
+// What the canonical route needs in native IMX for a given quote, or null when unknown.
+const canonNeedWei = q => (q && q.tx ? cashoutImxNeeded(q, 'canonical') : null);
+
+// Pick the route that will actually work for this wallet, once, on first load. After that the
+// member's own choice stands — re-quoting must never yank the selection out from under them.
+//
+// The order encodes what can go wrong rather than what is cheapest:
+//   * The withdrawal queue holds EVERY canonical withdrawal for 24 hours when it trips, and
+//     leaves the member owing a mainnet transaction to finalise. Nothing about a price makes
+//     that a good default, so the queue wins outright.
+//   * Then affordability, because a route you cannot fund is not an option. Canonical needs
+//     the relay deposit sitting in the wallet first; Layerswap needs a fraction of a cent of
+//     ordinary transfer gas.
+//   * Only when both are genuinely usable does price decide, and then on the quoted fee,
+//     because that is the number the member can see and check.
+//   * When neither is comfortably affordable, Layerswap: it asks for the least, and the
+//     alternative is telling someone to go and acquire tens of IMX they haven't got.
+function autoPickRoute(st) {
+  if (!st || st.autoPicked || cashoutState !== st) return;
+  // A deliberate pick ends the matter. Without this the latch could still be unset when the
+  // member chose for themselves, and a later answer would quietly move them — off the
+  // trust-minimised bridge they had selected and onto the custodial route, unannounced.
+  if (st.routePicked) { st.autoPicked = true; return; }
+  const cmp = st.cmp || {};
+  const ls = cmp.layerswap, cn = cmp.canonical;
+  if (!ls || !cn) return;                       // wait until both have answered
+  st.autoPicked = true;
+
+  const lsOk = !ls.error;
+  const cnOk = !cn.error && st.canonHealth?.queueActive !== true;
+  const need = canonNeedWei(cn);
+  const cnAfford = cnOk && need != null && st.imxWei != null && st.imxWei >= need;
+
+  let pick;
+  if (!cnOk) pick = 'layerswap';
+  else if (!lsOk) pick = 'canonical';
+  else if (cnAfford) {
+    const lsFee = Number(ls.feeUsd), cnFee = Number(cn.feeUsd);
+    pick = Number.isFinite(lsFee) && Number.isFinite(cnFee) && cnFee < lsFee ? 'canonical' : 'layerswap';
+  } else pick = 'layerswap';
+
+  if (pick !== cashoutRoute) {
+    cashoutRoute = pick;
+    st.quote = null; st.err = null;
+    patchCashoutMove();
+    queueCashoutQuote(0);
+  }
+}
+
 function cashoutBalLineHtml() {
   const st = cashoutState || {};
   if (st.phase === 'load') return `<span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.cashout.move.balLoading'))}`;
   if (st.balWei == null) return esc(t('trade.cashout.move.balUnknown'));
   return esc(t('trade.cashout.move.bal').replace('{x}', fmtEthFiat(weiToEth(st.balWei))));
 }
+// The two ways out, as a pair of chips above the quote. Layerswap leads because it works
+// from any wallet; the canonical bridge is named as the trust-minimised alternative rather
+// than hidden, because for anyone already holding IMX it is the better trade.
+// Switching re-quotes: the two routes price completely differently.
+function cashoutRoutePickerHtml() {
+  const st = cashoutState || {};
+  const busy = bridgeJob && !BRIDGE_TERMINAL.has(bridgeJob.phase);
+  const cmp = st.cmp || {};
+  const queued = st.canonHealth?.queueActive === true;
+  // null means the read failed. Not knowing is not the same as knowing it's clear, and this
+  // route's failure mode is a 24-hour hold, so the chip says so rather than staying silent.
+  const queueUnknown = st.canonHealth != null && st.canonHealth.queueActive == null;
+
+  // Each chip carries this route's real price for THIS amount, priced now. Descriptions alone
+  // can't rank these two: Layerswap sits near $0.65 while the canonical relay follows Ethereum
+  // gas and swings by more than tenfold in a day, so which is cheaper depends on the hour.
+  const priceLine = r => {
+    const q = cmp[r];
+    if (!q) return `<i class="trade-route-fee is-wait">${esc(t('trade.cashout.route.pricing'))}</i>`;
+    if (q.error) {
+      return `<i class="trade-route-fee is-off">${esc(t(q.error === 'route_down'
+        ? 'trade.cashout.route.offline' : 'trade.cashout.route.noprice'))}</i>`;
+    }
+    const secs = q.durationSeconds;
+    const eta = r === 'layerswap' && secs
+      ? t('trade.cashout.move.secs').replace('{s}', String(secs))
+      : t('trade.cashout.move.mins');
+    return `<i class="trade-route-fee">${esc(t('trade.cashout.route.fee')
+      .replace('{f}', fmtFeeUsd(q.feeUsd)).replace('{t}', eta))}</i>`;
+  };
+
+  // What this route demands you already hold, which is the thing that actually decides whether
+  // it's usable. Layerswap's fee comes out of the ETH; canonical wants the relay deposit in the
+  // wallet first, and that is the wall members kept hitting.
+  const needLine = r => {
+    if (r === 'layerswap') {
+      // The fee comes out of the ETH, so no IMX is needed to PAY. The transfer still costs
+      // ordinary zkEVM gas (~0.0004 IMX), and promising "no IMX needed" to a wallet holding
+      // literally zero would strand exactly the member this route exists for.
+      const have = st.imxWei;
+      if (have != null && have < LS_MIN_GAS_WEI) {
+        return `<i class="trade-route-need is-bad">${esc(t('trade.cashout.route.needDust'))}</i>`;
+      }
+      return `<i class="trade-route-need is-ok">${esc(t('trade.cashout.route.needNone'))}</i>`;
+    }
+    if (queued) return `<i class="trade-route-need is-bad">${esc(t('trade.cashout.route.queued'))}</i>`;
+    if (queueUnknown) return `<i class="trade-route-need is-bad">${esc(t('trade.cashout.route.queueUnsure'))}</i>`;
+    const need = canonNeedWei(cmp.canonical);
+    if (need == null) return '';
+    const have = st.imxWei;
+    const ok = have != null && have >= need;
+    return `<i class="trade-route-need ${ok ? 'is-ok' : 'is-bad'}">${esc(
+      t(ok ? 'trade.cashout.route.needHave' : 'trade.cashout.route.needShort')
+        .replace('{x}', fmtImx(weiToEth(need))))}</i>`;
+  };
+
+  const chip = r => {
+    const off = r === 'canonical' && (queued || cmp[r]?.error === 'route_down');
+    return `
+    <button class="trade-route-pick${cashoutRoute === r ? ' is-on' : ''}${off ? ' is-off' : ''}"
+      data-act="cashout-route" data-route="${r}"
+      type="button" role="radio" aria-checked="${cashoutRoute === r}" ${busy || off ? 'disabled' : ''}>
+      <b>${esc(t(`trade.cashout.route.${r}.h`))}</b>
+      <span>${esc(t(`trade.cashout.route.${r}.p`))}</span>
+      ${priceLine(r)}
+      ${needLine(r)}
+    </button>`;
+  };
+
+  // The queue is the one hazard worth interrupting for: when it's on, a canonical withdrawal
+  // is held 24 hours whatever its size, and the member is left owing a mainnet transaction to
+  // release it. Say that before they pick, not after they've signed.
+  const queueWarn = queued
+    ? `<div class="trade-status is-warn"><span aria-hidden="true">⏳</span><span>${esc(t('trade.cashout.route.queueWarn'))}</span></div>`
+    : '';
+
+  // A single withdrawal over largeTransferThresholds is queued on its own, even when the global
+  // queue is off — same 24-hour hold, same "send your own mainnet transaction to finish it".
+  // We already read the threshold live; not warning on it would mean cheerfully taking a
+  // member's signature on a move that quietly becomes a day-long wait. Only the canonical route
+  // is affected, so this stays quiet on Layerswap.
+  let bigWarn = '';
+  if (!queued && cashoutRoute === 'canonical' && st.canonHealth?.thresholdWei) {
+    try {
+      const thr = BigInt(st.canonHealth.thresholdWei);
+      const want = cashoutAmountWei();
+      if (thr > 0n && want != null && want >= thr) {
+        bigWarn = `<div class="trade-status is-warn"><span aria-hidden="true">⏳</span><span>${esc(
+          t('trade.cashout.route.bigWarn').replace('{x}', fmtEth(weiToEth(thr))))}</span></div>`;
+      }
+    } catch { /* unparseable threshold — say nothing rather than guess */ }
+  }
+  return `
+    <div class="trade-route-picks" role="radiogroup" aria-label="${esc(t('trade.cashout.route.aria'))}">
+      ${CASHOUT_ROUTES.map(chip).join('')}
+    </div>${queueWarn}${bigWarn}`;
+}
+
 function cashoutQuoteAreaHtml() {
   const st = cashoutState || {};
   const q = st.quote;
-  const ERR = { over: 'trade.cashout.move.err.over', amount: 'trade.cashout.move.err.amount', small: 'trade.cashout.move.err.small', rate: 'trade.err.rate', quote: 'trade.cashout.move.err.quote' };
-  if (st.err && st.err !== 'gas') return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(t(ERR[st.err]))}</span></div>`;
-  if (q === 'loading') return `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.bridge.quote.loading'))}</div>`;
-  if (!q) return '';
+  // The picker rides above every state, including errors and loading: switching route is
+  // often the fix for whatever the error is saying, so it must never be the thing that
+  // disappears when something goes wrong.
+  const pick = (st.routeDownNotice
+    ? `<div class="trade-status is-warn"><span aria-hidden="true">ℹ</span><span>${esc(t('trade.cashout.route.downNotice'))}</span></div>`
+    : '') + cashoutRoutePickerHtml();
+  const ERR = { over: 'trade.cashout.move.err.over', amount: 'trade.cashout.move.err.amount', small: 'trade.cashout.move.err.small', rate: 'trade.err.rate', quote: 'trade.cashout.move.err.quote', routedown: 'trade.cashout.route.down' };
+  if (st.err && st.err !== 'gas') return `${pick}<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(t(ERR[st.err]))}</span></div>`;
+  if (q === 'loading') return `${pick}<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.bridge.quote.loading'))}</div>`;
+  if (!q) return pick;
   // Don't show Squid's durationSeconds here: it's calibrated to the slow (mainnet →
   // zkEVM) direction. A real cash-out executed in 72s while the quote claimed ~23 min —
-  // an ETA that wrong reads as "something's broken" to a nervous seller.
+  // an ETA that wrong reads as "something's broken" to a nervous seller. Layerswap's ETA is
+  // measured on this direction and runs ~25s, so that one is worth showing.
+  const lsMins = q.provider === 'layerswap' && q.durationSeconds
+    ? t('trade.cashout.move.secs').replace('{s}', String(q.durationSeconds))
+    : t('trade.cashout.move.mins');
   const meta = [
     q.feeUsd != null ? t('trade.bridge.quote.fees').replace('{f}', fmtFeeUsd(q.feeUsd)) : null,
-    t('trade.cashout.move.mins'),
-    t('trade.bridge.quote.by'),
+    lsMins,
+    t(q.provider === 'layerswap' ? 'trade.cashout.move.byLs' : 'trade.bridge.quote.by'),
   ].filter(Boolean).join(' · ');
   const gasShort = st.err === 'gas';
   const needImx = cashoutImxNeeded(q);
   const busy = bridgeJob && !BRIDGE_TERMINAL.has(bridgeJob.phase);
-  return `
+  return `${pick}
     <div class="trade-bridge-quote">
       <div class="trade-bridge-line">${esc(t('trade.cashout.move.quoteLine').replace('{y}', fmtEthFiat(q.toEth)))}</div>
       <div class="trade-bridge-meta">${esc(meta)}</div>
-      ${gasShort ? `<div class="trade-status is-error"><span aria-hidden="true">⛽</span><span>${esc(t('trade.cashout.move.gasShort').replace('{x}', fmtImx(weiToEth(needImx))).replace('{y}', fmtImx(weiToEth(cashoutState?.imxWei ?? 0n))))}</span></div>` : ''}
+      ${gasShort ? `<div class="trade-status is-error"><span aria-hidden="true">⛽</span><span>${esc(
+        // The IMX figure and the "fees ≈ $X" line directly above it are the SAME money: the
+        // relay fee, quoted once in dollars and once in the coin it's actually paid in. Shown
+        // as two bare numbers they read as two charges, and the IMX one reads as enormous
+        // because IMX is a ten-cent coin. So say the dollar amount alongside it and say
+        // plainly that it is not an extra charge.
+        //
+        // That reasoning is canonical-only. On Layerswap the fee comes out of the ETH being
+        // moved and is nothing to do with the IMX, so telling someone the fee "is charged in
+        // IMX" there would be flatly untrue. Same shortfall, opposite explanation.
+        (q.provider === 'layerswap'
+          ? (q.feeUsd != null
+            ? t('trade.cashout.move.gasShortLs').replace('{z}', fmtFeeUsd(q.feeUsd))
+            : t('trade.cashout.move.gasShort'))
+          : q.feeUsd != null
+          ? t('trade.cashout.move.gasShortUsd').replace('{z}', fmtFeeUsd(q.feeUsd))
+          : t('trade.cashout.move.gasShort'))
+          .replace('{x}', fmtImx(weiToEth(needImx)))
+          .replace('{y}', fmtImx(weiToEth(cashoutState?.imxWei ?? 0n))))}</span></div>` : ''}
       ${gasShort && gasState?.ctx === 'cashout'
         ? gasHelpHtml()
         : `<button class="trade-funds-btn" data-act="cashout-now" type="button" ${gasShort || busy ? 'disabled' : ''}>${esc(t('trade.cashout.move.btn'))}</button>`}
@@ -1301,6 +1618,20 @@ function cashoutHopHtml(lblKey, netImg, netName, sub) {
       <span class="trade-bchip"><img src="${netImg}" alt="" width="14" height="14">${esc(netName)}</span>
     </div>`;
 }
+// Which custody sentence belongs on this screen. The two routes make opposite promises about
+// where the member's ETH goes, so picking the wrong one is the most misleading thing this
+// modal can say.
+//
+// For a bridge that already exists, the answer comes from the JOB, never from the current
+// selection. `cashoutRoute` is a module global that resets to the default on every page load,
+// while a bridge job is persisted and restored across one — so after a reload a canonical
+// withdrawal was being described as "your ETH goes to Layerswap", to a member who had
+// deliberately chosen the route where it does not. swapId is written only by
+// runCashoutLayerswap, which makes it the marker that survives.
+const cashoutFootKey = (job = null) =>
+  (job ? !!job.swapId : cashoutRoute === 'layerswap')
+    ? 'trade.cashout.move.footLs' : 'trade.cashout.move.foot';
+
 function cashoutMoveInner() {
   // A move is underway/finished — the tracker card takes over the modal (same pattern as
   // the funds/gas panels), so there's exactly one source of truth on screen.
@@ -1308,7 +1639,12 @@ function cashoutMoveInner() {
     return `
       <span class="apply-pill">${esc(t('trade.cashout.badge'))}</span>
       ${bridgeCardHtml(bridgeJob)}
-      <p class="trade-safety-foot">${esc(t('trade.cashout.move.foot'))}</p>`;
+      ${/* The one-tap fix for a message that stalled out of relay gas lives here, because
+            this branch owns the screen for every terminal phase including 'error'. It was
+            hung off the quote area, which this return never reaches — so the button existed
+            and was unreachable, which is worse than not having built it. */
+        gasRescueHtml()}
+      <p class="trade-safety-foot">${esc(t(cashoutFootKey(bridgeJob)))}</p>`;
   }
   const st = cashoutState || {};
   return `
@@ -1332,8 +1668,7 @@ function cashoutMoveInner() {
     <div class="trade-safety-actions">
       <button class="apply-btn-ghost" data-act="cashout-back" type="button">${esc(t('trade.cashout.back'))}</button>
     </div>
-    <p class="trade-safety-foot">${esc(t('trade.cashout.move.foot'))}<br>
-      <a class="trade-cashout-diy" href="${CASHOUT_URL}" target="_blank" rel="noopener">${esc(t('trade.cashout.move.diy'))} ↗</a></p>`;
+    <p class="trade-safety-foot" id="trade-cashout-foot">${cashoutFootInnerHtml()}</p>`;
 }
 // Patch only the quote area + balance line — the amount input keeps focus while typing.
 function patchCashoutMove() {
@@ -1341,6 +1676,17 @@ function patchCashoutMove() {
   if (slot) slot.innerHTML = cashoutQuoteAreaHtml();
   const bal = root()?.querySelector('#trade-cashout-balline');
   if (bal) bal.innerHTML = cashoutBalLineHtml();
+  // The custody sentence changes with the route, and every route change comes through here.
+  // It used to sit outside the two patched nodes, so switching route repainted the price and
+  // left the promise describing the route the member had just left — telling someone their
+  // ETH never leaves their wallet as they signed it over to a solver, or the reverse.
+  const foot = root()?.querySelector('#trade-cashout-foot');
+  if (foot) foot.innerHTML = cashoutFootInnerHtml();
+}
+// The footer's contents, so the full render and the patch can never drift apart.
+function cashoutFootInnerHtml() {
+  return `${esc(t(cashoutFootKey()))}<br>
+    <a class="trade-cashout-diy" href="${CASHOUT_URL}" target="_blank" rel="noopener">${esc(t('trade.cashout.move.diy'))} ↗</a>`;
 }
 function cashoutMaxClick() {
   const st = cashoutState;
@@ -1357,8 +1703,39 @@ function cashoutMaxClick() {
 async function runCashout() {
   const st = cashoutState;
   const q = st?.quote;
-  if (!q || q === 'loading' || !q.tx || st.err === 'gas') return;
+  // The canonical route carries its transaction on the quote; Layerswap mints one only when
+  // the member commits, so a missing `tx` is normal there and must not block the button.
+  if (!q || q === 'loading' || st.err === 'gas') return;
+  if (cashoutRoute !== 'layerswap' && !q.tx) return;
   if (bridgeJob && !BRIDGE_TERMINAL.has(bridgeJob.phase)) return; // one bridge at a time
+  if (cashoutRoute === 'layerswap') return runCashoutLayerswap(q);
+  // A canonical quote is perishable. Its `tx.value` is the Axelar relay deposit, which
+  // tracks Ethereum gas and has moved more than tenfold inside three hours. Signing a stale
+  // one underpays the relay, and an underfunded message does not heal: it sits approved and
+  // unexecuted until somebody tops it up by hand. So refuse to sign an old quote and go get
+  // a fresh one instead — a second of waiting against weeks of stranded ETH.
+  if (st.quoteAt && Date.now() - st.quoteAt > CASHOUT_QUOTE_MAX_AGE_MS) {
+    st.quote = null;
+    patchCashoutMove();
+    return queueCashoutQuote(0);
+  }
+  // Read the queue again, right now, and refuse if it is on OR if we cannot tell. Checking it
+  // when the screen opened is not evidence about this moment: the queue trips on aggregate
+  // traffic, so it can come on between opening the panel and pressing the button, and a
+  // withdrawal signed into it is held 24 hours and then needs a mainnet transaction the member
+  // may not be able to afford. "We could not check" has to block too — presenting an unknown
+  // as clear is how you promise a few minutes and deliver a day.
+  const health = await fetch('/api/market/creatures/cashout/canonical/health',
+    { signal: AbortSignal.timeout(10000) }).then(r => r.ok ? r.json() : null).catch(() => null);
+  if (cashoutState !== st) return;
+  if (health) st.canonHealth = health;
+  if (health?.queueActive !== false) {
+    st.err = null;
+    patchCashoutMove();
+    setBridgeJob({ phase: 'error', kind: 'cashout', dir: 'out', account,
+      msg: t(health?.queueActive === true ? 'trade.cashout.route.queueBlocked' : 'trade.cashout.route.queueUnknown') });
+    return;
+  }
   try {
     bridgeJob = { phase: 'switch', dir: 'out', kind: 'cashout', account, mins: null, startedAt: Date.now(), fromSym: 'ETH', toSym: 'ETH', fromEth: q.fromEth, toEth: q.toEth };
     patchCashout();
@@ -1393,6 +1770,144 @@ async function runCashout() {
     trackBridge();
   } catch (err) {
     console.error('Cash-out failed:', err);
+    setBridgeJob({ phase: 'error', msg: friendlyError(err) });
+  }
+}
+
+// Did a canonical withdrawal actually PAY OUT, or did it execute into the 24-hour queue?
+// Axelar cannot tell us apart from these, so ask the bridge: if the flow-rate guard is on, or
+// the amount cleared the per-transfer threshold, the ETH is held rather than delivered. Only
+// the clear case gets to say "landed".
+async function confirmCanonicalDelivery(hash) {
+  let h = null;
+  try {
+    const r = await fetch('/api/market/creatures/cashout/canonical/health', { signal: AbortSignal.timeout(10000) });
+    h = r.ok ? await r.json() : null;
+  } catch { h = null; }
+  if (!bridgeJob || bridgeJob.hash !== hash) return; // superseded
+  let overThreshold = false;
+  try {
+    const thr = h?.thresholdWei ? BigInt(h.thresholdWei) : null;
+    const sent = bridgeJob.fromEth != null ? BigInt(Math.round(Number(bridgeJob.fromEth) * 1e6)) * 10n ** 12n : null;
+    overThreshold = thr != null && thr > 0n && sent != null && sent >= thr;
+  } catch { overThreshold = false; }
+  // Unknown health does NOT get the celebration. A quiet "check your wallet" is honest; a
+  // wrong "it's landed" sends someone hunting for money that is sitting in a queue.
+  if (h?.queueActive === true || overThreshold) {
+    setBridgeJob({ phase: 'done', stage: 'arrived', queuedDelivery: true });
+  } else if (h?.queueActive === false) {
+    setBridgeJob({ phase: 'done', stage: 'arrived' });
+  } else {
+    setBridgeJob({ phase: 'done', stage: 'arrived', deliveryUnsure: true });
+  }
+}
+
+// --- A stalled canonical message ---------------------------------------------------------
+// The Ethereum-side relay ran out of prepaid gas, so the message sits approved and unexecuted.
+// The ETH is not lost and not spent: it is waiting on a gas top-up. Left unexplained this is
+// the worst outcome on the whole screen, and it is not hypothetical — two of these from
+// 2026-07-31 were still untouched nineteen days later because nobody knew what to do.
+//
+// The top-up itself (addNativeGas on the zkEVM gas service) needs the message's log index, and
+// Axelar publishes several similarly-named indices with different scopes. Getting it wrong
+// spends real IMX on the wrong event. Rather than guess with a member's money, this hands them
+// to Axelarscan's page for their transaction, which offers the same top-up and computes the
+// index correctly. Worth revisiting as a one-tap once the field can be verified against a live
+// stalled message.
+function gasRescueHtml() {
+  const b = bridgeJob;
+  if (!b?.stalled || !b.hash) return '';
+  const url = b.axelarUrl || `https://axelarscan.io/gmp/${encodeURIComponent(b.hash)}`;
+  return `
+    <p class="trade-funds-net">${esc(t('trade.bridge.rescue.p'))}</p>
+    <a class="trade-funds-btn" href="${esc(url)}" target="_blank" rel="noopener">${esc(t('trade.bridge.rescue.btn'))} ↗</a>`;
+}
+
+// Layerswap cash-out: one signature, no approval, no IMX beyond ordinary transfer gas.
+//
+// The shape differs from the canonical route in two ways worth naming:
+//   * The transaction is minted HERE, not at quote time, because creating it registers a
+//     swap on Layerswap's side. Quoting stays free and repeatable; committing happens once.
+//   * It is a bare ERC-20 transfer, so there is nothing to approve. The router-pull the
+//     canonical route needs an allowance for simply doesn't exist here.
+// The calldata is forwarded exactly as the server hands it over: Layerswap appends the swap
+// id to it, and that is the only thing tying the transfer to this swap.
+async function runCashoutLayerswap(q) {
+  try {
+    bridgeJob = { phase: 'switch', dir: 'out', kind: 'cashout', account, mins: null, startedAt: Date.now(), fromSym: 'ETH', toSym: 'ETH', fromEth: q.fromEth, toEth: q.toEth };
+    patchCashout();
+    patchBridgeBanner();
+    await switchToChain(ZK_CHAIN_ID_HEX); // source chain — usually a no-op, we're already here
+
+    // Mint against the amount showing on screen, re-read now rather than trusting the one
+    // the quote was taken with: the member may have edited the box while the quote settled.
+    const wei = cashoutAmountWei();
+    if (wei == null) { setBridgeJob({ phase: 'error', msg: t('trade.cashout.move.err.amount') }); return; }
+    const res = await fetch('/api/market/creatures/cashout/ls/create', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: account, amountEth: weiToEthStr(wei) }),
+      signal: AbortSignal.timeout(30000),
+    });
+    const swap = await res.json().catch(() => ({}));
+    if (!res.ok || !swap.tx?.to || !swap.tx?.data || !swap.swapId) {
+      // The route can vanish between quoting and committing — it is a solver, and Ethereum is
+      // the leg they drop first. "Try again in a moment" is the one answer that is never true
+      // for that, so it gets the message that actually helps: switch to the official bridge.
+      const key = swap.error === 'route_down' ? 'trade.cashout.route.down'
+        : swap.error === 'no_route' ? 'trade.cashout.move.err.small'
+        : 'trade.cashout.move.err.quote';
+      setBridgeJob({ phase: 'error', msg: t(key) });
+      return;
+    }
+    // Assert the same facts here rather than trust that the server did. The wallet is about
+    // to be asked to move real ETH, so the recipient and the amount are decoded from the
+    // calldata and checked against what this screen actually asked for. A mismatch means
+    // something upstream is wrong, and the right answer is to refuse, not to sign and hope.
+    const d = String(swap.tx.data || '');
+    const okShape = swap.tx.to?.toLowerCase() === IMX_ETH_TOKEN.toLowerCase()
+      && /^0xa9059cbb[0-9a-f]{128,}$/i.test(d);
+    const recip = okShape ? ('0x' + d.slice(34, 74)).toLowerCase() : null;
+    let amt = null;
+    try { amt = okShape ? BigInt('0x' + d.slice(74, 138)) : null; } catch { amt = null; }
+    // Compare against the amount Layerswap can actually express, not the one in the box.
+    //
+    // They price in units of 1e-8 ETH, so the calldata always carries this figure floored to
+    // that step. Asserting equality against the raw 18-decimal box value refused every wallet
+    // whose balance had more than eight decimal places, which is very nearly every wallet:
+    // the box is PREFILLED with the exact balance, so pressing Move on the default route
+    // failed for the ordinary case, and failed after ls/create had already registered a swap
+    // upstream. The earlier test missed it because its stub balance happened to be round.
+    //
+    // Flooring here keeps the property that matters: the transaction can never move more than
+    // was asked, and the only difference tolerated is the sub-cent rounding Layerswap itself
+    // performs. Anything else is still refused unsigned.
+    const wantWei = wei - (wei % LS_AMOUNT_STEP_WEI);
+    if (!okShape || !recip || recip === account.toLowerCase() || amt == null || amt !== wantWei) {
+      console.error('Layerswap returned an unexpected call', { to: swap.tx.to, recip, amt: String(amt), want: String(wantWei) });
+      setBridgeJob({ phase: 'error', msg: t('trade.cashout.move.err.quote') });
+      return;
+    }
+    // And it has to be ETH they actually hold. The amount is re-read from the box at commit
+    // time, so a balance checked when the quote landed is not evidence about this number.
+    const balNow = await readErc20(IMX_ETH_TOKEN, account).catch(() => null);
+    if (balNow != null && amt > balNow) {
+      setBridgeJob({ phase: 'error', msg: t('trade.cashout.move.err.over') });
+      return;
+    }
+
+    setBridgeJob({ phase: 'confirm' });
+    const hash = await eth().request({
+      method: 'eth_sendTransaction',
+      params: [{ from: account, to: swap.tx.to, data: swap.tx.data }],
+    });
+    setBridgeJob({
+      phase: 'waiting', hash, swapId: swap.swapId, mins: null, startedAt: Date.now(), stage: 'submitted',
+      kind: 'cashout', dir: 'out', axelarUrl: null, needWei: '0', quoteId: '', requestId: '', account,
+      fromSym: 'ETH', toSym: 'ETH', fromEth: swap.fromEth ?? q.fromEth, toEth: swap.toEth ?? q.toEth,
+    });
+    trackBridge();
+  } catch (err) {
+    console.error('Layerswap cash-out failed:', err);
     setBridgeJob({ phase: 'error', msg: friendlyError(err) });
   }
 }
@@ -2703,18 +3218,46 @@ function showOfferFundsHelp(need, ctx) {
 // need a little of it. Bridged ETH can't pay it. So when a wallet's IMX runs dry we show
 // the same warm, one-tap path the Buy funds panel uses, but pointed at native IMX.
 
+// Three decimals suits the tens-of-IMX relay deposit this was written for. It does not suit
+// the Layerswap requirement, which is 0.002 IMX: at that size every balance from 0.0015 up
+// rounds to the requirement itself, so the gas wall read "needs about 0.002 IMX, you have
+// 0.002 IMX" above a dead button, and anything under 0.0005 printed as a flat "0 IMX" to a
+// member whose wallet was not empty. Give the small end the digits it needs to stay a
+// different number from its own threshold.
 function fmtImx(n) {
   if (n == null || !Number.isFinite(Number(n))) return '—';
-  return `${Number(n).toLocaleString(undefined, { maximumFractionDigits: 3 })} IMX`;
+  const v = Number(n);
+  const dp = v !== 0 && Math.abs(v) < 0.01 ? 6 : 3;
+  return `${v.toLocaleString(undefined, { maximumFractionDigits: dp })} IMX`;
 }
 
 // Gas-bridge status, with a context-agnostic "you're set" line on completion (the buy
 // "tap Buy again" copy would be wrong in Sell/Transfer). Other phases are asset-neutral,
 // so they reuse the shared tracker.
+// "You're all set!" was said the moment ANY gas landed, including a 5 IMX top-up against a
+// 61 IMX requirement. Celebrating while the member is still blocked is worse than saying
+// nothing: they go back, hit the same wall, and stop trusting the panel. So the arrival is
+// checked against what the action actually needs.
+//
+// Its own function because two surfaces render a finished gas bridge — the tracker card that
+// replaces the panel, and the status line in the quote area — and the warning has to appear
+// on whichever one the member is looking at.
+function gasShortfallAfterTopUpHtml() {
+  const b = bridgeJob;
+  if (!b || b.kind !== 'gas' || b.phase !== 'done') return '';
+  const need = gasState?.needWei != null ? Number(gasState.needWei) / 1e18 : null;
+  const have = gasState?.imxBal != null ? Number(gasState.imxBal) / 1e18 : null;
+  if (need == null || have == null || have >= need) return '';
+  return `<div class="trade-status is-warn"><span aria-hidden="true">⚠</span><span>${esc(
+    t('trade.gas.bridge.doneShort').replace('{x}', fmtImx(have)).replace('{y}', fmtImx(need)))}</span></div>`;
+}
+
 function gasBridgeStatusHtml() {
   const b = bridgeJob;
   if (!b || b.kind !== 'gas') return '';
   if (b.phase === 'done') {
+    const short = gasShortfallAfterTopUpHtml();
+    if (short) return short;
     return `<div class="trade-status is-ok"><span aria-hidden="true">✓</span><span>${esc(t('trade.gas.bridge.done'))}</span></div>`;
   }
   return bridgeStatusHtml();
@@ -2726,10 +3269,16 @@ function gasBridgeStatusHtml() {
 // Does the assist card stand alone? While we're offering to cover the gas, or actually
 // covering it, the bridge/on-ramp options are noise — the member needs one button. They
 // come back if the assist errors out.
+// Does the assist card get the panel to itself? Only when the assist can actually finish the
+// job. This checked `available` alone, while gasAssistHtml separately refused to render an
+// offer that wouldn't cover the need (assistCovers) — so an eligible holder hitting a
+// cash-out gas wall got the exclusive layout wrapped around an empty string: a header and
+// nothing else. No assist, no bridge, no card, no deep-link. The coverage test has to be
+// asked in both places or the two disagree.
 function gasAssistExclusive(g) {
   if (!g) return false;
   if (g.assistPhase && g.assistPhase !== 'error') return true;
-  return !g.assistPhase && g.assist && g.assist.available === true;
+  return !g.assistPhase && g.assist && g.assist.available === true && assistCovers(g, g.assist);
 }
 
 // The "we'll cover it" card. Returns '' when there's nothing to say (not signed in with a
@@ -2782,7 +3331,12 @@ function gasAssistHtml(g) {
 
   // Signed out, but this is exactly the member the assist exists for — say so and offer
   // the one-click sign-in. This is the highest-value moment to ask.
-  if (a.reason === 'not_signed_in') {
+  //
+  // Only when signing in would actually get them somewhere. This branch asked nothing at all,
+  // so the card offered to "pay the network fee for you" to a member who needed 21.9 IMX and
+  // already held 14.2 — two separate reasons the faucet would have paid them nothing. They
+  // sign in, come back, and the offer is gone with no explanation. See assistSigninWouldHelp.
+  if (a.reason === 'not_signed_in' && assistSigninWouldHelp(g, a)) {
     return `<div class="trade-gas-assist is-offer">
       <div class="trade-gas-assist-head">
         <span class="trade-gas-assist-ic" aria-hidden="true">⛽</span>
@@ -2820,6 +3374,23 @@ function assistCovers(g, a) {
   return target >= Number(g.needWei) / 1e18;
 }
 
+// Would signing in actually get them a grant? Signed out, the server can't look at anything —
+// it answers `not_signed_in` to everyone and hands back only the policy — so the two questions
+// it would have asked have to be asked here instead, against what the browser can already see:
+//
+//   * would a top-up cover what this action needs (assistCovers), and
+//   * is the wallet below the trigger at all? The faucet tops UP TO a target, so a wallet
+//     already holding more than the trigger is paid nothing and answered `has_gas`.
+//
+// Get either wrong and the card promises free gas that will never arrive, which is worse than
+// saying nothing: it sends someone through a Discord round-trip to reach an empty panel.
+function assistSigninWouldHelp(g, a) {
+  if (!assistCovers(g, a)) return false;
+  const trigger = Number(a?.policy?.triggerImx);
+  if (!Number.isFinite(trigger) || g?.imxBal == null) return true; // unknown — don't guess it away
+  return Number(g.imxBal) / 1e18 < trigger;
+}
+
 // One claim per member, ever, checked against three identities. They all mean the same
 // thing to whoever is reading it, so they read the same.
 const GAS_USED_REASONS = new Set(['account_used', 'highrise_used', 'wallet_used']);
@@ -2846,10 +3417,65 @@ function gasAssistTermsHtml(a) {
   </ul>`;
 }
 
+// The way out that costs nothing, offered before any way out that costs money.
+//
+// The canonical relay deposit is the only thing in this flow that can want tens of IMX, and a
+// member who cannot cover it is shown a panel about acquiring IMX: bridge some, buy some, or
+// (falsely, until now) sign in and we will hand you some. All three miss the obvious answer,
+// which is that the other route needs no deposit at all. That answer was on screen only as a
+// route chip whose fee line reads as a price comparison, not as the fix for the error under it.
+//
+// It is offered to a wallet that cannot pay the fast route's gas either, which looks wrong
+// until you compare the two shortfalls. The canonical requirement is always at least the 0.05
+// IMX headroom and in practice tens of IMX, which is far above what the free grant tops up to,
+// so on that route there is never any free gas. The Layerswap requirement is 0.002 IMX, which
+// sits comfortably inside the grant. Switching is what makes their problem solvable, so gating
+// the switch on a balance the grant would supply left the one genuinely stranded member with
+// nothing but a card on-ramp. Different copy, same button.
+//
+// Deliberately NOT exclusive: it goes above the funding options rather than replacing them.
+// Someone who picked the official bridge on purpose may well want to fund it rather than be
+// herded onto a route where a third party briefly holds their ETH. Offer, don't corner.
+function gasRouteEscapeHtml(g) {
+  if (!g || g.ctx !== 'cashout' || cashoutRoute !== 'canonical') return '';
+  const st = cashoutState;
+  const ls = st?.cmp?.layerswap;
+  // A Layerswap quote carries no `tx` by design (the transaction is minted at create time),
+  // so "is this route usable?" has to be asked of the price, not of a transaction.
+  if (!ls || ls.error || ls.toEth == null) return '';
+  // ...and priced for the amount in the box right now, not the one before the last edit.
+  const want = cashoutAmountWei();
+  if (want == null || ls.forWei !== String(want)) return '';
+  // Never mid-bridge. The route chips disable themselves for the same reason, and this button
+  // does the same job: switching route nulls the gas state a running top-up reports against,
+  // so a member who has already signed and paid for a bridge would lose its follow-through.
+  if (bridgeJob && !BRIDGE_TERMINAL.has(bridgeJob.phase)) return '';
+
+  const canPay = g.imxBal != null && g.imxBal >= LS_MIN_GAS_WEI;
+  const fee = ls.feeUsd != null
+    ? ' ' + t('trade.gas.other.fee').replace('{f}', fmtFeeUsd(ls.feeUsd))
+    : '';
+  const head = canPay ? t('trade.gas.other.h') : t('trade.gas.other.h.low');
+  const body = (canPay ? t('trade.gas.other.p') : t('trade.gas.other.p.low')) + fee;
+  return `<div class="trade-gas-assist is-offer">
+    <div class="trade-gas-assist-head">
+      <span class="trade-gas-assist-ic" aria-hidden="true">⚡</span>
+      <div><b>${esc(head)}</b><span>${esc(body)}</span></div>
+    </div>
+    <button class="trade-funds-btn is-assist" data-act="cashout-route" data-route="layerswap" type="button">${esc(t('trade.gas.other.btn'))}</button>
+  </div>`;
+}
+
 function gasHelpHtml() {
   // A gas bridge is underway/finished — the tracker card IS the panel now (no duplicate
   // "Almost there" header or quote line above it, and no double frame).
-  if (isGasBridge(bridgeJob) && CARD_PHASES.has(bridgeJob.phase)) return bridgeCardHtml(bridgeJob);
+  //
+  // The "landed, but still not enough" warning has to ride along here. It lived only on the
+  // quote area further down, which this early return skips for exactly the phase that sets
+  // it — so a partial top-up went on saying "You're all set!" and the warning never showed.
+  if (isGasBridge(bridgeJob) && CARD_PHASES.has(bridgeJob.phase)) {
+    return bridgeCardHtml(bridgeJob) + gasShortfallAfterTopUpHtml();
+  }
   const g = gasState;
   if (!g) return '';
   const imx = fmtWeiEth(g.imxBal);
@@ -2900,16 +3526,53 @@ function gasHelpHtml() {
   // The reassuring note names what's actually moving, so an IMX holder isn't told we'll
   // "swap your ETH" when their IMX is right there on Ethereum.
   const note = fromImx ? t('trade.gas.bridgeNote.imx') : g.from === 'eth' ? t('trade.gas.bridgeNote') : '';
+  // "You just need a little IMX" and "a tiny amount is plenty" were printed at every size of
+  // need. True for a buy or a transfer, which want a rounding error of gas. Absurd directly
+  // under an error saying you need 108 IMX and hold 15, which is what a member actually saw.
+  // When we know the real requirement, name it instead of reassuring them about it.
+  //
+  // The threshold is "is this a relay deposit at all", not "is it more than 5 IMX". Keying it
+  // to the top-up target left a whole band mislabelled: the canonical requirement has been
+  // observed as low as 4 IMX in an Ethereum lull, and at that size the panel still said "you
+  // just need a little IMX" and "a tiny amount is plenty" directly under an error asking for
+  // four of them, and suppressed the refund note that explains most of it comes back. A
+  // canonical need is never below the 0.05 IMX headroom; the Layerswap need is 0.002. Anything
+  // above the "you're set for gas" mark is the former.
+  const big = g.needWei != null && g.needWei > GAS_OK_WEI;
+  const head = big ? t('trade.gas.h.big') : t('trade.gas.h');
+  const sub = big
+    ? t('trade.gas.needLine').replace('{x}', fmtImx(Number(g.needWei) / 1e18))
+    : t('trade.funds.gasHint');
+  // A big IMX figure reads as a big charge, and it isn't one: the relay fee is a deposit for
+  // the Ethereum side, and Axelar refunds whatever the execution didn't use, typically within
+  // a couple of minutes. Traced withdrawals fronted 4-5 IMX and kept 0.4-2. Without saying so
+  // we'd have members abandoning a cash-out over money they were always going to get back.
+  const refundNote = big ? `<p class="trade-funds-net">${esc(t('trade.gas.refundNote'))}</p>` : '';
+  // The one-tap top-up is capped. When the requirement is above that cap, a quote for the cap
+  // is not a solution and must not be presented as one — say plainly that this one tap won't
+  // cover it, so nobody pays for a bridge that leaves them exactly as stuck.
+  const overCap = g.needWei != null && Number(g.needWei) / 1e18 > GAS_MAX_IMX;
+  const capNote = overCap
+    ? `<div class="trade-status is-warn"><span aria-hidden="true">⚠</span><span>${esc(
+        t('trade.gas.overCap').replace('{x}', fmtImx(GAS_MAX_IMX)))}</span></div>`
+    : '';
   return `
     <div class="trade-funds trade-gas">
-      <div class="trade-funds-h"><span aria-hidden="true">⛽</span> ${esc(t('trade.gas.h'))} ${tipHtml('trade.gas.p')}</div>
+      ${/* The tooltip has to follow the header. Left fixed, it explained "the tiny network fee"
+            and promised "a tiny amount lasts a long time" from behind a heading announcing a
+            requirement of tens of IMX, which is the same contradiction the heading itself was
+            split to remove. */''}
+      <div class="trade-funds-h"><span aria-hidden="true">⛽</span> ${esc(head)} ${tipHtml(big ? 'trade.gas.p.big' : 'trade.gas.p')}</div>
       <ul class="trade-funds-list">
         <li><span class="trade-funds-ic" aria-hidden="true">•</span><div>
           <b>IMX</b> — ${esc(t('trade.gas.imxLine'))}
-          <span class="trade-funds-sub">${esc(t('trade.funds.have'))} ${esc(imx)} IMX · ${esc(t('trade.funds.gasHint'))}</span>
+          <span class="trade-funds-sub">${esc(t('trade.funds.have'))} ${esc(imx)} IMX · ${esc(sub)}</span>
         </div></li>
       </ul>
+      ${gasRouteEscapeHtml(g)}
       ${assist}
+      ${capNote}
+      ${refundNote}
       ${note ? `<p class="trade-funds-net">${esc(note)}</p>` : ''}
       ${bridgeArea}
     </div>`;
@@ -3020,10 +3683,10 @@ async function ensureGasQuote(g) {
   if (!g.from) { g.quote = null; patchGas(); return; }
   g.quote = 'loading';
   patchGas();
-  let q = await fetchGasQuote(g.from);
+  let q = await fetchGasQuote(g.from, g.needWei);
   if (q == null && gasState === g) {
     await new Promise(r => setTimeout(r, 1200));
-    if (gasState === g) q = await fetchGasQuote(g.from);
+    if (gasState === g) q = await fetchGasQuote(g.from, g.needWei);
   }
   if (gasState === g) { g.quote = q; patchGas(); }
 }
@@ -3038,7 +3701,17 @@ async function ensureGasQuote(g) {
 // `needWei` is how much gas this particular action actually needs, when we know it. Most
 // actions need a rounding error and leave it null; cash-out needs a real amount, and a free
 // grant that still leaves someone short is worse than not offering one (see assistCovers).
+// Every call takes a ticket. The staleness guard used to compare the CONTEXT string, and both
+// cash-out routes pass the same one ('cashout'), so two overlapping calls each believed they
+// were current and the slower one won. That was harmless while only the canonical route ever
+// reached here, because both calls carried the same requirement. Now they can carry 0.002 IMX
+// or thirty-something, four orders of magnitude apart, and every decision downstream keys off
+// it: the panel header, the "you need about {x}" line, whether the free grant is offered, the
+// over-cap warning, the refund note and the size of the top-up bridge. A late answer from the
+// route the member has already left must not write any of them.
+let gasSeq = 0;
 async function showGasHelp(ctx, retry = null, needWei = null) {
+  const seq = ++gasSeq;
   gasState = { ctx, retry, needWei, imxBal: null, mainnetEthWei: null, mainnetImxWei: null, from: null, quote: 'loading', assist: 'checking', assistPhase: null };
   patchGas();
   const [imxBal, elsewhere, assist] = await Promise.all([
@@ -3046,19 +3719,32 @@ async function showGasHelp(ctx, retry = null, needWei = null) {
     fetch(`/api/market/creatures/eth-elsewhere/${account}`).then(r => r.ok ? r.json() : null).catch(() => null),
     fetchGasAssist(),
   ]);
-  if (gasState?.ctx !== ctx) return; // user moved on
+  if (gasSeq !== seq) return; // superseded by a later call (route switch, re-quote)
   const mainnetEthWei = elsewhere?.mainnetEthWei ?? null;
   const mainnetImxWei = elsewhere?.mainnetImxWei ?? null;
   // Prefer bridging IMX they already hold on mainnet (no swap, cheaper); else swap a little
   // mainnet ETH; else there's nothing to one-tap — fall back to the deep-link.
+  // "Can we one-tap this?" is a question about whether the wallet can actually FUND the
+  // bridge, not whether it holds a non-zero balance. It used to be a bare `> 0n`, so a few
+  // wei of leftover mainnet ETH — dust almost every wallet carries — was enough to route the
+  // member into a bridge they could never sign AND to suppress the card on-ramp below, which
+  // is the only route that works from an empty mainnet wallet. That is exactly the "it wont
+  // let me bc i dont have enough funds" a member reported. The buy-side funds panel has
+  // always checked against a gas reserve; this one now does the same.
   let hasImxL1 = false, hasEth = false;
-  try { hasImxL1 = mainnetImxWei != null && BigInt(mainnetImxWei) > 0n; } catch { hasImxL1 = false; }
-  try { hasEth = mainnetEthWei != null && BigInt(mainnetEthWei) > 0n; } catch { hasEth = false; }
+  const reserve = BigInt(Math.round(BRIDGE_GAS_RESERVE_ETH * 1e6)) * 10n ** 12n;
+  try { hasImxL1 = mainnetImxWei != null && BigInt(mainnetImxWei) > 0n && BigInt(mainnetEthWei ?? 0) >= reserve; } catch { hasImxL1 = false; }
+  try { hasEth = mainnetEthWei != null && BigInt(mainnetEthWei) > reserve; } catch { hasEth = false; }
   const from = hasImxL1 ? 'imx' : hasEth ? 'eth' : null;
   // When we can cover the gas, that IS the answer — hold the self-funded quote back
   // ('unfetched') so a member who's one click from free gas doesn't burn a Squid call.
   // Any other outcome quotes the fallback immediately, as before.
-  const canAssist = !!assist?.available;
+  //
+  // "Can cover" has to mean cover THIS action. A grant tops up to a fraction of an IMX; a
+  // cash-out relay wants tens. Testing availability alone made us skip the fallback quote for
+  // exactly the members the fallback existed for, and they landed on a panel with nothing in
+  // it. Same test as gasAssistExclusive and gasAssistHtml, so all three agree.
+  const canAssist = !!assist?.available && assistCovers({ needWei }, assist);
   gasState = {
     ctx, retry, needWei, imxBal, mainnetEthWei, mainnetImxWei, from, assist,
     assistPhase: null, assistErr: null, assistTx: null,
@@ -3071,21 +3757,49 @@ async function showGasHelp(ctx, retry = null, needWei = null) {
   // The server already retries Squid's 429s (the shared integrator id rate-limits easily), but
   // give it a second window here too: a null quote is what drops the user to the empty Squid
   // deep-link, so that fallback should mean "genuinely unavailable", not "one rate-limit blip".
-  let q = await fetchGasQuote(from);
-  if (q == null && gasState?.ctx === ctx) {
+  let q = await fetchGasQuote(from, needWei);
+  if (q == null && gasSeq === seq) {
     await new Promise(r => setTimeout(r, 1200));
-    if (gasState?.ctx === ctx) q = await fetchGasQuote(from);
+    if (gasSeq === seq) q = await fetchGasQuote(from, needWei);
   }
-  if (gasState?.ctx === ctx) { gasState.quote = q; patchGas(); }
+  if (gasSeq === seq) { gasState.quote = q; patchGas(); }
+}
+
+// How much IMX a top-up should actually deliver, given what the calling action needs.
+//
+// This used to be the flat GAS_TARGET_IMX for every caller, which quietly made the whole
+// panel useless for the one action that needs a real amount. A cash-out relay fee ran 54-215
+// IMX on the day it was measured, so a member short of gas was offered 5 IMX, told "you're
+// all set" when it landed, and hit the identical wall. Buys, sells and transfers still pass
+// needWei null: they need a rounding error of gas and the flat target is right for them.
+//
+// The margin is deliberately generous, because the two ways of being wrong are not
+// remotely symmetric. The relay fee is a DEPOSIT, not a price: Axelar refunds whatever the
+// Ethereum-side execution didn't use, and in traced withdrawals the surplus came back about
+// 100 seconds later, with the real net cost landing near 0.4-2 IMX. So overpaying costs a
+// member a couple of minutes of float. Underpaying parks their ETH indefinitely: two
+// withdrawals that went out underfunded on 2026-07-31 were still sitting approved and
+// unexecuted nineteen days later, and that state does not heal on its own.
+//
+// The fee also moves violently, because it tracks Ethereum gas. On one observed day it ran
+// 4.5 IMX at 0.13 gwei and 50+ IMX at 5.8 gwei for a SMALLER withdrawal, inside three hours.
+// Topping up to the number we last saw is how someone pays for a bridge and is still short
+// when they get back.
+const GAS_NEED_MARGIN = 2.0;
+function gasTopUpImx(needWei) {
+  if (needWei == null) return GAS_TARGET_IMX;
+  const need = Number(needWei) / 1e18;
+  if (!Number.isFinite(need) || need <= 0) return GAS_TARGET_IMX;
+  return Math.min(GAS_MAX_IMX, Math.max(GAS_TARGET_IMX, Math.ceil(need * GAS_NEED_MARGIN)));
 }
 
 // One gas-quote request; null on any non-OK / error (caller decides whether to retry or fall
-// back to the deep-link).
-async function fetchGasQuote(from) {
+// back to the deep-link). `needWei` is the calling action's real requirement when it has one.
+async function fetchGasQuote(from, needWei = null) {
   try {
     const res = await fetch('/api/market/creatures/bridge/gas/quote', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ address: account, needImx: String(GAS_TARGET_IMX), from }),
+      body: JSON.stringify({ address: account, needImx: String(gasTopUpImx(needWei)), from }),
     });
     return res.ok ? await res.json() : null;
   } catch { return null; }
@@ -3179,7 +3893,13 @@ function loadSavedBridge() {
     // Only resume a bridge that's still in flight (waiting/slow). A finished job (done/error)
     // has no live purpose across a reload — restoring it just leaves a stale global that
     // suppresses the next top-up's action button and shows a day-old banner.
-    if (j.phase === 'done' || j.phase === 'error') {
+    //
+    // The exception is a message that stalled out of relay gas. That one is NOT finished: the
+    // member's ETH is sitting in an approved-but-unexecuted Axelar message and the only thing
+    // that frees it is the top-up button we render off this job. Dropping it on reload deletes
+    // the sole route back to their money, which is how two of these ended up untouched for
+    // nineteen days. It is kept, and only it.
+    if ((j.phase === 'done' || j.phase === 'error') && !j.stalled) {
       localStorage.removeItem(BRIDGE_STORE);
       return null;
     }
@@ -3279,8 +3999,11 @@ function bridgeCardHtml(b) {
   if (b.phase === 'done') {
     return `<div class="trade-bcard is-ok" role="status" aria-live="polite">
       <div class="trade-bcard-hd"><div class="trade-bcard-badge" aria-hidden="true">✓</div>
-        <h4>${esc(t(gas ? 'trade.gas.bridge.done' : out ? 'trade.cashout.move.done' : 'trade.bridge.done'))}</h4>
-        ${out ? `<p>${esc(t('trade.cashout.move.doneSub'))}</p>` : ''}</div>
+        <h4>${esc(t(gas ? 'trade.gas.bridge.done'
+          : out ? (b.queuedDelivery ? 'trade.cashout.move.queued' : b.deliveryUnsure ? 'trade.cashout.move.doneUnsure' : 'trade.cashout.move.done')
+          : 'trade.bridge.done'))}</h4>
+        ${out ? `<p>${esc(t(b.queuedDelivery ? 'trade.cashout.move.queuedSub'
+          : b.deliveryUnsure ? 'trade.cashout.move.doneUnsureSub' : 'trade.cashout.move.doneSub'))}</p>` : ''}</div>
       <div class="trade-bcard-body">${bridgeRowsHtml(b, true)}
         ${out ? `<button class="trade-bcard-btn is-ghost" data-act="add-eth-mainnet" type="button">${esc(t('trade.cashout.move.seeInMM'))}</button>` : ''}
         <button class="trade-bcard-btn" data-act="bridge-dismiss" type="button">${esc(t('trade.bridge.card.done'))}</button>
@@ -3388,7 +4111,25 @@ function setBridgeJob(patchFields) {
   patchGas(); // keep the inline Sell/Transfer gas panels in step with the bridge
   patchCashout(); // and the cash-out modal's move screen / tracker card
   patchTopup(); // and the Add-funds modal
-  if (patchFields.phase === 'done') refreshAfterBridge();
+  if (patchFields.phase === 'done') {
+    refreshAfterBridge();
+    // A self-funded gas top-up landing is the same event as the free assist landing, and it
+    // deserves the same follow-through. It never got it: only the assist path called
+    // resumeAfterGas, so someone who paid for their own IMX came back to a panel still
+    // showing the old shortfall and a dead button, with no clue that the thing they just
+    // bought had fixed it. Re-read the balance first, so both this and the completion copy
+    // are judging against what actually arrived rather than what we knew before.
+    if (bridgeJob?.kind === 'gas' && gasState) {
+      const g = gasState;
+      readNative(account).then(bal => {
+        if (gasState !== g) return;
+        if (bal != null) g.imxBal = bal;
+        patchGas();
+        const need = g.needWei != null ? BigInt(g.needWei) : null;
+        if (need == null || (bal != null && bal >= need)) resumeAfterGas(g);
+      }).catch(() => {});
+    }
+  }
 }
 
 // A bridge just landed funds on zkEVM (the ETH ERC-20 for a price bridge, native IMX for a
@@ -3409,10 +4150,22 @@ function refreshAfterBridge() {
 const isGasBridge = b => (b || bridgeJob)?.kind === 'gas';
 const isCashout = b => (b || bridgeJob)?.kind === 'cashout';
 
-// One server-side status read for a job (fresh Squid signal, not the wallet's cached balance).
-// Timed out so it can't hang the caller; returns the parsed payload or null.
+// One server-side status read for a job (a fresh signal from the provider, not the wallet's
+// cached balance). Timed out so it can't hang the caller; returns the parsed payload or null.
+//
+// A Layerswap cash-out is tracked by its swap id rather than the tx hash: the transfer is a
+// bare ERC-20 send, so the hash means nothing to anyone but the source chain. Both providers
+// answer in the same `stage` vocabulary, so everything downstream of here is shared.
 async function fetchBridgeStatus(job) {
   try {
+    if (job.swapId) {
+      const r = await fetch(`/api/market/creatures/cashout/ls/status?id=${encodeURIComponent(job.swapId)}`, { signal: AbortSignal.timeout(9000) });
+      if (!r.ok) return null;
+      const s = await r.json();
+      // Layerswap has no Axelar message to link to, so the source-chain tx stands in as
+      // "show me the proof" — the tracker renders whichever url it is handed.
+      return { stage: s.stage, axelarUrl: s.destUrl || s.srcUrl || null };
+    }
     const dir = job.dir === 'out' ? '&dir=out' : '';
     const r = await fetch(`/api/market/creatures/bridge/status?tx=${job.hash}&quoteId=${encodeURIComponent(job.quoteId || '')}&requestId=${encodeURIComponent(job.requestId || '')}${dir}`, { signal: AbortSignal.timeout(9000) });
     return r.ok ? await r.json() : null;
@@ -3432,12 +4185,38 @@ const liveBridge = hash => (bridgeJob?.hash && bridgeJob.hash === hash && bridge
 function applyBridgeStatus(hash, s) {
   const job = liveBridge(hash);
   if (!job) return true; // finished or superseded — stop tracking
+  // Layerswap could not fill the swap and sent the ETH back to the wallet it came from.
+  // That is not "failed" as far as the member is concerned — nothing is lost and nothing
+  // needs chasing — so it gets its own wording rather than the generic bridge failure.
+  if (s.stage === 'refunded') { setBridgeJob({ phase: 'error', msg: t('trade.cashout.route.refunded'), axelarUrl: s.axelarUrl || job.axelarUrl }); return true; }
   if (s.stage === 'failed' || s.stage === 'failed_src') { setBridgeJob({ phase: 'error', msg: t('trade.bridge.failed'), axelarUrl: s.axelarUrl || job.axelarUrl }); return true; }
-  if (s.stage === 'needs_gas') { setBridgeJob({ phase: 'error', msg: t('trade.bridge.needsGas'), axelarUrl: s.axelarUrl || job.axelarUrl }); return true; }
+  // Out of relay gas. Recoverable, but only by calling addNativeGas on the source chain's gas
+  // service, which nobody discovers unaided: two cash-outs left underfunded on 2026-07-31 were
+  // still approved and unexecuted nineteen days later. Keep the log index so the panel can
+  // offer the top-up as a button instead of just naming the problem.
+  if (s.stage === 'needs_gas') {
+    setBridgeJob({ phase: 'error', msg: t('trade.bridge.needsGas'), axelarUrl: s.axelarUrl || job.axelarUrl,
+      stalled: true });
+    return true;
+  }
   // Squid reports the funds have landed on zkEVM — complete NOW rather than waiting on the
   // wallet balance read, which the injected provider can serve stale after the chain switch
   // (the old bug: tracker never flipped to done until a reload).
-  if (s.stage === 'arrived') { setBridgeJob({ phase: 'done', stage: 'arrived', axelarUrl: s.axelarUrl || job.axelarUrl }); return true; }
+  if (s.stage === 'arrived') {
+    // For a CANONICAL cash-out, "executed" is not the same as "paid out". When the root
+    // bridge's flow-rate guard is on, or the amount is over the per-transfer threshold, the
+    // Ethereum-side message executes and then parks the ETH in a 24-hour queue that the
+    // member has to release with their own mainnet transaction. Axelar reports that as
+    // executed, and we were turning it into "Your ETH landed on Ethereum! 🎉" — the single
+    // most misleading thing this screen could say. Confirm before celebrating.
+    if (job.kind === 'cashout' && !job.swapId) {
+      setBridgeJob({ stage: 'arrived', axelarUrl: s.axelarUrl || job.axelarUrl });
+      confirmCanonicalDelivery(job.hash);
+      return true;
+    }
+    setBridgeJob({ phase: 'done', stage: 'arrived', axelarUrl: s.axelarUrl || job.axelarUrl });
+    return true;
+  }
   if (s.stage !== job.stage || (s.axelarUrl && s.axelarUrl !== job.axelarUrl)) setBridgeJob({ stage: s.stage, axelarUrl: s.axelarUrl || job.axelarUrl });
   return false;
 }
@@ -3561,8 +4340,13 @@ function handleBridgeNow() {
 }
 
 function handleGasBridgeNow() {
-  // Arrive when the top-up target's worth of native IMX has landed.
-  const needWei = BigInt(Math.round(GAS_TARGET_IMX * 1e6)) * 10n ** 12n;
+  // Arrive when the amount we actually QUOTED has landed, not a flat 5 IMX. The two used to
+  // be assumed equal, so a cash-out top-up of 80 IMX reported success the moment 5 arrived
+  // and the member went back to a wall. Prefer the quote's own output; fall back to the
+  // requirement, then to the flat target.
+  const quoted = Number(gasState?.quote?.toEth);
+  const target = Number.isFinite(quoted) && quoted > 0 ? quoted : gasTopUpImx(gasState?.needWei);
+  const needWei = BigInt(Math.round(target * 1e6)) * 10n ** 12n;
   return runBridge(gasState?.quote, { kind: 'gas', needWei, fromSym: gasState?.from === 'imx' ? 'IMX' : 'ETH', toSym: 'IMX' });
 }
 
@@ -7749,6 +8533,22 @@ function onClick(e) {
     case 'cashout-guide':  cashoutStep = 'guide'; return patchCashout();
     case 'cashout-move':   return openCashoutMove();
     case 'cashout-max':    return cashoutMaxClick();
+    case 'cashout-route': {
+      const r = target.dataset.route;
+      if (!CASHOUT_ROUTES.includes(r) || r === cashoutRoute) return;
+      cashoutRoute = r;
+      // The old quote priced a different route, so drop it rather than leave a stale number
+      // on screen while the new one loads. Any gas panel belonged to the old route too, and
+      // a deliberate pick clears the "we moved you" notice — they have seen it and acted.
+      if (cashoutState) {
+        cashoutState.quote = null; cashoutState.err = null; cashoutState.routeDownNotice = false;
+        // Their choice, and it stands: this disarms the auto-pick for the rest of the session.
+        cashoutState.routePicked = true; cashoutState.autoPicked = true;
+      }
+      if (gasState?.ctx === 'cashout') gasState = null;
+      patchCashoutMove();
+      return queueCashoutQuote(0);
+    }
     case 'cashout-now':    return runCashout();
     case 'add-eth-mainnet': return showEthOnMainnet();
     case 'cashout-back':
