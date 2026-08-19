@@ -2,7 +2,7 @@
 
 The official Highrise Creature Club member site — a single hub for the community: the club
 overview, live market data, in-wallet trading, holder stats, the roadmap, and the holder-led
-**Player Council** and its election. Static front-end (vanilla HTML/CSS/ES modules, no build
+Player Council and its election. Static front-end (vanilla HTML/CSS/ES modules, no build
 step) packaged with a tiny Node server for Railway.
 
 ## Local Run
