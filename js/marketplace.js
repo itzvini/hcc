@@ -451,38 +451,77 @@ let transferSel = null;    // derived single selection (transferSet.size === 1 ?
 let transferCheck = null;      // null | 'loading' | {addr, valid, reason?, checksum, contract, active, activityKnown, creatures}
 let transferAck = false;       // explicit confirmation for never-used addresses
 let transferCheckTimer = null;
-// The Transfer tab sends either Creatures or money. Same recipient box, same safety check,
-// same Send button — only WHAT moves differs. All three coins live on Immutable zkEVM, so
-// this mode is offered for Creatures only (LAND settles on Ethereum).
+// The Transfer tab sends either NFTs or money. Same recipient box, same safety check, same
+// Send button — only WHAT moves differs. Both collections offer both: Creatures settle on
+// Immutable zkEVM (native IMX plus bridged ETH and USDC), LAND on Ethereum (native ETH, the
+// WETH a sale pays out in, and Circle's own USDC). The coin set, the gas coin and the fee
+// reserve all follow the active collection's chain.
 //
-// DECIMALS ARE NOT ALL 18. Bridged USDC on zkEVM has 6, verified on-chain. Everything below
+// DECIMALS ARE NOT ALL 18. USDC has 6 on both chains, verified on-chain. Everything below
 // goes through parseUnits/formatUnits with the coin's own `dec` — never a bare 1e18, or a
 // "10 USDC" send becomes 10,000,000,000,000 USDC-worth of units (or reverts, if you're lucky).
-const XFER_COINS = {
+const XFER_COINS_ZK = {
   imx:  { key: 'imx',  sym: 'IMX',  dec: 18, native: true,  token: null },
   eth:  { key: 'eth',  sym: 'ETH',  dec: 18, native: false, token: IMX_ETH_TOKEN },
   usdc: { key: 'usdc', sym: 'USDC', dec: 6,  native: false, token: IMX_USDC_TOKEN },
 };
-const XFER_COIN_ORDER = ['imx', 'eth', 'usdc'];
+// Ethereum mainnet. ETH is the native coin here, so it pays its own gas. WETH is what a LAND
+// sale or an accepted offer pays out in, and USDC is Circle's original, not a bridged copy.
+const XFER_COINS_L1 = {
+  eth:  { key: 'eth',  sym: 'ETH',  dec: 18, native: true,  token: null },
+  weth: { key: 'weth', sym: 'WETH', dec: 18, native: false, token: WETH_TOKEN },
+  usdc: { key: 'usdc', sym: 'USDC', dec: 6,  native: false, token: USDC_MAINNET_TOKEN },
+};
+const XFER_COIN_ORDER = { creatures: ['imx', 'eth', 'usdc'], land: ['eth', 'weth', 'usdc'] };
+const xferCoins = () => (coll === 'land' ? XFER_COINS_L1 : XFER_COINS_ZK);
+const xferCoinOrder = () => XFER_COIN_ORDER[coll] || XFER_COIN_ORDER.creatures;
 
 let xferMode = 'items';        // 'items' | 'coin'
-let xferCoin = 'imx';          // which of XFER_COINS is being sent
-let xferImxAmount = '';        // the typed amount, as entered
-let xferBals = { imx: null, eth: null, usdc: null }; // wallet balances in each coin's own units
-let xferImxState = null;       // null | {phase:'send'|'wait'|'done'|'error', msg?, hash?, amount?, sym?}
-// Explicit, per-send confirmation that the user knows WHICH NETWORK this lands on.
-// This is the most expensive mistake available here: the ETH and USDC on Immutable zkEVM are
-// bridged tokens, NOT the mainnet originals, and IMX here is the native coin rather than the
-// Ethereum ERC-20. Exchange and broker deposit addresses almost always accept only Ethereum
-// mainnet, and anything sent to one over zkEVM is normally unrecoverable. So we say so in
-// plain words and make them tick it, fresh, every time the coin or the recipient changes.
+let xferCoin = 'imx';          // key into the ACTIVE coin set (see xferCoinDef)
+let xferAmount = '';           // the typed amount, as entered
+let xferBals = {};             // coin key -> balance in that coin's own base units
+let xferBalsFor = null;        // `${account}|${coll}` the balances above belong to
+let xferBalsBusy = false;      // one balance sweep at a time
+let xferGasWei = null;         // Ethereum only: last gas price read, for the ETH fee reserve
+let xferSendState = null;      // null | {phase:'send'|'wait'|'done'|'error', msg?, hash?, amount?, sym?}
+// Explicit, per-send confirmation that the user knows WHICH NETWORK this lands on. This is
+// the most expensive mistake available here, and it cuts both ways: the ETH and USDC on
+// Immutable zkEVM are bridged tokens rather than the mainnet originals, while an Ethereum
+// send aimed at an L2-only deposit address is just as gone. Exchanges and brokers watch one
+// network per address. So we say which one in plain words and make them tick it, fresh,
+// every time the coin or the recipient changes.
 let xferNetAck = false;
-// A native IMX send pays its own gas, so Max has to hold some back — 21000 gas at ~11 gwei
-// is ~0.00023 IMX, and this leaves room for a spike plus enough not to strand the wallet at
-// zero. ERC-20 sends (ETH, USDC) burn IMX for gas instead, so their Max is the full balance.
-const IMX_SEND_RESERVE_WEI = 2n * 10n ** 15n; // 0.002 IMX
+// A native send pays its own fee out of the very balance being sent, so Max has to hold some
+// back. On zkEVM that's a hair of IMX: 21000 gas at ~11 gwei is ~0.00023 IMX, and this leaves
+// room for a spike plus enough not to strand the wallet at zero. On Ethereum the fee is real
+// money and tracks the base fee, so we quote it live and clamp the result — a bad read must
+// never eat the whole balance, nor leave the send too short to confirm. ERC-20 sends burn the
+// native coin for gas instead, so their Max is the full balance of the coin being sent.
+const IMX_SEND_RESERVE_WEI = 2n * 10n ** 15n;      // 0.002 IMX
+const L1_SEND_GAS  = 21000n;                       // a plain ETH transfer
+const L1_ERC20_GAS = 65000n;                       // a WETH/USDC transfer, with headroom
+const L1_RESERVE_FALLBACK_WEI = 3n * 10n ** 15n;   // 0.003 ETH, when eth_gasPrice won't read
+const L1_RESERVE_MIN_WEI = 5n * 10n ** 14n;        // 0.0005 ETH floor
+const L1_RESERVE_MAX_WEI = 2n * 10n ** 16n;        // 0.02 ETH ceiling
+const clampL1 = wei => (wei < L1_RESERVE_MIN_WEI ? L1_RESERVE_MIN_WEI : wei > L1_RESERVE_MAX_WEI ? L1_RESERVE_MAX_WEI : wei);
 
-const xferCoinDef = () => XFER_COINS[xferCoin] || XFER_COINS.imx;
+// The coin being sent, resolved against the ACTIVE chain's set: `xferCoin` outlives a
+// collection switch, and 'imx' means nothing on Ethereum. Resolve rather than reassign —
+// a render must not mutate state — so the chips read the key through here too, or the
+// selected coin ends up lit nowhere while the amount box quietly uses the fallback.
+const xferCoinKey = () => (xferCoins()[xferCoin] ? xferCoin : xferCoinOrder()[0]);
+const xferCoinDef = () => xferCoins()[xferCoinKey()];
+// What a native send has to keep back to pay for itself. Doubled on Ethereum because the
+// base fee moves between the moment we quote it and the moment the wallet signs.
+function nativeReserveWei() {
+  if (coll !== 'land') return IMX_SEND_RESERVE_WEI;
+  return xferGasWei == null ? L1_RESERVE_FALLBACK_WEI : clampL1(L1_SEND_GAS * xferGasWei * 2n);
+}
+// The least native coin an ERC-20 send needs on hand before its gas is a problem.
+function erc20GasFloorWei() {
+  if (coll !== 'land') return GAS_MIN_WEI;
+  return xferGasWei == null ? L1_RESERVE_FALLBACK_WEI : clampL1(L1_ERC20_GAS * xferGasWei);
+}
 
 // Decimal string → base units for a token with `dec` decimals. Null when unparseable/zero.
 function parseUnits(text, dec) {
@@ -918,6 +957,14 @@ async function readErc20(token, addr) {
 }
 async function readNative(addr) {
   try { return BigInt(await eth().request({ method: 'eth_getBalance', params: [addr, 'latest'] }) || '0x0'); }
+  catch { return null; }
+}
+// Current gas price in wei, straight from the connected wallet's own node. Only Ethereum
+// needs it — there a send's fee is real money and swings with the base fee, so the amount a
+// native send has to hold back can't be a constant. Null when the read fails; callers fall
+// back to a fixed reserve rather than guessing at zero.
+async function readGasPrice() {
+  try { return BigInt(await eth().request({ method: 'eth_gasPrice' }) || '0x0') || null; }
   catch { return null; }
 }
 async function readAllowance(token, owner, spender) {
@@ -3578,6 +3625,20 @@ function dropStaleListing(listingId) {
   loadListings(true);
 }
 
+// What a LAND buy needs on hand for mainnet gas, on top of the price. This used to be a flat
+// 0.01 ETH, which at an ordinary base fee is roughly ten times the real cost and turned away
+// buyers who could comfortably afford the parcel. So quote gas live off the wallet's own node
+// and size the cushion from the work the transaction actually does. Doubled to match what the
+// wallet itself will demand: MetaMask sets maxFeePerGas at roughly twice the base fee and
+// refuses to sign unless the balance covers value plus that maximum, so a tighter figure here
+// would only wave the buyer through into a wallet-side rejection. Clamped, so a junk read
+// neither waves an empty wallet through nor blocks a funded one. A null read (older wallet, RPC
+// hiccup) falls back to the same fixed figure the transfer flow uses. All this check decides is
+// whether we stop the buyer early and offer a top-up.
+const L1_BUY_GAS     = 250000n;  // a Seaport fulfilment, with headroom
+const L1_APPROVE_GAS = 60000n;   // the one-time conduit approval a USDC buy signs first
+const landGasWei = (gasWei, units) => (gasWei == null ? L1_RESERVE_FALLBACK_WEI : clampL1(units * gasWei * 2n));
+
 // LAND buy: Ethereum mainnet, native-ETH value transaction, no approvals. The
 // prepared calldata is zone-bound to this buyer, so it can't be hijacked.
 async function handleBuyLand(it) {
@@ -3594,16 +3655,17 @@ async function handleBuyLand(it) {
       // USDC listing: the price is paid in mainnet USDC (6 decimals); only gas is native ETH.
       // Check the USDC balance and keep a small ETH cushion for the approval + fulfil gas.
       // (A USDC buyer on-ramp is a follow-up — a buyer must already hold USDC on Ethereum.)
-      const [usdcBal, ethBal] = await Promise.all([readErc20(USDC_MAINNET_TOKEN, account), readNative(account)]);
+      const [usdcBal, ethBal, gasWei] = await Promise.all([readErc20(USDC_MAINNET_TOKEN, account), readNative(account), readGasPrice()]);
       const needUnits = BigInt(Math.round((it.totalAmt ?? it.priceAmt ?? 0) * 1e6));
       if (usdcBal != null && usdcBal < needUnits) { setBuy('error', { msg: t('trade.err.needUsdcLand').replace('{x}', fmtListingAmt(it)), onramp: { chain: 'ethereum', token: 'USDC', fiat: onrampFiatUsd(Math.max(1, (it.totalAmt ?? it.priceAmt ?? 0) - Number(usdcBal) / 1e6)) } }); return; }
-      if (ethBal != null && ethBal < 3n * 10n ** 15n) { // < ~0.003 ETH → can't cover mainnet gas
-        setBuy('error', { msg: t('trade.err.landGas'), onramp: { chain: 'ethereum', token: 'ETH', fiat: onrampFiatUsd(0.01) } });
+      const gasFloorWei = landGasWei(gasWei, L1_BUY_GAS + L1_APPROVE_GAS); // approval AND fulfilment
+      if (ethBal != null && ethBal < gasFloorWei) {
+        setBuy('error', { msg: t('trade.err.landGas'), onramp: { chain: 'ethereum', token: 'ETH', fiat: onrampFiatUsd(Number(gasFloorWei) / 1e18) } });
         return;
       }
     } else {
-      const needWei = BigInt(Math.round((it.totalEth ?? it.priceEth) * 1e6)) * 10n ** 12n + 10n ** 16n; // +0.01 ETH gas cushion
-      const balWei = await readNative(account);
+      const [balWei, gasWei] = await Promise.all([readNative(account), readGasPrice()]);
+      const needWei = BigInt(Math.round((it.totalEth ?? it.priceEth) * 1e6)) * 10n ** 12n + landGasWei(gasWei, L1_BUY_GAS);
       if (balWei != null && balWei < needWei) {
         // Short on mainnet ETH — offer a card on-ramp that delivers ETH straight to Ethereum
         // (Transak, if configured). Minted on click; stash the shortfall (in USD) to prefill.
@@ -4002,7 +4064,9 @@ async function showEthOnMainnet() {
 }
 // One-tap WETH → native ETH unwrap (withdraw): turns a seller's WETH proceeds into plain ETH,
 // 1:1, gas only — no DEX/swap. Unwraps the full WETH balance.
-function setUnwrap(phase, extra) { unwrapState = { phase, ...extra }; patchSellView(); patchCashout(); }
+// The unwrap button now appears in three places (the sold card, the cash-out guide, and
+// the WETH chip on the Transfer money card), so its status has to reach all three.
+function setUnwrap(phase, extra) { unwrapState = { phase, ...extra }; patchSellView(); patchCashout(); patchTransferSide(); }
 async function handleUnwrapWeth() {
   if (unwrapState && (unwrapState.phase === 'send' || unwrapState.phase === 'wait')) return;
   try {
@@ -4016,6 +4080,7 @@ async function handleUnwrapWeth() {
     if (!receipt || receipt.status !== '0x1') { setUnwrap('error', { msg: t('trade.err.txFailed') }); return; }
     setUnwrap('done', { hash, amtEth: weiToEth(bal) });
     refreshBalance();
+    refreshXferBalances(); // the WETH chip just emptied into the ETH one; no-ops elsewhere
   } catch (err) {
     console.error('Unwrap WETH failed:', err);
     setUnwrap('error', { msg: friendlyError(err) });
@@ -6424,40 +6489,38 @@ function transferSendAllowed() {
   const running = massState && massState.kind === 'transfer' && massState.phase === 'run';
   const recipientOk = !running && c && c !== 'loading' && c.valid && (c.active || transferAck);
   if (xferMode === 'coin') {
-    const busy = xferImxState && (xferImxState.phase === 'send' || xferImxState.phase === 'wait');
-    return !!recipientOk && !busy && xferNetAck && xferImxAmountWei() != null;
+    const busy = xferSendState && (xferSendState.phase === 'send' || xferSendState.phase === 'wait');
+    return !!recipientOk && !busy && xferNetAck && xferAmountWei() != null;
   }
   return transferSet.size >= 1 && !!recipientOk;
 }
 
 // The typed amount in the selected coin's base units, or null when it's unparseable, zero,
 // or more than the wallet can actually send.
-function xferImxAmountWei() {
+function xferAmountWei() {
   const coin = xferCoinDef();
-  const units = parseUnits(xferImxAmount, coin.dec);
+  const units = parseUnits(xferAmount, coin.dec);
   if (units == null) return null;
-  const max = xferImxMaxWei();
+  const max = xferMaxWei();
   if (max != null && units > max) return null;
   return units;
 }
-// The most this wallet can send of the selected coin. Native IMX has to keep back its own
-// gas; an ERC-20 pays gas in IMX, so the whole balance is sendable.
-function xferImxMaxWei() {
+// The most this wallet can send of the selected coin. The native coin has to keep back its
+// own fee; an ERC-20 pays that fee in the native coin, so its whole balance is sendable.
+function xferMaxWei() {
   const coin = xferCoinDef();
   const bal = xferBals[coin.key];
   if (bal == null) return null;
   if (!coin.native) return bal;
-  const max = bal - IMX_SEND_RESERVE_WEI;
+  const max = bal - nativeReserveWei();
   return max > 0n ? max : 0n;
 }
 
-// IMX mode is a Creatures-only thing: it's the zkEVM gas coin, and LAND settles on Ethereum.
-const imxSendAvailable = () => coll === 'creatures';
-
 function transferViewHtml() {
   if (!account || !onRightChain()) return walletGateHtml();
-  if (!imxSendAvailable() && xferMode === 'coin') xferMode = 'items'; // switched to LAND while sending coins
   invFacets = computeInvFacets();
+  // The balances belong to one wallet on one chain; a switch of either invalidates them.
+  if (xferMode === 'coin' && xferBalsFor !== `${account}|${coll}`) refreshXferBalances();
 
   // Same workbench split as Sell, in BOTH modes. Money mode used to drop the picker and the
   // whole filter rail with it, which read as the page breaking rather than as a mode change:
@@ -6485,68 +6548,83 @@ function transferHeadHtml() {
     return `<h4 class="trade-form-h">${esc(t(skey('trade.transfer.h')))} ${tipHtml(skey('trade.transfer.p'))}</h4>
       <span class="trade-field-label">${esc(t(skey('trade.transfer.pick')))}</span>`;
   }
-  return `<h4 class="trade-form-h">${esc(t('trade.xfer.imx.h'))} ${tipHtml('trade.xfer.imx.p')}</h4>
-    <div class="trade-imx-explain">
+  return `<h4 class="trade-form-h">${esc(t(skey('trade.xfer.imx.h')))} ${tipHtml(skey('trade.xfer.imx.p'))}</h4>
+    <div class="trade-imx-explain${coll === 'land' ? ' is-l1' : ''}">
       <span class="trade-imx-explain-ic" aria-hidden="true">⛽</span>
       <div>
-        <b>${esc(t('trade.xfer.imx.what.h'))}</b>
-        <p>${esc(t('trade.xfer.imx.what.p'))}</p>
+        <b>${esc(t(skey('trade.xfer.imx.what.h')))}</b>
+        <p>${esc(t(skey('trade.xfer.imx.what.p')))}</p>
       </div>
     </div>
-    <span class="trade-field-label">${esc(t('trade.xfer.inv.label'))} ${tipHtml('trade.xfer.inv.tip')}</span>`;
+    <span class="trade-field-label">${esc(t(skey('trade.xfer.inv.label')))} ${tipHtml(skey('trade.xfer.inv.tip'))}</span>`;
 }
 function patchTransferHead() {
   const el = root()?.querySelector('#trade-xfer-head');
   if (el) el.innerHTML = transferHeadHtml();
 }
 
-// Creatures | Money. Only shown when both are actually sendable from this wallet's chain.
+// Creatures | Money on zkEVM, LAND | Money on Ethereum. Both collections carry both modes;
+// only the left label and the coins behind it change.
 function xferModeSegHtml() {
-  if (!imxSendAvailable()) return '';
   const opt = (v, label) => `
     <button type="button" role="tab" class="seg-btn ${xferMode === v ? 'is-active' : ''}"
       aria-selected="${xferMode === v}" data-act="xfer-mode" data-mode="${v}">${esc(t(label))}</button>`;
   return `<div class="trade-seg trade-xfer-seg" role="tablist" aria-label="${esc(t('trade.xfer.mode.aria'))}">
-    ${opt('items', 'trade.xfer.mode.items')}${opt('coin', 'trade.xfer.mode.coin')}
+    ${opt('items', skey('trade.xfer.mode.items'))}${opt('coin', 'trade.xfer.mode.coin')}
   </div>`;
 }
 
-// The amount card that stands in for the picked-Creatures strip when sending IMX.
-function transferImxCardHtml() {
-  const st = xferImxState;
+// The amount card that stands in for the picked-items strip when sending money.
+function transferCoinCardHtml() {
+  const st = xferSendState;
   if (st && st.phase === 'done') {
     // Offer the way back to the amount box — otherwise a second send means toggling modes.
     return `<div class="trade-imx-card is-done">
       <span class="trade-imx-ic" aria-hidden="true">✓</span>
-      <div><b>${esc(t('trade.xfer.imx.sent.h').replace('{x}', fmtCoinUnits(st.amount, XFER_COINS[st.sym?.toLowerCase()] || xferCoinDef())))}</b>
-      <span>${esc(t('trade.xfer.imx.sent.p'))}</span></div>
+      <div><b>${esc(t('trade.xfer.imx.sent.h').replace('{x}', fmtCoinUnits(st.amount, xferCoins()[st.sym?.toLowerCase()] || xferCoinDef())))}</b>
+      <span>${esc(t(skey('trade.xfer.imx.sent.p')))}</span></div>
       <button class="apply-btn-ghost trade-imx-again" data-act="imx-again" type="button">${esc(t('trade.xfer.imx.again'))}</button>
     </div>`;
   }
+  const l1 = coll === 'land';
   const coin = xferCoinDef();
-  const max = xferImxMaxWei();
+  const max = xferMaxWei();
   const bal = xferBals[coin.key];
   const balTxt = bal == null
     ? `<span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.cashout.move.balLoading'))}`
     : esc(t('trade.xfer.imx.bal').replace('{x}', fmtCoinUnits(bal, coin)));
-  const typed = String(xferImxAmount ?? '').trim();
+  const typed = String(xferAmount ?? '').trim();
   // Balance on each chip, so picking a coin is an informed choice rather than a guess.
-  const chips = XFER_COIN_ORDER.map(k => {
-    const c = XFER_COINS[k];
+  const coins = xferCoins();
+  const sel = xferCoinKey();
+  const chips = xferCoinOrder().map(k => {
+    const c = coins[k];
     const b = xferBals[k];
-    const on = xferCoin === k;
+    const on = sel === k;
     return `<button type="button" class="trade-coin-chip${on ? ' is-on' : ''}" data-act="xfer-coin" data-coin="${k}"
       role="tab" aria-selected="${on}">
       <span class="trade-coin-sym">${esc(c.sym)}</span>
       <span class="trade-coin-bal">${b == null ? '…' : esc(fmtCoinUnits(b, c).replace(' ' + c.sym, ''))}</span>
     </button>`;
   }).join('');
-  return `<div class="trade-imx-card">
+  // WETH is the one coin here nobody meant to hold: it arrives from a LAND sale or an
+  // accepted offer, and most exchanges won't credit a WETH deposit. Unwrapping is 1:1 and
+  // costs only gas, so offer it right where they're about to send the wrong token.
+  const wethBal = l1 ? xferBals.weth : null;
+  const unwrap = l1 && coin.key === 'weth' && wethBal != null && wethBal > 0n
+    ? `<div class="trade-coin-unwrap">
+        <p>${esc(t('trade.xfer.coin.weth.note'))}</p>
+        <button type="button" class="apply-btn-ghost" data-act="unwrap-weth">${esc(t('trade.xfer.coin.weth.btn'))}</button>
+        ${unwrapStatusHtml()}
+      </div>`
+    : '';
+  return `<div class="trade-imx-card${l1 ? ' is-l1' : ''}">
     <div class="trade-coin-net">
-      <img src="/img/brands/immutable.png" alt="" width="18" height="18" />
-      <span>${esc(t('trade.xfer.coin.network'))}</span>
+      <img src="${l1 ? '/img/brands/eth.png' : '/img/brands/immutable.png'}" alt="" width="18" height="18" />
+      <span>${esc(t(skey('trade.xfer.coin.network')))}</span>
     </div>
     <div class="trade-coin-chips" role="tablist" aria-label="${esc(t('trade.xfer.coin.aria'))}">${chips}</div>
+    ${unwrap}
     <label class="trade-cashout-amtlbl" for="trade-imx-amt">${esc(t('trade.xfer.imx.amount'))}</label>
     <div class="trade-cashout-amtrow">
       <input id="trade-imx-amt" class="trade-cashout-amt" type="text" inputmode="decimal" autocomplete="off"
@@ -6555,37 +6633,41 @@ function transferImxCardHtml() {
       <button class="trade-cashout-max" data-act="imx-max" type="button" ${max && max > 0n ? '' : 'disabled'}>${esc(t('trade.cashout.move.max'))}</button>
     </div>
     <p class="trade-cashout-balline">${balTxt}</p>
-    <div id="trade-imx-warn">${imxAmountWarnHtml()}</div>
-    <p class="trade-funds-foot">${esc(t(coin.native ? 'trade.xfer.imx.reserve' : 'trade.xfer.coin.gasNote'))}</p>
+    <div id="trade-imx-warn">${coinAmountWarnHtml()}</div>
+    <p class="trade-funds-foot">${esc(t(skey(coin.native ? 'trade.xfer.imx.reserve' : 'trade.xfer.coin.gasNote')))}</p>
   </div>`;
 }
 
 // An amount over the sendable max is the one error worth naming inline; everything else
 // just leaves the Send button off. Lives in its own slot so a keystroke can repaint the
 // warning without rebuilding the input (which would drop focus and the caret).
-function imxAmountWarnHtml() {
+function coinAmountWarnHtml() {
   const coin = xferCoinDef();
-  const max = xferImxMaxWei();
-  const typed = String(xferImxAmount ?? '').trim();
-  // Sending IMX needs IMX for its own fee, so a wallet at or under the reserve has a Max of
+  const max = xferMaxWei();
+  const typed = String(xferAmount ?? '').trim();
+  // The native coin pays for its own send, so a wallet at or under the reserve has a Max of
   // zero and no amount it can type. Without this the member gets a dead Send button and no
-  // reason for it — every OTHER coin routes to the gas panel, so this one says so too.
+  // reason for it — every OTHER coin says why, so this one does too. The way out differs by
+  // chain: on zkEVM the gas panel can bridge (or gift) IMX, on Ethereum the answer is more
+  // ETH, which means the card on-ramp that already delivers straight to mainnet.
   if (coin.native && max != null && max === 0n && xferBals[coin.key] != null) {
     return `<div class="trade-status is-error">
       <span aria-hidden="true">⛽</span>
-      <span>${esc(t('trade.xfer.imx.err.noGas'))}</span>
-      <button type="button" class="trade-flt-clearall" data-act="xfer-gas">${esc(t('trade.xfer.imx.err.noGas.btn'))}</button>
+      <span>${esc(t(skey('trade.xfer.imx.err.noGas')))}</span>
+      ${coll === 'land'
+        ? `<button type="button" class="trade-flt-clearall" data-act="onramp" data-chain="ethereum" data-token="ETH" data-fiat="25">${esc(t('trade.xfer.imx.err.noGas.btn.land'))}</button>`
+        : `<button type="button" class="trade-flt-clearall" data-act="xfer-gas">${esc(t('trade.xfer.imx.err.noGas.btn'))}</button>`}
     </div>`;
   }
-  if (!typed || max == null || !/^[\d.,]+$/.test(typed) || xferImxAmountWei() != null) return '';
+  if (!typed || max == null || !/^[\d.,]+$/.test(typed) || xferAmountWei() != null) return '';
   return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(t('trade.xfer.imx.err.over').replace('{x}', fmtCoinUnits(max, coin)))}</span></div>`;
 }
 
 // Keystroke-level repaint: the warning slot and the Send button only.
-function patchImxAmountUi() {
+function patchCoinAmountUi() {
   const r = root();
   const warn = r?.querySelector('#trade-imx-warn');
-  if (warn) warn.innerHTML = imxAmountWarnHtml();
+  if (warn) warn.innerHTML = coinAmountWarnHtml();
   const btn = r?.querySelector('#trade-transfer-form #trade-send');
   if (btn) btn.disabled = !transferSendAllowed();
 }
@@ -6602,21 +6684,21 @@ function transferSideHtml() {
   const to = pendingRecipient || '';
   if (pendingRecipient && !transferCheck) queueTransferCheck(pendingRecipient);
   const n = transferSet.size;
-  const imx = xferMode === 'coin';
-  const label = imx
+  const money = xferMode === 'coin';
+  const label = money
     ? t('trade.xfer.imx.btn')
     : n >= 2 ? t('trade.mass.transfer.btn').replace('{n}', String(n)) : t(skey('trade.transfer.btn'));
-  const statusInner = imx
-    ? imxSendStatusHtml()
+  const statusInner = money
+    ? coinSendStatusHtml()
     : (massState && massState.kind === 'transfer' ? massStatusHtml() : '');
   return `
     ${xferModeSegHtml()}
-    <div id="trade-transfer-selected">${imx ? transferImxCardHtml() : transferSelectedHtml()}</div>
+    <div id="trade-transfer-selected">${money ? transferCoinCardHtml() : transferSelectedHtml()}</div>
     <form class="trade-form" id="trade-transfer-form" novalidate>
       <label class="trade-field"><span>${esc(t(skey('trade.field.recipient')))}</span>
         <input id="trade-to" type="text" value="${esc(to)}" placeholder="0x…" autocomplete="off" spellcheck="false" /></label>
       <div id="trade-to-check" aria-live="polite">${transferCheckHtml()}</div>
-      ${imx ? xferNetAckHtml() : ''}
+      ${money ? xferNetAckHtml() : ''}
       <button class="trade-send" id="trade-send" type="submit" ${transferSendAllowed() ? '' : 'disabled'}>${esc(label)} <span aria-hidden="true">→</span></button>
       <div class="trade-status" id="trade-status" role="status" aria-live="polite">${statusInner}</div>
     </form>`;
@@ -6627,24 +6709,31 @@ function transferSideHtml() {
 // here that costs real money and cannot be undone, so it takes a tick, every time.
 function xferNetAckHtml() {
   const coin = xferCoinDef();
-  return `<label class="trade-net-ack${xferNetAck ? ' is-on' : ''}">
+  // WETH gets its own line: it's the one token here an exchange will usually reject outright,
+  // whatever network it arrives on.
+  const body = coin.key === 'weth' ? 'trade.xfer.coin.ack.p.weth' : skey('trade.xfer.coin.ack.p');
+  return `<label class="trade-net-ack${coll === 'land' ? ' is-l1' : ''}${xferNetAck ? ' is-on' : ''}">
     <input type="checkbox" data-act="xfer-net-ack" ${xferNetAck ? 'checked' : ''} />
     <span>
-      <b>${esc(t('trade.xfer.coin.ack.h').replace('{c}', coin.sym))}</b>
-      ${esc(t('trade.xfer.coin.ack.p').replace('{c}', coin.sym))}
+      <b>${esc(t(skey('trade.xfer.coin.ack.h')).replace('{c}', coin.sym))}</b>
+      ${esc(t(body).replace('{c}', coin.sym))}
     </span>
   </label>`;
 }
 
-// Status line for an IMX send. Mirrors the Creature transfer's states so the column reads
-// the same whichever mode you're in.
-function imxSendStatusHtml() {
-  const st = xferImxState;
+// Status line for a money send. Mirrors the NFT transfer's states so the column reads the
+// same whichever mode you're in. A hash we already have goes out as a link on every state
+// that isn't finished: a send left in the mempool is exactly when someone needs to look.
+function coinSendStatusHtml() {
+  const st = xferSendState;
   if (!st) return '';
-  if (st.phase === 'error') return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(st.msg)}</span></div>`;
-  if (st.phase === 'done') return `<div class="trade-status is-ok"><span aria-hidden="true">✓</span><span>${esc(t('trade.xfer.imx.sent.p'))}</span></div>`;
-  const key = st.phase === 'send' ? 'trade.xfer.imx.confirm' : 'trade.xfer.imx.sending';
-  return `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t(key))}</span></div>`;
+  const link = st.hash
+    ? ` <a href="${esc(txExplorerUrl(st.hash))}" target="_blank" rel="noopener">${esc(t('trade.status.view'))} ↗</a>`
+    : '';
+  if (st.phase === 'error') return `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${esc(st.msg)}${link}</span></div>`;
+  if (st.phase === 'done') return `<div class="trade-status is-ok"><span aria-hidden="true">✓</span><span>${esc(t(skey('trade.xfer.imx.sent.p')))}${link}</span></div>`;
+  const key = st.phase === 'send' ? 'trade.xfer.imx.confirm' : skey('trade.xfer.imx.sending');
+  return `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t(key))}${link}</span></div>`;
 }
 
 // Strip of picked-to-transfer items (thumb + number + remove ×), or a prompt when empty —
@@ -7196,15 +7285,15 @@ function patchTransferStatus() {
 // Transfer the picked Creatures/parcels to ONE recipient. Unifies single + mass: one item
 // behaves exactly like the old single transfer (one confirmation), 2+ runs sequentially with
 // progress. Each is its own on-chain tx; a rejection or failure keeps the rest picked.
-// Switch the Transfer tab between sending Creatures and sending IMX. Reads the balance on
-// entering IMX mode; the recipient box and its check survive the switch untouched.
+// Switch the Transfer tab between sending items and sending money. Reads the balances on
+// entering money mode; the recipient box and its check survive the switch untouched.
 async function setXferMode(mode) {
-  const next = mode === 'coin' && imxSendAvailable() ? 'coin' : 'items';
+  const next = mode === 'coin' ? 'coin' : 'items';
   if (next === xferMode) return;
   xferMode = next;
-  xferImxState = null;
+  xferSendState = null;
   xferNetAck = false;
-  if (next === 'coin') { xferBals = { imx: null, eth: null, usdc: null }; }
+  if (next === 'coin') { xferBals = {}; xferBalsFor = null; }
   patchTransferHead();
   patchTransferSide();
   if (next === 'coin') refreshXferBalances();
@@ -7218,48 +7307,69 @@ function pickLeavesCoinMode() {
   return true;
 }
 
-// All three zkEVM balances at once, so the coin chips can show what's actually there.
+// Every coin on the active chain at once, so the chips can show what's actually there. The
+// reads go through the connected wallet, which answers for whichever chain it is currently
+// on — so this only runs once the wallet has actually landed on the collection's chain, and
+// the result is stamped with the wallet + collection it belongs to. Ethereum also gets a gas
+// price, because there the fee reserve is real money rather than a rounding hair.
 async function refreshXferBalances() {
-  const [imx, eth, usdc] = await Promise.all([
-    readNative(account).catch(() => null),
-    readErc20(IMX_ETH_TOKEN, account).catch(() => null),
-    readErc20(IMX_USDC_TOKEN, account).catch(() => null),
-  ]);
-  if (xferMode !== 'coin') return;
-  xferBals = { imx, eth, usdc };
-  patchTransferSide();
+  if (!account || !onRightChain() || xferBalsBusy) return;
+  const owner = `${account}|${coll}`;
+  const coins = xferCoins();
+  const order = xferCoinOrder();
+  xferBalsBusy = true;
+  try {
+    const [vals, gas] = await Promise.all([
+      Promise.all(order.map(k => (coins[k].native ? readNative(account) : readErc20(coins[k].token, account)))),
+      coll === 'land' ? readGasPrice() : Promise.resolve(null),
+    ]);
+    // The wallet or the collection moved under us while those were in flight — these
+    // figures now describe somewhere else, and showing them would be worse than a spinner.
+    if (xferMode !== 'coin' || `${account}|${coll}` !== owner) return;
+    const next = {};
+    order.forEach((k, i) => { next[k] = vals[i]; });
+    xferBals = next;
+    xferBalsFor = owner;
+    if (coll === 'land') xferGasWei = gas;
+    patchTransferSide();
+  } finally {
+    xferBalsBusy = false;
+    // A sweep that landed on the wrong wallet/collection left the chips still empty, and
+    // nothing else is guaranteed to ask again. Chase the current one now.
+    if (xferMode === 'coin' && xferBalsFor !== `${account}|${coll}`) refreshXferBalances();
+  }
 }
 
 // Switch which coin is being sent. The typed amount is cleared: "5" means something very
 // different in USDC than in ETH, and silently reinterpreting it is how people overpay.
 function setXferCoin(k) {
-  if (!XFER_COINS[k] || k === xferCoin) return;
+  if (!xferCoins()[k] || k === xferCoinKey()) return;
   xferCoin = k;
-  xferImxAmount = '';
-  xferImxState = null;
+  xferAmount = '';
+  xferSendState = null;
   xferNetAck = false; // a different coin is a different risk — confirm it again
   patchTransferSide();
 }
 
-function imxMaxClick() {
-  const max = xferImxMaxWei();
+function coinMaxClick() {
+  const max = xferMaxWei();
   if (max == null || max <= 0n) return;
-  xferImxAmount = formatUnits(max, xferCoinDef().dec);
+  xferAmount = formatUnits(max, xferCoinDef().dec);
   const input = root()?.querySelector('#trade-imx-amt');
-  if (input) input.value = xferImxAmount;
-  patchImxAmountUi();
+  if (input) input.value = xferAmount;
+  patchCoinAmountUi();
 }
 
-// Send native IMX to another wallet. Non-custodial and contract-free: the user's own wallet
-// signs a plain value transfer, exactly like sending from MetaMask directly. The recipient
-// goes through the SAME safety check as a Creature transfer, because the mistake is the
-// same one and just as irreversible.
-async function handleImxSend(form) {
-  if (xferImxState && (xferImxState.phase === 'send' || xferImxState.phase === 'wait')) return;
-  const set = (phase, extra) => { xferImxState = { phase, ...extra }; patchTransferSide(); };
+// Send money to another wallet. Non-custodial and contract-free: the user's own wallet signs
+// a plain value transfer (or a bare ERC-20 transfer), exactly like sending from MetaMask
+// directly. The recipient goes through the SAME safety check as an NFT transfer, because the
+// mistake is the same one and just as irreversible. The chain follows the collection.
+async function handleCoinSend(form) {
+  if (xferSendState && (xferSendState.phase === 'send' || xferSendState.phase === 'wait')) return;
+  const set = (phase, extra) => { xferSendState = { phase, ...extra }; patchTransferSide(); };
   const to = (form.querySelector('#trade-to')?.value || '').trim().toLowerCase();
   const coin = xferCoinDef();
-  const wei = xferImxAmountWei();
+  const wei = xferAmountWei();
   // The button is disabled unless these hold, but state can race a click.
   if (!IS_ADDR.test(to)) return set('error', { msg: t('trade.err.badAddr') });
   if (to === account)    return set('error', { msg: t('trade.err.self') });
@@ -7267,31 +7377,43 @@ async function handleImxSend(form) {
   if (wei == null)       return set('error', { msg: t('trade.xfer.imx.err.amount') });
   if (!transferSendAllowed() || transferCheck?.addr?.toLowerCase() !== to) return set('error', { msg: t('trade.err.badAddr') });
 
-  if (!xferNetAck) return set('error', { msg: t('trade.xfer.coin.err.ack') });
+  if (!xferNetAck) return set('error', { msg: t(skey('trade.xfer.coin.err.ack')) });
 
   set('send', {});
   try {
-    await switchToChain(ZK_CHAIN_ID_HEX); // all three coins live on Immutable zkEVM
-    // An ERC-20 send burns native IMX for gas. Catch that here rather than letting MetaMask
-    // fail it cryptically — and the gas panel can now just cover it for them.
+    await switchToChain(C().chainHex); // Creatures settle on zkEVM, LAND on Ethereum
+    // An ERC-20 send burns the chain's NATIVE coin for gas — IMX on zkEVM, ETH on Ethereum.
+    // Catch an empty tank here rather than letting MetaMask fail it cryptically. On zkEVM
+    // the gas panel can bridge or gift the IMX; on Ethereum there's nothing to gift, so say
+    // what's missing and leave the card on-ramp on the card above.
     if (!coin.native) {
       const gas = await readNative(account);
-      if (gas != null && gas < GAS_MIN_WEI) { xferImxState = null; showGasHelp('transfer', retryForm('#trade-transfer-form', handleImxSend)); return; }
+      if (gas != null && gas < erc20GasFloorWei()) {
+        if (coll === 'land') return set('error', { msg: t('trade.xfer.coin.err.gas.land') });
+        xferSendState = null;
+        showGasHelp('transfer', retryForm('#trade-transfer-form', handleCoinSend));
+        return;
+      }
     }
     const params = coin.native
       ? { from: account, to, value: '0x' + wei.toString(16) }
       : { from: account, to: coin.token, data: SEL_ERC20_TRANSFER + word(to) + word(wei) };
     const hash = await eth().request({ method: 'eth_sendTransaction', params: [params] });
     set('wait', { hash });
-    await waitForReceipt(hash);
+    // Ethereum blocks are twelve seconds and a thin fee can sit for longer than we'll wait,
+    // so separate the three real outcomes: confirmed, reverted, and still in the mempool.
+    // Calling a pending send "sent" is how someone ends up sending it a second time.
+    const receipt = await waitForReceipt(hash);
+    if (!receipt) return set('error', { msg: t('trade.xfer.imx.err.pending'), hash });
+    if (receipt.status !== '0x1') return set('error', { msg: t('trade.xfer.imx.err.failed'), hash });
     set('done', { hash, amount: wei, sym: coin.sym });
-    xferImxAmount = '';
+    xferAmount = '';
     xferNetAck = false;
     refreshXferBalances();
     refreshBalance();
   } catch (err) {
-    if (isUserReject(err)) { xferImxState = null; patchTransferSide(); return; }
-    console.error('IMX send failed:', err);
+    if (isUserReject(err)) { xferSendState = null; patchTransferSide(); return; }
+    console.error('Coin send failed:', err);
     set('error', { msg: friendlyError(err) });
   }
 }
@@ -7659,13 +7781,16 @@ function onClick(e) {
     case 'gas-assist':     return handleGasAssist();
     case 'xfer-mode':      return setXferMode(target.dataset.mode);
     case 'xfer-coin':      return setXferCoin(target.dataset.coin);
-    // Sending IMX when you have none: same panel every other coin gets.
-    case 'xfer-gas':       return showGasHelp('transfer', retryForm('#trade-transfer-form', handleImxSend));
-    case 'imx-max':        return imxMaxClick();
+    // Sending IMX when you have none: same panel every other coin gets. The panel bridges and
+    // gifts IMX, so it only means anything on zkEVM — LAND's warning offers the on-ramp instead.
+    case 'xfer-gas':
+      if (coll !== 'creatures') return;
+      return showGasHelp('transfer', retryForm('#trade-transfer-form', handleCoinSend));
+    case 'imx-max':        return coinMaxClick();
     case 'xfer-net-ack':
       xferNetAck = !xferNetAck;
       return patchTransferSide();
-    case 'imx-again':      xferImxState = null; xferImxAmount = ''; return patchTransferSide();
+    case 'imx-again':      xferSendState = null; xferAmount = ''; return patchTransferSide();
     case 'onramp':         return openOnramp(target.dataset.chain, target.dataset.token, Number(target.dataset.fiat) || 0);
     case 'bridge-dismiss': return dismissBridge();
     case 'mmwarn-dismiss':
@@ -7749,7 +7874,7 @@ function onSubmit(e) {
     render();
     return;
   }
-  if (e.target?.id === 'trade-transfer-form') { e.preventDefault(); (xferMode === 'coin' ? handleImxSend : handleMassTransfer)(e.target); }
+  if (e.target?.id === 'trade-transfer-form') { e.preventDefault(); (xferMode === 'coin' ? handleCoinSend : handleMassTransfer)(e.target); }
   if (e.target?.id === 'trade-sell-form')      { e.preventDefault(); handleSell(e.target); }
   if (e.target?.id === 'trade-mass-sell-form') { e.preventDefault(); handleMassSell(); }
   if (e.target?.id === 'trade-offer-form') {
@@ -7847,8 +7972,8 @@ function onInput(e) {
     return;
   }
   if (e.target?.id === 'trade-imx-amt') {
-    xferImxAmount = e.target.value;
-    patchImxAmountUi(); // never patchTransferSide here — it would rebuild this very input
+    xferAmount = e.target.value;
+    patchCoinAmountUi(); // never patchTransferSide here — it would rebuild this very input
     return;
   }
   if (e.target?.id === 'trade-topup-gas-amt') {
@@ -7920,6 +8045,12 @@ function resetSellerState() {
   landMyOffers = null; landOfferState = null; landAcceptState = null; landAcceptBusy = false; unwrapState = null;
   sellPickOffers = null;
   transferSel = null; transferCheck = null; transferAck = false;
+  // Money mode survives, but nothing measured in it does: 'eth' means a bridged ERC-20 on
+  // zkEVM and the native coin on Ethereum, so a balance carried across would be a figure
+  // from the wrong chain sitting under the right ticker. Drop the lot and re-read.
+  xferBals = {}; xferBalsFor = null; xferGasWei = null;
+  xferAmount = ''; xferSendState = null; xferNetAck = false;
+  if (!xferCoins()[xferCoin]) xferCoin = xferCoinOrder()[0];
   gasState = null; // an in-flight bridge keeps its own banner; this is just the help panel
   resetInvFilter(); openFacet = null; // inventory traits differ per collection
   clearTimeout(transferCheckTimer);
@@ -8044,7 +8175,7 @@ function stashTradeReturn() {
       picks: [...transferSet].slice(0, 200),
       xferMode,
       xferCoin,
-      amount: xferImxAmount || '',
+      amount: xferAmount || '',
       to: root()?.querySelector('#trade-to')?.value || '',
       y: Math.round(window.scrollY || 0),
     }));
@@ -8130,8 +8261,8 @@ export async function loadMarketplace() {
       if (/^\d{1,80}$/.test(String(id))) transferSet.add(String(id));
     }
     if (back.xferMode === 'coin') xferMode = 'coin';
-    if (XFER_COINS[back.xferCoin]) xferCoin = back.xferCoin;
-    if (typeof back.amount === 'string') xferImxAmount = back.amount.slice(0, 32);
+    if (xferCoins()[back.xferCoin]) xferCoin = back.xferCoin; // validated against the restored collection
+    if (typeof back.amount === 'string') xferAmount = back.amount.slice(0, 32);
     // An explicit ?token= in the URL is a deliberate deep link, so it wins.
     if (!deepToken && /^\d{1,80}$/.test(String(back.token || ''))) deepToken = String(back.token);
     if (IS_ADDR.test(String(back.to || '').trim().toLowerCase())) pendingRecipient = String(back.to).trim();

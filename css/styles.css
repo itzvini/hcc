@@ -4250,11 +4250,30 @@ button.trade-net:hover { box-shadow: 0 0 12px var(--hr-banana-25); }
   font-weight: 900;
   box-shadow: 0 0 18px var(--hr-primary-25), inset 0 1px 0 rgba(255,255,255,.25);
 }
+/* The money card takes its colour from the chain it sends on: IMX orange on Immutable zkEVM,
+   brand lavender on Ethereum. The accent is one var per surface, so the chain shows in the
+   card, the explainer and the network tick without any of them restating a colour. */
+.trade-imx-card, .trade-imx-explain, .trade-net-ack { --xfer-accent: 255,141,93; }
+.trade-imx-card.is-l1, .trade-imx-explain.is-l1, .trade-net-ack.is-l1 { --xfer-accent: 133,97,255; }
 .trade-imx-card {
   padding: 16px; border-radius: var(--hr-radius-lg);
-  background: linear-gradient(180deg, rgba(255,141,93,.10), rgba(0,0,0,.28));
-  border: 1px solid rgba(255,141,93,.30);
+  background: linear-gradient(180deg, rgba(var(--xfer-accent),.10), rgba(0,0,0,.28));
+  border: 1px solid rgba(var(--xfer-accent),.30);
 }
+/* WETH is in the picker only because a LAND sale pays out in it, and almost nobody means to
+   hold it. The way out is one tap, so it sits on the card rather than in a help page. */
+.trade-coin-unwrap {
+  margin: -4px 0 14px; padding: 12px;
+  border-radius: var(--hr-radius-md);
+  border: 1px solid rgba(var(--xfer-accent),.35);
+  background: rgba(var(--xfer-accent),.08);
+}
+.trade-coin-unwrap p { margin: 0 0 10px; font-size: 12px; line-height: 1.5; color: var(--hr-fg-1); }
+.trade-coin-unwrap .apply-btn-ghost { font-size: 12px; padding: 8px 16px; }
+/* The empty-tank warning carries a way out with it. A two-word button must never break
+   across lines to squeeze in beside the sentence — it takes its own line instead. */
+#trade-imx-warn .trade-status { flex-wrap: wrap; }
+#trade-imx-warn .trade-status .trade-flt-clearall { flex: 0 0 auto; margin-left: auto; white-space: nowrap; }
 .trade-imx-card .trade-cashout-balline { margin-top: 10px; }
 .trade-imx-card .trade-funds-foot { margin-top: 8px; }
 .trade-imx-card .trade-status { margin-top: 10px; }
@@ -4299,7 +4318,7 @@ button.trade-net:hover { box-shadow: 0 0 12px var(--hr-banana-25); }
   display: flex; gap: 10px; align-items: flex-start; margin: 12px 0;
   padding: 12px; cursor: pointer;
   border-radius: var(--hr-radius-md);
-  border: 1px solid rgba(255,141,93,.45); background: rgba(255,141,93,.09);
+  border: 1px solid rgba(var(--xfer-accent),.45); background: rgba(var(--xfer-accent),.09);
   font-size: 12px; color: var(--hr-fg-1); line-height: 1.5;
   transition: border-color .15s, background-color .15s;
 }
@@ -4317,7 +4336,7 @@ button.trade-net:hover { box-shadow: 0 0 12px var(--hr-banana-25); }
 .trade-imx-explain-ic {
   flex: 0 0 auto; width: 34px; height: 34px; display: grid; place-items: center;
   border-radius: 50%; font-size: 17px;
-  background: rgba(255,141,93,.16);
+  background: rgba(var(--xfer-accent),.16);
 }
 .trade-imx-explain b { font-family: var(--hr-sans); font-weight: 800; font-size: 14.5px; color: var(--hr-fg-0); }
 .trade-imx-explain p { margin: 4px 0 0; font-size: 13px; color: var(--hr-fg-1); line-height: 1.55; }
