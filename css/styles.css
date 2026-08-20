@@ -401,6 +401,10 @@ h1 .pop { color: var(--hr-primary); }
     border: 1px solid var(--hr-line-strong); border-radius: var(--hr-radius-lg);
     box-shadow: var(--hr-shadow-3);
     max-height: calc(100vh - 84px); overflow-y: auto;
+    /* iOS reports 100vh as the height the page would have with the toolbars hidden, so
+       the vh line alone let the last few rows sit behind Safari's bottom bar. dvh is the
+       height actually on screen; browsers too old to know it keep the line above. */
+    max-height: calc(100dvh - 84px);
     opacity: 0; visibility: hidden; transform: translateY(-8px); pointer-events: none;
     transition: opacity .18s ease, transform .18s ease, visibility .18s;
   }
@@ -425,10 +429,15 @@ h1 .pop { color: var(--hr-primary); }
   }
   .nav-dropdown::before { display: none; }
   /* Don't let hover/focus expand the accordion on touch — only an explicit tap does.
-     The .is-open rule sits last so a tapped-open group wins over a lingering :hover. */
-  .nav-group:hover > .nav-dropdown,
-  .nav-group:focus-within > .nav-dropdown { max-height: 0; }
-  .nav-group.is-open > .nav-dropdown { max-height: 340px; }
+     The .is-open rule sits last so a tapped-open group wins over a lingering :hover.
+     Scoped to .nav-links, because the language row is a .nav-group too but is never an
+     accordion here — it stays open. Unscoped, the :hover rule outranked .lang-menu's
+     max-height:none, so the sticky hover a tap leaves behind collapsed the row to zero
+     height between touchend and click. The click then fell through the sheet onto the
+     page underneath, which switched tab and left the language untouched. */
+  .nav-links .nav-group:hover > .nav-dropdown,
+  .nav-links .nav-group:focus-within > .nav-dropdown { max-height: 0; }
+  .nav-links .nav-group.is-open > .nav-dropdown { max-height: 340px; }
 
   /* Language: the trigger drops away and the codes lay out as a wrapped row */
   .lang-switcher { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--hr-line); }
@@ -494,7 +503,7 @@ h1 .pop { color: var(--hr-primary); }
 .section-head > .section-head-t { flex: 1 1 280px; min-width: 0; }
 
 /* ---------- INFO / KNOWLEDGE CARDS (embed-style explainers) ---------- */
-.info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; margin-top: 28px; }
+.info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(290px, 100%), 1fr)); gap: 16px; margin-top: 28px; }
 .info-card {
   --accent: var(--hr-primary);
   --accent-soft: rgba(81,255,165,0.18);
@@ -1154,6 +1163,21 @@ details .faq-body p { padding: 0; }
 }
 .date-sep { color: var(--hr-fg-3); font-weight: 700; }
 
+/* On a phone the metric row (five labels), the interval row and the date picker are each
+   wider than the card, and a bare `.seg` never wraps — so they used to run off the right
+   edge and widen the whole page. Let every group wrap into rows and let its buttons share
+   the width, so the controls stay inside the card at any width. */
+@media (max-width: 620px) {
+  .market-controls { width: 100%; }
+  .market-controls > .seg { flex-wrap: wrap; row-gap: 3px; justify-content: center; }
+  .market-controls > .seg > .seg-btn { flex: 1 1 auto; white-space: nowrap; }
+  .market-controls > .seg-select { flex: 1 1 auto; }
+  .market-dates { justify-content: center; row-gap: 6px; }
+  .market-dates .date-field { flex: 1 1 auto; min-width: 0; }
+  .market-dates .date-field input[type="date"] { flex: 1 1 auto; min-width: 0; }
+  .market-dates .date-sep { display: none; }
+}
+
 /* Reset-zoom pill — revealed only after the user zooms or pans */
 .market-reset {
   background: var(--hr-bg-3); border: 1px solid var(--hr-line);
@@ -1285,7 +1309,7 @@ summary.rm-phase-head:focus-visible { outline: 2px solid var(--accent); outline-
 .rm-phase-rule { flex: 1; height: 1px; background: linear-gradient(90deg, var(--hr-line), transparent); }
 
 /* Tile grid — 3-up on desktop, wraps down to 1 on mobile */
-.rm-grid { display: grid; gap: 13px; grid-template-columns: repeat(auto-fill, minmax(258px, 1fr)); }
+.rm-grid { display: grid; gap: 13px; grid-template-columns: repeat(auto-fill, minmax(min(258px, 100%), 1fr)); }
 details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
 @keyframes rm-fade { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: none; } }
 
@@ -1987,9 +2011,14 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
 @media (max-width: 860px) {
   .col-stats { grid-template-columns: repeat(2, 1fr); }
   .col-controls { flex-direction: column; align-items: stretch; }
-  .col-tools { justify-content: space-between; }
-  .col-search { flex: 1; }
+  /* The tools row (search + toggles + sort) is wider than a phone. Wrapping keeps it
+     inside the column — without it the row's min-content width stretched the whole
+     stacked column past the screen edge and dragged the chips out with it. */
+  .col-tools { justify-content: space-between; flex-wrap: wrap; row-gap: 9px; }
+  .col-search { flex: 1 1 140px; min-width: 0; }
   .col-search-in { width: 100%; }
+  .ctr-sortwrap { flex: 1 1 auto; min-width: 0; justify-content: flex-end; }
+  .ctr-sort { min-width: 0; }
 }
 /* Below this the card's right-hand preview strip no longer fits beside the text */
 @media (max-width: 780px) {
@@ -2340,6 +2369,11 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
   .ctr-grid { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 11px; }
   .ctr-group-h { flex-wrap: wrap; }
   .ctr-group-m { white-space: normal; }
+  /* Once the chips wrap over many rows the vertical rule and its label get split onto
+     different lines, leaving a stray hairline mid-row. Drop the rule and let the label
+     head its own line instead. */
+  .ctr-chip-sep { display: none; }
+  .ctr-chip-lbl { flex: 0 0 100%; margin-top: 4px; }
 }
 @media (max-width: 700px) {
   .ctr-modal[open] { padding: 14px; }
@@ -3232,7 +3266,8 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
   .gdemo-traits { display: none; }
   .gdemo-wallet { right: 8px; width: 220px; }
   .gdemo-beat { padding: 4px 9px 4px 5px; }
-  .gdemo-ctrl { margin-left: 0; width: 100%; }
+  /* Replay + Back + Next + "Up next" is more than a narrow phone fits on one line. */
+  .gdemo-ctrl { margin-left: 0; width: 100%; flex-wrap: wrap; row-gap: 8px; }
   .gdemo-next { flex: 1; }
   .gdemo-captext { font-size: 12.5px; }
 }
@@ -3315,7 +3350,7 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
 #panel-market .guide-subpanel > section:first-child { padding-top: 12px; }
 
 /* ---------- USEFUL LINKS ---------- */
-.links-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 24px; }
+.links-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 12px; margin-top: 24px; }
 .link-card {
   display: flex; align-items: center; gap: 14px;
   background: var(--hr-bg-2); border: 1px solid var(--hr-line);
@@ -3367,8 +3402,13 @@ footer { margin-top: 28px; }
   .guide-steps li{padding:12px 14px 12px 44px}
   .guide-subnav{gap:6px}
   .guide-subtab{padding:8px 14px;font-size:12px}
-  .hub{grid-template-columns:1fr 1fr;gap:10px}
+  /* minmax(0,…) instead of a bare 1fr: a plain 1fr track can't shrink below its widest
+     word, so on a narrow phone the two cards pushed past the screen edge. */
+  .hub{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 }
+/* Two columns leave too little room for the longest card titles ("Announcements") — one
+   card per row below this. */
+@media(max-width:400px){.hub{grid-template-columns:1fr}}
 @media(max-width:560px){
   .card{padding:22px 18px}
   .council-vis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:stretch}
@@ -4696,9 +4736,15 @@ body.trade-sheet-open { overflow: hidden; }
   font-weight: 900;
   box-shadow: 0 0 18px var(--hr-primary-25), inset 0 1px 0 rgba(255,255,255,.25);
 }
+/* Five tabs never fit one phone line, and `min-width: 0` used to squash them until the
+   labels spilled out of their pills and overlapped each other. Wrap into rows instead:
+   `min-width: auto` keeps every pill at least as wide as its own label, and nowrap keeps
+   each label on one line, so the rows break cleanly and all five stay readable. */
 @media (max-width: 620px) {
-  .trade-tabs { display: flex; width: 100%; }
-  .trade-tabs .seg-btn { flex: 1; min-width: 0; padding: 12px 10px; }
+  .trade-tabs { display: flex; width: 100%; flex-wrap: wrap; row-gap: 4px; border-radius: var(--hr-radius-xl); }
+  /* The 28% basis is what makes the rows break 3 + 2 at every phone width instead of
+     packing 4 onto line one and leaving a single stretched tab below. */
+  .trade-tabs .seg-btn { flex: 1 1 28%; min-width: auto; white-space: nowrap; padding: 12px 14px; }
 }
 
 /* Sell picker: small selectable tiles of your own Creatures */
@@ -5446,6 +5492,9 @@ a.trade-buy-btn { display: inline-flex; }
 @media (max-width: 620px) {
   .trade-safety-card { padding: 24px 18px 18px; }
   .trade-safety-pill span:last-child { display: none; } /* icon-only on small screens */
+  /* When the tab row wraps, the pill can land alone on the last line — pin it right so it
+     reads as a deliberate corner affordance instead of a stray button. */
+  .trade-safety-pill { margin-left: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
   .trade-safety-card, .trade-safety-rules li { animation: none !important; }
@@ -5838,6 +5887,9 @@ a.trade-buy-btn { display: inline-flex; }
   /* Stacked: image on top (capped), info scrolls below it. */
   .trade-modal-card { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); height: auto; max-height: 92vh; }
   .trade-modal-img, .trade-modal-media .trade-tile-noimg { min-height: 0; height: auto; max-height: 38vh; }
+  /* Stacked, the artwork runs full width and the close button lands on top of the rarity
+     chip — slide the chip clear of it. */
+  .trade-modal-media .trade-rar { right: 54px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -7332,7 +7384,7 @@ a.ann-embed-title:hover { color: var(--hr-secondary); }
 .scam-rule-t p { color: var(--hr-fg-0); font-size: 16px; line-height: 1.6; font-weight: 600; margin-top: 4px; }
 
 /* ---- Tactic cards (native <details>) ---- */
-.scam-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-top: 28px; align-items: start; }
+.scam-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 14px; margin-top: 28px; align-items: start; }
 .scam-card {
   --accent: var(--hr-primary);
   position: relative; overflow: hidden;

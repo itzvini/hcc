@@ -100,8 +100,31 @@ let tradeLoaded     = false;
 let roadmapLoaded   = false;
 let collectionsLoaded = false;
 
+// The sheet hangs off the bottom of the tab bar, and that bar is sticky, not fixed. Open
+// the menu while the page still sits above the bar's resting place and the sheet drops
+// past the bottom of the screen — on an iPhone SE that left 21 of the 22 rows, the whole
+// language row among them, out of reach. Pinning the bar first gives the sheet a full
+// screen to open into; a bar already up there stays put.
+//   jump, never glide: a sheet still travelling is a moving target. Tapping 120ms into a
+//     smooth scroll opened Roadmap instead of switching language, because the row that
+//     had slid under the finger by click time won — the very bug this menu was just
+//     fixed for. Overriding scroll-behavior beats `behavior: 'instant'`, which throws on
+//     iOS 15.0 to 15.3.
+//   ceil: a fractional scroll lands a pixel short in Safari, and a bar one pixel shy of
+//     the top never trips the sentinel that frosts it.
+//   queried, not the pageTabs const below: that one is declared further down the file.
+function pinTabBar() {
+  const top = Math.ceil(document.querySelector('.page-tabs')?.getBoundingClientRect().top ?? 0);
+  if (top <= 0) return;
+  const root = document.documentElement;
+  root.style.scrollBehavior = 'auto';
+  window.scrollBy(0, top);
+  root.style.scrollBehavior = '';
+}
+
 // Mobile menu open/close (the whole menu sheet drops from under the bar)
 function setDrawer(open) {
+  if (open) pinTabBar();
   navMenu.classList.toggle('is-open', open);
   navToggle.setAttribute('aria-expanded', String(open));
   if (!open) closeGroups();

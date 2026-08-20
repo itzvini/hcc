@@ -46,7 +46,11 @@ export async function setLanguage(lang) {
     if (lang !== 'en') { await setLanguage('en'); return; }
   }
   currentLang = lang;
-  localStorage.setItem('hcc-lang', lang);
+  // Storage throws when the browser blocks it (Safari private browsing, "block all
+  // cookies"). Losing the saved preference is a small cost; letting it throw here cost
+  // the whole switch, because every visible change below was skipped — the page stayed
+  // in the old language and the click looked like it had done nothing.
+  try { localStorage.setItem('hcc-lang', lang); } catch {}
   document.documentElement.lang = lang;
   applyTranslations();
   document.querySelectorAll('.lang-btn').forEach(btn => {
@@ -57,7 +61,8 @@ export async function setLanguage(lang) {
 }
 
 export async function initI18n() {
-  const saved   = localStorage.getItem('hcc-lang');
+  let saved = null;
+  try { saved = localStorage.getItem('hcc-lang'); } catch {}
   const browser = (navigator.language || '').split('-')[0];
   const lang    = saved || (SUPPORTED_LANGS.includes(browser) ? browser : 'en');
   await setLanguage(lang);
