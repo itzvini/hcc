@@ -611,6 +611,44 @@
   ],
   "site": [
     {
+      "date": "August 21, 2026",
+      "title": "A roadmap for the Gen 2 pets",
+      "body": "The pets have their own board now, at Roadmap. Five slime sets, Sushi through Elemental, each showing the phase it's in, what's next, and what's holding it up, refreshed every two weeks with the Discord update. The creature roadmap sits beside it as its own tab, back in step with the build order you voted for: pets first, creature sets next, Yogurt Zombies last.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "21 de ago. de 2026",
+          "title": "Um roadmap para os pets Gen 2",
+          "body": "Os pets agora têm o próprio quadro, na aba Roadmap. Cinco sets de slimes, do Sushi ao Elemental, cada um mostrando a fase em que está, o que vem a seguir e o que está travando, renovados a cada duas semanas junto com a atualização de progresso do Discord. O roadmap das criaturas fica ao lado, em uma aba própria, de novo alinhado com a ordem de produção que você votou: pets primeiro, sets de criaturas depois, Yogurt Zombies por último."
+        },
+        "es": {
+          "date": "21 ago. 2026",
+          "title": "Un roadmap para los pets de Gen 2",
+          "body": "Los pets ya tienen su propio panel en la pestaña Roadmap. Cinco conjuntos de slimes, de Sushi Slimes a Elemental Slimes, cada uno con la fase en la que está, lo que viene después y lo que lo está frenando, y todo se actualiza cada dos semanas junto con la actualización de Discord. El roadmap de creatures queda al lado, en su propia pestaña, otra vez alineado con el orden de producción que votaste: primero los pets, después los conjuntos de creatures y al final los Yogurt Zombies."
+        },
+        "fr": {
+          "date": "21 août 2026",
+          "title": "Un roadmap pour les pets Gen 2",
+          "body": "Les pets ont maintenant leur propre tableau, dans Roadmap. Cinq sets de slimes, de Sushi à Elemental, chacun montrant la phase où il en est, ce qui arrive ensuite et ce qui le bloque, le tout rafraîchi toutes les deux semaines avec la mise à jour Discord. Le roadmap des Creatures est juste à côté, dans son propre onglet, de nouveau aligné sur l'ordre de production que tu as voté : les pets d'abord, les sets de Creatures ensuite, les Yogurt Zombies en dernier."
+        },
+        "de": {
+          "date": "21. August 2026",
+          "title": "Eine Roadmap für die Gen-2-Pets",
+          "body": "Die Pets haben jetzt ihre eigene Übersicht, unter Roadmap. Fünf Slime-Sets, von Sushi bis Elemental, jedes zeigt, in welcher Phase es steckt, was als Nächstes kommt und was es gerade bremst, alle zwei Wochen mit dem Discord-Update aktualisiert. Die Creature-Roadmap steht daneben als eigener Tab, wieder im Takt mit der Reihenfolge, für die du gestimmt hast: erst die Pets, dann die Creature-Sets, zum Abschluss die Yogurt Zombies."
+        },
+        "ru": {
+          "date": "21 августа 2026",
+          "title": "Роадмап питомцев Gen 2",
+          "body": "У питомцев теперь свой маршрут, ищите его на вкладке «Роадмап». Пять наборов Slime, от Sushi Slimes до Elemental Slimes, и по каждому видно, на каком он этапе, что будет дальше и что его тормозит. Обновляем раз в две недели, вместе с обновлением в Discord. Роадмап существ стоит рядом отдельной вкладкой и снова совпадает с порядком работ, за который вы проголосовали: сначала питомцы, потом наборы существ, а Yogurt Zombies в конце."
+        },
+        "tr": {
+          "date": "21 Ağustos 2026",
+          "title": "Gen 2 pet'ler için bir yol haritası",
+          "body": "Pet'lerin artık Yol Haritası altında kendi panosu var. Beş slime seti, Sushi'den Elemental'a, her biri hangi aşamada olduğunu, sırada ne olduğunu ve neyin onu yavaşlattığını gösteriyor, Discord güncellemesiyle birlikte iki haftada bir yenileniyor. Creature yol haritası hemen yanında kendi sekmesinde duruyor, oyladığın yapım sırasıyla yeniden aynı hizada: önce pet'ler, sonra creature setleri, en sonda Yogurt Zombies."
+        }
+      }
+    },
+    {
       "date": "August 13, 2026",
       "title": "We'll cover your gas",
       "body": "New to Immutable and short on IMX for network fees? If you hold a Creature, the gas is on us. Sign in, tap once, and a little IMX lands in your connected wallet in seconds, enough for dozens of trades, with nothing to sign or approve. Whatever you were in the middle of, buying, selling, or moving a Creature, picks right back up. One claim per holder.",

@@ -56,6 +56,54 @@ Without key+secret, the **LAND** card CTA is hidden and **Creatures** fall back 
 keyless hosted on-ramp ([toolkit.immutable.com/onramp](https://toolkit.immutable.com/onramp/)) —
 which can't pin the network, so the buyer must pick Immutable zkEVM themselves.
 
+## Gen 2 roadmap (two boards)
+
+The Roadmap tab holds three sub-tabs: **Milestones** (`/roadmap`), the hand-maintained
+milestone track; **Gen 2 Pets** (`/roadmap/pets`); and **Gen 2 Creatures** (`/roadmap/gen2`).
+The two Gen 2 boards are the public face of the bi-weekly Discord progress update.
+
+Each board is driven by one JSON file at the repo root, and that file is the only thing you
+edit when an update goes out:
+
+| Board | Data file | Road element |
+|---|---|---|
+| Gen 2 Pets | `gen2-pets-progress.json` | `#g2p-road` |
+| Gen 2 Creatures | `gen2-progress.json` | `#g2-road` |
+
+Both are rendered by the same code ([js/gen2.js](js/gen2.js)); the `BOARDS` array at the top of
+that file maps each data file to its DOM ids, its i18n prefix, and the icon plus accent colour
+for every set. Adding a set means adding it to `BOARDS[n].sets`, to the JSON, and adding a
+`<prefix>.set.<id>.h` key to [locales/en.json](locales/en.json).
+
+Per set in the JSON:
+
+- `done` — how many stages are fully finished. Pets run **1 Direction, 2 Concepts, 3 Feedback,
+  4 Final art, 5 In game**; creatures run **1 Direction, 2 Concepts, 3 Sketches, 4 Final art,
+  5 In game**. The stop cards only list stages 1 to 4; `done: 5` flips the whole stop to
+  "Complete".
+- `active: true` — being worked on right now, which lights the stop and shows stage `done + 1`
+  as in progress. More than one set can be active.
+- `status: "next"` — an "Up next" chip on a set nobody is working on yet.
+- `note` — shown verbatim on the card.
+
+And per file: `updated` (the announcement date), plus `focus` on the **creature** file only, the
+"next two weeks" card under its pipeline. The pets board has no focus card and no
+"what's slowing this down" card; both were built and then cut on the owner's call, so its per-set
+`note` fields are the only place it states where the work is. Don't add a `focus` or `blocker`
+field to `gen2-pets-progress.json`. Any field can carry per-language overrides the same way
+`changelog.json` entries do: `"i18n": { "pt": { "note": "…" } }`.
+
+The array order in the JSON is the order the road is drawn in.
+
+The static markup in [index.html](index.html) is a **fallback**, not decoration: if the fetch
+fails the page still shows a truthful board, so keep it in step with the JSON when the state
+changes materially. Both files are served straight from the root, so each is in `PUBLIC_FILES`
+in [server.js](server.js).
+
+Editorial rules for these pages live in the project brain (`60 Decisions/Roadmap Editorial
+Rules`): no internal dates, no resourcing, no scope debates, and nothing about how Gen 2 gets
+delivered or monetised.
+
 ## Collections (the release archive)
 
 The Collections tab holds two views, as sub-tabs: **Releases** (`/collections`), the club's

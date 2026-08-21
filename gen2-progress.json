@@ -1,13 +1,184 @@
 {
-  "_howto": "Bi-weekly Gen 2 update lives here. Per set: 'done' = stages fully completed (1 Direction, 2 Concepts, 3 Sketches, 4 Final art, 5 In game), 'active' = being worked right now (shows the next stage as in-progress), optional 'status':'next' shows an 'Up next' chip on a queued set. 'note' is shown verbatim on the card; 'focus' is the global 'next two weeks' line; 'updated' is the announcement date (YYYY-MM-DD) — the site shows the next update as +14 days. Optional translations per entry: \"i18n\": { \"pt\": { \"note\": \"…\" } }.",
-  "updated": "2026-06-11",
-  "focus": "Right now it's all about landing the Zombies: the last sketches are being finished and final art is moving item by item. Vampire concept exploration lines up next — expect the first peeks in an upcoming update.",
+  "_howto": "Bi-weekly Gen 2 CREATURE update lives here (the pets have their own file, gen2-pets-progress.json). Per set: 'done' = stages fully completed (1 Direction, 2 Concepts, 3 Sketches, 4 Final art, 5 In game), 'active' = being worked right now (shows the next stage as in-progress), optional 'status':'next' shows an 'Up next' chip on a queued set. 'note' is shown verbatim on the card; 'focus' is the global 'next two weeks' line; 'updated' is the announcement date (YYYY-MM-DD). The array order is the order the road is drawn in. Optional translations per entry: \"i18n\": { \"pt\": { \"note\": \"…\" } }.",
+  "updated": "2026-08-21",
+  "focus": "The creature sets are on hold while the Gen 2 pets get built, the order you voted for. The Yogurt Zombies are the closest to finished and now come last on purpose, so everything the team learns on the other sets can go back into them.",
   "sets": [
-    { "id": "zombies", "done": 3, "active": true, "note": "The last sketches are wrapping while final art gets polished, item by item." },
-    { "id": "vampires", "done": 1, "active": false, "status": "next", "note": "Concept exploration kicks off as the Zombies wrap. Elegant, dramatic, a little dangerous." },
-    { "id": "werewolves", "done": 1, "active": false, "note": "Direction locked — the pack is waiting for its turn in the studio." },
-    { "id": "demons", "done": 1, "active": false, "note": "Direction locked — horns, attitude, and a wardrobe to match." },
-    { "id": "ghosts", "done": 1, "active": false, "note": "Direction locked — soft, eerie, see-through fits incoming." },
-    { "id": "slimes", "done": 1, "active": false, "note": "Direction locked — the gooiest finale, cousins of the slime pets you already know." }
-  ]
+    {
+      "id": "vampires",
+      "done": 1,
+      "active": false,
+      "status": "next",
+      "note": "First creature set up once the pets are done. Elegant, dramatic, a little dangerous.",
+      "i18n": {
+        "pt": {
+          "note": "O primeiro set de criaturas a ser feito quando os pets terminarem. Elegante, dramático, um pouco perigoso."
+        },
+        "es": {
+          "note": "El primer set de criaturas en cuanto terminen las mascotas. Elegante, dramático, un poco peligroso."
+        },
+        "fr": {
+          "note": "Premier set de créatures dès que les pets sont finis. Élégant, théâtral, un peu dangereux."
+        },
+        "de": {
+          "note": "Das erste Kreaturen-Set, sobald die Pets fertig sind. Elegant, dramatisch, ein bisschen gefährlich."
+        },
+        "ru": {
+          "note": "Первый набор существ после питомцев. Элегантные, эффектные, немного опасные."
+        },
+        "tr": {
+          "note": "Pet'ler bitince sıra ilk olarak bu creature setinde. Zarif, dramatik, biraz tehlikeli."
+        }
+      }
+    },
+    {
+      "id": "werewolves",
+      "done": 1,
+      "active": false,
+      "note": "Direction locked. The pack is waiting for its turn in the studio.",
+      "i18n": {
+        "pt": {
+          "note": "Direção definida. A matilha espera sua vez no estúdio."
+        },
+        "es": {
+          "note": "Dirección cerrada. La manada espera su turno en el estudio."
+        },
+        "fr": {
+          "note": "Direction verrouillée. La meute attend son tour au studio."
+        },
+        "de": {
+          "note": "Richtung steht. Das Rudel wartet im Studio darauf, dranzukommen."
+        },
+        "ru": {
+          "note": "Направление зафиксировано. Стая ждёт своей очереди в студии."
+        },
+        "tr": {
+          "note": "Yön kesinleşti. Sürü stüdyoda sırasını bekliyor."
+        }
+      }
+    },
+    {
+      "id": "demons",
+      "done": 1,
+      "active": false,
+      "note": "Direction locked. Horns, attitude, and a wardrobe to match.",
+      "i18n": {
+        "pt": {
+          "note": "Direção definida. Chifres, atitude e um guarda-roupa à altura."
+        },
+        "es": {
+          "note": "Dirección cerrada. Cuernos, actitud y un vestuario a la altura."
+        },
+        "fr": {
+          "note": "Direction verrouillée. Des cornes, du caractère, et une garde-robe assortie."
+        },
+        "de": {
+          "note": "Richtung steht. Hörner, Attitüde und die passende Garderobe."
+        },
+        "ru": {
+          "note": "Направление зафиксировано. Рога, характер и гардероб под стать."
+        },
+        "tr": {
+          "note": "Yön kesinleşti. Boynuzlar, tavır ve bunlara yakışan bir gardırop."
+        }
+      }
+    },
+    {
+      "id": "ghosts",
+      "done": 1,
+      "active": false,
+      "note": "Direction locked. Soft, eerie, see-through fits incoming.",
+      "i18n": {
+        "pt": {
+          "note": "Direção definida. Looks suaves, assombrados e transparentes a caminho."
+        },
+        "es": {
+          "note": "Dirección cerrada. Looks suaves, inquietantes y transparentes en camino."
+        },
+        "fr": {
+          "note": "Direction verrouillée. Des tenues douces, inquiétantes et transparentes arrivent."
+        },
+        "de": {
+          "note": "Richtung steht. Sanfte, unheimliche, durchscheinende Outfits sind unterwegs."
+        },
+        "ru": {
+          "note": "Направление зафиксировано. Мягкие, жутковатые, полупрозрачные образы на подходе."
+        },
+        "tr": {
+          "note": "Yön kesinleşti. Yumuşak, ürkütücü, yarı saydam kombinler geliyor."
+        }
+      }
+    },
+    {
+      "id": "slimes",
+      "done": 1,
+      "active": false,
+      "note": "Direction locked. The gooiest of the creature sets, cousins of the slime pets you already know.",
+      "i18n": {
+        "pt": {
+          "note": "Direção definida. O mais gosmento dos sets de criaturas, primos dos pets slime que você já conhece."
+        },
+        "es": {
+          "note": "Dirección cerrada. El set de criaturas más viscoso, primos de las mascotas slime que ya conoces."
+        },
+        "fr": {
+          "note": "Direction verrouillée. Le plus gluant des sets de créatures, cousins des pets slimes que vous connaissez déjà."
+        },
+        "de": {
+          "note": "Richtung steht. Das glibberigste der Kreaturen-Sets, Verwandte der Slime-Pets, die du schon kennst."
+        },
+        "ru": {
+          "note": "Направление зафиксировано. Самый тягучий из наборов существ, родня тем питомцам Slime, которых вы уже знаете."
+        },
+        "tr": {
+          "note": "Yön kesinleşti. Creature setlerinin en yapış yapışı, zaten tanıdığın slime pet'lerin kuzenleri."
+        }
+      }
+    },
+    {
+      "id": "zombies",
+      "done": 3,
+      "active": false,
+      "note": "The closest set to finished, and now the last one out on purpose, so everything the other sets teach us goes into it first.",
+      "i18n": {
+        "pt": {
+          "note": "O set mais perto de ficar pronto, e agora o último a sair de propósito, para que tudo o que os outros sets nos ensinarem entre nele antes."
+        },
+        "es": {
+          "note": "El set más cerca de terminarse, y ahora el último en salir a propósito, para que todo lo que nos enseñen los otros sets entre en él primero."
+        },
+        "fr": {
+          "note": "Le set le plus proche de la fin, et maintenant le dernier à sortir exprès, pour qu'on y ramène d'abord tout ce que les autres sets nous apprennent."
+        },
+        "de": {
+          "note": "Das Set, das am weitesten ist, und jetzt mit Absicht das letzte, das rauskommt. So fließt vorher alles hinein, was uns die anderen Sets beibringen."
+        },
+        "ru": {
+          "note": "Набор ближе всех к финалу и теперь намеренно выходит последним, чтобы сначала в него вошло всё, чему нас научат другие наборы."
+        },
+        "tr": {
+          "note": "Bitmeye en yakın set, artık bilerek en son çıkıyor. Böylece diğer setlerin bize öğrettiği her şey önce bu sete işleniyor."
+        }
+      }
+    }
+  ],
+  "i18n": {
+    "pt": {
+      "focus": "Os sets de criaturas estão em pausa enquanto os pets Gen 2 são produzidos, a ordem que você votou. Os Yogurt Zombies são os mais perto de ficarem prontos e agora vêm por último de propósito, para que tudo o que o time aprender nos outros sets volte para eles."
+    },
+    "es": {
+      "focus": "Los sets de criaturas están en pausa mientras se construyen las mascotas Gen 2, el orden que votaste. Los Yogurt Zombies son los que están más cerca de terminarse y ahora van al final a propósito, para que todo lo que el equipo aprenda en los otros sets vuelva a ellos."
+    },
+    "fr": {
+      "focus": "Les sets de créatures sont en pause pendant qu'on produit les pets Gen 2, l'ordre que vous avez voté. Les Yogurt Zombies sont les plus proches de la fin et passent en dernier exprès, pour que l'équipe puisse y ramener tout ce qu'elle apprend sur les autres sets."
+    },
+    "de": {
+      "focus": "Die Kreaturen-Sets pausieren, während die Gen-2-Pets gebaut werden, die Reihenfolge, für die du gestimmt hast. Die Yogurt Zombies sind am weitesten und kommen jetzt mit Absicht zuletzt, damit alles, was das Team an den anderen Sets lernt, in sie zurückfließen kann."
+    },
+    "ru": {
+      "focus": "Наборы существ на паузе, пока делают питомцев Gen 2: за этот порядок проголосовали вы. Yogurt Zombies ближе всех к финалу и теперь идут последними намеренно, чтобы всё, чему команда научится на других наборах, вернулось в них."
+    },
+    "tr": {
+      "focus": "Gen 2 pet'leri yapılırken creature setleri beklemede, oyladığın sıra bu. Yogurt Zombies bitmeye en yakın set ve artık bilerek en sona alındı, böylece ekibin diğer setlerde öğrendiği her şey onlara geri dönebiliyor."
+    }
+  }
 }

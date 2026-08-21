@@ -6222,7 +6222,7 @@ const contentTypes = {
 // server.js, package.json, node_modules, etc.) returns 404. This is the primary
 // guard against leaking secrets or source on an open-source, self-hostable repo.
 const PUBLIC_DIRS  = new Set(['css', 'js', 'img', 'assets', 'fonts', 'locales']);
-const PUBLIC_FILES = new Set(['index.html', 'changelog.json', 'gen2-progress.json', 'collections.json', 'favicon.ico', 'robots.txt', 'sitemap.xml']);
+const PUBLIC_FILES = new Set(['index.html', 'changelog.json', 'gen2-progress.json', 'gen2-pets-progress.json', 'collections.json', 'favicon.ico', 'robots.txt', 'sitemap.xml']);
 // Gzip candidates: text formats plus raw OpenType/TrueType fonts (~45% smaller).
 // WOFF/WOFF2 and images are already compressed — recompressing wastes CPU for ~0%.
 const COMPRESSIBLE_EXT = new Set(['.html', '.css', '.js', '.json', '.svg', '.otf', '.ttf']);

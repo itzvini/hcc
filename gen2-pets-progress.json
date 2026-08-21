@@ -1,0 +1,137 @@
+{
+  "_howto": "Bi-weekly Gen 2 PETS update lives here (the creature sets have their own file, gen2-progress.json). Per set: 'done' = stages fully completed (1 Direction, 2 Concepts, 3 Redraw, 4 Final art, 5 In game), 'active' = being worked right now (shows the next stage as in-progress), optional 'status':'next' shows an 'Up next' chip on a queued set. 'note' is shown verbatim on the card and is the ONLY place this board states what's happening: it carries no 'next two weeks' or 'what's slowing this down' summary card, both were removed on purpose, so don't add a 'focus' or 'blocker' field back. 'updated' is the announcement date (YYYY-MM-DD). Optional translations per entry: \"i18n\": { \"pt\": { \"note\": \"…\" } }.",
+  "updated": "2026-08-21",
+  "sets": [
+    {
+      "id": "sushi",
+      "done": 2,
+      "active": true,
+      "note": "The whole lineup is drawn, from the grumpy Salmon down to the tiny Tako Sausage. Next it gets redrawn in the format the game uses today.",
+      "i18n": {
+        "pt": {
+          "note": "A lista completa está desenhada, do Salmon rabugento ao pequeno Tako Sausage. Agora ela vai ser redesenhada no formato que o jogo usa hoje."
+        },
+        "es": {
+          "note": "Toda la lista está dibujada, desde el gruñón Salmon hasta el diminuto Tako Sausage. Lo siguiente es redibujarla en el formato que usa el juego hoy."
+        },
+        "fr": {
+          "note": "Toute la gamme est dessinée, du Salmon grincheux au minuscule Tako Sausage. Ensuite, on la redessine dans le format qu'utilise le jeu aujourd'hui."
+        },
+        "de": {
+          "note": "Die ganze Besetzung ist gezeichnet, vom mürrischen Salmon bis zur winzigen Tako Sausage. Als Nächstes wird sie in dem Format neu gezeichnet, das das Spiel heute nutzt."
+        },
+        "ru": {
+          "note": "Вся линейка нарисована, от ворчливого Salmon до крошечного Tako Sausage. Дальше перерисуем её в том формате, который игра использует сегодня."
+        },
+        "tr": {
+          "note": "Huysuz Salmon'dan minik Tako Sausage'e kadar bütün kadro çizildi. Sırada oyunun bugün kullandığı formatta yeniden çizilmesi var."
+        }
+      }
+    },
+    {
+      "id": "dessert",
+      "done": 1,
+      "active": true,
+      "note": "Already started. The first look lands in the next update.",
+      "i18n": {
+        "pt": {
+          "note": "Já começou. O primeiro look chega na próxima atualização."
+        },
+        "es": {
+          "note": "Ya empezaron. El primer look llega en la próxima actualización."
+        },
+        "fr": {
+          "note": "Déjà commencé. Le premier aperçu arrive dans la prochaine mise à jour."
+        },
+        "de": {
+          "note": "Schon gestartet. Der erste Look kommt im nächsten Update."
+        },
+        "ru": {
+          "note": "Уже начали. Первый показ в следующем обновлении."
+        },
+        "tr": {
+          "note": "Çoktan başladı. İlk görünüm bir sonraki güncellemede geliyor."
+        }
+      }
+    },
+    {
+      "id": "nature",
+      "done": 1,
+      "active": false,
+      "status": "next",
+      "note": "Theme locked. Concepts start as the Dessert Slimes wrap.",
+      "i18n": {
+        "pt": {
+          "note": "Tema definido. Os conceitos começam quando os Dessert Slimes terminarem."
+        },
+        "es": {
+          "note": "Tema cerrado. Los conceptos empiezan cuando terminen los Dessert Slimes."
+        },
+        "fr": {
+          "note": "Thème verrouillé. Les concepts commencent dès que les Dessert Slimes sont finis."
+        },
+        "de": {
+          "note": "Thema steht. Die Konzepte starten, sobald die Dessert Slimes fertig sind."
+        },
+        "ru": {
+          "note": "Тема зафиксирована. Концепты начнутся, когда закончим Dessert Slimes."
+        },
+        "tr": {
+          "note": "Tema kesinleşti. Dessert Slimes biterken konseptler başlıyor."
+        }
+      }
+    },
+    {
+      "id": "celestial",
+      "done": 1,
+      "active": false,
+      "note": "Theme locked. Waiting its turn in the studio.",
+      "i18n": {
+        "pt": {
+          "note": "Tema definido. Esperando sua vez no estúdio."
+        },
+        "es": {
+          "note": "Tema cerrado. Esperando su turno en el estudio."
+        },
+        "fr": {
+          "note": "Thème verrouillé. Il attend son tour au studio."
+        },
+        "de": {
+          "note": "Thema steht. Wartet im Studio darauf, dranzukommen."
+        },
+        "ru": {
+          "note": "Тема зафиксирована. Ждёт своей очереди в студии."
+        },
+        "tr": {
+          "note": "Tema kesinleşti. Stüdyoda sırasını bekliyor."
+        }
+      }
+    },
+    {
+      "id": "elemental",
+      "done": 1,
+      "active": false,
+      "note": "Theme locked. The closer for the pet run.",
+      "i18n": {
+        "pt": {
+          "note": "Tema definido. O set que fecha a leva de pets."
+        },
+        "es": {
+          "note": "Tema cerrado. El que cierra la tanda de mascotas."
+        },
+        "fr": {
+          "note": "Thème verrouillé. Il ferme la marche des pets."
+        },
+        "de": {
+          "note": "Thema steht. Der Abschluss der Pet-Reihe."
+        },
+        "ru": {
+          "note": "Тема зафиксирована. Замыкает очередь питомцев."
+        },
+        "tr": {
+          "note": "Tema kesinleşti. Pet serisini kapatan set."
+        }
+      }
+    }
+  ]
+}
