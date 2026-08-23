@@ -669,8 +669,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 <main id="panel-roadmap" class="tab-panel roadmap-panel" role="region" aria-labelledby="tab-roadmap" hidden>
   <nav class="guide-subnav wrap" role="tablist" aria-label="Roadmap sections" data-i18n-aria="a11y.roadmap.sections">
     <button class="guide-subtab is-active" type="button" role="tab" aria-selected="true" data-subtab="milestones" data-i18n="roadmap.sub.milestones">Milestones</button>
-    <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="pets" data-i18n="roadmap.sub.pets">Gen 2 Pets</button>
-    <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="gen2" data-i18n="roadmap.sub.gen2">Gen 2 Creatures</button>
+    <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="gen2-explained" data-subowns="pets gen2" data-i18n="roadmap.sub.explained">Gen 2</button>
   </nav>
 
   <div class="guide-subpanel" data-subpanel="milestones">
@@ -847,11 +846,187 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 
     <p class="rm-note" data-i18n="rm.note">Milestones in rough order. We'll announce dates as we confirm them.</p>
     <div class="rm-cta-row">
-      <button type="button" class="rm-cta rm-cta-primary" data-subgoto="pets" data-i18n="rm.petscta">See the Gen 2 pets roadmap →</button>
-      <button type="button" class="rm-cta rm-cta-ghost" data-subgoto="gen2" data-i18n="rm.gen2cta">See the Gen 2 creatures roadmap →</button>
+      <button type="button" class="rm-cta rm-cta-primary" data-subgoto="gen2-explained" data-i18n="rm.explaincta">What Gen 2 actually gets you →</button>
     </div>
   </section>
   </div><!-- /milestones -->
+
+  <!-- Gen 2 Explained — the plain-language answer page. Built after Gen 2 progress
+       update #6 (22 Aug 2026), when creature-chat filled with "what am I actually
+       getting?". Every claim here traces to something said publicly: the update post,
+       Vini's answers in creature-chat, and his replies in a support ticket. Anything
+       still open lives in the .gx-open card, and it stays there until it's settled.
+       Static page, no JS of its own beyond the shared .g2-reveal observer. -->
+  <div class="guide-subpanel" data-subpanel="gen2-explained" hidden>
+
+  <section class="wrap" id="gen2-explained">
+    <div class="perx-hero g2-reveal">
+      <div class="apply-aurora" aria-hidden="true"></div>
+      <div class="apply-sparkles" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <!-- The slime rides .pet-wrap so app.js inlines its SVG (its internal <g transform>
+           paths only resolve in document context); .perx-float carries the bob + the
+           reduced-motion kill switch the perks hero already sets up. -->
+      <div class="gx-float gx-float-pet pet-wrap" aria-hidden="true"><img src="/assets/pets/slime-composite.svg" alt=""></div>
+      <img class="perx-float gx-float-nft" src="/assets/nft.png" alt="" width="86" height="86" loading="lazy">
+      <span class="apply-pill" data-i18n="gx.pill">Straight answers</span>
+      <h2 class="perx-hero-h" data-i18n="gx.h2">Gen 2, explained</h2>
+      <p class="perx-hero-p" data-i18n="gx.lead">One question keeps coming back after every update: what am I actually getting? Here's the whole thing in plain language, and an honest line wherever something isn't decided yet.</p>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="eyebrow" data-i18n="gx.swap.eyebrow">The short version</div>
+    <h2 data-i18n="gx.swap.h2">What you hold, and what it gets</h2>
+    <p class="lead" data-i18n="gx.swap.lead">Two collections, two things owed. That's the whole model, and it's the part most people are getting turned around.</p>
+
+    <div class="gx-swap">
+      <article class="gx-swap-card g2-reveal" style="--accent:var(--hr-primary);--accent-soft:var(--hr-primary-25)">
+        <span class="gx-swap-glow" aria-hidden="true"></span>
+        <div class="gx-swap-side">
+          <span class="gx-swap-ico" aria-hidden="true">🐉</span>
+          <span class="gx-swap-eyebrow" data-i18n="gx.swap.hold">You hold</span>
+          <h4 data-i18n="gx.swap.c1from">A Gen 1 Creature</h4>
+        </div>
+        <span class="gx-swap-arrow" aria-hidden="true">→</span>
+        <div class="gx-swap-side">
+          <span class="gx-swap-ico" aria-hidden="true">🫠</span>
+          <span class="gx-swap-eyebrow" data-i18n="gx.swap.gets">It gets</span>
+          <h4 data-i18n="gx.swap.c1to">A Gen 2 pet slime</h4>
+          <p data-i18n="gx.swap.c1p">Attached to that Creature, the way slime pets belong to LAND today.</p>
+        </div>
+      </article>
+
+      <article class="gx-swap-card g2-reveal" style="--accent:var(--hr-secondary);--accent-soft:var(--hr-secondary-25);--d:.09s">
+        <span class="gx-swap-glow" aria-hidden="true"></span>
+        <div class="gx-swap-side">
+          <span class="gx-swap-ico" aria-hidden="true">🗺️</span>
+          <span class="gx-swap-eyebrow" data-i18n="gx.swap.hold">You hold</span>
+          <h4 data-i18n="gx.swap.c2from">A LAND plot</h4>
+        </div>
+        <span class="gx-swap-arrow" aria-hidden="true">→</span>
+        <div class="gx-swap-side">
+          <span class="gx-swap-ico" aria-hidden="true">🧟</span>
+          <span class="gx-swap-eyebrow" data-i18n="gx.swap.gets">It gets</span>
+          <h4 data-i18n="gx.swap.c2to">A Gen 2 Creature</h4>
+          <p data-i18n="gx.swap.c2p">Attached to that plot. Premium plots get exclusive ones.</p>
+        </div>
+      </article>
+    </div>
+
+    <p class="gx-swap-note" data-i18n="gx.swap.note">Hold both and you're owed both: one Gen 2 piece for every Creature and every plot in your wallet. Premium plots and Legendary Creatures get the rarer pieces.</p>
+
+    <div class="facts g2-reveal">
+      <div class="fact"><div class="n" data-i18n="gx.fact1n">11,111</div><div class="l" data-i18n="gx.fact1">pets owed, one per Creature</div></div>
+      <div class="fact"><div class="n" data-countup="5">5</div><div class="l" data-i18n="gx.fact2">slime themes so far</div></div>
+      <div class="fact"><div class="n" data-countup="6">6</div><div class="l" data-i18n="gx.fact3">creature sets for the LAND</div></div>
+    </div>
+  </section>
+
+  <div class="divider">• • •</div>
+
+  <section class="wrap">
+    <div class="eyebrow" data-i18n="gx.truth.eyebrow">Clearing it up</div>
+    <h2 data-i18n="gx.truth.h2">What Gen 2 is, and what it isn't</h2>
+    <p class="lead" data-i18n="gx.truth.lead">Four things worth knowing on each side. If you only read one part of this page, read this one.</p>
+
+    <div class="gx-truth">
+      <div class="gx-col gx-col-yes g2-reveal">
+        <h3 class="gx-col-h"><span class="gx-col-mark" aria-hidden="true">✓</span><span data-i18n="gx.truth.yes">What it is</span></h3>
+        <ul class="gx-list">
+          <li class="gx-item"><h5 data-i18n="gx.yes1h">Attached to what you already hold</h5><p data-i18n="gx.yes1p">Your pet rides on your Creature. Your Gen 2 Creature rides on your plot. The pair moves as one.</p></li>
+          <li class="gx-item"><h5 data-i18n="gx.yes2h">The promise being finished</h5><p data-i18n="gx.yes2p">Gen 2 is what was agreed years ago and never landed. We're closing it out, not selling it to you.</p></li>
+          <li class="gx-item"><h5 data-i18n="gx.yes3h">Yours for holding</h5><p data-i18n="gx.yes3p">There's nothing to buy and no entry to pay. Holding the Gen 1 side is what earns the Gen 2 side.</p></li>
+          <li class="gx-item"><h5 data-i18n="gx.yes4h">Random, near enough</h5><p data-i18n="gx.yes4p">We'll try to fit a pet to its Creature, but plan on the draw being random.</p></li>
+        </ul>
+      </div>
+
+      <div class="gx-col gx-col-no g2-reveal" style="--d:.09s">
+        <h3 class="gx-col-h"><span class="gx-col-mark" aria-hidden="true">✕</span><span data-i18n="gx.truth.no">What it isn't</span></h3>
+        <ul class="gx-list">
+          <li class="gx-item"><h5 data-i18n="gx.no1h">A second thing to sell</h5><p data-i18n="gx.no1p">The Gen 2 half doesn't split off. Sell the Creature and the pet goes with it, in one listing.</p></li>
+          <li class="gx-item"><h5 data-i18n="gx.no2h">More Creature Coins</h5><p data-i18n="gx.no2p">Coins pay per Creature and per plot you hold. Gen 2 doesn't add one, so your daily rate won't move.</p></li>
+          <li class="gx-item"><h5 data-i18n="gx.no3h">Out yet</h5><p data-i18n="gx.no3p">None of it exists in Highrise. Anything sold as a Gen 2 pet or creature today is fake, without exception.</p></li>
+          <li class="gx-item"><h5 data-i18n="gx.no4h">All sushi</h5><p data-i18n="gx.no4p">Sushi is one theme of several. Dessert is already in the works and more follow it, and how many themes there are in the end can still change.</p></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider">• • •</div>
+
+  <section class="wrap">
+    <div class="eyebrow" data-i18n="gx.faq.eyebrow">Your questions</div>
+    <h2 data-i18n="gx.faq.h2">Asked since the last update</h2>
+    <p class="lead" data-i18n="gx.faq.lead">These came out of Discord in the days after update #6. If yours isn't here, ask it in creature-chat and it'll end up on this page.</p>
+
+    <details><summary data-i18n="gx.q1">I own a Creature and no LAND. Do I get anything?</summary><p data-i18n="gx.a1">Yes. Every Gen 1 Creature is owed a Gen 2 pet slime, whether or not you hold a plot. Own three Creatures and you're owed three pets.</p></details>
+    <details><summary data-i18n="gx.q2">I own LAND. Am I getting a slime or a creature?</summary><p data-i18n="gx.a2">A creature. Plots already have their slime pets, so the Gen 2 side of LAND is a creature attached to the plot. Premium plots get exclusive ones.</p></details>
+    <details><summary data-i18n="gx.q3">Is a new NFT landing in my wallet?</summary><p data-i18n="gx.a3">No. Nothing new arrives on its own. The Gen 2 piece attaches to the NFT you already hold, so you end up with one asset carrying both halves rather than two assets side by side.</p></details>
+    <details><summary data-i18n="gx.q4">Can I sell the pet on its own, or keep it and sell the Creature?</summary><p data-i18n="gx.a4">No. The two stay together, and that was always the intent: bundling them is what makes your Gen 1 worth more rather than competing with a shinier Gen 2. Vini hasn't ruled out building a way to trade an attached Gen 2 later on, but that's a conversation for after Gen 2 ships, not a plan today.</p></details>
+    <details><summary data-i18n="gx.q5">Do I choose mine, or is it random?</summary><p data-i18n="gx.a5">Plan on random. The team will try to fit a pet to the Creature it lands on, so a dark Creature may well end up with something that suits it, but nothing about that is promised and you won't be picking from a menu.</p></details>
+    <details><summary data-i18n="gx.q6">Will I earn more Creature Coins once I have both?</summary><p data-i18n="gx.a6">No. Coins pay out per Creature and per LAND plot you hold, and Gen 2 doesn't add one to your count. Buy another NFT and you earn more; getting your Gen 2 half doesn't change your daily rate.</p></details>
+    <details><summary data-i18n="gx.q7">Do rarer NFTs get rarer Gen 2?</summary><p data-i18n="gx.a7">Partly, yes. Every Premium LAND plot and every Legendary Creature gets rarer, more exclusive Gen 2 assets. Below those two tiers nothing is settled, so what you've read about holographic Creatures or the ten 1-of-1s pulling special pets is still holder guesswork. When the rest is decided you'll read it here first.</p></details>
+    <details><summary data-i18n="gx.q8">Is the whole thing sushi?</summary><p data-i18n="gx.a8">No. Sushi is the first slime theme we've shown, not the whole thing. Dessert is being drawn now, then Nature, Celestial and Elemental, and both the count and the themes themselves can still change as the work lands. The creature sets for LAND are separate again: vampires, werewolves, demons, ghosts, slimes and the Yogurt Zombies.</p></details>
+    <details><summary data-i18n="gx.q9">Why do they look like concepts from years ago?</summary><p data-i18n="gx.a9">Because they are, and that's deliberate. The lineup comes straight from the preview shared back then, cleaned up rather than redesigned, because holders asked for the originals before anything new. Slimes were the first pets Highrise ever had and they're simple by nature, so the variety comes from five themed sets instead of five hundred shapes. Plenty of you have said they don't measure up to what the game ships now, and that's fair feedback, honestly given. It's read, and it's being weighed against keeping faith with the original concepts.</p></details>
+    <details><summary data-i18n="gx.q11">When do I get it?</summary><p data-i18n="gx.a11">There's no date, and we'd rather say that than invent one. What you can hold us to is a progress update every two weeks and a public board per set, so you can watch the work move instead of taking our word for it.</p></details>
+    <details><summary data-i18n="gx.q12">Won't bundling wreck the market if demand drops?</summary><p data-i18n="gx.a12">Straight answer from Vini: if buyers won't pay the asking price, the asset doesn't move, and a seller who wants out lowers their price. There's no plan to step into the market and prop it up. The plan is to keep shipping releases and perks so the collection stays worth wanting. Gen 2 is a perk that adds to HCC, not a promise about price.</p></details>
+    <details><summary data-i18n="gx.q13">Is HCC just Gen 2 now?</summary><p data-i18n="gx.a13">No. Drops and Creature Store releases carry on alongside it, and pet giveaways plus slime accessory grabs and store items are likely once the pets land. Gen 2 is the debt being paid. It isn't the whole club.</p></details>
+
+    <div class="gx-warn">
+      <p data-i18n-html="gx.warn"><b>The scam to know:</b> no Gen 2 pet or creature exists yet, anywhere. Any listing, DM or "early Gen 2 airdrop" offering one is a theft attempt. Read <a href="/guides/safety">Stay safe</a> before you click anything, and reach every marketplace through <a href="/guides/links">the official links</a>.</p>
+    </div>
+  </section>
+
+  <div class="divider">• • •</div>
+
+  <section class="wrap">
+    <div class="eyebrow" data-i18n="gx.open.eyebrow">Not settled yet</div>
+    <h2 data-i18n="gx.open.h2">What we can't tell you</h2>
+    <p class="lead" data-i18n="gx.open.lead">These are genuinely open. We'd rather list them than let a guess harden into a fact you trade on.</p>
+
+    <ul class="gx-open g2-reveal">
+      <li class="gx-open-row" style="--accent:var(--hr-primary)"><span class="gx-open-ico" aria-hidden="true">🔗</span><span><b data-i18n="gx.open1h">Splitting the pair</b> <span data-i18n="gx.open1p">Whether a Gen 2 piece can ever be traded away from the NFT it's attached to. Not ruled out, and not designed. It gets discussed after Gen 2 ships.</span></span></li>
+      <li class="gx-open-row" style="--accent:var(--hr-secondary)"><span class="gx-open-ico" aria-hidden="true">🎲</span><span><b data-i18n="gx.open2h">How close the match gets</b> <span data-i18n="gx.open2p">How much a pet's look will follow the Creature it lands on. We'll try. Plan on random.</span></span></li>
+      <li class="gx-open-row" style="--accent:var(--hr-banana)"><span class="gx-open-ico" aria-hidden="true">💎</span><span><b data-i18n="gx.open3h">Rarity below the top tiers</b> <span data-i18n="gx.open3p">Premium plots and Legendary Creatures get the rarer pieces. What every tier under them gets, and whether holographic Creatures or the 1-of-1s get anything set apart, is undecided.</span></span></li>
+      <li class="gx-open-row" style="--accent:var(--hr-blueberry)"><span class="gx-open-ico" aria-hidden="true">🎨</span><span><b data-i18n="gx.open.sets.h">How many pet themes</b> <span data-i18n="gx.open.sets.p">Five slime themes are in the works today. Both the count and the themes themselves can still change before the pets ship.</span></span></li>
+      <li class="gx-open-row" style="--accent:var(--hr-tangerine)"><span class="gx-open-ico" aria-hidden="true">📅</span><span><b data-i18n="gx.open4h">Any date</b> <span data-i18n="gx.open4p">No delivery window is set. When one is real enough to publish, it goes on the Milestones board.</span></span></li>
+    </ul>
+    <p class="rm-note" data-i18n="gx.open.note">See one of these stated as fact? It didn't come from us.</p>
+  </section>
+
+  <section class="wrap">
+    <div class="eyebrow" data-i18n="gx.next.eyebrow">Watch it move</div>
+    <h2 data-i18n="gx.next.h2">Where the work stands today</h2>
+    <p class="lead" data-i18n="gx.next.lead">Two boards track the build, one set at a time, and both are refreshed with every update.</p>
+
+    <div class="gx-boards g2-reveal">
+      <a class="gx-board" href="/roadmap/pets" data-subgoto="pets" style="--accent:var(--hr-alert);--accent-soft:var(--hr-alert-15)">
+        <span class="gx-board-glow" aria-hidden="true"></span>
+        <span class="gx-board-ico" aria-hidden="true">🍣</span>
+        <span class="gx-board-txt">
+          <b data-i18n="gx.next.pets.h">Gen 2 Pets roadmap</b>
+          <span data-i18n="gx.next.pets.p">The slime themes for your Creatures, and where each one stands today.</span>
+        </span>
+        <span class="gx-board-arrow" aria-hidden="true">→</span>
+      </a>
+      <a class="gx-board" href="/roadmap/gen2" data-subgoto="gen2" style="--accent:var(--hr-secondary);--accent-soft:var(--hr-secondary-25)">
+        <span class="gx-board-glow" aria-hidden="true"></span>
+        <span class="gx-board-ico" aria-hidden="true">🧟</span>
+        <span class="gx-board-txt">
+          <b data-i18n="gx.next.creatures.h">Gen 2 Creatures roadmap</b>
+          <span data-i18n="gx.next.creatures.p">The six creature sets for the LAND, and which one is in production.</span>
+        </span>
+        <span class="gx-board-arrow" aria-hidden="true">→</span>
+      </a>
+    </div>
+
+    <div class="rm-cta-row">
+      <a class="rm-cta rm-cta-ghost" href="/announcements" data-goto="announcements" data-i18n="gx.next.cta3">Read every update →</a>
+    </div>
+    <p class="gx-source" data-i18n="gx.source">Everything on this page comes from what we've said in public: progress update #6, and the answers given in creature-chat and support tickets in the days after it. Where an answer changes, this page changes with it.</p>
+  </section>
+
+  </div><!-- /gen2-explained -->
 
   <!-- Gen 2 Pets — the pet half of the Gen 2 entitlement, and the half you voted to
        build first. Same board machinery as the creature roadmap below: the static
@@ -990,6 +1165,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
       <div class="perk"><span class="ico">🥇</span><h4 data-i18n="g2p.fit.c2h">Pets first, creatures next</h4><p data-i18n="g2p.fit.c2p">You voted for the order. The team is on the pets now, the creature sets follow, and the Yogurt Zombies close it out.</p></div>
           </div>
     <div class="rm-cta-row">
+      <button type="button" class="rm-cta rm-cta-primary" data-subgoto="gen2-explained" data-i18n="rm.explaincta">What Gen 2 actually gets you →</button>
       <button type="button" class="rm-cta rm-cta-ghost" data-subgoto="gen2" data-i18n="g2p.fit.cta">See the Gen 2 creatures roadmap →</button>
     </div>
     <p class="rm-note" data-i18n="g2p.note">Set order and pacing can change as the work lands. We'll explain every change in the updates every two weeks.</p>
@@ -1141,6 +1317,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
     </div>
     <div class="rm-cta-row">
       <button type="button" class="rm-cta rm-cta-primary" data-subgoto="pets" data-i18n="g2.petscta">See the Gen 2 pets roadmap →</button>
+      <button type="button" class="rm-cta rm-cta-ghost" data-subgoto="gen2-explained" data-i18n="rm.explaincta">What Gen 2 actually gets you →</button>
     </div>
     <p class="rm-note" data-i18n="g2.note">Set order and pacing can change as the work lands and as the Council weighs in. We'll explain every change in the updates every two weeks.</p>
   </section>

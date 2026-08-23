@@ -1559,6 +1559,195 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
   .g2-stop.is-live .g2-stop-node { animation: none !important; }
 }
 
+/* ---------- GEN 2 EXPLAINED (Roadmap › Gen 2 Explained) ----------
+   The answer page for "what am I actually getting?". Reuses the showcase shell
+   already on this tab (.perx-hero + .apply-aurora for the hero, .g2-reveal for the
+   entrance, .facts / details / .rm-cta-row for the furniture) and adds only the
+   three pieces it needs of its own: the hold → gets pair, the is/isn't columns,
+   and the open-questions list. Per-card theming rides on --accent / --accent-soft,
+   the same pattern as the roadmap stops. */
+
+/* ---- Hero floats ---- */
+/* Scoped to the hero on purpose: `.perx-hero > *` sets position:relative on every
+   direct child and is declared later in this file, so a bare .gx-float loses to it. */
+.perx-hero .gx-float {
+  position: absolute; z-index: 1; pointer-events: none;
+  filter: drop-shadow(0 10px 24px rgba(0,0,0,.45));
+}
+.gx-float-pet.pet-wrap {
+  top: 20px; right: 30px;
+  width: clamp(54px, 8vw, 84px); height: auto; aspect-ratio: 84 / 100;
+}
+.gx-float-nft { bottom: 22px; left: 32px; width: clamp(44px, 7vw, 78px); animation-duration: 4.6s; }
+@media (max-width: 560px) {
+  /* Both floats crowd the headline once the hero narrows. */
+  .gx-float-pet.pet-wrap, .gx-float-nft { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gx-float-pet.pet-wrap { animation: none !important; }
+}
+
+/* ---- The hold → gets pair ---- */
+.gx-swap { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 28px; }
+.gx-swap-card {
+  position: relative; overflow: hidden; isolation: isolate;
+  /* Top-aligned, not centred: the "it gets" side carries an extra line of copy, and
+     centring each column on its own height dropped its icon below the other one. */
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; gap: 14px;
+  padding: 26px 22px; border-radius: var(--hr-radius-xl);
+  border: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(40,39,45,.66), rgba(20,19,23,.85));
+  backdrop-filter: blur(10px);
+  box-shadow: var(--hr-shadow-2), inset 0 1px 0 rgba(255,255,255,.05);
+  transition: transform .25s cubic-bezier(.2,.7,.2,1), border-color .25s, box-shadow .25s;
+}
+.gx-swap-card:hover {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: var(--hr-shadow-3), 0 0 28px var(--accent-soft), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.gx-swap-card > * { position: relative; z-index: 1; }
+.gx-swap-glow {
+  position: absolute; z-index: 0; inset: -40% -30% auto; height: 90%; pointer-events: none;
+  background: radial-gradient(55% 80% at 78% 0%, var(--accent-soft), transparent 72%);
+  opacity: .5; transition: opacity .25s;
+}
+.gx-swap-card:hover .gx-swap-glow { opacity: .95; }
+.gx-swap-side { text-align: center; }
+.gx-swap-ico { display: block; font-size: 2.1rem; line-height: 1; margin-bottom: 10px; filter: drop-shadow(0 5px 16px var(--accent-soft)); }
+.gx-swap-eyebrow {
+  display: block; font: 900 10px/1 var(--hr-sans);
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase;
+  color: var(--hr-fg-3); margin-bottom: 6px;
+}
+.gx-swap-side h4 { font: 800 16px/1.2 var(--hr-sans); color: var(--hr-fg-0); }
+.gx-swap-side p { margin-top: 7px; font-size: 12.5px; line-height: 1.5; color: var(--hr-fg-2); }
+.gx-swap-arrow {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 50%; flex: none;
+  font: 900 16px/1 var(--hr-sans); color: var(--hr-on-primary);
+  background: var(--accent); box-shadow: 0 0 20px var(--accent-soft);
+  /* Sits on the icons' row: .gx-swap-ico is 2.1rem tall, the arrow disc is 34px. */
+  margin-top: 1px;
+}
+.gx-swap-note {
+  margin-top: 18px; text-align: center;
+  font-size: 14px; line-height: 1.6; color: var(--hr-fg-1);
+}
+
+/* ---- Is / isn't columns ---- */
+.gx-truth { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 28px; }
+.gx-col {
+  --accent: var(--hr-primary); --accent-soft: var(--hr-primary-25);
+  padding: 24px 22px; border-radius: var(--hr-radius-xl);
+  border: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(40,39,45,.6), rgba(20,19,23,.82));
+  backdrop-filter: blur(10px);
+  box-shadow: var(--hr-shadow-2), inset 0 1px 0 rgba(255,255,255,.05);
+}
+.gx-col-no { --accent: var(--hr-alert); --accent-soft: var(--hr-alert-15); }
+.gx-col-h {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 18px;
+  font: 800 15px/1 var(--hr-sans);
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase;
+  color: var(--hr-fg-0);
+}
+.gx-col-mark {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 26px; height: 26px; border-radius: 50%;
+  font: 900 13px/1 var(--hr-sans); color: var(--hr-on-primary);
+  background: var(--accent); box-shadow: 0 0 16px var(--accent-soft);
+}
+.gx-list { list-style: none; display: grid; gap: 10px; }
+.gx-item {
+  padding: 14px 16px; border-radius: var(--hr-radius-md);
+  background: var(--hr-bg-3); border: 1px solid var(--hr-line);
+  border-left: 3px solid color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.gx-item h5 { font: 800 13.5px/1.3 var(--hr-sans); color: var(--hr-fg-0); margin-bottom: 4px; }
+.gx-item p  { font-size: 13px; line-height: 1.55; color: var(--hr-fg-2); }
+
+/* ---- Standalone scam warning (same treatment as the .faq-warn inside an answer) ---- */
+.gx-warn {
+  margin-top: 20px; padding: 15px 18px;
+  border-radius: var(--hr-radius-md);
+  background: var(--hr-alert-15); border: 1px solid rgba(255,91,149,.3);
+}
+.gx-warn p { font-size: 14px; line-height: 1.6; color: var(--hr-fg-1); }
+.gx-warn b { color: var(--hr-alert); }
+
+/* ---- Open questions ---- */
+.gx-open { list-style: none; display: grid; gap: 9px; margin-top: 26px; }
+.gx-open-row {
+  display: flex; align-items: flex-start; gap: 11px;
+  padding: 14px 16px; border-radius: var(--hr-radius-md);
+  background: var(--hr-bg-2); border: 1px solid var(--hr-line);
+  border-left: 3px solid var(--accent, var(--hr-primary));
+  color: var(--hr-fg-2); font-size: 14px; line-height: 1.55;
+  box-shadow: var(--hr-shadow-1);
+}
+.gx-open-row b { color: var(--accent, var(--hr-fg-0)); font-weight: 700; }
+.gx-open-ico { flex: none; font-size: 16px; line-height: 1.45; }
+
+.gx-source {
+  margin-top: 26px; text-align: center; max-width: 620px; margin-inline: auto;
+  font-size: 12.5px; line-height: 1.6; color: var(--hr-fg-3);
+}
+
+/* ---- The two roadmap boards, reached from here ----
+   The Gen 2 sub-tab is the way in to both boards now, so they get cards rather than
+   pills. Real <a href> so they stay crawlable and middle-clickable; app.js turns a
+   plain click into a sub-tab switch. */
+.gx-boards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 28px; }
+.gx-board {
+  position: relative; overflow: hidden; isolation: isolate;
+  display: flex; align-items: center; gap: 14px;
+  padding: 20px 22px; border-radius: var(--hr-radius-xl);
+  border: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(40,39,45,.66), rgba(20,19,23,.85));
+  backdrop-filter: blur(10px);
+  box-shadow: var(--hr-shadow-2), inset 0 1px 0 rgba(255,255,255,.05);
+  text-decoration: none;
+  transition: transform .25s cubic-bezier(.2,.7,.2,1), border-color .25s, box-shadow .25s;
+}
+.gx-board:hover {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: var(--hr-shadow-3), 0 0 28px var(--accent-soft), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.gx-board > * { position: relative; z-index: 1; }
+.gx-board-glow {
+  position: absolute; z-index: 0; inset: -50% -30% auto; height: 120%; pointer-events: none;
+  background: radial-gradient(50% 70% at 15% 0%, var(--accent-soft), transparent 72%);
+  opacity: .55; transition: opacity .25s;
+}
+.gx-board:hover .gx-board-glow { opacity: 1; }
+.gx-board-ico { flex: none; font-size: 1.9rem; line-height: 1; filter: drop-shadow(0 5px 16px var(--accent-soft)); }
+.gx-board-txt { flex: 1; min-width: 0; }
+.gx-board-txt b { display: block; font: 800 15.5px/1.25 var(--hr-sans); color: var(--hr-fg-0); margin-bottom: 4px; }
+.gx-board-txt span { display: block; font-size: 13px; line-height: 1.5; color: var(--hr-fg-2); }
+.gx-board-arrow {
+  flex: none; font: 900 15px/1 var(--hr-sans); color: var(--accent);
+  transition: transform .25s cubic-bezier(.2,.7,.2,1);
+}
+.gx-board:hover .gx-board-arrow { transform: translateX(4px); }
+
+@media (max-width: 720px) {
+  .gx-swap, .gx-truth, .gx-boards { grid-template-columns: 1fr; }
+}
+@media (max-width: 420px) {
+  /* Stack the pair vertically so neither side gets squeezed to two words a line;
+     the arrow turns to point down the card instead of across it. */
+  .gx-swap-card { grid-template-columns: 1fr; gap: 12px; padding: 22px 18px; }
+  .gx-swap-arrow { transform: rotate(90deg); margin-inline: auto; }
+  .gx-col { padding: 20px 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gx-swap-card, .gx-swap-card:hover, .gx-swap-glow,
+  .gx-board, .gx-board:hover, .gx-board-glow,
+  .gx-board-arrow, .gx-board:hover .gx-board-arrow { transition: none; transform: none; }
+}
+
 @media (max-width: 760px) {
   .g2-road { grid-auto-columns: minmax(200px, 78vw); }
   .g2-pipe { grid-template-columns: 1fr; }

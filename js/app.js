@@ -265,7 +265,11 @@ document.querySelectorAll('[data-goto]').forEach(el => {
 // the page panel the sub-nav lives in, so each page only drives its own subpanels.
 function selectSubTab(scope, name) {
   scope.querySelectorAll('[data-subtab]').forEach(btn => {
-    const active = btn.dataset.subtab === name;
+    // data-subowns lists sub-panels that have no button of their own and belong to
+    // this one: Roadmap's "Gen 2" owns the pets and creatures boards, so it stays lit
+    // while either is open and they keep the URLs already published in Discord.
+    const owns = (btn.dataset.subowns || '').split(/\s+/).filter(Boolean);
+    const active = btn.dataset.subtab === name || owns.includes(name);
     btn.classList.toggle('is-active', active);
     btn.setAttribute('aria-selected', String(active));
   });
@@ -282,7 +286,15 @@ document.querySelectorAll('[data-subtab]').forEach(btn =>
   btn.addEventListener('click', () => jumpSubTab(btn, btn.dataset.subtab)));
 // In-page jumps that switch sub-tab (e.g. the Gen 2 CTA at the end of Milestones)
 document.querySelectorAll('[data-subgoto]').forEach(el =>
-  el.addEventListener('click', () => jumpSubTab(el, el.dataset.subgoto)));
+  el.addEventListener('click', e => {
+    // On an <a>, a modified or middle click follows the real href into a new tab;
+    // a plain click switches sub-tab in place. Same deal as [data-goto] above.
+    if (el.tagName === 'A') {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+      e.preventDefault();
+    }
+    jumpSubTab(el, el.dataset.subgoto);
+  }));
 
 // Walkthrough steppers — show one guide at a time (chip tabs + prev/next) instead of
 // one long scroll. Used by Guides › Walkthroughs, Guides › Marketplace, and the
@@ -437,7 +449,7 @@ function route(pathname) {
   if (tab === 'guides' && sub === 'scams') sub = 'safety';
   if (sub) {
     const scope = document.getElementById(`panel-${tab}`);
-    if (scope && scope.querySelector(`[data-subtab="${sub}"]`)) selectSubTab(scope, sub);
+    if (scope && scope.querySelector(`[data-subtab="${sub}"], [data-subpanel="${sub}"]`)) selectSubTab(scope, sub);
   }
   if (tab === 'market' && sub === 'holders') ensureHoldersLoaded();
   if (tab === 'collections' && sub === 'traits') ensureTraitsLoaded();
