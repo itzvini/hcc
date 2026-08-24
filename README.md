@@ -112,8 +112,8 @@ themselves are built from. The archive answers "what did the club put out"; the 
 answers "what are the Creatures made of". They share their stat band, chips and search box
 so the tab reads as one page.
 
-The **Releases** view (`/collections`) is the club's full back catalogue: 130 releases
-and 1,457 items, oldest to newest, on a year-by-year timeline. Each release card opens
+The **Releases** view (`/collections`) is the club's full back catalogue: 131 releases
+and 1,470 items, oldest to newest, on a year-by-year timeline. Each release card opens
 into a grid of its items with their in-game art, rarity and copy counts. You can filter
 by type (drops, grabs, Creature Store, events, giveaways, collabs), search across item and
 release names, and flip the order.
@@ -163,6 +163,29 @@ That reads a database URL from `COLLECTIONS_DATABASE_URL`, `DATABASE_PUBLIC_URL`
 straight in. Rerun it when new releases ship, then commit the regenerated JSON.
 `--skip-art` builds the JSON alone and touches no database, which leaves every item
 showing a placeholder. `--refresh-art` re-encodes and reloads everything.
+
+**A release the workbook has never heard of** — anything that shipped after the last hand
+export — goes in `EXTRA_RELEASES` as a `catalogue_items()` block, straight off the item
+catalogue: `(disp_id, name, category, rarity[, window])`. The window is `[x0, y0, x1, y1,
+W, H]` and the client reads it as fractions of the frame `W x H`, so it must be measured
+against **that item's own render**, whatever size it arrives at — the asset portal trims
+each render to its item, and a face item comes back on a whole mannequin about 276x783
+where the archive's 600x800 `HEAD_WINDOW` fractions would cut through the face.
+
+**When an item has no picture at all**, the CDN says so by answering HTTP 200 with one
+shared bare mannequin (`BLANK_RENDER`). That is worse than a 404: it looks like a picture,
+and two such items then quietly share one, below the three-or-more check that catches this
+in bulk. The build hashes every render against it, treats a match as no picture, names the
+items in its output, and drops them from the strip on the collapsed card — which is chosen
+before any picture is fetched, on the assumption that a worn slot always has a render.
+
+The picture of last resort is then the archetype's own **`thumbnail_url` / `image_url`**, a
+CloudFront webp the artist uploaded by hand. The catalogue's list call doesn't return either
+field; the full record does. Save the 800px one into `tools/item-art/<disp_id>.webp` and it
+wins over everything. Ghost Town's two Haunted Caps are the worked example — and since the
+full record also carries `release_date`, that release is dated exactly rather than from its
+median asset time. Check that date before trusting it: this catalogue's `release_date` is
+sometimes a century out.
 
 **Rows the archive leaves out.** Two separate filters.
 
