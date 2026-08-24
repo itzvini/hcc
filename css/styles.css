@@ -128,16 +128,11 @@ strong { font-weight: 700; color: var(--hr-fg-0); }
 a { color: var(--hr-primary); text-decoration: none; font-weight: 700; }
 a:hover { color: var(--hr-primary-press); }
 
-/* ---------- BACKGROUND ACCENTS (solid fills only — no gradients) ---------- */
-.blob {
-  position: fixed; border-radius: 50%;
-  pointer-events: none; z-index: -1;
-  animation: float 9s ease-in-out infinite;
-}
-.blob.b1 { width: 260px; height: 260px; background: var(--hr-primary-25);  top: 6%;  left: -90px;  animation-delay: 0s;   }
-.blob.b2 { width: 200px; height: 200px; background: var(--hr-secondary-25); top: 42%; right: -70px; animation-delay: 1.5s; }
-.blob.b3 { width: 160px; height: 160px; background: var(--hr-alert-15);     top: 74%; left: 2%;     animation-delay: 3s;   }
-@keyframes float { 0%,100%{transform:translateY(0) rotate(-3deg)} 50%{transform:translateY(-24px) rotate(3deg)} }
+/* The page background is flat. Three fixed pastel discs used to drift behind the
+   content (.blob b1/b2/b3 plus a `float` keyframe); they read as flat cut-out circles
+   rather than ambient light, and were the one animation on the site that no
+   prefers-reduced-motion rule ever switched off. Removed. Depth comes from the
+   surfaces that own it: card glows, tier accents, and the footer aurora. */
 
 /* ---------- TYPOGRAPHY ---------- */
 .eyebrow {
@@ -359,7 +354,15 @@ h1 .pop { color: var(--hr-primary); }
 }
 
 /* ---------- MOBILE NAV (hamburger + drop-down sheet) ---------- */
-@media (max-width: 880px) {
+/* 1060px, not 880: the desktop nav is one row of eight pills plus the language
+   picker, and at its widest translation (German) that row needs 1055px of viewport.
+   At the old 880px threshold every width from 881px to 1055px — iPad in landscape, a
+   half-screen laptop window — drew the wide row and let it run off the right edge,
+   putting the language picker off-screen with nothing to scroll. The
+   compact bar now takes over before the wide row stops fitting.
+   This number is shared with the mobile layer at the end of the file: change it in
+   both places or neither. */
+@media (max-width: 1150px) {
   .page-tabs { padding: 8px 0; }
   .nav-bar { gap: 10px; }
 
@@ -8261,4 +8264,325 @@ span.hp-statchip-ico { font-size: 17px; line-height: 22px; text-align: center; c
   .hp-skel .hp-tile-media { animation: none; }
   .trade-hp-dot { animation: none; }
   .trade-hp-card, .trade-hp-wdrawer { animation: none; }
+}
+
+/* ==========================================================================
+   MOBILE UX LAYER
+   Everything below only applies at phone/small-tablet widths. It sits last in
+   the sheet on purpose: these rules correct the mobile rendering of components
+   designed desktop-first, and being last means they win ties on source order
+   without needing !important.
+
+   What it fixes, in order:
+     1. The nav becomes a real fixed app bar, so there is always a way out.
+     2. The hero masthead stops repeating on every page.
+     3. Form fields hit 16px, so iOS stops zooming the page on every tap.
+     4. Tap targets reach 44px.
+     5. Control rows lay out flush instead of ragged.
+     6. The menu sheet gets a scrim and a scroll lock.
+   ========================================================================== */
+
+/* ---------- 1. FIXED APP BAR ---------- */
+/* The bar was sticky, and it sits below the hero in the document, so on a phone
+   the first screen of every page had no navigation on it at all — you had to
+   scroll past a slime parade to find the menu. Fixed pins it from first paint. */
+@media (max-width: 1150px) {
+  :root {
+    /* 44px toggle + 8px padding top and bottom + 1px border. Everything that has
+       to clear the bar derives from this one number. */
+    --hr-bar-h: 61px;
+    --hr-bar-total: calc(var(--hr-bar-h) + env(safe-area-inset-top, 0px));
+  }
+
+  body { padding-top: var(--hr-bar-total); }
+  /* Tab switches and in-page jumps used to park headings under the bar. */
+  html { scroll-padding-top: calc(var(--hr-bar-total) + 12px); }
+
+  .page-tabs {
+    position: fixed; top: 0; left: 0; right: 0;
+    padding-top: calc(8px + env(safe-area-inset-top, 0px));
+    /* A fixed bar is always over content, so it is always frosted — the .is-stuck
+       sentinel only ever mattered for the sticky version. 0.85 let bright mint
+       headings read straight through the bar as they passed under it, which looked
+       like a rendering fault; 0.96 plus a stronger blur makes it a solid layer. */
+    background-color: rgba(20, 19, 23, 0.96);
+    backdrop-filter: blur(24px) saturate(1.2);
+    -webkit-backdrop-filter: blur(24px) saturate(1.2);
+    border-bottom-color: var(--hr-line);
+    box-shadow: 0 8px 24px -14px rgba(0, 0, 0, 0.9);
+  }
+  /* Same treatment whether or not the sentinel has fired. */
+  .page-tabs.is-stuck { background-color: rgba(20, 19, 23, 0.96); }
+
+  /* The section name is the bar title, so give it title weight. */
+  .nav-current { font-size: 17px; font-weight: 900; letter-spacing: var(--hr-tracking-tight); }
+
+  /* Keep the end of a long page clear of the iPhone home indicator. */
+  .site-footer { padding-bottom: calc(44px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* ---------- 2. ONE HERO, ON ITS OWN PAGE ---------- */
+/* header is site chrome that lives above the nav, so it drew on every tab. On a
+   desktop that reads as a masthead; on a phone it meant the Marketplace, the
+   Roadmap and the Data page all opened on "Creatures + LAND get a voice." with
+   their real content below the fold. Keep it on The Club, drop it elsewhere — the
+   app bar already names the section. app.js sets body[data-tab]. */
+@media (max-width: 1150px) {
+  body[data-tab]:not([data-tab="club"]) > header { display: none; }
+
+  /* On The Club it stays, tightened up — the bar already holds the top. */
+  body > header { padding: 26px 0 30px; }
+  header h1 { font-size: clamp(2rem, 10.5vw, 3.2rem); }
+  header .kicker { margin-bottom: 16px; }
+  .mascot-row { margin-top: 26px; }
+}
+
+/* ---------- 3. 16px FORM FIELDS ---------- */
+/* iOS Safari zooms the whole page in when you focus a field whose text is under
+   16px, and every field on this site was 11 to 15px. Tapping the price filter or
+   the search box yanked the layout around and left you pinched in — the loudest
+   "this is broken" signal on the phone.
+   The :not() chain is there for specificity: it out-ranks the component rules
+   that set size through the `font:` shorthand, so no !important is needed. Only
+   the size is overridden; family, weight and colour still come from the
+   component. */
+@media (max-width: 1150px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]),
+  select:not([multiple]):not([size]),
+  textarea:not([hidden]):not([aria-hidden="true"]) {
+    font-size: 16px;
+  }
+
+  /* Checkboxes were 13px squares. Give them a real box and the brand tick. */
+  input[type="checkbox"]:not([hidden]), input[type="radio"]:not([hidden]) {
+    width: 20px; height: 20px; accent-color: var(--hr-primary);
+  }
+}
+
+/* ---------- 4. 44px TAP TARGETS ---------- */
+/* Measured on an iPhone 12: segmented buttons came out 23px tall, language pills
+   31px, category chips 33px, footer links 18px. All of them are things people are
+   meant to hit with a thumb. */
+@media (max-width: 1150px) {
+  /* Segmented controls — the chart metric/interval/range rows, the collection
+     switches, the marketplace tabs. 11px type on a control is unreadable too. */
+  .seg-btn { min-height: 42px; padding: 0 14px; font-size: 13px; }
+  .seg { padding: 4px; }
+
+  /* Language pills in the menu sheet */
+  .lang-btn { min-height: 44px; padding: 0 16px; font-size: 14px; }
+
+  /* Collections and Traits: category chips, sort, search, "show more" */
+  .col-chip { min-height: 46px; padding: 0 14px; font-size: 13.5px; }
+  .col-chip-ico { font-size: 15px; }
+  .col-sort, .ctr-sort { min-height: 46px; }
+  .col-search-in { min-height: 46px; padding-top: 0; padding-bottom: 0; }
+  .col-more { min-height: 46px; }
+
+  /* Perks quantity stepper */
+  .perx-stepbtn { min-width: 44px; min-height: 44px; }
+  .perx-count { min-height: 44px; }
+
+  /* Footer: the link columns were 18px rows stacked 9px apart, which is a coin
+     toss under a thumb. Give every row a full 44px band. */
+  .footer-social-btn { min-height: 46px; }
+  .footer-col ul { gap: 2px; }
+  .footer-col a { min-height: 44px; align-items: center; font-size: 15px; }
+  .footer-legal { gap: 8px; }
+  .footer-legal a { min-height: 44px; display: inline-flex; align-items: center; padding-right: 12px; }
+
+  /* Small round info buttons ("what is this?") were 16px. Keep the dot the size
+     it is and grow the hit area around it, so nothing shifts visually. */
+  .trade-tip-btn { position: relative; }
+  .trade-tip-btn::before {
+    content: ""; position: absolute; top: 50%; left: 50%;
+    width: 44px; height: 44px; transform: translate(-50%, -50%);
+  }
+
+  /* Native date fields: 11px text in a 27px box, with the browser dd/mm/yyyy
+     chrome showing through. Sized up they read as part of the design. */
+  .date-field { flex: 1 1 100%; }
+  .date-field input[type="date"] {
+    min-height: 46px; width: 100%; padding: 0 12px;
+    border-radius: var(--hr-radius-md);
+  }
+  .date-field > span { font-size: 10.5px; flex: none; }
+  .seg-select { min-height: 46px; padding: 0 34px 0 14px; }
+}
+
+/* ---------- 5. FLUSH CONTROL ROWS ---------- */
+@media (max-width: 1150px) {
+  /* Chart controls: three separate pill tracks of different natural widths, left
+     aligned, wrapping where they ran out — the rows never lined up with each
+     other. Full-width tracks make each row edge to edge, and the buttons already
+     grow to share it, so every row comes out flush. */
+  .market-controls > .seg,
+  .market-controls > .seg-select,
+  .market-controls > .market-dates { width: 100%; }
+  .market-controls > .seg { justify-content: stretch; }
+  .market-controls { gap: 10px; }
+
+  /* Category chips wrapped into a ragged five-row staircase. A two-column grid
+     makes them even, and pushing the count to the right edge turns each chip into
+     a readable row: icon, name, how many. The odd one out spans the full width.
+     (A horizontal rail would be shorter, but these views rebuild their chips on
+     every tap, which would throw the rail back to the start each time.) */
+  .col-chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .col-chip { justify-content: flex-start; }
+  .col-chip-n { margin-left: auto; }
+  .col-chips > .col-chip:last-child:nth-child(odd) { grid-column: 1 / -1; }
+
+  /* Search gets its own full-width row; sort and the rest follow underneath. */
+  .col-search { flex: 1 1 100%; }
+}
+
+/* ---------- 6. MENU SHEET: SCRIM + SCROLL LOCK ---------- */
+/* The sheet floated with the page showing through underneath it, so it read as an
+   unfinished box rather than a layer. The scrim sits between the page and the bar
+   (the bar is z-40 and the sheet rides inside it), and a tap anywhere on it
+   closes the menu — app.js already closes on any click outside .nav-bar. */
+.nav-scrim { display: none; }
+@media (max-width: 1150px) {
+  .nav-scrim {
+    display: block; position: fixed; inset: 0; z-index: 35;
+    background: rgba(6, 6, 9, 0.6);
+    backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity .18s ease, visibility .18s;
+  }
+  body.nav-open .nav-scrim { opacity: 1; visibility: visible; pointer-events: auto; }
+  /* Stop the page scrolling behind an open sheet. */
+  body.nav-open { overflow: hidden; }
+
+  /* Give the rows in the sheet room to breathe now that they are the main way
+     around the site on a phone. */
+  .nav-menu { padding: 12px; }
+  .nav-link, .nav-trigger { min-height: 50px; font-size: 15px; }
+  .nav-dropdown .nav-link { min-height: 48px; }
+  .lang-switcher { margin-top: 10px; padding-top: 14px; }
+  .lang-menu { gap: 8px; }
+}
+
+/* ---------- 7. NO ORPHANED TILES ---------- */
+/* Stat bands go two-up on a phone, so an odd count left the last tile half-width
+   with dead space beside it. Let a lone last tile take the whole row. */
+@media (max-width: 860px) {
+  .col-stats > *:last-child:nth-child(odd),
+  .hold-stats > *:last-child:nth-child(odd),
+  .market-stats > *:last-child:nth-child(odd),
+  .facts > *:last-child:nth-child(odd),
+  .dist-grid > *:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+
+/* ---------- 8. A LITTLE MORE WIDTH ---------- */
+/* 22px of gutter each side costs 44px of the 375px a small phone has. */
+@media (max-width: 420px) {
+  .wrap { padding: 0 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-scrim { transition: none; }
+}
+
+/* ---------- 9. `hidden` ACTUALLY HIDES ---------- */
+/* The `hidden` attribute hides through the UA sheet, which any author `display:`
+   rule beats. The file already patches this one component at a time
+   (.tab-panel[hidden], .wt-panel[hidden], .trade-modal[hidden] …) and #market-total
+   was missed: it is display:flex with a border and padding, so hiding it left an
+   empty bordered strip under the chart on every non-summable metric. One rule
+   closes the whole class of bug instead of waiting for the next one.
+   The `:not([hidden])` idiom used elsewhere in the sheet is unaffected. */
+[hidden] { display: none !important; }
+
+/* ---------- 10. TAP TARGETS THAT OUTRANK THE BASE RULE ---------- */
+/* Components that set their own smaller min-height on .seg-btn win on specificity,
+   so each needs naming. Same 44px floor as section 4. */
+@media (max-width: 1150px) {
+  .trade-command-top .trade-coll-switch .seg-btn,
+  .gm-card .wt-mkt-toggle .seg-btn,
+  :is(.seg, .trade-tabs, .trade-coll-switch, .trade-cur-seg, .trade-offer-cur,
+      .trade-xfer-seg, .wt-mkt-toggle, .trade-flt-scope) .seg-btn {
+    min-height: 44px;
+  }
+
+  .trade-safety-pill,
+  .trade-mm-btn,
+  .apply-btn-ghost,
+  .perx-cta,
+  .perx-chip,
+  .trade-flt-toggle,
+  summary.rm-phase-head { min-height: 46px; }
+  .perx-chip { align-items: center; }
+
+  /* Checkboxes sit next to their own label, which is the real target, but give the
+     box itself a bit more edge. */
+  input[type="checkbox"]:not([hidden]), input[type="radio"]:not([hidden]) {
+    width: 22px; height: 22px;
+  }
+
+  /* Footer rows fill their column, so the whole line is tappable rather than just
+     the few characters of the word. */
+  .footer-col a { width: 100%; }
+}
+
+/* ---------- 11. MARKETPLACE TOOLBAR ---------- */
+/* Search, sort and Filters shared one wrapped row: the search box ended up 233px,
+   the sort select 115px, and "Price: low to high" was clipped mid-word inside it.
+   Search takes its own row; sort and Filters share the next one with sort growing
+   into whatever is left. */
+@media (max-width: 1150px) {
+  .trade-toolbar { gap: 8px; }
+  .trade-toolbar > .seg { width: 100%; }
+  .trade-flt-search { flex: 1 1 100%; min-width: 0; }
+  .trade-flt-sort { flex: 1 1 auto; min-width: 0; }
+  .trade-toolbar > .apply-btn-ghost { flex: 0 0 auto; margin-top: 0; }
+}
+
+/* ---------- 12. A CLOSED SHEET MUST BE INERT ---------- */
+/* The closed sheet sets visibility:hidden and pointer-events:none on itself, but the
+   mobile accordion rule re-enables both on every .nav-dropdown inside it (it has to,
+   because on mobile those are collapsed by max-height rather than hidden), and the
+   language row then takes `max-height: none` so it keeps its full height. The result
+   was a 364x96 block of live, invisible language buttons parked over the middle of
+   every page: on the Marketplace, a tap at (108, 494) — where the page draws its
+   browse actions — silently switched the whole site to Portuguese. The collapsed
+   accordions were live 4px strips for the same reason.
+   Nothing inside a closed sheet may be visible or take a tap. The universal selector
+   is deliberate: the bug was a descendant re-enabling itself, so anything added to
+   the sheet later is covered too. Scoped to the mobile layout, because on desktop the
+   menu is an inline row that never carries .is-open. */
+@media (max-width: 1150px) {
+  .nav-menu:not(.is-open) * { visibility: hidden; pointer-events: none; }
+}
+
+/* ---------- 13. LANGUAGE ROW: ONE LINE ---------- */
+/* Seven pills wrapped to a second row, and the taller rows above pushed that row
+   past the bottom of the sheet, so it ended cut in half. A seven-column grid puts
+   every language on one line and gives each a 44px-tall square-ish key. */
+@media (max-width: 1150px) {
+  .lang-menu {
+    display: grid !important;              /* beats the base .lang-menu flex !important */
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .lang-btn { padding: 0 4px; justify-content: center; font-size: 13px; }
+  .lang-btn b { min-width: 0; }
+}
+
+/* ---------- 14. NO HALF-EMPTY ACTION ROW ---------- */
+/* The browse actions were forced to width:100% and then right-aligned, so the
+   currency select and Refresh sat in the far corner of their own line with 181px of
+   nothing beside them. Sized to their content they fit on the heading's line
+   instead. If a longer translation pushes them down they still right-align, exactly
+   as before. */
+@media (max-width: 1150px) {
+  .trade-results-head { align-items: center; }
+  .trade-browse-actions { width: auto; flex: 1 1 auto; justify-content: flex-end; }
+}
+
+/* A label that needs two lines (Creature Store in English, and more of them in the
+   longer languages) still has to sit comfortably inside the uniform 46px chip. */
+@media (max-width: 1150px) {
+  .col-chip { padding: 0 11px; gap: 6px; line-height: 1.15; }
+  .col-chip-n { padding: 2px 5px; }
 }

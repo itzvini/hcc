@@ -33,10 +33,6 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 </head>
 <body>
 
-<div class="blob b1"></div>
-<div class="blob b2"></div>
-<div class="blob b3"></div>
-
 <header>
   <div class="wrap">
     <span class="kicker" data-i18n="hero.kicker">Highrise Creature Club</span>
@@ -135,6 +131,12 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
     </div>
   </div>
 </nav>
+
+<!-- Dims the page behind the mobile menu sheet so the sheet reads as a layer, not a
+     floating box with content showing through it. Hidden on desktop, where the menu is
+     an inline row. A tap on it closes the menu (the document handler in app.js catches
+     anything outside .nav-bar). -->
+<div class="nav-scrim" id="nav-scrim" aria-hidden="true"></div>
 
 <main id="panel-club" class="tab-panel is-active" role="region" aria-labelledby="tab-club">
 

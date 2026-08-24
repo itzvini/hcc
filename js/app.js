@@ -122,10 +122,14 @@ function pinTabBar() {
   root.style.scrollBehavior = '';
 }
 
-// Mobile menu open/close (the whole menu sheet drops from under the bar)
+// Mobile menu open/close (the whole menu sheet drops from under the bar).
+// `body.nav-open` drives two things the sheet can't do alone: the scrim that dims the
+// page behind it, and a scroll lock so a swipe on the sheet doesn't scroll the page
+// underneath it. Both are scoped to the mobile layout in CSS.
 function setDrawer(open) {
   if (open) pinTabBar();
   navMenu.classList.toggle('is-open', open);
+  document.body.classList.toggle('nav-open', open);
   navToggle.setAttribute('aria-expanded', String(open));
   if (!open) closeGroups();
 }
@@ -180,6 +184,12 @@ if (pageTabs && 'IntersectionObserver' in window) {
 }
 
 function selectTab(name, updateUrl = true) {
+  // Which page is open, published to CSS. The hero masthead above the nav is site
+  // chrome, not part of any page: on a phone it ate the whole first screen of every
+  // tab, so you landed on the Marketplace looking at a slime parade with the real
+  // content below the fold. CSS keeps the hero on The Club and drops it everywhere
+  // else at mobile widths, where the app bar already names the section.
+  document.body.dataset.tab = name;
   tabButtons.forEach(btn => {
     const active = btn.dataset.tab === name;
     btn.classList.toggle('is-active', active);
