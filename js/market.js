@@ -1,6 +1,15 @@
-import { t } from './i18n.js';
+import { t, getCurrentLang } from './i18n.js';
 
 const FONT = "'Museo Sans Rounded', sans-serif";
+
+// Same helper as holders.js — translated strings go into innerHTML below.
+const esc = s => String(s).replace(/[&<>"']/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// Phone-width chart tuning. Matches the mobile layout breakpoint in styles.css —
+// change one and change the other. Read at chart-build time, so a rotate or a resize
+// picks up the new value on the next render().
+const isNarrow = () => window.matchMedia('(max-width: 1150px)').matches;
 const RANGE_DAYS = { '1m': 30, '3m': 90, '6m': 180, '1y': 365, 'all': Infinity };
 const DAY = 86400000;
 const SUM_METRICS = new Set(['count', 'volume']); // totalled per interval, not averaged
@@ -200,7 +209,18 @@ function renderChart() {
         x: {
           grid: { display: false },
           border: { display: false },
-          ticks: { font: { family: FONT, size: 10, weight: '700' }, color: '#7D7C88', maxTicksLimit: 8, autoSkip: true },
+          // Eight date labels do not fit across a phone, so Chart.js tilted them to ~50°
+          // and they came out as an unreadable cascade — worse in the languages that spell
+          // the month out ("19 de ago."). Four flat labels beat eight tilted ones; the
+          // tooltip carries the exact date for any point anyway.
+          ticks: {
+            font: { family: FONT, size: isNarrow() ? 10.5 : 10, weight: '700' },
+            color: '#7D7C88',
+            maxTicksLimit: isNarrow() ? 4 : 8,
+            autoSkip: true,
+            maxRotation: isNarrow() ? 0 : 50,
+            autoSkipPadding: isNarrow() ? 12 : 3,
+          },
         },
         y: {
           grid: { color: 'rgba(255,255,255,0.08)' },
@@ -317,10 +337,27 @@ function updateCurrencyOptions() {
 function renderStats() {
   const c = lastData.creatures || {};
   const l = lastData.land || null;
+  const lang = getCurrentLang();
   document.getElementById('stat-creature-floor').textContent = fmtPrice(inCurrency(c.floor, c.floorUsd));
   document.getElementById('stat-land-floor').textContent     = fmtPrice(l ? inCurrency(l.floor, l.floorUsd) : null);
-  document.getElementById('stat-creature-sales').textContent = (c.sales30d ?? 0).toLocaleString();
-  document.getElementById('stat-land-sales').textContent     = l && l.sales30d != null ? l.sales30d.toLocaleString() : '—';
+  // Grouping separators follow the language the reader chose, not their browser's —
+  // otherwise an English page on a Brazilian phone prints "5.360" for 5,360.
+  document.getElementById('stat-creature-sales').textContent = (c.sales30d ?? 0).toLocaleString(lang);
+  document.getElementById('stat-land-sales').textContent     = l && l.sales30d != null ? l.sales30d.toLocaleString(lang) : '—';
+}
+
+// "Data as of <date>", the same line and the same key the Holders sub-tab uses.
+// This has to run from render(), not once from the fetch: a deep link to /market
+// starts the fetch before initI18n() resolves, and a t() call that early gets the
+// raw key back. render() is what a language switch re-runs, so the line is built
+// with whatever dictionary is loaded now and rebuilt when a new one arrives.
+function renderUpdated() {
+  const el = document.getElementById('market-updated');
+  if (!el || !lastData) return;
+  const d = new Date(lastData.lastFetched);
+  const dateStr = d.toLocaleString(getCurrentLang(), { dateStyle: 'medium', timeStyle: 'short' });
+  el.innerHTML = `${esc(t('holders.asOf').replace('{date}', dateStr))}` +
+    `${lastData.stale ? ` <span class="stale-badge">${esc(t('stale.badge'))}</span>` : ''}`;
 }
 
 function render() {
@@ -328,6 +365,7 @@ function render() {
   fxRates = lastData.fxRates || { usd: 1 };
   updateCurrencyOptions();
   renderStats();
+  renderUpdated();
   const cHist = ((lastData.creatures || {}).history || []).filter(Boolean);
   const lHist = (((lastData.land || {}).history) || []).filter(Boolean);
   const hasChart = cHist.length > 0 || lHist.length > 0;
@@ -404,11 +442,6 @@ export async function loadMarketChart() {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     lastData = data;
-
-    const d = new Date(data.lastFetched);
-    const dateStr = d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-    document.getElementById('market-updated').innerHTML =
-      `Data as of ${dateStr}${data.stale ? ` <span class="stale-badge">${t('stale.badge')}</span>` : ''}`;
 
     loadingEl.hidden = true;
     contentEl.hidden = false;

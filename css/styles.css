@@ -8400,8 +8400,8 @@ span.hp-statchip-ico { font-size: 17px; line-height: 22px; text-align: center; c
   }
 
   /* Native date fields: 11px text in a 27px box, with the browser dd/mm/yyyy
-     chrome showing through. Sized up they read as part of the design. */
-  .date-field { flex: 1 1 100%; }
+     chrome showing through. Sized up they read as part of the design.
+     (The Data page lays the From/To pair out — see the DATA PAGE section below.) */
   .date-field input[type="date"] {
     min-height: 46px; width: 100%; padding: 0 12px;
     border-radius: var(--hr-radius-md);
@@ -8586,3 +8586,66 @@ span.hp-statchip-ico { font-size: 17px; line-height: 22px; text-align: center; c
   .col-chip { padding: 0 11px; gap: 6px; line-height: 1.15; }
   .col-chip-n { padding: 2px 5px; }
 }
+
+/* ==========================================================================
+   DATA PAGE (mobile)
+   The chart controls are five pill-shaped tracks laid out in a row on desktop.
+   Stacked on a phone they each go full-width, and two of them wrap to a second
+   line — at which point a 9999px radius stops reading as a pill and starts
+   reading as a lozenge blob with the buttons rattling around inside it. The
+   From/To pair made it worse: two stacked inputs with square-ish corners inside
+   a stadium-shaped container, so the input edges cut across the container curve.
+   ========================================================================== */
+@media (max-width: 1150px) {
+  /* A track that is as tall as it is round is not a pill. Rounded rectangles for
+     the containers, pills kept on the buttons inside them — the normal shape of a
+     segmented control, and it survives wrapping to two lines. */
+  .market-controls > .seg,
+  .market-controls > .seg-select,
+  .market-controls > .market-dates { border-radius: var(--hr-radius-lg); }
+
+  /* From and To side by side rather than stacked, each with its label above it.
+     Stacked they cost 105px and put the label in a narrow gutter beside the input;
+     paired they cost 70px and each field gets the full column for the native
+     dd/mm/yyyy control. Two columns still fit the smallest phone: at 375px each
+     field is ~148px against the ~132px the native control needs. */
+  .market-dates { padding: 8px; gap: 8px; align-items: stretch; }
+  .market-dates .date-field {
+    flex: 1 1 0; min-width: 0;
+    flex-direction: column; align-items: stretch; gap: 5px;
+  }
+  .market-dates .date-field > span {
+    font: 800 10px/1 var(--hr-sans);
+    letter-spacing: var(--hr-tracking-caps); text-transform: uppercase;
+    color: var(--hr-fg-3);
+  }
+
+  /* The chart is the point of the page and had 280px against 447px of controls
+     above it. Give it back some height. */
+  .market-chart-box { height: 340px; }
+}
+
+/* The native date control will not render "dd/mm/yyyy" plus its calendar button in
+   under ~145px — it silently truncates its own text instead of overflowing, so it
+   reads as "dd/mm/yyy". Two columns clear that only from a 390px viewport up. Below
+   it the pair stacks, and the label goes back beside the input rather than above it,
+   so stacking costs no extra height. */
+@media (max-width: 389px) {
+  .market-dates .date-field {
+    flex: 1 1 100%;
+    flex-direction: row; align-items: center; gap: 10px;
+  }
+  /* A fixed label column so From and To start their inputs at the same x. In em so
+     it follows the label type, and wide enough for the longest translation. */
+  .market-dates .date-field > span { flex: 0 0 auto; min-width: 4.5em; }
+}
+
+/* The stat band is four tiles; two-up on a phone is right, but the labels
+   ("Creature sales · 30d") wrap to two lines in most languages while the shorter
+   ones don't, leaving tiles of different heights in the same row. */
+@media (max-width: 1150px) {
+  .facts { align-items: stretch; }
+  .facts > .fact { display: flex; flex-direction: column; justify-content: center; }
+}
+
+
