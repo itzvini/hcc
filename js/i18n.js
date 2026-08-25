@@ -32,6 +32,13 @@ function applyTranslations() {
   document.querySelectorAll('[data-i18n-alt]').forEach(el => {
     el.setAttribute('alt', t(el.dataset.i18nAlt));
   });
+  // Plain numbers group differently per language (11,111 vs 11.111). The count-up in
+  // app.js formats while it animates; this catches the settled value on load, on every
+  // language switch, and under reduced motion, where nothing animates at all.
+  document.querySelectorAll('[data-countup]').forEach(el => {
+    const n = Number(el.dataset.countup);
+    if (Number.isFinite(n)) el.textContent = n.toLocaleString(currentLang);
+  });
 }
 
 export async function setLanguage(lang) {

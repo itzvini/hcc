@@ -36,7 +36,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 <header>
   <div class="wrap">
     <span class="kicker" data-i18n="hero.kicker">Highrise Creature Club</span>
-    <h1><span data-i18n="hero.h1">Creatures + LAND get a </span><span class="pop" data-i18n="hero.pop">voice.</span></h1>
+    <h1><span data-i18n="hero.h1">Creatures + LAND, one </span><span class="pop" data-i18n="hero.pop">club.</span></h1>
     <div class="mascot-row">
       <div class="pet-wrap"><img src="/assets/pets/bluluvey-composite.svg" alt="Bluluvey pet" data-i18n-alt="a11y.pet.bluluvey"></div>
       <div class="pet-wrap"><img src="/assets/pets/snoozlepuff-composite.svg" alt="Snoozlepuff pet" data-i18n-alt="a11y.pet.snoozlepuff"></div>
@@ -140,7 +140,84 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 
 <main id="panel-club" class="tab-panel is-active" role="region" aria-labelledby="tab-club">
 
+<!-- Intro — the club introduces itself first; the wayfinding hub comes after. -->
 <section class="wrap" id="club-top">
+  <div class="intro-hero g2-reveal">
+    <div class="apply-aurora" aria-hidden="true"></div>
+    <div class="apply-sparkles" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <img class="intro-float intro-float-coin" src="/assets/creature-coin.png" alt="" width="104" height="104" loading="lazy">
+    <img class="intro-float intro-float-nft" src="/assets/nft.png" alt="" width="76" height="76" loading="lazy">
+    <span class="apply-pill" data-i18n="intro.pill">Welcome to the club</span>
+    <h2 class="intro-h" data-i18n="intro.h2">Hold either one, and you're in</h2>
+    <p class="intro-lead" data-i18n="intro.lead">Highrise's 11,111 creature avatars and its LAND parcels sit in the same family. Own any one of them and you're a member: Creature Coins every day, wearable looks, exclusive drops and members-only spaces built into Highrise.</p>
+    <div class="intro-stats">
+      <div class="intro-stat" style="--accent:var(--hr-primary)">
+        <b><span data-countup="11111">11,111</span></b>
+        <span data-i18n="intro.stat1">Creatures, no two the same</span>
+      </div>
+      <div class="intro-stat" style="--accent:var(--hr-secondary)">
+        <b><span data-countup="2">2</span></b>
+        <span data-i18n="intro.stat2">ways in: a Creature or a LAND plot</span>
+      </div>
+      <div class="intro-stat" style="--accent:var(--hr-banana)">
+        <b>0%</b>
+        <span data-i18n="intro.stat3">fee on the club's own marketplace</span>
+      </div>
+    </div>
+    <div class="intro-ctas">
+      <a class="intro-cta" href="#club-hub" data-i18n="intro.cta1">Find your way around</a>
+      <button class="intro-cta is-quiet" type="button" data-goto="perks" data-i18n="intro.cta2">See what holding gets you</button>
+    </div>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="eyebrow" data-i18n="s1.eyebrow">Start here</div>
+  <h2 data-i18n="s1.h2">So… what is the Creature Club?</h2>
+  <p class="lead" data-i18n-html="s1.lead">The Highrise Creature Club is built from two collectible NFT concepts: <strong>11,111 one-of-a-kind creature avatars</strong> and the <strong>Highrise LAND NFTs</strong> we brought into the same club. Hold either one and you're a member, with perks built into Highrise.</p>
+
+  <div class="info-grid">
+    <article class="info-card g2-reveal" style="--accent:#FF5B95;--accent-soft:rgba(255,91,149,0.16);--d:.04s">
+      <span class="topic-ico" style="--accent:#FF5B95;--accent-soft:rgba(255,91,149,0.2)"><img src="/assets/nft.png" alt="" loading="lazy" width="84" height="84"></span>
+      <span class="info-q" data-i18n="s1.nft.q">The basics</span>
+      <h3 data-i18n="s1.nft.h">So, what's an NFT?</h3>
+      <p data-i18n="s1.nft.p">Think of an NFT as a one-of-a-kind digital collectible that's genuinely yours, recorded on the blockchain, not just sitting inside an app. Your Creature is yours to keep, wear, sell, or gift, and no one can copy or take it.</p>
+    </article>
+
+    <article class="info-card g2-reveal" style="--accent:#51FFA5;--accent-soft:rgba(81,255,165,0.16);--d:.12s">
+      <span class="topic-ico" style="--accent:#51FFA5;--accent-soft:rgba(81,255,165,0.2)"><img src="/assets/creature-logo.png" alt="" loading="lazy" width="84" height="84"></span>
+      <span class="info-q" data-i18n="s1.cc.q">The club</span>
+      <h3 data-i18n="s1.cc.h">What's the Creature Club?</h3>
+      <p data-i18n="s1.cc.p">It's 11,111 unique creature avatars, plus the Highrise LAND parcels folded into the same family. Members unlock wearable looks, daily Creature Coins, exclusive drops, and members-only spaces built into Highrise.</p>
+      <p class="info-note" data-i18n-html="s1.cc.note"><strong>Gen 2 is on the way:</strong> every LAND will receive its own Creature, and every Gen 1 Creature its own pet, so Creatures and LAND end up equal in perks.</p>
+    </article>
+
+    <article class="info-card g2-reveal" style="--accent:#8561FF;--accent-soft:rgba(133,97,255,0.16);--d:.2s">
+      <span class="topic-ico" style="--accent:#8561FF;--accent-soft:rgba(133,97,255,0.2)"><img src="/assets/membership.png" alt="" loading="lazy" width="84" height="84"></span>
+      <span class="info-q" data-i18n="s1.join.q">Membership</span>
+      <h3 data-i18n="s1.join.h">How do I become a member?</h3>
+      <p data-i18n="s1.join.p">Just own a Creature or a LAND NFT. That's the whole requirement. Either one grants full Creature Club status: daily Creature Coins, exclusive drops, and the private community spaces.</p>
+      <p class="info-note" data-i18n-html="s1.join.note"><strong>Your Discord role is automatic.</strong> Once your NFT sits in a wallet linked to your Highrise account, your roles update on their own, usually within an hour. Nothing to claim on your side.</p>
+    </article>
+  </div>
+
+  <div class="eyebrow" style="margin-top:36px" data-i18n="s1.perks.eyebrow">At a glance</div>
+  <div class="perks" style="margin-top:14px">
+    <div class="perk"><span class="ico">👗</span><h4 data-i18n="s1.p1h">Wear the look</h4><p data-i18n="s1.p1p">Every item on your creature is yours to wear inside Highrise.</p></div>
+    <div class="perk"><span class="ico"><img src="/img/ui/coins.png" alt="" /></span><h4 data-i18n="s1.p2h">Creature Coins</h4><p data-i18n="s1.p2p">Earn coins daily to spin exclusive grabs only members can reach.</p></div>
+    <div class="perk"><span class="ico"><img src="/img/ui/gift.png" alt="" /></span><h4 data-i18n="s1.p3h">Drops &amp; airdrops</h4><p data-i18n="s1.p3p">Early and free access to fresh creature content as it ships.</p></div>
+    <div class="perk"><span class="ico">🚪</span><h4 data-i18n="s1.p4h">Members-only spaces</h4><p data-i18n="s1.p4p">An exclusive club room and a seat at the community table.</p></div>
+  </div>
+
+  <div style="margin-top:30px;padding-top:26px;border-top:1px solid var(--hr-line)">
+    <div class="eyebrow" data-i18n="land.eyebrow">The other way in</div>
+    <h3 style="font:700 17px/1.3 var(--hr-sans);color:var(--hr-fg-0);margin-bottom:10px">🗺️ <span data-i18n="land.h3">Highrise LAND NFTs</span></h3>
+    <p data-i18n-html="land.body">LAND NFTs are the club's collection of virtual parcels in the Highrise universe, in <strong>Standard</strong> and <strong>Premium</strong> tiers. Most LAND owners also have an adorable <strong>slime pet</strong> to go with their plot. LAND's original standalone plan changed, so we folded the project into the Creature Club family: owning LAND now makes you a member too.</p>
+    <p style="margin-top:10px;font-size:13px;color:var(--hr-fg-2)" data-i18n="land.perks.summary">LAND owners earn Creature Coins (Premium plots at 3×), get room capacity boosts, keep their slime pets, and take part in the same drops and giveaways as Creature holders.</p>
+  </div>
+</section>
+
+<section class="wrap" id="club-hub">
   <div class="eyebrow" data-i18n="hub.eyebrow">Find your way around</div>
   <h2 data-i18n="hub.h2">Where do you want to go?</h2>
   <div class="hub">
@@ -204,52 +281,6 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
       <span class="hub-d" data-i18n="hub.contribute.d">Help shape the site. It's open source on GitHub.</span>
       <span class="hub-arrow">→</span>
     </button>
-  </div>
-</section>
-
-<section class="wrap">
-  <div class="eyebrow" data-i18n="s1.eyebrow">Start here</div>
-  <h2 data-i18n="s1.h2">So… what is the Creature Club?</h2>
-  <p class="lead" data-i18n-html="s1.lead">The Highrise Creature Club is built from two collectible NFT concepts: <strong>11,111 one-of-a-kind creature avatars</strong> and the <strong>Highrise LAND NFTs</strong> we brought into the same club. Hold either one and you're a member, with perks built into Highrise.</p>
-
-  <div class="info-grid">
-    <article class="info-card g2-reveal" style="--accent:#FF5B95;--accent-soft:rgba(255,91,149,0.16);--d:.04s">
-      <span class="topic-ico" style="--accent:#FF5B95;--accent-soft:rgba(255,91,149,0.2)"><img src="/assets/nft.png" alt="" loading="lazy" width="84" height="84"></span>
-      <span class="info-q" data-i18n="s1.nft.q">The basics</span>
-      <h3 data-i18n="s1.nft.h">So, what's an NFT?</h3>
-      <p data-i18n="s1.nft.p">Think of an NFT as a one-of-a-kind digital collectible that's genuinely yours, recorded on the blockchain, not just sitting inside an app. Your Creature is yours to keep, wear, sell, or gift, and no one can copy or take it.</p>
-    </article>
-
-    <article class="info-card g2-reveal" style="--accent:#51FFA5;--accent-soft:rgba(81,255,165,0.16);--d:.12s">
-      <span class="topic-ico" style="--accent:#51FFA5;--accent-soft:rgba(81,255,165,0.2)"><img src="/assets/creature-logo.png" alt="" loading="lazy" width="84" height="84"></span>
-      <span class="info-q" data-i18n="s1.cc.q">The club</span>
-      <h3 data-i18n="s1.cc.h">What's the Creature Club?</h3>
-      <p data-i18n="s1.cc.p">It's 11,111 unique creature avatars, plus the Highrise LAND parcels folded into the same family. Members unlock wearable looks, daily Creature Coins, exclusive drops, and members-only spaces built into Highrise.</p>
-      <p class="info-note" data-i18n-html="s1.cc.note"><strong>Gen 2 is on the way:</strong> every LAND will receive its own Creature, and every Gen 1 Creature its own pet, so Creatures and LAND end up equal in perks.</p>
-    </article>
-
-    <article class="info-card g2-reveal" style="--accent:#8561FF;--accent-soft:rgba(133,97,255,0.16);--d:.2s">
-      <span class="topic-ico" style="--accent:#8561FF;--accent-soft:rgba(133,97,255,0.2)"><img src="/assets/membership.png" alt="" loading="lazy" width="84" height="84"></span>
-      <span class="info-q" data-i18n="s1.join.q">Membership</span>
-      <h3 data-i18n="s1.join.h">How do I become a member?</h3>
-      <p data-i18n="s1.join.p">Just own a Creature or a LAND NFT. That's the whole requirement. Either one grants full Creature Club status: daily Creature Coins, exclusive drops, and the private community spaces.</p>
-      <p class="info-note" data-i18n-html="s1.join.note"><strong>Your Discord role is automatic.</strong> Once your NFT sits in a wallet linked to your Highrise account, your roles update on their own, usually within an hour. Nothing to claim on your side.</p>
-    </article>
-  </div>
-
-  <div class="eyebrow" style="margin-top:36px" data-i18n="s1.perks.eyebrow">At a glance</div>
-  <div class="perks" style="margin-top:14px">
-    <div class="perk"><span class="ico">👗</span><h4 data-i18n="s1.p1h">Wear the look</h4><p data-i18n="s1.p1p">Every item on your creature is yours to wear inside Highrise.</p></div>
-    <div class="perk"><span class="ico"><img src="/img/ui/coins.png" alt="" /></span><h4 data-i18n="s1.p2h">Creature Coins</h4><p data-i18n="s1.p2p">Earn coins daily to spin exclusive grabs only members can reach.</p></div>
-    <div class="perk"><span class="ico"><img src="/img/ui/gift.png" alt="" /></span><h4 data-i18n="s1.p3h">Drops &amp; airdrops</h4><p data-i18n="s1.p3p">Early and free access to fresh creature content as it ships.</p></div>
-    <div class="perk"><span class="ico">🚪</span><h4 data-i18n="s1.p4h">Members-only spaces</h4><p data-i18n="s1.p4p">An exclusive club room and a seat at the community table.</p></div>
-  </div>
-
-  <div style="margin-top:30px;padding-top:26px;border-top:1px solid var(--hr-line)">
-    <div class="eyebrow" data-i18n="land.eyebrow">The other way in</div>
-    <h3 style="font:700 17px/1.3 var(--hr-sans);color:var(--hr-fg-0);margin-bottom:10px">🗺️ <span data-i18n="land.h3">Highrise LAND NFTs</span></h3>
-    <p data-i18n-html="land.body">LAND NFTs are the club's collection of virtual parcels in the Highrise universe, in <strong>Standard</strong> and <strong>Premium</strong> tiers. Most LAND owners also have an adorable <strong>slime pet</strong> to go with their plot. LAND's original standalone plan changed, so we folded the project into the Creature Club family: owning LAND now makes you a member too.</p>
-    <p style="margin-top:10px;font-size:13px;color:var(--hr-fg-2)" data-i18n="land.perks.summary">LAND owners earn Creature Coins (Premium plots at 3×), get room capacity boosts, keep their slime pets, and take part in the same drops and giveaways as Creature holders.</p>
   </div>
 </section>
 

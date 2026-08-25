@@ -545,7 +545,10 @@ function g2CountUp(el) {
   function frame(ts) {
     if (t0 === null) t0 = ts;
     const p = Math.min((ts - t0) / dur, 1);
-    el.textContent = String(Math.round(target * (1 - Math.pow(1 - p, 3))));
+    // Grouped, in the reader's language: the home intro counts to 11,111, and a bare
+    // "11111" reads as a serial number.
+    el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3)))
+      .toLocaleString(document.documentElement.lang || 'en');
     if (p < 1) requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
