@@ -81,14 +81,22 @@ const DIST_THRESHOLDS         = [1, 2, 5, 10]; // bucket breakpoints
 // one ERC-721 back, so those parcels leave the owner's wallet — on-chain the estate
 // contract is the LAND holder, not the user. Without crediting estates, every estate
 // owner reads as holding 0 LAND. We credit each estate's parcel count back to its
-// current owner below (see fetchEstateLandCredits). Estates are immutable once minted
-// (the contract only mints a whole estate from parcels or burns it — no add/remove), so
-// an estate's LAND count is exactly its EstateMinted parcels[] length.
+// current owner below (see buildEstateAttribution).
 //
 // Ownership is read straight from the contract (totalSupply/tokenByIndex/ownerOf) rather
 // than Blockscout's /holders or /instances: those are balance-derived and over-report
 // for this contract (they keep burned/transferred-out estates), which would credit LAND
-// to wallets that no longer hold an estate. Event logs (EstateMinted) ARE reliable.
+// to wallets that no longer hold an estate.
+//
+// KNOWN OVER-COUNT: the parcel LIST is not reliable, from either source. A live estate can
+// end up holding fewer parcels than it was minted with — estate 11927738 was minted with
+// 144 and the contract holds 57 of them today — and NEITHER the EstateMinted log NOR the
+// contract's own estatesToParcels array shrinks to match, so both say 144. The only
+// truthful count is LAND ownership itself, parcel by parcel. Today that means the credit
+// below runs high by roughly 100 parcels across 3 wallets: it can make a wallet look like
+// it holds more LAND than it does, never less, so it never wrongly locks anyone out of
+// Council eligibility. The holders page publishes the exact figure instead, counted from
+// the parcel sweep in landQuality().
 const ESTATE_CONTRACT         = '0x8dcbcafacfdc935d084dc19983194509813da6bd';
 const ESTATE_LOGS_URL         = `https://eth.blockscout.com/api/v2/addresses/${ESTATE_CONTRACT}/logs`;
 // topic0 of EstateMinted(uint256,address,uint32[]) — filters the contract's log feed to
@@ -246,11 +254,18 @@ async function fetchLiveEstateOwners() {
   return estateIds.map((estateId, i) => ({ estateId, owner: owners[i] }));
 }
 
-// Map<ownerAddress(lowercase), lockedParcelCount>: for every live estate, the number of
-// LAND parcels it locks, attributed to its current owner. See the ESTATE_CONTRACT note.
-// Parcel counts come from decoded EstateMinted logs; ownership comes from the contract.
-async function fetchEstateLandCredits() {
-  // Parcel count per estate id. The log feed is newest-first, so the first entry seen
+// Everything the rest of the file needs to know about estates, worked out in one pass:
+//
+//   credits     Map<ownerAddress, lockedParcelCount> — the LAND each estate owner is due
+//   parcelOwner Map<landTokenId, ownerAddress> — who is really behind an estate-held parcel
+//   estates     { live } — how many estates exist right now
+//
+// Two callers on very different clocks want this (the 30-minute holder snapshot and the
+// 12-hour rarity sweep), and it costs a full log crawl plus 2×N contract reads, so it is
+// cached and shared rather than computed twice. See the ESTATE_CONTRACT note above.
+// Parcel ids come from decoded EstateMinted logs; ownership comes from the contract.
+async function buildEstateAttribution() {
+  // Parcel id list per estate id. The log feed is newest-first, so the first entry seen
   // for an id is its current mint (an id is only ever re-minted after a burn).
   const parcelsByEstate = new Map();
   await fetchBlockscoutPages(ESTATE_LOGS_URL, body => {
@@ -262,22 +277,56 @@ async function fetchEstateLandCredits() {
       const parcels = params.find(p => String(p.type || '').endsWith('[]'))?.value;
       const estateId = id != null ? String(id) : null;
       if (estateId == null || parcelsByEstate.has(estateId)) continue;
-      parcelsByEstate.set(estateId, Array.isArray(parcels) ? parcels.length : 0);
+      parcelsByEstate.set(estateId, Array.isArray(parcels) ? parcels.map(String) : []);
     }
   }, { topic: ESTATE_MINTED_TOPIC });
 
   const credits = new Map();
+  const parcelOwner = new Map();
+  let live = 0;
   for (const { estateId, owner } of await fetchLiveEstateOwners()) {
     if (owner === ZERO_ADDRESS) continue;
-    const count = parcelsByEstate.get(estateId);
-    if (count == null) { console.warn(`Estate ${estateId} live but has no EstateMinted parcel count`); continue; }
-    if (count > 0) credits.set(owner, (credits.get(owner) || 0) + count);
+    const parcels = parcelsByEstate.get(estateId);
+    if (parcels == null) { console.warn(`Estate ${estateId} live but has no EstateMinted parcel count`); continue; }
+    live++;
+    if (!parcels.length) continue;
+    credits.set(owner, (credits.get(owner) || 0) + parcels.length);
+    for (const tokenId of parcels) parcelOwner.set(tokenId, owner);
   }
-  return credits;
+  // Only `live` is published: it comes from the contract's own token enumeration and is
+  // exact. A parcel COUNT from this data is not (see the KNOWN OVER-COUNT note above), so
+  // the one on the holders page is counted from real LAND ownership in landQuality().
+  return { credits, parcelOwner, estates: { live } };
 }
 
-function computeDistribution(countMap) {
-  const sorted = [...DIST_THRESHOLDS].sort((a, b) => a - b);
+const EMPTY_ESTATE_ATTRIBUTION = {
+  credits: new Map(), parcelOwner: new Map(), estates: { live: 0 },
+};
+const estateCache = { data: null, at: 0, inFlight: null };
+const ESTATE_CACHE_TTL_MS = 30 * 60 * 1000;
+
+// Stale-while-revalidate, same contract as getHolderStats: a cached copy answers at once
+// and a refresh runs behind it. A failed refresh keeps whatever we already had.
+function getEstateAttribution() {
+  const fresh = estateCache.data && Date.now() - estateCache.at < ESTATE_CACHE_TTL_MS;
+  if (!fresh && !estateCache.inFlight) {
+    estateCache.inFlight = buildEstateAttribution()
+      .then(d => { estateCache.data = d; estateCache.at = Date.now(); return d; })
+      .catch(err => {
+        console.error('Estate attribution failed:', err.message);
+        if (estateCache.data) return estateCache.data;
+        throw err;
+      })
+      .finally(() => { estateCache.inFlight = null; });
+  }
+  if (estateCache.data) return Promise.resolve(estateCache.data);
+  return estateCache.inFlight;
+}
+
+// Wallets grouped by how many they hold. `thresholds` are the bucket floors: [1,2,5,10]
+// gives 1 / 2-4 / 5-9 / 10+. Anything below the lowest floor (i.e. zero) is left out.
+function computeDistribution(countMap, thresholds = DIST_THRESHOLDS) {
+  const sorted = [...thresholds].sort((a, b) => a - b);
   const buckets = sorted.map((t, i) => ({
     min: t,
     max: i < sorted.length - 1 ? sorted[i + 1] - 1 : Infinity,
@@ -294,17 +343,42 @@ function computeDistribution(countMap) {
   }));
 }
 
+// Concentration of one collection, straight from its address→count map. Every share is
+// measured against the supply those wallets add up to, so the numbers are consistent with
+// the holder counts on the same page rather than a separate totalSupply() read.
+function computeConcentration(countMap) {
+  const held = [...countMap.values()].filter(n => n > 0).sort((a, b) => b - a);
+  if (!held.length) return null;
+  const supply = held.reduce((a, b) => a + b, 0);
+  const shareOf = n => round4(n / supply);
+  const topShare = n => shareOf(held.slice(0, n).reduce((a, b) => a + b, 0));
+  const mid = held.length >> 1;
+  return {
+    supply,
+    wallets: held.length,
+    largest: held[0],
+    largestShare: shareOf(held[0]),
+    top10Share: topShare(Math.min(10, held.length)),
+    // Top 1% of wallets, rounded up so a small collection still has at least one.
+    topPercentWallets: Math.max(1, Math.ceil(held.length / 100)),
+    topPercentShare: topShare(Math.max(1, Math.ceil(held.length / 100))),
+    median: held.length % 2 ? held[mid] : (held[mid - 1] + held[mid]) / 2,
+    average: round4(supply / held.length),
+    singles: held.filter(n => n === 1).length,
+  };
+}
+
 async function computeHolderStats() {
   fetchProgress.phase = 'fetching';
   fetchProgress.creaturePages = 0;
   fetchProgress.landPages = 0;
 
-  const [creatureCounts, landCounts, estateCredits] = await Promise.all([
+  const [creatureCounts, landCounts, estate] = await Promise.all([
     fetchHolderCounts(CREATURE_HOLDERS_URL, () => fetchProgress.creaturePages++),
     fetchHolderCounts(LAND_HOLDERS_URL,     () => fetchProgress.landPages++),
     // Non-fatal: a failed estate lookup just leaves estate-locked LAND uncredited
     // (and the phantom contract holding removed below), rather than failing the snapshot.
-    fetchEstateLandCredits().catch(err => { console.error('Estate land credits failed:', err.message); return new Map(); }),
+    getEstateAttribution().catch(() => EMPTY_ESTATE_ATTRIBUTION),
   ]);
 
   fetchProgress.phase = 'computing';
@@ -313,7 +387,7 @@ async function computeHolderStats() {
   // owner. Drop that phantom contract holding, then credit each estate's parcels back to
   // its real owner — so estate holders count as LAND holders for eligibility and stats.
   landCounts.delete(ESTATE_CONTRACT);
-  for (const [owner, parcels] of estateCredits) {
+  for (const [owner, parcels] of estate.credits) {
     landCounts.set(owner, (landCounts.get(owner) || 0) + parcels);
   }
 
@@ -343,6 +417,14 @@ async function computeHolderStats() {
     creatureDistribution: computeDistribution(creatureCounts),
     landDistribution: computeDistribution(landCounts),
     combinedDistribution: computeDistribution(combinedCounts),
+    // How tightly held each collection is. Free to compute — it reads the same maps the
+    // buckets above are built from — and it is the number holders actually argue about,
+    // because on a one-wallet-one-vote council it is also the shape of the electorate.
+    concentration: {
+      creatures: computeConcentration(creatureCounts),
+      land: computeConcentration(landCounts),
+      combined: computeConcentration(combinedCounts),
+    },
     stale: false,
     lastFetched: new Date().toISOString(),
   };
@@ -1766,6 +1848,250 @@ function getCollectionIndex() {
 }
 getCollectionIndex(); // warm it at boot, in the background
 setInterval(() => { getCollectionIndex(); }, 60 * 60 * 1000).unref(); // hourly check; TTL gates the rebuild
+
+// --- Holders: rarity & tier quality index ---
+// The holders snapshot above answers "how many", never "how good". Two questions holders
+// keep asking are how many Legendary Creatures exist and where they sit, and how much of
+// the LAND map is Premium — and neither is answerable from a /holders balance feed, which
+// carries counts and nothing else. Both need per-TOKEN ownership joined to per-token
+// attributes, so this is its own sweep on its own clock:
+//
+//   Creatures  Immutable's collection /owners feed (tokenId → wallet, 200/page, ~56 pages)
+//              joined to the rarity already carried by the collection index.
+//   LAND       the mainnet explorer's /instances feed, which returns the owner AND the
+//              parcel's own Rarity trait (normal/premium) inline — one crawl, no
+//              per-token metadata calls. Estate-held parcels are handed back to the
+//              person behind the estate before anything is counted.
+//
+// Twelve hours between sweeps: a Legendary changing hands is rare, and the alternative is
+// ~120 pages of upstream crawl every time somebody opens the tab. The client is told when
+// the snapshot was taken and hides the section while the first one builds.
+const QUALITY_TTL_MS       = 12 * 60 * 60 * 1000;
+const QUALITY_RETRY_MS     = 5 * 60 * 1000;   // nothing to serve → try again soon
+const QUALITY_DEGRADED_MS  = 60 * 60 * 1000;  // an older snapshot still serves → go gently
+const QUALITY_PARTIAL_MS   = 15 * 60 * 1000;  // one side missing → re-sweep within the hour
+const QUALITY_MAX_PAGES    = 120;             // 120 × 200 = 24k, far above the 11,111 supply
+// Buckets for "wallets by how many of the rare thing they hold": 1 / 2 / 3-4 / 5-9 / 10+.
+// Finer at the bottom than the main distribution, because holding two Legendaries is a
+// real distinction and holding two Creatures is not.
+const RARE_DIST_THRESHOLDS = [1, 2, 3, 5, 10];
+const RAREST_TOP_N         = 100; // "the N rarest by statistical rank sit in M wallets"
+const LAND_INSTANCES_URL   = 'https://eth.blockscout.com/api/v2/tokens/0x8bf3a40ea2337e6e4f6e540680ea6390cb3b4e11/instances';
+// The parcel's own metadata "Rarity" trait is what Highrise calls the plot TIER. Same
+// mapping as lib/land-market.js tierOf() — keep the two in step.
+const LAND_TIER = { premium: 'Premium', normal: 'Standard', standard: 'Standard' };
+
+// Map<tokenId, ownerAddress> for every Creature. The collection /owners feed is the same
+// shape and page cost as the metadata sweep the collection index already runs.
+async function fetchCreatureOwners() {
+  const byToken = new Map();
+  let cursor = null, pages = 0;
+  do {
+    const url = new URL(`https://api.immutable.com/v1/chains/${IMX_ZKEVM_CHAIN}/collections/${CREATURE_CONTRACT}/owners`);
+    url.searchParams.set('page_size', '200');
+    if (cursor) url.searchParams.set('page_cursor', cursor);
+    const body = await imxFetch(url.toString());
+    for (const r of (body.result ?? [])) {
+      const owner = String(r.account_address || '').toLowerCase();
+      if (!HEX_ADDRESS.test(owner) || owner === ZERO_ADDRESS) continue;
+      byToken.set(String(r.token_id), owner);
+    }
+    cursor = body.page?.next_cursor ?? null;
+    if (cursor) await new Promise(r => setTimeout(r, 120)); // pace the sweep
+  } while (cursor && ++pages < QUALITY_MAX_PAGES);
+  return byToken;
+}
+
+// [{ tokenId, owner, tier }] for every live LAND parcel. A parcel with no readable owner
+// or no tier is skipped rather than guessed at — a missing tier is not a Standard plot.
+async function fetchLandParcels() {
+  const parcels = [];
+  await fetchBlockscoutPages(LAND_INSTANCES_URL, body => {
+    for (const it of (body.items ?? [])) {
+      const owner = String(it.owner?.hash || '').toLowerCase();
+      const props = it.metadata?.properties ?? [];
+      const rarity = props.find(p => /^rarity$/i.test(p.trait_type || ''))?.value;
+      const tier = LAND_TIER[String(rarity ?? '').toLowerCase()];
+      if (!HEX_ADDRESS.test(owner) || owner === ZERO_ADDRESS || !tier) continue;
+      parcels.push({ tokenId: String(it.id), owner, tier });
+    }
+  });
+  return parcels;
+}
+
+// One rare-thing close-up: how many exist, how many wallets hold at least one, the biggest
+// single holding, and the wallets-by-holding buckets. `share` is filled in by the caller.
+function summariseRare(perWallet, supply) {
+  const held = [...perWallet.values()];
+  return {
+    supply,
+    share: null,
+    holders: held.length,
+    mostHeld: held.length ? Math.max(...held) : 0,
+    perWallet: computeDistribution(perWallet, RARE_DIST_THRESHOLDS),
+  };
+}
+
+// Creature side: rarity tiers across the whole supply, plus a close-up on the rarest tier.
+function creatureQuality(ownersByToken, coll) {
+  const supplyByTier = new Map();   // 'Legendary' → creatures
+  const walletsByTier = new Map();  // 'Legendary' → Set(wallets)
+  const perWalletTop = new Map();   // wallet → rarest-tier creatures held
+  const rarestWallets = new Set();  // wallets holding a top-N-rank Creature
+  const wallets = new Set();
+
+  // The rarest tier PRESENT, not a hardcoded "Legendary" — Gen 2 need not use the same
+  // words, and 11,002 of today's 11,111 Creatures are Epic with nothing below it.
+  let topTier = null;
+  for (const known of coll.byId.values()) {
+    if (known.rarity && (topTier == null || rarityRank(known.rarity) < rarityRank(topTier))) topTier = known.rarity;
+  }
+
+  for (const [tokenId, owner] of ownersByToken) {
+    wallets.add(owner);
+    const known = coll.byId.get(tokenId);
+    if (!known) continue;
+    // 33 Creatures carry no attributes at all, so they have no rarity either. They get
+    // their own label rather than being folded into the commonest tier.
+    const tier = known.rarity || 'Untraited';
+    supplyByTier.set(tier, (supplyByTier.get(tier) || 0) + 1);
+    if (!walletsByTier.has(tier)) walletsByTier.set(tier, new Set());
+    walletsByTier.get(tier).add(owner);
+    if (tier === topTier) perWalletTop.set(owner, (perWalletTop.get(owner) || 0) + 1);
+    if (known.rank != null && known.rank <= RAREST_TOP_N) rarestWallets.add(owner);
+  }
+
+  const supply = [...supplyByTier.values()].reduce((a, b) => a + b, 0);
+  // Rarest tier first, untraited tail last — rarityRank() already sends anything it does
+  // not recognise to the back.
+  const tiers = [...supplyByTier.keys()]
+    .sort((a, b) => rarityRank(a) - rarityRank(b) || a.localeCompare(b))
+    .map(key => ({
+      key,
+      supply: supplyByTier.get(key),
+      share: supply ? round4(supplyByTier.get(key) / supply) : 0,
+      holders: walletsByTier.get(key).size,
+    }));
+
+  const top = topTier ? { key: topTier, ...summariseRare(perWalletTop, supplyByTier.get(topTier) || 0) } : null;
+  if (top) top.share = supply ? round4(top.supply / supply) : 0;
+  return {
+    supply,
+    wallets: wallets.size,
+    tiers,
+    top,
+    rarest: { n: RAREST_TOP_N, holders: rarestWallets.size },
+  };
+}
+
+// LAND side: Premium vs Standard across the map, plus a close-up on Premium.
+function landQuality(parcels, estate) {
+  const supplyByTier = new Map();
+  const walletsByTier = new Map();
+  const perWalletPremium = new Map();
+  const wallets = new Set();
+  const estateOwners = new Set();
+  let estateHeld = 0;
+
+  for (const { tokenId, owner, tier } of parcels) {
+    // A parcel locked in an estate is owned on-chain by the estate contract. Hand it to
+    // whoever owns the estate, exactly as the holder snapshot does — otherwise every
+    // estate builder reads as owning no Premium land at all.
+    let holder = owner;
+    if (holder === ESTATE_CONTRACT) {
+      const behind = estate.parcelOwner.get(tokenId);
+      if (!behind) continue; // in the contract but no live estate claims it — leave it out
+      holder = behind;
+      estateHeld++;
+      estateOwners.add(behind);
+    }
+    wallets.add(holder);
+    supplyByTier.set(tier, (supplyByTier.get(tier) || 0) + 1);
+    if (!walletsByTier.has(tier)) walletsByTier.set(tier, new Set());
+    walletsByTier.get(tier).add(holder);
+    if (tier === 'Premium') perWalletPremium.set(holder, (perWalletPremium.get(holder) || 0) + 1);
+  }
+
+  const supply = [...supplyByTier.values()].reduce((a, b) => a + b, 0);
+  const tiers = ['Premium', 'Standard'].filter(k => supplyByTier.has(k)).map(key => ({
+    key,
+    supply: supplyByTier.get(key),
+    share: supply ? round4(supplyByTier.get(key) / supply) : 0,
+    holders: walletsByTier.get(key).size,
+  }));
+  const top = { key: 'Premium', ...summariseRare(perWalletPremium, supplyByTier.get('Premium') || 0) };
+  top.share = supply ? round4(top.supply / supply) : 0;
+  return {
+    supply,
+    wallets: wallets.size,
+    tiers,
+    top,
+    // Parcels counted from what the estate contract ACTUALLY holds, not from the mint logs
+    // or the contract's own parcel array — both of those run high (see the KNOWN OVER-COUNT
+    // note by ESTATE_CONTRACT). This is the exact figure the page publishes.
+    estates: {
+      live: estate.estates.live,
+      parcelsLocked: estateHeld,
+      owners: estateOwners.size,
+    },
+  };
+}
+
+async function buildHolderQuality() {
+  // The Creature side is a join, so it needs the collection index's rarity and ranks. On a
+  // cold boot that index is still sweeping, and a snapshot built without it would say
+  // "Creatures unavailable" for a quarter of an hour — so wait on the build already in
+  // flight instead. Only if there is no build at all do we go LAND-only.
+  let coll = getCollectionIndex();
+  if (!coll && collectionIndex.inFlight) coll = await collectionIndex.inFlight;
+  const [ownersByToken, parcels, estate] = await Promise.all([
+    coll
+      ? fetchCreatureOwners().catch(err => { console.error('Creature owner sweep failed:', err.message); return null; })
+      : Promise.resolve(null),
+    fetchLandParcels().catch(err => { console.error('LAND parcel sweep failed:', err.message); return null; }),
+    getEstateAttribution().catch(() => EMPTY_ESTATE_ATTRIBUTION),
+  ]);
+
+  const creatures = ownersByToken?.size && coll ? creatureQuality(ownersByToken, coll) : null;
+  const land = parcels?.length ? landQuality(parcels, estate) : null;
+  // Both halves gone means the sweep told us nothing. Throw, so the retry timer runs and
+  // whatever we served before keeps serving — an empty snapshot would read as "there are
+  // no Legendaries", which is a lie a stale one never tells.
+  if (!creatures && !land) throw new Error('neither the Creature nor the LAND sweep returned anything');
+  console.log(`Holder quality snapshot: ${creatures ? `${creatures.supply} Creatures` : 'Creatures unavailable'}, ${land ? `${land.supply} parcels` : 'LAND unavailable'}.`);
+  return { creatures, land, fetchedAt: new Date().toISOString() };
+}
+
+const qualityIndex = { data: null, at: 0, inFlight: null, failedAt: 0, coolMs: 0 };
+
+// Non-blocking, same contract as getCollectionIndex: returns the snapshot when there is
+// one and kicks a refresh once it is stale. A partial snapshot (one side missing) expires
+// on the short clock, so the missing half gets another go soon.
+function getHolderQuality() {
+  const partial = qualityIndex.data && !(qualityIndex.data.creatures && qualityIndex.data.land);
+  const ttl = partial ? QUALITY_PARTIAL_MS : QUALITY_TTL_MS;
+  const fresh = qualityIndex.data && Date.now() - qualityIndex.at < ttl;
+  const cooling = Date.now() - qualityIndex.failedAt < qualityIndex.coolMs;
+  if (!fresh && !qualityIndex.inFlight && !cooling) {
+    qualityIndex.inFlight = buildHolderQuality()
+      .then(d => {
+        qualityIndex.data = d; qualityIndex.at = Date.now();
+        qualityIndex.failedAt = 0; qualityIndex.coolMs = 0;
+        return d;
+      })
+      .catch(err => {
+        qualityIndex.failedAt = Date.now();
+        qualityIndex.coolMs = qualityIndex.data ? QUALITY_DEGRADED_MS : QUALITY_RETRY_MS;
+        console.error('Holder quality build failed:', err.message);
+      })
+      .finally(() => { qualityIndex.inFlight = null; });
+  }
+  return qualityIndex.data;
+}
+// Warmed a minute after boot rather than at it: the collection index it joins against is
+// starting its own sweep right now, and racing the two only makes both slower.
+setTimeout(() => { getHolderQuality(); }, 60 * 1000).unref();
+setInterval(() => { getHolderQuality(); }, 30 * 60 * 1000).unref(); // TTL gates the rebuild
 
 // Browse pools, memoized per (listings snapshot, collection build) pair so the merge
 // cost is paid once per 60s snapshot rebuild, not once per request.
@@ -6430,6 +6756,20 @@ const server = http.createServer((request, response) => {
       'Cache-Control': 'no-store',
     });
     response.end(JSON.stringify(fetchProgress));
+    return;
+  }
+
+  // Rarity & tier close-up. Its own endpoint because its own sweep is on a 12-hour clock,
+  // an order of magnitude slower than the 30-minute holder snapshot — folding it into
+  // /api/holders would either stall that response or pin both to the same TTL. Answers
+  // { ready: false } while the first sweep runs; the page just leaves the section out.
+  if (request.url.startsWith('/api/holders/quality')) {
+    const data = getHolderQuality();
+    response.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'public, max-age=600',
+    });
+    response.end(JSON.stringify(data ? { ready: true, ...data } : { ready: false }));
     return;
   }
 

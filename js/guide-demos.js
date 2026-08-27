@@ -322,9 +322,9 @@ const TRADING_LAND = makeTradingSpec({
   barHtml: () => barOnHtml('land', { eth: '0.31', count: 2 }),
   filtersHtml: () => `<div class="gdemo-filters">
     <button type="button" class="trade-flt-rchip" data-tier="premium" data-gd="chip" tabindex="-1">
-      <span class="trade-flt-rdot" aria-hidden="true"></span>Premium<span class="trade-flt-n">9%</span></button>
+      <span class="trade-flt-rdot" aria-hidden="true"></span>Premium<span class="trade-flt-pct">9%</span></button>
     <button type="button" class="trade-flt-rchip" data-tier="standard" tabindex="-1">
-      <span class="trade-flt-rdot" aria-hidden="true"></span>Standard<span class="trade-flt-n">91%</span></button>
+      <span class="trade-flt-rdot" aria-hidden="true"></span>Standard<span class="trade-flt-pct">91%</span></button>
     <span class="gdemo-count">${rep('trade.filter.countAllLand', { n: 21 })}</span>
   </div>`,
   tilesHtml: () => FIX_SLIMES.map((f, i) => `<div class="trade-tile gdemo-tile" data-gd-tile="${i}">

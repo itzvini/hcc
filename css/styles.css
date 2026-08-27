@@ -1109,6 +1109,131 @@ details .faq-body p { padding: 0; }
   .dist-track i { animation: none !important; transform: none; }
   .dist-tile, .dist-key, .dist-val, .dist-n, .dist-track i { transition: none; }
 }
+
+/* ---------- RARITY & TIER CARDS ----------
+   Same .dist-tile shell as the distribution rails, so the two blocks read as one family.
+   Only two collections here, so the grid drops to a pair and each card carries two rail
+   groups: the tier split, then who holds the rare tier. */
+.dist-grid.is-pair { grid-template-columns: repeat(2,minmax(0,1fr)); }
+/* Tier names are words, not "10+", so the key column needs real room. */
+.qual-col-key { width: 88px; }
+
+/* The one number people came for, said once and said loudly: 76 Legendary, 571 Premium. */
+.qual-hl {
+  display: flex; align-items: center; gap: 12px;
+  margin: 0 0 16px; padding: 12px 14px;
+  border-radius: var(--hr-radius-md);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+  background:
+    radial-gradient(130% 130% at 0% 0%, var(--accent-soft), transparent 70%),
+    rgba(255,255,255,.03);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+}
+.qual-hl-n {
+  font: 800 30px/1 var(--hr-sans); color: var(--accent);
+  font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+  text-shadow: 0 0 22px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.qual-hl-t { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.qual-hl-l {
+  font: 800 12px/1 var(--hr-sans); color: var(--hr-fg-0);
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase;
+}
+.qual-hl-s { font: 700 11.5px/1.25 var(--hr-sans); color: var(--hr-fg-2); font-variant-numeric: tabular-nums; }
+
+/* Divider between a card's two rail groups. Hairline, not a rule — the tile already has
+   its own edge and a second hard line inside it reads as two cards jammed together. */
+.qual-sub { margin: 16px 0 13px; padding-top: 15px; position: relative; }
+.qual-sub::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--accent) 32%, transparent), rgba(255,255,255,.06) 62%, transparent);
+}
+.qual-foot {
+  margin: 14px 0 0; padding-top: 11px;
+  border-top: 1px solid var(--hr-line);
+  font: 700 11px/1.5 var(--hr-sans); color: var(--hr-fg-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- CONCENTRATION LEDGER ----------
+   Three cards, one per collection. A stat and the share it represents, stacked, because
+   the raw number without its share ("941") tells nobody anything. */
+.conc-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 16px; margin-top: 28px; }
+.conc-card {
+  --accent: var(--hr-primary); --accent-soft: var(--hr-primary-25);
+  position: relative; overflow: hidden; isolation: isolate;
+  padding: 20px 18px 16px; border-radius: var(--hr-radius-lg);
+  border: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(38,37,44,.82), rgba(20,19,23,.93));
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: var(--hr-shadow-2), inset 0 1px 0 rgba(255,255,255,.05);
+  transition: border-color .25s, box-shadow .25s;
+}
+.conc-card > * { position: relative; z-index: 1; }
+.conc-card::before {
+  content: ""; position: absolute; z-index: -1; inset: 0; pointer-events: none;
+  background: radial-gradient(120% 58% at 50% -12%,
+    color-mix(in srgb, var(--accent) 15%, transparent), transparent 72%);
+}
+.conc-card::after {
+  content: ""; position: absolute; top: 0; left: 18%; right: 18%; height: 1px;
+  background: linear-gradient(90deg, transparent,
+    color-mix(in srgb, var(--accent) 55%, transparent), transparent);
+  pointer-events: none;
+}
+.conc-card .eyebrow { margin-bottom: 3px; color: var(--hr-fg-1); }
+.conc-card .dist-den { margin-bottom: 15px; }
+.conc-rows { display: flex; flex-direction: column; }
+.conc-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 9px 0;
+  border-top: 1px solid var(--hr-line);
+  opacity: 0; transform: translateY(6px);
+  animation: conc-in .5s cubic-bezier(.2,.7,.2,1) forwards;
+  animation-delay: calc(.05s * var(--i) + .1s);
+}
+.conc-row:first-child { border-top: 0; padding-top: 0; }
+@keyframes conc-in { to { opacity: 1; transform: none; } }
+.conc-l { font: 700 11.5px/1.35 var(--hr-sans); color: var(--hr-fg-2); }
+.conc-v { text-align: right; flex: none; }
+.conc-n {
+  display: block; font: 800 17px/1.1 var(--hr-sans); color: var(--hr-fg-0);
+  font-variant-numeric: tabular-nums;
+}
+.conc-s {
+  display: block; margin-top: 2px;
+  font: 700 10.5px/1.2 var(--hr-sans); color: var(--accent);
+  font-variant-numeric: tabular-nums; opacity: .85;
+}
+@media (hover: hover) {
+  .conc-card:hover {
+    border-color: color-mix(in srgb, var(--accent) 38%, transparent);
+    box-shadow: var(--hr-shadow-3), 0 0 30px var(--accent-soft), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+}
+
+/* Both grids collapse the same way the distribution grid does: full width, or one
+   centred column, and nothing awkward in between. */
+@media (max-width: 900px) {
+  .conc-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 860px) {
+  .dist-grid.is-pair { grid-template-columns: minmax(0,520px); }
+}
+@media (max-width: 620px) {
+  .conc-grid { grid-template-columns: minmax(0,520px); justify-content: center; gap: 12px; }
+}
+@media (max-width: 560px) {
+  .qual-hl { gap: 10px; padding: 11px 12px; }
+  .qual-hl-n { font-size: 26px; }
+  .qual-col-key { width: 80px; }
+}
+
+/* Motion safety: the ledger rows and the rail fills both animate, so both stop here. */
+@media (prefers-reduced-motion: reduce) {
+  .conc-row { animation: none; opacity: 1; transform: none; }
+}
 /* ---------- MARKET TAB ---------- */
 .market-chart-head {
   display: flex; justify-content: space-between; align-items: flex-start;
@@ -4709,6 +4834,11 @@ button.trade-net:hover { box-shadow: 0 0 12px var(--hr-banana-25); }
    the mint accent); the live match count keeps to the far right. */
 .trade-flt-pct { margin-left: auto; font-size: 11px; font-weight: 800; color: var(--hr-primary); font-variant-numeric: tabular-nums; opacity: .9; }
 .trade-flt-pct + .trade-flt-n { margin-left: 8px; }
+/* In a tier chip the share and its parcel count sit snug after the label (the chip's own
+   7px gap does the spacing), and the % takes the tier's colour — mint on Standard, banana
+   on Premium — instead of the dropdown's fixed mint. */
+.trade-flt-rchip .trade-flt-pct { margin-left: 1px; color: var(--tc); }
+.trade-flt-rchip .trade-flt-pct + .trade-flt-n { margin-left: 1px; }
 
 /* Active filters + result count */
 .trade-flt-active { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 0 10px; }

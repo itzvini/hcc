@@ -2683,6 +2683,117 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         </div>
       </div>
 
+      <!-- Rarity & tiers. Fed by /api/holders/quality, which sweeps per-token ownership on
+           its own 12-hour clock, so this whole block stays hidden until that snapshot
+           exists rather than showing empty rails. Two cards, one per collection: the tier
+           split across the supply, then a close-up on who holds the rare tier. -->
+      <div id="holders-rare" hidden>
+        <div class="divider" style="padding:24px 0 8px">• • •</div>
+        <div class="eyebrow" style="text-align:center;margin-bottom:4px" data-i18n="holders.rare.eyebrow">Rarity &amp; tiers</div>
+        <p style="text-align:center;font-size:.95rem;margin-bottom:0" data-i18n="holders.rare.lead">Not every Creature or plot is the same. Here's how the rare ones are spread across wallets.</p>
+
+        <div class="dist-grid is-pair">
+          <div class="dist-tile" id="qual-tile-creatures" style="--accent:var(--hr-primary);--accent-soft:var(--hr-primary-25)">
+            <div class="dist-tile-hd">
+              <span class="dist-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.9l2.2 5.9 5.9 2.2-5.9 2.2L12 19.1l-2.2-5.9L3.9 11l5.9-2.2L12 2.9Z"/></svg></span>
+              <div class="dist-tile-t">
+                <div class="eyebrow" data-i18n="holders.rare.creatures">Creature rarity</div>
+                <p class="dist-den" id="qual-den-creatures"></p>
+              </div>
+            </div>
+            <div class="qual-hl">
+              <span class="qual-hl-n" id="qual-hl-n-creatures">—</span>
+              <span class="qual-hl-t">
+                <span class="qual-hl-l" id="qual-hl-l-creatures"></span>
+                <span class="qual-hl-s" id="qual-hl-s-creatures"></span>
+              </span>
+            </div>
+            <table class="dist-rails">
+              <caption class="dist-cap" data-i18n="holders.rare.cap.tiers">How the collection splits by tier</caption>
+              <colgroup><col class="qual-col-key"><col><col class="dist-col-n"></colgroup>
+              <thead>
+                <tr>
+                  <th scope="col" colspan="2" data-i18n="holders.rare.col.tier">Tier</th>
+                  <th scope="col"><span class="dist-cap" data-i18n="holders.rare.col.count">How many</span></th>
+                </tr>
+              </thead>
+              <tbody id="qual-tiers-creatures"></tbody>
+            </table>
+            <div class="qual-sub">
+              <div class="eyebrow" id="qual-own-hd-creatures"></div>
+              <p class="dist-den" id="qual-own-den-creatures"></p>
+            </div>
+            <table class="dist-rails">
+              <caption class="dist-cap" data-i18n="holders.rare.cap.owners">Wallets grouped by how many they hold</caption>
+              <colgroup><col class="dist-col-key"><col><col class="dist-col-n"></colgroup>
+              <thead>
+                <tr>
+                  <th scope="col" colspan="2" id="qual-own-col-creatures"></th>
+                  <th scope="col"><span class="dist-cap" data-i18n="holders.rare.col.wallets">Wallets</span></th>
+                </tr>
+              </thead>
+              <tbody id="qual-own-creatures"></tbody>
+            </table>
+            <p class="qual-foot" id="qual-foot-creatures"></p>
+          </div>
+
+          <div class="dist-tile" id="qual-tile-land" style="--accent:var(--hr-banana);--accent-soft:var(--hr-banana-25)">
+            <div class="dist-tile-hd">
+              <span class="dist-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.2 9.1 12 4.6l7.8 4.5v5.8L12 19.4l-7.8-4.5V9.1Z"/><path d="M12 11.9 4.2 7.4M12 11.9l7.8-4.5M12 11.9v7.5"/></svg></span>
+              <div class="dist-tile-t">
+                <div class="eyebrow" data-i18n="holders.rare.land">Plot tier</div>
+                <p class="dist-den" id="qual-den-land"></p>
+              </div>
+            </div>
+            <div class="qual-hl">
+              <span class="qual-hl-n" id="qual-hl-n-land">—</span>
+              <span class="qual-hl-t">
+                <span class="qual-hl-l" id="qual-hl-l-land"></span>
+                <span class="qual-hl-s" id="qual-hl-s-land"></span>
+              </span>
+            </div>
+            <table class="dist-rails">
+              <caption class="dist-cap" data-i18n="holders.rare.cap.tiers">How the collection splits by tier</caption>
+              <colgroup><col class="qual-col-key"><col><col class="dist-col-n"></colgroup>
+              <thead>
+                <tr>
+                  <th scope="col" colspan="2" data-i18n="holders.rare.col.tier">Tier</th>
+                  <th scope="col"><span class="dist-cap" data-i18n="holders.rare.col.count">How many</span></th>
+                </tr>
+              </thead>
+              <tbody id="qual-tiers-land"></tbody>
+            </table>
+            <div class="qual-sub">
+              <div class="eyebrow" id="qual-own-hd-land"></div>
+              <p class="dist-den" id="qual-own-den-land"></p>
+            </div>
+            <table class="dist-rails">
+              <caption class="dist-cap" data-i18n="holders.rare.cap.owners">Wallets grouped by how many they hold</caption>
+              <colgroup><col class="dist-col-key"><col><col class="dist-col-n"></colgroup>
+              <thead>
+                <tr>
+                  <th scope="col" colspan="2" id="qual-own-col-land"></th>
+                  <th scope="col"><span class="dist-cap" data-i18n="holders.rare.col.wallets">Wallets</span></th>
+                </tr>
+              </thead>
+              <tbody id="qual-own-land"></tbody>
+            </table>
+            <p class="qual-foot" id="qual-foot-land"></p>
+          </div>
+        </div>
+        <p class="holders-updated" id="holders-rare-updated"></p>
+      </div>
+
+      <!-- Concentration. Free to compute from the same maps the buckets above use, and the
+           number holders actually argue about: on a one-wallet-one-vote council it is also
+           the shape of the electorate. -->
+      <div id="holders-conc" hidden>
+        <div class="divider" style="padding:24px 0 8px">• • •</div>
+        <div class="eyebrow" style="text-align:center;margin-bottom:4px" data-i18n="holders.conc.eyebrow">How tightly it's held</div>
+        <p style="text-align:center;font-size:.95rem;margin-bottom:0" data-i18n="holders.conc.lead">An average hides the tail. These are the numbers that show whether a collection sits in a few hands.</p>
+        <div class="conc-grid" id="conc-grid"></div>
+      </div>
+
       <p class="holders-updated" id="holders-updated"></p>
     </div>
   </section>

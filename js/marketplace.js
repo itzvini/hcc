@@ -1,4 +1,4 @@
-import { t } from './i18n.js';
+import { t, getCurrentLang } from './i18n.js';
 import { DISCORD_SVG } from './apply.js';
 import { loadProfile } from './profile.js';
 
@@ -629,7 +629,15 @@ function fmtTraitPct(p) {
 // The facet set feeding the shared filter bar: the Sales tab counts over the sold set, so
 // its chips read "how many recent sales match", every other browse-like view uses the
 // listing/collection facets. One helper so every facet renderer stays tab-agnostic.
-function curFacets() { return tradeTab === 'sales' ? salesFacets : browseFacets; }
+function curFacets() {
+  const f = tradeTab === 'sales' ? salesFacets : browseFacets;
+  // An empty facet list while the catalogue is still building isn't "this set has no
+  // traits", it's "not known yet". Report unknown so the tier chips stay enabled and the
+  // trait list shows its loading state, instead of a row of dead zeroes (Aug 2026: LAND
+  // served an empty index and the Standard/Premium chips read a confident "0").
+  if (f && !f.length && tradeTab !== 'sales' && browseIndexing) return null;
+  return f;
+}
 
 // Look up a trait value's rarity % from the current facets (collection-wide,
 // scope-independent). Null when facets aren't loaded or the value isn't catalogued.
@@ -5591,8 +5599,9 @@ function rarityChipsHtml() {
 }
 
 // LAND plot tier ("Tier" facet) as its own chip group — Standard / Premium, always
-// visible, each with its collection-wide rarity %. Same toggle mechanism as any trait
-// value (data-act="flt-val"), so it reuses the existing filter handler.
+// visible, each with its collection-wide share AND the parcel count behind it. Same
+// toggle mechanism as any trait value (data-act="flt-val"), so it reuses the existing
+// filter handler.
 function tierFacet() {
   return (curFacets() || []).find(x => x.type === 'Tier') || null;
 }
@@ -5602,12 +5611,27 @@ function tierChipsHtml() {
     const o = vals.get(name);
     const sel = traitSelected('Tier', name);
     const n = curFacets() ? (o?.n ?? 0) : null; // unknown before first response → enabled
-    // Collection browse shows each tier's collection-wide rarity %; wallet/profile
-    // views have no % (facets are per-holder) — show the holder's plot COUNT instead.
-    const tag = (o ? fmtTraitPct(o.pct) : '') || (n != null ? String(n) : '');
+    // Collection browse pairs each tier's share with the count it's computed from — both
+    // describe the whole collection, so the two numbers read as one fact and don't shift
+    // when you toggle On sale / All LAND. Wallet and profile views have no collection
+    // stats (facets are per-holder), so they show the holder's plot COUNT alone.
+    const pct = o ? fmtTraitPct(o.pct) : '';
+    const total = o?.total ?? null;             // collection-wide, the number the % is of
+    const cnt = total != null ? total : (pct ? null : n);
+    // Grouped in the language the PAGE is in, not the browser's (a pt visitor reading an
+    // English page should still see 2,568) — same rule as i18n.js's number elements.
+    const cntStr = cnt != null ? cnt.toLocaleString(getCurrentLang()) : '';
+    // Only the collection number gets the "in the collection" wording. A wallet or profile
+    // view is showing that holder's plots, so it stays bare rather than claiming otherwise.
+    const cntTitle = total != null ? t('trade.filter.tierCount').replace('{n}', cntStr) : '';
+    const aria = pct && cntStr
+      ? t('trade.filter.tierChipAria').replace('{t}', name).replace('{n}', cntStr).replace('{p}', pct) : '';
     return `<button type="button" class="trade-flt-rchip ${sel ? 'is-on' : ''}" data-tier="${esc(name.toLowerCase())}"
-      data-act="flt-val" data-type="Tier" data-val="${esc(name)}" aria-pressed="${sel}" ${n === 0 && !sel ? 'disabled' : ''}>
-      <span class="trade-flt-rdot" aria-hidden="true"></span>${esc(name)}${tag ? `<span class="trade-flt-n">${esc(tag)}</span>` : ''}
+      data-act="flt-val" data-type="Tier" data-val="${esc(name)}" aria-pressed="${sel}"
+      ${aria ? `aria-label="${esc(aria)}"` : ''} ${n === 0 && !sel ? 'disabled' : ''}>
+      <span class="trade-flt-rdot" aria-hidden="true"></span>${esc(name)}${pct
+        ? `<span class="trade-flt-pct" title="${esc(t('trade.filter.rarityPct'))}">${esc(pct)}</span>` : ''}${cntStr
+        ? `<span class="trade-flt-n" ${cntTitle ? `title="${esc(cntTitle)}"` : ''}>${esc(cntStr)}</span>` : ''}
     </button>`;
   }).join('');
 }
