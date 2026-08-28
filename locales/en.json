@@ -210,6 +210,7 @@
   "trade.browse.empty": "No active listings right now. Check back soon.",
   "trade.browse.loadMore": "Load more",
   "trade.browse.loadingMore": "Loading…",
+  "trade.browse.truncated": "Showing the first {n} listings, so the count and floor cover only these.",
   "trade.filter.scopeAria": "Show items on sale or the whole collection",
   "trade.filter.scopeListed": "On sale",
   "trade.filter.scopeAll": "All Creatures",

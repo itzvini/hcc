@@ -216,12 +216,28 @@ function refreshAfterRecovery() {
 
 // A tab returning to the foreground is the cheapest possible recovery signal, and the one
 // users actually generate: they switch away, the outage ends, they switch back.
+let hiddenAt = 0;
+// A grid that has sat in a background tab is showing a market that has moved on: the
+// server's snapshot is a minute old at most, but nothing was asking it for a new one. So a
+// returning tab quietly re-reads page 0 — no skeleton, no scroll jump. Deliberately narrow:
+// only from page 0 (a reader who has paged deeper would lose their place), only with no
+// modal open (the open tile must not vanish under the dialog), and only after long enough
+// that the snapshot really could have changed.
+const BROWSE_REFRESH_AFTER_MS = 60 * 1000; // one snapshot window
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden || !root()) return;
+  if (document.hidden) { hiddenAt = Date.now(); return; }
+  if (!root()) return;
   for (const c of ['creatures', 'land']) {
     const st = health[c]?.state;
     if (st && st !== 'live') { stopHealthPoll(c); healthPollAttempt[c] = 0; scheduleHealthPoll(c); }
   }
+  const away = hiddenAt ? Date.now() - hiddenAt : 0;
+  hiddenAt = 0;
+  if (away < BROWSE_REFRESH_AFTER_MS) return;
+  if (collState() !== 'live') return;       // a degraded collection already has its own poll
+  if (!isBrowseView() || tradeTab !== 'buy') return;
+  if (modalToken || browsePage !== 0 || listingsLoading) return;
+  loadBrowse(true, true);
 });
 
 const hOf = (c = coll) => health[c] || null;
@@ -256,6 +272,7 @@ let browseListedTotal = null;  // everything currently listed, pre-filter
 let browseCollectionTotal = null; // whole collection size, once the server has indexed it
 let browseScope = 'listed';    // EFFECTIVE scope from the server (≠ flt.scope while indexing)
 let browseIndexing = false;    // asked for the whole collection; server still cataloguing
+let browseTruncated = false;   // the market holds more listings than the server indexes at once
 let browseHadFilters = false;  // whether the LAST APPLIED response was filtered — the count
                                // line renders response-time state, never a mid-flight mix
 let browseFacets = null;       // [{type, values:[{v, n}]}] from the server
@@ -278,6 +295,7 @@ let salesReqId = 0;
 let fltOpenMobile = false;     // filter drawer expanded (mobile)
 let fltDebounce = null;
 let browseReqId = 0;           // drops stale responses when filters change mid-flight
+let browseAbort = null;        // and cancels them, so a superseded body isn't downloaded
 let browseIndexTimer = null;   // quiet re-poll while the server is still cataloguing
 // Wallet view: a full address typed into the Browse search flips the grid to that wallet's
 // holdings. browseOwner echoes the address the server resolved (null = normal browse).
@@ -346,7 +364,7 @@ function resetBrowseForView() {
   resetFilters();
   flt.scope = browseDataset().defaultScope;
   browseFacets = null; browseTotal = null; browseListedTotal = null; browsePriceRange = null;
-  browseCollectionTotal = null; browseScope = flt.scope; browseIndexing = false;
+  browseCollectionTotal = null; browseScope = flt.scope; browseIndexing = false; browseTruncated = false;
   browsePage = 0; browseHasMore = false; browseHadFilters = false;
   browseOwner = null; browseOwnedTotal = null; browseOwnerProfile = null; browseProfileExpandedFor = null;
   // Sales History shares this collection scope — drop its sold set + facets so the new
@@ -2540,14 +2558,21 @@ async function loadBrowse(reset = true, quiet = false) {
   const page = reset ? 0 : browsePage + 1;
   if (reset && !quiet) { listings = []; browsePage = 0; browseHasMore = false; listingsError = false; }
   const rid = ++browseReqId;
+  // Typing in the search box fires a request every 300ms. The request id already stopped a
+  // superseded response from painting, but the browser still downloaded the whole body
+  // first — so drop the connection as well.
+  browseAbort?.abort();
+  const ctl = new AbortController();
+  browseAbort = ctl;
   clearTimeout(browseIndexTimer); // a fresh request supersedes any pending poll
   const hadFilters = fltActive(); // captured at request time, applied at response time
   const ds = browseDataset();
   const reqColl = coll; // captured at send time, so a late response can't paint the wrong tab
-  if (!quiet) { listingsLoading = true; patchGrid(); patchFilters(); }
+  let added = null;     // rows this page added, when it was a "load more" rather than a reset
+  if (!quiet) { listingsLoading = true; if (reset) patchGrid(); else patchLoadMore(); patchFilters(); }
   try {
     const qs = browseQuery(page);
-    const res = await fetch(`${ds.api}${qs ? '?' + qs : ''}`, { headers: { Accept: 'application/json' } });
+    const res = await fetch(`${ds.api}${qs ? '?' + qs : ''}`, { headers: { Accept: 'application/json' }, signal: ctl.signal });
     // A 503 still carries a health envelope, so parse before deciding.
     const data = await res.json().catch(() => null);
     applyHealth(data, reqColl);
@@ -2555,7 +2580,11 @@ async function loadBrowse(reset = true, quiet = false) {
     if (rid !== browseReqId || ds.api !== browseDataset().api) return; // superseded — newer request (or view) owns the grid
     if (data.ethUsd != null) ethUsd = data.ethUsd;
     if (data.fxRates) fxRates = data.fxRates;
-    listings = reset ? (data.items || []) : listings.concat(data.items || []);
+    const fresh = data.items || [];
+    // Only the rows this page added; the finally block appends them rather than rebuilding
+    // every tile already on screen.
+    if (!reset) added = fresh;
+    listings = reset ? fresh : listings.concat(fresh);
     browsePage = data.page ?? page;
     browseHasMore = !!data.hasMore;
     browseTotal = data.total ?? null;
@@ -2563,6 +2592,7 @@ async function loadBrowse(reset = true, quiet = false) {
     browseCollectionTotal = data.collectionTotal ?? browseCollectionTotal;
     browseScope = data.scope || 'listed';
     browseIndexing = !!data.indexing;
+    browseTruncated = !!data.truncated;
     browseOwner = data.owner || null;
     browseOwnedTotal = data.ownedTotal ?? null;
     browseOwnerProfile = data.ownerProfile || null;
@@ -2580,12 +2610,15 @@ async function loadBrowse(reset = true, quiet = false) {
       return;
     }
   } catch (err) {
+    if (err?.name === 'AbortError') return; // superseded on purpose — not a failure
     if (rid !== browseReqId) return;
     console.error('Browse load failed:', err);
     if (reset && !quiet) listingsError = true;
   } finally {
     if (rid === browseReqId) {
-      listingsLoading = false; patchGrid(); patchFilters();
+      listingsLoading = false;
+      if (!added || !appendTiles('#trade-grid', '#trade-loadmore', added, tileHtml, loadMoreHtml, 'trade-tile')) patchGrid();
+      patchFilters();
       // Still cataloguing? The trait facets (and the full "All" set) aren't ready yet —
       // poll quietly until they land so the UI completes itself. Scoped to this dataset
       // so switching collections doesn't keep it alive.
@@ -2726,8 +2759,29 @@ function loadMoreHtml() {
 function patchGrid() {
   const g = root()?.querySelector('#trade-grid');
   if (g) g.innerHTML = gridInnerHtml();
+  patchLoadMore();
+}
+
+// The "load more" button on its own. Its pending state is the only thing that changes when
+// a next page is on the way, and repainting the grid for it would throw away the tiles the
+// reader is looking at.
+function patchLoadMore() {
   const lm = root()?.querySelector('#trade-loadmore');
   if (lm) lm.innerHTML = loadMoreHtml();
+}
+
+// "Load more" adds a page; it doesn't change the pages already on screen. Re-rendering the
+// whole grid for it threw away every tile the reader was looking at and built it again,
+// which re-decoded its image and replayed its entrance animation. Append instead, and fall
+// back to a full render whenever the grid isn't currently a list of tiles (an empty state,
+// an error card) or the rows arrived out of step.
+function appendTiles(sel, moreSel, rows, render, moreHtml, rowClass) {
+  const g = root()?.querySelector(sel);
+  if (!g || !rows?.length || !g.firstElementChild?.classList.contains(rowClass)) return false;
+  g.insertAdjacentHTML('beforeend', rows.map(render).join(''));
+  const lm = root()?.querySelector(moreSel);
+  if (lm) lm.innerHTML = moreHtml();
+  return true;
 }
 
 // --- Token detail modal ---
@@ -5697,8 +5751,14 @@ function countLineHtml() {
   const denom = allScope ? browseCollectionTotal : browseListedTotal;
   if (browseTotal == null || denom == null) return '';
   const key = browseHadFilters ? ds.countFiltered : (allScope ? ds.countCollection : ds.countAll);
+  // The server indexes a fixed number of listings per sweep. Past that it says so, and the
+  // count and floor on screen describe only the slice it holds — say that rather than
+  // quietly under-report the market.
   const note = browseIndexing && flt.scope === 'all'
-    ? ` <span class="trade-flt-note">${esc(t(ds.indexing))}</span>` : '';
+    ? ` <span class="trade-flt-note">${esc(t(ds.indexing))}</span>`
+    : browseTruncated
+      ? ` <span class="trade-flt-note">${esc(t('trade.browse.truncated').replace('{n}', (browseListedTotal ?? 0).toLocaleString()))}</span>`
+      : '';
   return `<span class="trade-flt-count ${listingsLoading ? 'is-stale' : ''}" role="status">${esc(t(key)
     .replace('{n}', browseTotal.toLocaleString()).replace('{total}', denom.toLocaleString()))}</span>${note}`;
 }
@@ -6117,8 +6177,10 @@ async function loadSales(reset = true) {
   const rid = ++salesReqId;
   const startColl = coll;
   const api = `/api/market/${coll === 'land' ? 'land' : 'creatures'}/sales`;
+  let added = null; // rows this page added, when it was a "load more" rather than a reset
   salesLoading = true;
-  patchSalesGrid(); patchFilters();
+  if (reset) patchSalesGrid(); else patchSalesLoadMore();
+  patchFilters();
   try {
     const qs = salesQuery(page);
     const res = await fetch(`${api}${qs ? '?' + qs : ''}`, { headers: { Accept: 'application/json' } });
@@ -6128,6 +6190,7 @@ async function loadSales(reset = true) {
     if (data.ethUsd != null) ethUsd = data.ethUsd;
     if (data.fxRates) fxRates = data.fxRates;
     const items = data.items || [];
+    if (!reset) added = items; // appended below rather than re-rendering the cards on screen
     salesItems = reset ? items : (salesItems || []).concat(items);
     salesPage = data.page ?? page;
     salesHasMore = !!data.hasMore;
@@ -6138,7 +6201,12 @@ async function loadSales(reset = true) {
     console.error('Sales history load failed:', err);
     if (reset) { salesItems = salesItems || []; salesError = true; }
   } finally {
-    if (rid === salesReqId) { salesLoading = false; patchSalesGrid(); patchFilters(); }
+    if (rid === salesReqId) {
+      salesLoading = false;
+      if (!added || !appendTiles('#trade-sales-grid', '#trade-sales-loadmore', added,
+        (s, i) => saleCardHtml(s, i), salesLoadMoreHtml, 'trade-sale-card')) patchSalesGrid();
+      patchFilters();
+    }
   }
 }
 function maybeLoadSales() {
@@ -6297,6 +6365,10 @@ function patchSalesGrid() {
   if (tradeTab !== 'sales') return;
   const g = root()?.querySelector('#trade-sales-grid');
   if (g) g.innerHTML = salesGridInnerHtml();
+  patchSalesLoadMore();
+}
+
+function patchSalesLoadMore() {
   const lm = root()?.querySelector('#trade-sales-loadmore');
   if (lm) lm.innerHTML = salesLoadMoreHtml();
 }

@@ -1555,7 +1555,11 @@ async function getCreatureListings(cursor = '') {
     fxRates: fx.fxRates, // { usd:1, eur, gbp, brl, rub, try, jpy, cad, aud } for the currency picker
     fetchedAt: new Date().toISOString(),
   };
-  if (listingsCache.size > 64) listingsCache.clear(); // bound memory from many distinct cursors
+  // Oldest out first. Clearing the whole map threw away the hot first page (cursor '')
+  // along with the cold deep cursors it was meant to bound; deleting before the set keeps
+  // a re-cached page at the young end of the insertion order.
+  listingsCache.delete(key);
+  if (listingsCache.size >= 64) listingsCache.delete(listingsCache.keys().next().value);
   listingsCache.set(key, { data, at: Date.now() });
   return data;
 }
@@ -1689,6 +1693,11 @@ async function getBrowseIndex() {
   }
   return browseIndex.data || browseIndex.inFlight;
 }
+
+// Warm it at boot, in the background. Stale-while-revalidate means nobody waits on a
+// REBUILD, but a cold process has nothing to serve, so without this the first Trade
+// visitor after every deploy waits on the whole listing sweep (measured at ~4s).
+getBrowseIndex().catch(() => {}); // a cold-boot failure already logged itself; retry is on demand
 
 // Wire format: q (name substring), min/max (ETH, vs the all-in price), sort,
 // page (offset into the filtered set), and repeated t=Type:Value params —
@@ -2112,6 +2121,53 @@ function allPoolOf(listIdx, coll) {
   return listIdx._allPool;
 }
 
+// --- Browse view memo -----------------------------------------------------------------
+// Filtering, sorting and faceting all run over a snapshot that changes once a minute, yet
+// every request redid the lot just to slice out 24 rows: for scope=all that is 11k rows
+// re-sorted and 14 facet types re-counted on every keystroke and every "load more". One
+// view per (snapshot, query-without-page) turns paging into a slice. It also freezes
+// `fetchedAt` to when the DATA was read, which is both more honest than "now" and what
+// makes the response body stable enough for its ETag to ever match.
+const BROWSE_VIEW_MAX = 64;
+const browseViewCache = new Map(); // key -> view; insertion-ordered, so the oldest is first
+
+// The parts are joined on a control character no field can contain: joined bare, a search
+// for "ab" with no price floor would key the same as a search for "a" with a floor of "b",
+// and one query would then be served the other's rows.
+function browseViewKey(kind, stamps, f) {
+  const traits = [...f.traits].map(([t, v]) => `${t}=${[...v].sort().join('|')}`).sort().join(';');
+  return [kind, stamps.join('.'), f.q, f.min, f.max, f.sort, f.scope, traits].join('\u0001');
+}
+
+// `stamps` are the build times of every input the view is derived from — when any of them
+// moves, the key moves with it and the old view falls out on its own.
+function browseView(kind, stamps, f, build) {
+  const key = browseViewKey(kind, stamps, f);
+  const hit = browseViewCache.get(key);
+  if (hit) { browseViewCache.delete(key); browseViewCache.set(key, hit); return hit; } // re-insert = keep hot
+  const view = build();
+  if (browseViewCache.size >= BROWSE_VIEW_MAX) browseViewCache.delete(browseViewCache.keys().next().value);
+  browseViewCache.set(key, view);
+  return view;
+}
+
+// A page of rows out of a memoized view, plus the fields every browse response shares.
+// Facets are identical for every page of one query and are half the payload, so only
+// page 0 carries them — the client keeps the copy it already has.
+function browsePage(view, f, extra = {}) {
+  const start = f.page * BROWSE_PAGE_SIZE;
+  return {
+    items: view.matched.slice(start, start + BROWSE_PAGE_SIZE).map(view.strip),
+    total: view.matched.length,
+    page: f.page,
+    hasMore: start + BROWSE_PAGE_SIZE < view.matched.length,
+    ...(f.page === 0 ? { facets: view.facets } : {}),
+    priceRange: view.priceRange,
+    fetchedAt: view.fetchedAt,
+    ...extra,
+  };
+}
+
 async function getCreatureBrowse(searchParams) {
   const f = parseBrowseQuery(searchParams);
   // A full wallet address in the search box switches Browse into "this wallet's holdings".
@@ -2125,32 +2181,37 @@ async function getCreatureBrowse(searchParams) {
   const [listIdx, fx] = await Promise.all([getBrowseIndex(), getMarketplaceFx()]);
   const coll = getCollectionIndex(); // null until the first build lands
   const wantAll = f.scope === 'all';
-  const pool = wantAll && coll ? allPoolOf(listIdx, coll) : listedPoolOf(listIdx, coll);
-
-  const matched = pool.filter(it => browseMatch(it, f)).sort(BROWSE_SORTS[f.sort]);
-  const start = f.page * BROWSE_PAGE_SIZE;
-  let lo = null, hi = null;
-  for (const it of listIdx.items) {
-    const p = it.totalEth ?? it.priceEth;
-    if (lo === null || p < lo) lo = p;
-    if (hi === null || p > hi) hi = p;
-  }
-  return {
-    items: matched.slice(start, start + BROWSE_PAGE_SIZE).map(({ traits, listedAt, ...pub }) => pub),
-    total: matched.length,
-    page: f.page,
-    hasMore: start + BROWSE_PAGE_SIZE < matched.length,
-    scope: wantAll && coll ? 'all' : 'listed',
-    indexing: wantAll && !coll,                  // asked for everything; still cataloguing
-    facets: computeBrowseFacets(pool, f),
-    priceRange: lo === null ? null : { min: lo, max: hi },
-    listedTotal: listIdx.items.length,
-    collectionTotal: coll?.total ?? null,
-    truncated: listIdx.truncated,
+  const view = browseView('creatures', [browseIndex.at, collectionIndex.at], f, () => {
+    const pool = wantAll && coll ? allPoolOf(listIdx, coll) : listedPoolOf(listIdx, coll);
+    const matched = pool.filter(it => browseMatch(it, f)).sort(BROWSE_SORTS[f.sort]);
+    let lo = null, hi = null;
+    for (const it of listIdx.items) {
+      const p = it.totalEth ?? it.priceEth;
+      if (lo === null || p < lo) lo = p;
+      if (hi === null || p > hi) hi = p;
+    }
+    return {
+      matched,
+      strip: ({ traits, listedAt, ...pub }) => pub,
+      facets: computeBrowseFacets(pool, f),
+      priceRange: lo === null ? null : { min: lo, max: hi },
+      scope: wantAll && coll ? 'all' : 'listed',
+      indexing: wantAll && !coll,                // asked for everything; still cataloguing
+      listedTotal: listIdx.items.length,
+      collectionTotal: coll?.total ?? null,
+      truncated: listIdx.truncated,
+      fetchedAt: new Date(browseIndex.at || Date.now()).toISOString(),
+    };
+  });
+  return browsePage(view, f, {
+    scope: view.scope,
+    indexing: view.indexing,
+    listedTotal: view.listedTotal,
+    collectionTotal: view.collectionTotal,
+    truncated: view.truncated,
     ethUsd: fx.ethUsd,
     fxRates: fx.fxRates,
-    fetchedAt: new Date().toISOString(),
-  };
+  });
 }
 
 // --- Trait showcase: every trait in the collection, on a Creature that wears it --------
@@ -2392,7 +2453,7 @@ async function getCreatureTraits() {
   const coll = getCollectionIndex();   // null until the first build lands
   if (!coll) {
     return { indexing: true, total: null, types: [], listedTotal: listIdx.items.length,
-      ethUsd: fx.ethUsd, fetchedAt: new Date().toISOString() };
+      ethUsd: fx.ethUsd, fetchedAt: new Date(browseIndex.at || Date.now()).toISOString() };
   }
   if (traitShowcase.forBuild !== coll.builtAt) {
     traitShowcase.data = buildTraitShowcase(coll, artMap);
@@ -2425,7 +2486,9 @@ async function getCreatureTraits() {
     })),
     listedTotal: listIdx.items.length,
     ethUsd: fx.ethUsd,
-    fetchedAt: new Date().toISOString(),
+    // When the DATA was read, not when this response was built: the listing snapshot is
+    // the youngest input, and a stable value here is what lets the 164KB body 304.
+    fetchedAt: new Date(browseIndex.at || Date.now()).toISOString(),
   };
 }
 
@@ -2538,17 +2601,17 @@ function shapeSalesHistory(feed, f, sortKey, meta) {
   const matched = rows.filter(r =>
     (!isAddr || r.buyer === f.q || r.seller === f.q) && browseMatch(r, fq)
   ).sort(SALES_SORTS[sortKey]);
-  const start = f.page * BROWSE_PAGE_SIZE;
-  return {
-    items: matched.slice(start, start + BROWSE_PAGE_SIZE).map(({ search, ...pub }) => pub),
-    total: matched.length,
-    page: f.page,
-    hasMore: start + BROWSE_PAGE_SIZE < matched.length,
+  return browsePage({
+    matched,
+    strip: ({ search, ...pub }) => pub,
     facets: computeBrowseFacets(rows, fq),
+    // The sales feed's own cache time: when the DATA was read, not when this response was
+    // assembled, so paging through settled history doesn't churn the response's validator.
+    fetchedAt: new Date(meta.at || Date.now()).toISOString(),
+  }, f, {
     ethUsd: meta.ethUsd,
     fxRates: meta.fxRates,
-    fetchedAt: new Date().toISOString(),
-  };
+  });
 }
 
 async function getCreatureSalesHistory(searchParams) {
@@ -2558,6 +2621,7 @@ async function getCreatureSalesHistory(searchParams) {
   const coll = getCollectionIndex(); // null until the first catalogue build lands
   const listedMap = new Map((listIdx?.items || []).map(it => [String(it.tokenId), it.totalEth ?? it.priceEth]));
   return shapeSalesHistory(feed, f, sortKey, {
+    at: creatureSalesFeed.at,
     daily, ethUsd: fx.ethUsd, fxRates: fx.fxRates,
     lookup: id => coll?.byId.get(String(id)) || null,
     listed: id => listedMap.get(String(id)) ?? null,
@@ -2650,48 +2714,55 @@ async function getLandBrowse(searchParams) {
   const [fx, listings] = await Promise.all([getMarketplaceFx(), landListingsByToken()]);
   const index = slimeIndex.getSlimeIndex(); // null while the first sweep runs
 
-  const rows = [];
-  const seen = new Set();
-  if (index) for (const s of index.items) { seen.add(String(s.tokenId)); rows.push(landRowOf(s, listings.get(String(s.tokenId)), fx.ethUsd)); }
-  // Listed parcels missing from the catalogue still show for sale (completeness — a
-  // marketplace must never hide a buyable item behind an unfinished index).
-  for (const [tokenId, L] of listings) if (!seen.has(tokenId)) rows.push(listingRowOf(tokenId, L, fx.ethUsd));
+  // Same memo as Creatures, and LAND needs it more: without one, every request rebuilt a
+  // row for all ~3,000 parcels before sorting and faceting them.
+  const view = browseView('land', [index?.builtAt ?? 0, slimeListingsCache.at], f, () => {
+    const rows = [];
+    const seen = new Set();
+    if (index) for (const s of index.items) { seen.add(String(s.tokenId)); rows.push(landRowOf(s, listings.get(String(s.tokenId)), fx.ethUsd)); }
+    // Listed parcels missing from the catalogue still show for sale (completeness — a
+    // marketplace must never hide a buyable item behind an unfinished index).
+    for (const [tokenId, L] of listings) if (!seen.has(tokenId)) rows.push(listingRowOf(tokenId, L, fx.ethUsd));
 
-  const wantAll = f.scope === 'all';
-  const pool = wantAll ? rows : rows.filter(r => r.listed);
-  const matched = pool.filter(it => browseMatch(it, f)).sort(BROWSE_SORTS[f.sort]);
-  const start = f.page * BROWSE_PAGE_SIZE;
-  let lo = null, hi = null;
-  for (const r of rows) {
-    if (r.totalEth == null) continue;
-    if (lo === null || r.totalEth < lo) lo = r.totalEth;
-    if (hi === null || r.totalEth > hi) hi = r.totalEth;
-  }
-  // Attach a collection-wide rarity % to every trait value: the share of ALL catalogued
-  // slimes that carry it. It's a stable property of the collection, so it's read from the
-  // index's traitFreq (not the filtered pool) — `n` already tells "how many match now".
-  const facets = index ? computeBrowseFacets(pool, f) : [];
-  if (index && index.total) for (const facet of facets) for (const val of facet.values) {
-    const c = index.traitFreq.get(`${facet.type}:${val.v}`);
-    if (c != null) { val.total = c; val.pct = c / index.total; }
-  }
-  return {
-    // traits stay on the row (only a few small fields) so the modal needs no extra fetch.
-    items: matched.slice(start, start + BROWSE_PAGE_SIZE).map(({ search, listedAt, ...pub }) => pub),
-    total: matched.length,
-    page: f.page,
-    hasMore: start + BROWSE_PAGE_SIZE < matched.length,
-    scope: wantAll ? 'all' : 'listed',
-    // 'all' needs the full catalogue; until it's built we can only show listed parcels.
-    indexing: !index,
-    facets,
-    priceRange: lo === null ? null : { min: lo, max: hi },
-    listedTotal: rows.reduce((n, r) => n + (r.listed ? 1 : 0), 0),
-    collectionTotal: index ? index.total : null,
+    const wantAll = f.scope === 'all';
+    const pool = wantAll ? rows : rows.filter(r => r.listed);
+    const matched = pool.filter(it => browseMatch(it, f)).sort(BROWSE_SORTS[f.sort]);
+    let lo = null, hi = null;
+    for (const r of rows) {
+      if (r.totalEth == null) continue;
+      if (lo === null || r.totalEth < lo) lo = r.totalEth;
+      if (hi === null || r.totalEth > hi) hi = r.totalEth;
+    }
+    // Attach a collection-wide rarity % to every trait value: the share of ALL catalogued
+    // slimes that carry it. It's a stable property of the collection, so it's read from the
+    // index's traitFreq (not the filtered pool) — `n` already tells "how many match now".
+    const facets = index ? computeBrowseFacets(pool, f) : [];
+    if (index && index.total) for (const facet of facets) for (const val of facet.values) {
+      const c = index.traitFreq.get(`${facet.type}:${val.v}`);
+      if (c != null) { val.total = c; val.pct = c / index.total; }
+    }
+    return {
+      matched,
+      // traits stay on the row (only a few small fields) so the modal needs no extra fetch.
+      strip: ({ search, listedAt, ...pub }) => pub,
+      facets,
+      priceRange: lo === null ? null : { min: lo, max: hi },
+      scope: wantAll ? 'all' : 'listed',
+      // 'all' needs the full catalogue; until it's built we can only show listed parcels.
+      indexing: !index,
+      listedTotal: rows.reduce((n, r) => n + (r.listed ? 1 : 0), 0),
+      collectionTotal: index ? index.total : null,
+      fetchedAt: new Date(index?.builtAt || Date.now()).toISOString(),
+    };
+  });
+  return browsePage(view, f, {
+    scope: view.scope,
+    indexing: view.indexing,
+    listedTotal: view.listedTotal,
+    collectionTotal: view.collectionTotal,
     ethUsd: fx.ethUsd,
     fxRates: fx.fxRates,
-    fetchedAt: new Date().toISOString(),
-  };
+  });
 }
 
 // LAND sales feed (OpenSea collection events), briefly cached. Traits/rank are joined per
@@ -2720,6 +2791,7 @@ async function getLandSalesHistory(searchParams) {
   const [feed, fx, daily, listings] = await Promise.all([getLandSalesFeed(), getMarketplaceFx(), getEthUsdDaily(), landListingsByToken()]);
   const index = slimeIndex.getSlimeIndex(); // null while the first sweep runs
   const data = shapeSalesHistory(feed, f, sortKey, {
+    at: landSalesFeed.at,
     daily, ethUsd: fx.ethUsd, fxRates: fx.fxRates,
     listed: id => { const L = listings.get(String(id)); if (!L) return null; return L.currency === 'usdc' ? (fx.ethUsd ? Math.round(L.priceAmt / fx.ethUsd * 1e4) / 1e4 : null) : (L.priceEth ?? L.priceAmt ?? null); },
     // The OpenSea event already carries name/image/coords; the catalogue adds traits + rank.
@@ -2848,7 +2920,6 @@ async function getWalletBrowse(collKind, f, opts = {}) {
   const fq = { ...f, q: '' }; // the wallet(s) select the pool; q is not a name substring here
   const pool = f.scope === 'listed' ? rows.filter(r => r.listed) : rows;
   const matched = pool.filter(it => browseMatch(it, fq)).sort(BROWSE_SORTS[f.sort]);
-  const start = f.page * BROWSE_PAGE_SIZE;
   let lo = null, hi = null;
   for (const r of rows) { const p = r.totalEth; if (p == null) continue; if (lo === null || p < lo) lo = p; if (hi === null || p > hi) hi = p; }
   const listedCount = rows.reduce((n, r) => n + (r.listed ? 1 : 0), 0);
@@ -2858,11 +2929,14 @@ async function getWalletBrowse(collKind, f, opts = {}) {
   const strip = collKind === 'land'
     ? ({ search, listedAt, ...pub }) => pub
     : ({ traits, listedAt, ...pub }) => pub;
-  return {
-    items: matched.slice(start, start + BROWSE_PAGE_SIZE).map(strip),
-    total: matched.length,
-    page: f.page,
-    hasMore: start + BROWSE_PAGE_SIZE < matched.length,
+  // Paged and faceted like collection browse (facets on page 0 only), but not memoized:
+  // the costly part is the upstream holdings read, and that already has its own pool cache.
+  return browsePage({
+    matched, strip,
+    facets: computeBrowseFacets(pool, fq),
+    priceRange: lo === null ? null : { min: lo, max: hi },
+    fetchedAt: new Date().toISOString(),
+  }, f, {
     scope: f.scope,
     owner: walletSpec.length === 1 && walletSpec[0].source === 'wallet' ? walletSpec[0].wallet : null,
     ownerProfile: opts.profile || null,
@@ -2873,14 +2947,11 @@ async function getWalletBrowse(collKind, f, opts = {}) {
     // they're warm this response degrades (raw/absent traits, parcel-only names), so
     // tell the client it's worth a quiet re-poll, same as collection-mode browse.
     indexing: collKind === 'land' ? !slimeIndex.getSlimeIndex() : !getCollectionIndex(),
-    facets: computeBrowseFacets(pool, fq),
-    priceRange: lo === null ? null : { min: lo, max: hi },
     listedTotal: listedCount,
     collectionTotal: rows.length,
     ethUsd: fx.ethUsd,
     fxRates: fx.fxRates,
-    fetchedAt: new Date().toISOString(),
-  };
+  });
 }
 
 // Public marketplace API — browse only (no auth, no wallet, nothing sensitive).
@@ -3084,8 +3155,8 @@ async function handleMarketplaceApi(request, response, url) {
     try {
       upstreamHealth.throwIfFaulted('creatures', 'listings');
       const data = await getCreatureListings(cursor);
-      lastKnown.record(KEY, data);
-      sendJson(response, 200, { ...data, health: creatureBrowseHealth(true) }, { 'Cache-Control': 'public, max-age=30' });
+      if (!cursor) lastKnown.record(KEY, data); // first page only — see the browse route below
+      sendJson(response, 200, { ...data, health: creatureBrowseHealth(true) }, { 'Cache-Control': 'public, max-age=30' }, { request, etagIgnore: HEALTH_CLOCK_KEYS });
     } catch (err) {
       console.error('Creature listings failed:', err.message);
       const snap = lastKnown.read(KEY, upstreamHealth.MAX_AGE_MS.creatures);
@@ -3095,7 +3166,7 @@ async function handleMarketplaceApi(request, response, url) {
       sendJson(response, snap ? 200 : 503, snap
         ? { ...snap.data, fetchedAt: new Date(snap.at).toISOString(), items: (snap.data.items || []).map(i => ({ ...i, stale: true })), health }
         : { error: 'upstream_down', items: null, health },
-        { 'Cache-Control': 'no-store' });
+        { 'Cache-Control': 'no-store' }, { request, compress: true });
     }
     return;
   }
@@ -3108,12 +3179,19 @@ async function handleMarketplaceApi(request, response, url) {
       const w = rateLimited(`mktwallet:${ip}`, 40, 60 * 1000);
       if (w) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(w) }); return; }
     }
+    // No `stale-while-revalidate` on this route or /listings: the club's rule is that
+    // listings show CURRENT status, and a background-revalidated copy would paint a
+    // minute-old price with nothing marking it stale. The slow surfaces (traits, sales,
+    // holders, market stats) do carry it — nothing there can go out of date mid-click.
     const KEY = `creatures:browse:${url.search || ''}`;
     try {
       upstreamHealth.throwIfFaulted('creatures', 'listings');
       const data = await getCreatureBrowse(url.searchParams);
-      lastKnown.record(KEY, data);
-      sendJson(response, 200, { ...data, health: creatureBrowseHealth(true) }, { 'Cache-Control': 'public, max-age=15' });
+      // Only the first page is worth keeping. It's the view every filter combo starts from,
+      // and recording deep pages as well let one browsing session evict every snapshot in
+      // the store before an outage ever arrived.
+      if (data.page === 0) lastKnown.record(KEY, data);
+      sendJson(response, 200, { ...data, health: creatureBrowseHealth(true) }, { 'Cache-Control': 'public, max-age=15' }, { request, etagIgnore: HEALTH_CLOCK_KEYS });
     } catch (err) {
       console.error('Creature browse failed:', err.message);
       const snap = lastKnown.read(KEY, upstreamHealth.MAX_AGE_MS.creatures);
@@ -3123,7 +3201,7 @@ async function handleMarketplaceApi(request, response, url) {
           fetchedAt: new Date(snap.at).toISOString(),
           items: (snap.data.items || []).map(i => ({ ...i, stale: true })),
           health: creatureBrowseHealth(false, snap.at, errCode(err)),
-        }, { 'Cache-Control': 'no-store' });
+        }, { 'Cache-Control': 'no-store' }, { request, compress: true });
         return;
       }
       // No snapshot. A WALLET view can still be rebuilt from chain data via Blockscout,
@@ -3144,7 +3222,7 @@ async function handleMarketplaceApi(request, response, url) {
             scope: 'all', owner: q, ownedTotal: items.length,
             pricesUnavailable: true, source: 'blockscout',
             health: creatureBrowseHealth(false, Date.now(), errCode(err)),
-          }, { 'Cache-Control': 'no-store' });
+          }, { 'Cache-Control': 'no-store' }, { request, compress: true });
           return;
         }
       }
@@ -3161,7 +3239,7 @@ async function handleMarketplaceApi(request, response, url) {
   // Browse already keeps, so it costs no upstream calls at all.
   if (pathname === '/api/market/creatures/traits') {
     const data = await getCreatureTraits();
-    sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=60' });
+    sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=600' }, { request });
     return;
   }
 
@@ -3175,7 +3253,7 @@ async function handleMarketplaceApi(request, response, url) {
       sendJson(response, 200, {
         ...data,
         health: upstreamHealth.collectionHealth('creatures', { meta: srcHealth('creatures', 'meta', true) }),
-      }, { 'Cache-Control': 'public, max-age=30' });
+      }, { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=150' }, { request, etagIgnore: HEALTH_CLOCK_KEYS });
     } catch (err) {
       console.error('Creature sales history failed:', err.message);
       sendJson(response, 503, {
@@ -4159,7 +4237,7 @@ async function handleMarketplaceApi(request, response, url) {
       sendJson(response, 200, {
         ...data,
         health: priced ? landHealth(true) : landHealth(false, null, 'not_configured'),
-      }, { 'Cache-Control': priced ? 'public, max-age=15' : 'no-store' });
+      }, { 'Cache-Control': priced ? 'public, max-age=15' : 'no-store' }, { request, compress: true, etagIgnore: HEALTH_CLOCK_KEYS });
     } catch (err) {
       console.error('LAND browse failed:', err.message);
       sendJson(response, err.statusCode || 503, {
@@ -4175,7 +4253,7 @@ async function handleMarketplaceApi(request, response, url) {
     if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
     try {
       const data = await getLandSalesHistory(url.searchParams);
-      sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=30' });
+      sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=30' }, { request });
     } catch (err) {
       console.error('LAND sales history failed:', err.message);
       sendJson(response, 503, { error: 'unavailable' });
@@ -4491,13 +4569,85 @@ async function handleMarketplaceApi(request, response, url) {
 // --- Council auth + eligibility API ---
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // seconds, mirrors db.js SESSION_TTL_MS
 
-function sendJson(response, status, obj, extraHeaders = {}) {
-  response.writeHead(status, {
+// The public read payloads here are big — the trait showcase is ~160KB, market stats
+// ~37KB, a browse page ~20KB — and they gzip to roughly a sixth. Passing `opts.request`
+// opts a response into that: the request is what lets us read Accept-Encoding and answer
+// a conditional GET with a 304.
+//
+// Compression is deliberately NOT blanket. When a response mixes a secret with
+// attacker-supplied input, its compressed SIZE leaks the secret (BREACH). Only responses
+// already marked `public` compress — every user-scoped response on this server is
+// `no-store` — plus the big public payloads that must stay no-store (the degraded market
+// snapshots), which opt in explicitly with `compress: true`.
+// The health envelope re-stamps these every time it is built, so they are the only reason
+// two otherwise identical market responses differ. Excluded from the validator (never from
+// the body) so revalidation can actually 304 — see `etagIgnore` below.
+const HEALTH_CLOCK_KEYS = ['checkedAt', 'asOf', 'ageMs'];
+const JSON_GZIP_MIN_BYTES = 1024; // below this, gzip costs more than it saves
+const JSON_GZIP_CACHE_MAX = 64;
+const jsonGzipCache = new Map();  // etag -> gzipped Buffer; snapshot-backed bodies repeat a lot
+
+function sendJson(response, status, obj, extraHeaders = {}, opts = {}) {
+  const request = opts.request;
+  const cacheControl = extraHeaders['Cache-Control'] ?? 'no-store';
+  const isPublic = String(cacheControl).split(',').some(p => p.trim() === 'public');
+  const body = Buffer.from(JSON.stringify(obj), 'utf8');
+
+  // Weak, content-derived and encoding-agnostic, so one validator covers both the gzipped
+  // and identity copies — the same convention the static handler uses. Only cacheable
+  // responses get one: a `no-store` client can never send If-None-Match back.
+  //
+  // `etagIgnore` names keys whose value moves on every request even when the answer is
+  // identical (the health envelope's liveness clock). Left in, they made the validator
+  // useless: no two responses ever matched. Only clocks belong in that list — everything
+  // that changes what the client DOES (health.state, trading, error) stays in the hash, so
+  // a 304 can only ever repeat a response the client can still act on.
+  const etagSource = request && opts.etagIgnore
+    ? Buffer.from(JSON.stringify(obj, (k, v) => (opts.etagIgnore.includes(k) ? undefined : v)), 'utf8')
+    : body;
+  const etag = request && isPublic && status === 200
+    ? 'W/"' + crypto.createHash('sha1').update(etagSource).digest('base64').slice(0, 27) + '"'
+    : null;
+  // Vary tracks whether this body COULD differ by encoding, not what this caller accepts —
+  // otherwise a shared cache could hand an identity copy to a client that wanted gzip.
+  const compressible = body.length >= JSON_GZIP_MIN_BYTES && (isPublic || opts.compress === true);
+  const gzipWanted = compressible && !!request
+    && String(request.headers['accept-encoding'] || '').includes('gzip');
+
+  const headers = {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
     ...extraHeaders,
+    ...(etag ? { ETag: etag } : {}),
+    ...(compressible ? { Vary: 'Accept-Encoding' } : {}),
+  };
+
+  if (etag && request.headers['if-none-match'] === etag) {
+    response.writeHead(304, headers);
+    response.end();
+    return;
+  }
+  const sendRaw = () => {
+    response.writeHead(status, { ...headers, 'Content-Length': String(body.length) });
+    response.end(body);
+  };
+  if (!gzipWanted) { sendRaw(); return; }
+
+  const sendGz = gz => {
+    response.writeHead(status, { ...headers, 'Content-Encoding': 'gzip', 'Content-Length': String(gz.length) });
+    response.end(gz);
+  };
+  const cached = etag ? jsonGzipCache.get(etag) : null;
+  if (cached) { sendGz(cached); return; }
+  zlib.gzip(body, (err, gz) => {
+    if (response.writableEnded || response.destroyed) return;
+    if (err || gz.length >= body.length) { sendRaw(); return; }
+    if (etag) {
+      if (jsonGzipCache.size >= JSON_GZIP_CACHE_MAX) jsonGzipCache.delete(jsonGzipCache.keys().next().value);
+      jsonGzipCache.set(etag, gz);
+    }
+    sendGz(gz);
   });
-  response.end(JSON.stringify(obj));
 }
 
 // Who is calling, for rate-limiting purposes.
@@ -6985,22 +7135,15 @@ const server = http.createServer((request, response) => {
   // { ready: false } while the first sweep runs; the page just leaves the section out.
   if (request.url.startsWith('/api/holders/quality')) {
     const data = getHolderQuality();
-    response.writeHead(200, {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'public, max-age=600',
-    });
-    response.end(JSON.stringify(data ? { ready: true, ...data } : { ready: false }));
+    sendJson(response, 200, data ? { ready: true, ...data } : { ready: false },
+      { 'Cache-Control': 'public, max-age=600, stale-while-revalidate=1800' }, { request });
     return;
   }
 
   if (request.url.startsWith('/api/holders')) {
     getHolderStats()
       .then(data => {
-        response.writeHead(200, {
-          'Content-Type': 'application/json; charset=utf-8',
-          'Cache-Control': 'public, max-age=300',
-        });
-        response.end(JSON.stringify(data));
+        sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=300, stale-while-revalidate=900' }, { request });
       })
       .catch(err => {
         console.error('Holder stats request failed:', err.message);
@@ -7043,11 +7186,7 @@ const server = http.createServer((request, response) => {
   if (request.url.startsWith('/api/market')) {
     getMarketStats()
       .then(data => {
-        response.writeHead(200, {
-          'Content-Type': 'application/json; charset=utf-8',
-          'Cache-Control': 'public, max-age=300',
-        });
-        response.end(JSON.stringify(data));
+        sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=300, stale-while-revalidate=900' }, { request });
       })
       .catch(err => {
         console.error('Market stats request failed:', err.message);
