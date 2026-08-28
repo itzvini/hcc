@@ -6619,11 +6619,12 @@ function resolveFile(requestUrl) {
   // Reject traversal and any dotfile/dot-directory segment (.env, .git, .github…).
   if (segments.some(s => s === '..' || s.startsWith('.'))) return null;
 
-  // Clean tab routes: up to three short lowercase segments with no extension
-  // (e.g. /roadmap, /roadmap/gen2, /guides/walkthroughs/funding) serve the app shell.
-  // This only ever returns index.html — it never reads an arbitrary path — so it
-  // can't leak files; the file allowlist below is unchanged.
-  if (segments.length <= 3 && TAB_ROUTES.has(segments[0]) &&
+  // Clean tab routes: up to four short lowercase segments with no extension
+  // (e.g. /roadmap, /roadmap/gen2, /guides/walkthroughs/funding, and the codex entity
+  // pages /collections/trait/outfit/kitsune-spell) serve the app shell. This only ever
+  // returns index.html — it never reads an arbitrary path — so it can't leak files; the
+  // file allowlist below is unchanged.
+  if (segments.length <= 4 && TAB_ROUTES.has(segments[0]) &&
       !path.extname(normalized) && segments.every(s => /^[a-z0-9-]+$/.test(s))) {
     return path.join(root, 'index.html');
   }
@@ -6643,6 +6644,225 @@ function resolveFile(requestUrl) {
 
   return filePath;
 }
+
+/* ---------------------------------------------------------------- page meta
+   Codex entity pages (/collections/release|item|trait|creature/…) all serve the same
+   app shell, so a link to any of them used to unfurl in Discord as the site's generic
+   card: same title, same description, same picture. That is most of the value of a
+   linkable reference thrown away, in the one place holders actually paste links.
+   So the shell's head is stamped per URL before the bytes leave: title, description,
+   canonical, and the thing the page is actually about as og:image.
+   The stamp is also what a reader without JS gets, and what a search engine indexes. */
+
+const CODEX_KINDS = new Set(['release', 'item', 'trait', 'creature']);
+const SITE_ORIGIN = (process.env.SITE_ORIGIN || 'https://hcc.highrise.game').replace(/\/+$/, '');
+const SITE_NAME   = 'Highrise Creature Club';
+
+// The same slug the browser writes into these links (js/entity-url.js). The two must
+// agree exactly or a shared URL gets the wrong card, so keep them in step.
+function entitySlug(s) {
+  return String(s).toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'x';
+}
+
+// A codex URL, or null for everything else. Sync and cheap: it runs on the shell routes
+// only, and decides whether the request is worth the async meta lookup at all.
+function codexRouteOf(pathname) {
+  const segs = pathname.split('/').filter(Boolean);
+  if (segs[0] !== 'collections' || !CODEX_KINDS.has(segs[1]) || segs.length < 3) return null;
+  return { kind: segs[1], args: segs.slice(2).map(s => { try { return decodeURIComponent(s); } catch { return s; } }) };
+}
+
+// Absolute, because a scraper has no page to resolve a relative path against. Localhost
+// keeps its own origin so a local check reads its own art rather than production's.
+function siteOrigin(request) {
+  const host = String(request.headers.host || '');
+  if (/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)) return `http://${host}`;
+  return SITE_ORIGIN;
+}
+
+// The release archive, read from disk for these stamps — the same file the browser
+// fetches. Re-read when it changes, so a rebuilt catalogue lands without a restart.
+const archiveIndex = { mtimeMs: -1, releases: new Map(), items: new Map() };
+function getArchiveIndex() {
+  let mtimeMs;
+  try { mtimeMs = fs.statSync(path.join(root, 'collections.json')).mtimeMs; }
+  catch { return archiveIndex; }            // no file: whatever we already had, or nothing
+  if (mtimeMs === archiveIndex.mtimeMs) return archiveIndex;
+  try {
+    const doc = JSON.parse(fs.readFileSync(path.join(root, 'collections.json'), 'utf8'));
+    const releases = new Map();
+    const items = new Map();
+    const byDate = [...(doc.releases || [])].sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+    for (const rel of byDate) {
+      releases.set(rel.id, rel);
+      // An item is one page per name across every release that carried it, so the first
+      // appearance wins here exactly as it does in the browser.
+      for (const it of rel.items || []) {
+        const key = entitySlug(it.n);
+        if (!items.has(key)) items.set(key, { rel, it });
+      }
+    }
+    archiveIndex.mtimeMs = mtimeMs;
+    archiveIndex.releases = releases;
+    archiveIndex.items = items;
+  } catch (err) {
+    console.error('Page meta: collections.json unreadable:', err.message);
+  }
+  return archiveIndex;
+}
+
+// Creature number ("#3379", the one holders say) to token id (39 digits, the one the
+// chain says). Rebuilt whenever the collection index is.
+const creatureNumbers = { forBuild: null, map: new Map() };
+function getCreatureNumbers() {
+  const coll = getCollectionIndex();
+  if (!coll) return null;
+  if (creatureNumbers.forBuild !== coll.builtAt) {
+    const map = new Map();
+    for (const it of coll.items) {
+      const m = String(it.name || '').match(/#(\d+)/);
+      if (m) map.set(m[1], it);
+    }
+    creatureNumbers.forBuild = coll.builtAt;
+    creatureNumbers.map = map;
+  }
+  return creatureNumbers.map;
+}
+
+const RARITY_WORD = { m: 'Mythical', l: 'Legendary', e: 'Epic', r: 'Rare', c: 'Common' };
+const TYPE_WORD = {
+  drop: 'drop', grab: 'grab', store: 'Creature Store release', event: 'event',
+  competition: 'competition', giveaway: 'giveaway', collab: 'collab', other: 'release',
+};
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+
+// Embeds are English only: they are built here, where the reader's language is unknown,
+// and a scraper caches one card per URL for everyone who sees the link.
+function whenWord(rel) {
+  const [y, m] = String(rel.date || '').split('-');
+  if (!y) return '';
+  const month = MONTHS[Number(m) - 1];
+  const when = month ? `${month} ${y}` : y;
+  return rel.precision === 'exact' ? when : `around ${when}`;
+}
+
+const group = n => Number(n).toLocaleString('en-US');
+
+function artUrlFor(origin, variant, key) {
+  return key ? `${origin}/api/collections/art/${variant}/${encodeURIComponent(key)}.webp` : null;
+}
+
+async function codexPageMeta(route, origin) {
+  const { kind, args } = route;
+
+  if (kind === 'release' || kind === 'item') {
+    const index = getArchiveIndex();
+    if (kind === 'release') {
+      const rel = index.releases.get(args[0]);
+      if (!rel) return null;
+      const when = whenWord(rel);
+      const hero = (rel.hero || []).map(n => rel.items[n]).find(i => i && i.k);
+      const counts = [`${group(rel.items.length)} item${rel.items.length === 1 ? '' : 's'}`];
+      if (rel.copies) counts.push(`${group(rel.copies)} copies made`);
+      return {
+        title: `${rel.name} · ${SITE_NAME}`,
+        description: `A club ${TYPE_WORD[rel.type] || 'release'}${
+          when ? ` from ${when}` : ''}. ${counts.join(', ')}.`,
+        image: artUrlFor(origin, 'full', hero && hero.k),
+      };
+    }
+    const found = index.items.get(args[0]);
+    if (!found) return null;
+    const { rel, it } = found;
+    const rarity = RARITY_WORD[it.r] || '';
+    return {
+      title: `${it.n} · ${SITE_NAME}`,
+      description: `${rarity ? `${rarity} ` : ''}${String(it.c || 'item').replace(/_/g, ' ')} from ${rel.name}.${
+        it.q ? ` ${group(it.q)} copies made.` : ''}`,
+      image: artUrlFor(origin, 'full', it.k),
+    };
+  }
+
+  if (kind === 'trait') {
+    const doc = await getCreatureTraits().catch(() => null);
+    if (!doc || doc.indexing) return null;
+    const ty = doc.types.find(x => entitySlug(x.type) === args[0]);
+    const val = ty && ty.values.find(v => entitySlug(v.v) === args[1]);
+    if (!val) return null;
+    const share = doc.total ? (val.n / doc.total) * 100 : null;
+    const pct = share == null ? '' : share < 0.1 ? 'under 0.1%' : `${share.toFixed(share < 1 ? 2 : 1)}%`;
+    return {
+      title: `${val.v} · ${ty.label || ty.type} trait · ${SITE_NAME}`,
+      description: `Worn by ${group(val.n)} of the ${group(doc.total)} Highrise Creatures${
+        pct ? `, ${pct} of the collection` : ''}.${
+        val.listed ? ` ${group(val.listed)} on sale now.` : ''}`,
+      image: artUrlFor(origin, 'trait', val.art),
+    };
+  }
+
+  // Creature: from the collection index only. A scraper walking many links must never
+  // turn into a burst of upstream metadata reads.
+  const numbers = getCreatureNumbers();
+  const token = numbers && (numbers.get(String(args[0]).replace(/\D/g, ''))
+    || (String(args[0]).length >= 20 ? getCollectionIndex().byId.get(args[0]) : null));
+  if (!token) return null;
+  const worn = ['Outfit', 'Hair'].map(k => token.traits[k]).filter(v => v && v !== 'None');
+  const body = token.traits.Body && token.traits.Body !== 'None' ? token.traits.Body : null;
+  const number = String(token.name || '').match(/#(\d+)/);
+  return {
+    title: `${token.name} · ${SITE_NAME}`,
+    description: `${token.rarity ? `${token.rarity}. ` : ''}Ranked ${group(token.rank)} of ${
+      group(getCollectionIndex().total)} by how rare its traits are.${
+      worn.length ? ` Wearing ${worn.join(' and ')}` : ''}${
+      worn.length && body ? `, on a ${body} body.` : worn.length ? '.' : ''}`,
+    image: token.image || null,
+    // A token id in the URL is the chain's name for it, not the club's. The card points
+    // at the readable address, the same one the page itself settles on.
+    url: number ? `${origin}/collections/creature/${number[1]}` : null,
+  };
+}
+
+// The head tags this stamps. Each is matched on its own attribute, so a head edit that
+// moves them around is fine and one that removes them is caught at boot below.
+const META_SLOTS = [
+  ['title', /<title>[\s\S]*?<\/title>/, v => `<title>${v}</title>`],
+  ['description', /<meta name="description" content="[^"]*">/,
+    v => `<meta name="description" content="${v}">`],
+  ['description', /<meta property="og:description" content="[^"]*">/,
+    v => `<meta property="og:description" content="${v}">`],
+  ['title', /<meta property="og:title" content="[^"]*">/,
+    v => `<meta property="og:title" content="${v}">`],
+  ['url', /<meta property="og:url" content="[^"]*">/,
+    v => `<meta property="og:url" content="${v}">`],
+  ['url', /<link rel="canonical" href="[^"]*">/, v => `<link rel="canonical" href="${v}">`],
+  ['image', /<meta property="og:image" content="[^"]*">/,
+    v => `<meta property="og:image" content="${v}">`],
+];
+
+const attrEscape = s => String(s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+function stampPageMeta(html, meta) {
+  let out = html;
+  for (const [field, pattern, build] of META_SLOTS) {
+    const value = meta[field];
+    if (value == null || value === '') continue;   // no picture: keep the club's own icon
+    out = out.replace(pattern, build(attrEscape(value)));
+  }
+  return out;
+}
+
+// If someone edits the head and one of these disappears, the stamp goes quiet rather
+// than wrong — worth a line in the log, because a silent miss looks like nothing at all.
+(() => {
+  try {
+    const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+    const missing = META_SLOTS.filter(([, pattern]) => !pattern.test(html));
+    if (missing.length) console.warn(`Page meta: ${missing.length} head tag(s) no longer match; those stamps are off.`);
+  } catch { /* the shell is missing, which will announce itself elsewhere */ }
+})();
 
 // A link pasted into chat / a game / a sentence often picks up trailing punctuation —
 // e.g. "https://hcc.highrise.game/announcements." → the request path is "/announcements.",
@@ -6853,12 +7073,16 @@ const server = http.createServer((request, response) => {
     return;
   }
 
-  fs.readFile(filePath, (error, data) => {
+  const serveShell = pageMeta => fs.readFile(filePath, (error, raw) => {
     if (error) {
       response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
       response.end('Not found');
       return;
     }
+
+    // Stamp the shell's head before anything else reads the bytes, so the ETag, the 304
+    // and the gzip all describe the page that was actually asked for.
+    const data = pageMeta ? Buffer.from(stampPageMeta(raw.toString('utf8'), pageMeta), 'utf8') : raw;
 
     const extension = path.extname(filePath).toLowerCase();
 
@@ -6913,7 +7137,10 @@ const server = http.createServer((request, response) => {
     // Compress once per content version, then serve from memory. The cache is bounded
     // by the allowlisted static text files, and a stale entry self-evicts when the
     // file's ETag moves on.
-    const cached = gzipCache.get(filePath);
+    // A stamped shell is a different body per URL, so it is compressed fresh and never
+    // cached: keying thousands of entity pages by file path would thrash the cache, and
+    // keying them by content would grow it without a bound.
+    const cached = pageMeta ? null : gzipCache.get(filePath);
     if (cached && cached.etag === etag) {
       response.writeHead(200, { ...baseHeaders, 'Content-Encoding': 'gzip' });
       response.end(cached.body);
@@ -6925,11 +7152,26 @@ const server = http.createServer((request, response) => {
         response.end(data);
         return;
       }
-      gzipCache.set(filePath, { etag, body: gzipped });
+      if (!pageMeta) gzipCache.set(filePath, { etag, body: gzipped });
       response.writeHead(200, { ...baseHeaders, 'Content-Encoding': 'gzip' });
       response.end(gzipped);
     });
   });
+
+  // Only the codex entity pages need a head of their own, and only they pay for the
+  // lookup. Anything the stamp can't answer for — an unknown item, a trait catalogue
+  // still building — serves the shell unchanged rather than half a card.
+  const requested = parseRequestUrl(request);
+  const codex = requested && path.basename(filePath) === 'index.html'
+    ? codexRouteOf(requested.pathname) : null;
+  if (!codex) { serveShell(null); return; }
+  const origin = siteOrigin(request);
+  codexPageMeta(codex, origin)
+    .then(meta => serveShell(meta ? { ...meta, url: meta.url || origin + requested.pathname } : null))
+    .catch(error => {
+      console.error('Page meta failed:', error.message);
+      serveShell(null);
+    });
 });
 
 // Outlast the edge proxy's idle timeout. Node closes a keep-alive socket after 5s by

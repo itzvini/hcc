@@ -8860,4 +8860,208 @@ span.hp-statchip-ico { font-size: 17px; line-height: 22px; text-align: center; c
   .facts > .fact { display: flex; flex-direction: column; justify-content: center; }
 }
 
+/* ---------- CODEX ----------
+   One page per thing the club has made: a release, an item, a trait, a Creature.
+   All four render through the same shell in js/codex.js — crumbs, art, a fact list,
+   then rails of linked neighbours — so a new entity type needs a renderer and no new
+   design. The entity's own accent arrives as --accent, driving the glow, the chip and
+   the tile hover, exactly as the release cards above do. */
+.cdx-view { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+#panel-collections.is-codex .guide-subpanel { display: none; }
 
+.cdx {
+  position: relative; isolation: isolate; overflow: hidden;
+  margin: 26px 0 60px; padding: 30px clamp(18px, 3vw, 38px) 34px;
+  border-radius: var(--hr-radius-2xl);
+  border: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(40,39,45,.55), rgba(20,19,23,.82));
+  backdrop-filter: blur(14px);
+  box-shadow: var(--hr-shadow-2);
+}
+/* The living glow: a soft wash of the entity's accent behind the header, so a drop and
+   a store release don't read as the same page with different words in it. */
+.cdx-glow {
+  position: absolute; inset: -40% 30% 55% -20%; z-index: 0; pointer-events: none;
+  background: radial-gradient(60% 60% at 30% 40%,
+    color-mix(in srgb, var(--accent) 26%, transparent), transparent 70%);
+  filter: blur(38px); opacity: .65;
+}
+.cdx > *:not(.cdx-glow) { position: relative; z-index: 1; }
+
+/* Crumbs: the trail back up the tree, and the thing that makes this read as a reference
+   rather than a modal that lost its close button. */
+.cdx-crumbs {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 7px;
+  font: 700 12px/1.4 var(--hr-sans); color: var(--hr-fg-3); margin-bottom: 20px;
+}
+.cdx-crumbs a { color: var(--hr-fg-2); text-decoration: none; }
+.cdx-crumbs a:hover { color: var(--accent); }
+.cdx-crumb-here { color: var(--hr-fg-1); }
+
+/* The site-wide `header` rule centres text and pads 70px above, which is right for a
+   page masthead and wrong for every header inside a card. Both of these are cards. */
+.cdx-head, .cdx-sec-h { padding: 0; text-align: left; }
+.cdx-head {
+  display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+  gap: clamp(20px, 3vw, 40px); align-items: center;
+}
+.cdx-head > .cdx-intro:only-child { grid-column: 1 / -1; }
+.cdx-art {
+  position: relative; aspect-ratio: 1; border-radius: var(--hr-radius-xl);
+  border: 1px solid var(--hr-line); overflow: hidden;
+  background: radial-gradient(70% 70% at 50% 35%,
+    color-mix(in srgb, var(--accent) 16%, transparent), rgba(10,10,12,.5));
+}
+.cdx-art-one { position: absolute; inset: 8%; }
+.cdx-art-one img { width: 100%; height: 100%; object-fit: contain; }
+.cdx-art-one.is-creature { inset: 0; }
+.cdx-art-one.is-trait { inset: 12%; }
+/* A release has no single picture, so it wears up to four of its own items. */
+.cdx-art-grid {
+  position: absolute; inset: 7%; display: grid; gap: 6px;
+  grid-template-columns: repeat(2, 1fr);
+}
+.cdx-art-grid[data-n="1"] { grid-template-columns: 1fr; }
+.cdx-art-grid > * {
+  position: relative; border-radius: var(--hr-radius-md);
+  overflow: hidden; background: rgba(255,255,255,.03);
+}
+.cdx-art-none {
+  display: grid; place-items: center; width: 100%; height: 100%;
+  color: var(--hr-fg-4); font: 800 22px/1 var(--hr-sans);
+}
+
+.cdx-kind {
+  display: inline-flex; align-items: center; gap: 7px; padding: 6px 13px;
+  border-radius: var(--hr-radius-pill); font: 800 11px/1 var(--hr-sans);
+  letter-spacing: .09em; text-transform: uppercase; color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.cdx-title { margin: 14px 0 8px; font: 800 clamp(26px, 3.4vw, 40px)/1.1 var(--hr-sans); color: var(--hr-fg-0); }
+.cdx-lead { margin: 0; font: 500 15px/1.5 var(--hr-sans); color: var(--hr-fg-2); }
+.cdx-flag { color: var(--accent); font-weight: 800; }
+.cdx-cta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+
+/* The fact list: an infobox laid flat, so it reads on a phone without a sidebar. */
+.cdx-facts {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  gap: 1px; margin: 32px 0 0; padding: 1px;
+  border-radius: var(--hr-radius-lg); overflow: hidden;
+  background: var(--hr-line);
+}
+.cdx-fact { padding: 15px 16px; background: rgba(18,17,21,.9); }
+.cdx-fact dt {
+  font: 800 10.5px/1 var(--hr-sans); letter-spacing: .08em;
+  text-transform: uppercase; color: var(--hr-fg-3);
+}
+.cdx-fact dd { margin: 8px 0 0; font: 500 14px/1.35 var(--hr-sans); color: var(--hr-fg-1); }
+.cdx-fact dd b { font-weight: 800; color: var(--hr-fg-0); }
+.cdx-sub { display: block; margin-top: 3px; font: 600 11.5px/1.3 var(--hr-sans); color: var(--hr-fg-3); }
+.cdx-dim { color: var(--hr-fg-3); }
+.cdx-mono { font-variant-numeric: tabular-nums; }
+.cdx-rar { display: inline-flex; align-items: center; gap: 7px; }
+
+.cdx-sec { margin-top: 38px; }
+.cdx-sec-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 16px; }
+.cdx-sec-h h3 { margin: 0; font: 800 17px/1.2 var(--hr-sans); color: var(--hr-fg-0); }
+.cdx-sec-sub { font: 600 12.5px/1 var(--hr-sans); color: var(--hr-fg-3); }
+.cdx-sec-more { margin-left: auto; font: 800 12px/1 var(--hr-sans); color: var(--accent); text-decoration: none; }
+.cdx-sec-more:hover { text-decoration: underline; }
+.cdx-prose { font: 500 14.5px/1.6 var(--hr-sans); color: var(--hr-fg-2); }
+.cdx-prose p { margin: 0; }
+
+/* Rails of neighbours. Every tile is a link to another page, which is the point of the
+   whole thing: you arrive for one item and leave having read four. */
+.cdx-rail { display: grid; grid-template-columns: repeat(auto-fill, minmax(126px, 1fr)); gap: 12px; }
+.cdx-rail:has(.is-wide) { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+.cdx-tile {
+  display: flex; flex-direction: column; gap: 8px; padding: 12px 12px 14px;
+  border-radius: var(--hr-radius-lg); text-decoration: none;
+  border: 1px solid var(--hr-line); background: rgba(255,255,255,.03);
+  transition: transform .2s, border-color .2s, background .2s;
+}
+.cdx-tile:hover {
+  transform: translateY(-3px); background: rgba(255,255,255,.06);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.cdx-tile.is-static { opacity: .72; }
+.cdx-tile.is-static:hover {
+  transform: none; border-color: var(--hr-line); background: rgba(255,255,255,.03);
+}
+.cdx-tile.is-wide { justify-content: center; min-height: 74px; }
+.cdx-tile-shot {
+  position: relative; display: block; aspect-ratio: 1; overflow: hidden;
+  border-radius: var(--hr-radius-md); background: rgba(255,255,255,.03);
+}
+.cdx-tile-shot.is-trait img { position: absolute; inset: 8%; width: 84%; height: 84%; object-fit: contain; }
+.cdx-tile-n { font: 700 12.5px/1.3 var(--hr-sans); color: var(--hr-fg-0); }
+.cdx-tile-c { display: flex; align-items: center; gap: 6px; font: 600 11px/1.2 var(--hr-sans); color: var(--hr-fg-3); }
+
+.cdx-whole {
+  max-width: 260px; border-radius: var(--hr-radius-lg); overflow: hidden;
+  border: 1px solid var(--hr-line); background: rgba(255,255,255,.03);
+}
+.cdx-whole img { display: block; width: 100%; }
+
+.cdx-steps { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+/* The first and last releases have only one neighbour, and a half-empty row reads as a
+   missing card rather than the end of the timeline. */
+.cdx-steps:has(> :only-child) { grid-template-columns: 1fr; }
+.cdx-step {
+  display: flex; flex-direction: column; gap: 6px; padding: 14px 16px;
+  border-radius: var(--hr-radius-lg); text-decoration: none;
+  border: 1px solid var(--hr-line); background: rgba(255,255,255,.03);
+  transition: transform .2s, border-color .2s;
+}
+.cdx-step.is-next { text-align: right; }
+.cdx-step:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.cdx-step-dir {
+  font: 800 10.5px/1 var(--hr-sans); letter-spacing: .07em;
+  text-transform: uppercase; color: var(--hr-fg-3);
+}
+.cdx-step-n { font: 700 13.5px/1.35 var(--hr-sans); color: var(--hr-fg-0); }
+
+.cdx-note { margin: 34px 0 0; font: 500 12px/1.6 var(--hr-sans); color: var(--hr-fg-4); }
+.cdx-loading { display: grid; place-items: center; min-height: 260px; }
+.cdx-missing { display: grid; justify-items: center; gap: 14px; padding: 70px 20px; text-align: center; }
+.cdx-missing-ico { font-size: 34px; }
+.cdx-missing p { margin: 0; font: 600 14.5px/1.5 var(--hr-sans); color: var(--hr-fg-2); }
+
+/* Entrance: the page rises as one, then its fact list and sections follow. Transform and
+   opacity only, and switched off entirely for anyone who asked for less motion. */
+@keyframes cdx-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.cdx { animation: cdx-rise .45s ease both; }
+.cdx-facts { animation: cdx-rise .45s .08s ease both; }
+.cdx-sec { animation: cdx-rise .45s .14s ease both; }
+
+@media (max-width: 780px) {
+  .cdx-head { grid-template-columns: 1fr; }
+  .cdx-art { max-width: 260px; }
+  .cdx-steps { grid-template-columns: 1fr; }
+  .cdx-step.is-next { text-align: left; }
+  .cdx-rail { grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cdx, .cdx-facts, .cdx-sec { animation: none; }
+  .cdx-tile, .cdx-step { transition: none; }
+  .cdx-tile:hover, .cdx-step:hover { transform: none; }
+}
+
+/* Ways into the codex from the two grids that feed it. The archive card's title and the
+   quick-look card both now lead to a page you can send someone, rather than dead-ending
+   in a modal only the person who opened it can see. */
+.col-card-link { color: inherit; text-decoration: none; }
+.col-card-link:hover { color: var(--accent); }
+.col-card-link::after {
+  content: "›"; margin-left: 7px; opacity: 0;
+  transition: opacity .2s, transform .2s; display: inline-block;
+}
+.col-card-link:hover::after { opacity: .8; transform: translateX(2px); }
+.col-insp-cta { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 20px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .col-card-link::after { transition: none; }
+  .col-card-link:hover::after { transform: none; }
+}

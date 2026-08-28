@@ -1,5 +1,8 @@
 User-agent: *
 Allow: /
+# Item, trait and Creature art. The codex pages point their share cards at these, and a
+# crawler that is told to stay out of /api/ drops the picture from the card.
+Allow: /api/collections/art/
 Disallow: /api/
 
 Sitemap: https://hcc.highrise.game/sitemap.xml

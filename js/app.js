@@ -53,6 +53,7 @@ const { loadGen2, rerenderGen2 } = lazy('./gen2.js');
 const { initGuideDemos, rerenderGuideDemos } = lazy('./guide-demos.js');
 const { loadCollections, rerenderCollections } = lazy('./collections.js');
 const { loadTraits, rerenderTraits } = lazy('./traits.js');
+const { openCodex, closeCodex, rerenderCodex } = lazy('./codex.js');
 const { initCouncilBoard, rerenderCouncilBoard } = lazy('./council.js');
 const { initPerks, rerenderPerks } = lazy('./perks.js');
 const { initSafety, rerenderSafety } = lazy('./safety.js');
@@ -74,6 +75,7 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
     rerenderGen2();
     rerenderCollections();
     rerenderTraits();
+    rerenderCodex();
     rerenderGuideDemos();
     rerenderCouncilBoard();
     rerenderPerks();
@@ -232,6 +234,9 @@ function selectTab(name, updateUrl = true) {
   else if (name === 'trade') closeProfileView();
   if (name === 'roadmap'   && !roadmapLoaded)   { roadmapLoaded   = true; loadGen2(); }
   if (name === 'collections' && !collectionsLoaded) { collectionsLoaded = true; loadCollections(); }
+  // A nav click on Collections means the archive, not whatever codex page was last open.
+  // route() re-opens the page straight after when the URL asks for one.
+  if (name === 'collections') closeCodex();
   if (updateUrl && location.pathname !== urlFor(name)) history.pushState(null, '', urlFor(name));
 }
 
@@ -426,6 +431,11 @@ initSafety();
 // and route() rewrites it so bookmarks and old OAuth redirects keep working.
 const ROUTE_TABS = ['club', 'announcements', 'council', 'apply', 'polls', 'roadmap', 'collections', 'guides', 'perks', 'holders', 'market', 'trade', 'profile', 'changelog', 'contribute', 'terms', 'privacy'];
 
+// Codex entity pages hang off Collections: /collections/item/<slug> and friends. They
+// are the reference layer's addresses, so anything that renders one of these links (a
+// release page, a trait tile, a Creature card) gets in-page navigation for free.
+const CODEX_KINDS = new Set(['release', 'item', 'trait', 'creature']);
+
 function urlFor(name, sub) {
   return name === 'club' && !sub ? '/' : `/${name}${sub ? `/${sub}` : ''}`;
 }
@@ -454,6 +464,14 @@ function route(pathname) {
     openProfileView(sub, { updateUrl: false });
     return;
   }
+  // Codex entity pages: /collections/<kind>/<…>. They take over the Collections panel,
+  // so they're routed before the sub-tab lookup below, which would otherwise read
+  // "release" or "item" as a sub-tab that doesn't exist.
+  if (tab === 'collections' && CODEX_KINDS.has(segs[1])) {
+    selectTab('collections', false);
+    openCodex(segs[1], segs.slice(2).map(decodeURIComponent));
+    return;
+  }
   selectTab(tab, false);
   // Legacy guides subtab: Scam Watch was merged into Stay safe, so old /guides/scams links land there.
   if (tab === 'guides' && sub === 'scams') sub = 'safety';
@@ -472,6 +490,24 @@ function route(pathname) {
 
 // Back/forward navigation
 window.addEventListener('popstate', () => route(location.pathname));
+
+// Codex links are written into HTML by several modules, so they're caught here once
+// rather than wired up per render. They stay real <a href> elements: crawlable, and a
+// modified or middle click still opens a new tab.
+document.addEventListener('click', event => {
+  const link = event.target.closest && event.target.closest('a[href^="/collections/"]');
+  if (!link) return;
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+  const segs = link.getAttribute('href').split('?')[0].split('/').filter(Boolean);
+  if (segs[0] !== 'collections' || !CODEX_KINDS.has(segs[1])) return;
+  event.preventDefault();
+  // These links also sit inside the archive's and the trait grid's quick-look dialogs,
+  // which would otherwise stay open on top of the page they just sent you to.
+  document.querySelectorAll('dialog[open]').forEach(d => d.close());
+  history.pushState(null, '', link.getAttribute('href'));
+  route(location.pathname);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
 
 // Legacy hash links switch tabs; the URL is normalized to the path form. Routing
 // through route() keeps the '#apply' → /council/vote alias working here too.
@@ -511,6 +547,7 @@ initI18n().then(() => {
   rerenderGen2();
   rerenderCollections();
   rerenderTraits();
+  rerenderCodex();
   rerenderGuideDemos();
   rerenderCouncilBoard();
   rerenderPerks();

@@ -1377,6 +1377,11 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 <!-- Collections — the full release archive, oldest to newest. js/collections.js fills
      #collections-app from /collections.json; the loading spinner is the only static bit. -->
 <main id="panel-collections" class="tab-panel" role="region" aria-labelledby="tab-collections" hidden>
+  <!-- Codex entity pages (/collections/release|item|trait|creature/…). js/codex.js fills
+       this and hides the sub-nav and both sub-panels while a page is open. Empty and
+       hidden otherwise, so a visitor without JS still gets the archive below. -->
+  <div id="codex-view" class="cdx-view" aria-live="polite" hidden></div>
+
   <nav class="guide-subnav wrap subnav-top" id="collections-top" role="tablist" aria-label="Collections sections" data-i18n-aria="a11y.collections.sections">
     <button class="guide-subtab is-active" type="button" role="tab" aria-selected="true" data-subtab="releases" data-i18n="col.sub.releases">Releases</button>
     <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="traits" data-i18n="col.sub.traits">Creature Traits</button>

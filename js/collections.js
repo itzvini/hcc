@@ -1,4 +1,5 @@
 import { t, getCurrentLang } from './i18n.js';
+import { codexHref } from './entity-url.js';
 
 // Collections — every Creature Club release ever made, oldest to newest.
 // Fetches /collections.json (built from the Highrise item catalogue and the club's
@@ -13,7 +14,7 @@ let data = null;
 let failed = false;
 
 // One accent per release type drives that card's glow, chip and rail node.
-const TYPES = {
+export const TYPES = {
   drop:     { ico: '💧', accent: 'var(--hr-primary)'   },
   grab:     { ico: '🎰', accent: 'var(--hr-secondary)' },
   store:    { ico: '🛒', accent: 'var(--hr-banana)'    },
@@ -25,7 +26,7 @@ const TYPES = {
 };
 const RARITY = ['m', 'l', 'e', 'r', 'c'];   // mythical → common, best first
 // Slots that aren't worn, so their render is the object itself, not an avatar in it
-const NOT_WORN = new Set(['furniture', 'room_floor', 'emote', 'set', 'container', 'pet']);
+export const NOT_WORN = new Set(['furniture', 'room_floor', 'emote', 'set', 'container', 'pet']);
 const HERO_THUMBS = 7;   // 7 thumbs + a "+N" chip fill the strip's 4-wide block exactly
 
 // UI state
@@ -34,19 +35,19 @@ let query = '';
 let newestFirst = false;   // oldest first, so the timeline reads as the club's history
 const openCards = new Set();
 
-function esc(s) {
+export function esc(s) {
   return String(s).replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-function num(n) {
+export function num(n) {
   return new Intl.NumberFormat(getCurrentLang()).format(n);
 }
 
 // Supporting quotes are Discord messages, so show them the way Discord would rather
 // than leaving the asterisks on display. Everything is escaped first, so the only
 // tags that survive are the ones added here.
-function discordMarkup(s) {
+export function discordMarkup(s) {
   return esc(s)
     .replace(/\*\*\*(.+?)\*\*\*/gs, '<strong><em>$1</em></strong>')
     .replace(/\*\*(.+?)\*\*/gs, '<strong>$1</strong>')
@@ -68,24 +69,33 @@ function monthYear(iso) {
   return new Intl.DateTimeFormat(getCurrentLang(), { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(d);
 }
 
-function fullDate(iso) {
+export function fullDate(iso) {
   const [y, m, d] = iso.split('-');
   const dt = new Date(Date.UTC(+y, +m - 1, +d));
   return new Intl.DateTimeFormat(getCurrentLang(), { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(dt);
 }
 
 // The rail badge: an exact day, or the month alone when the date is worked out
-function dateLabel(rel) {
+export function dateLabel(rel) {
   if (!rel.date) return t('col.date.unknown');
   return rel.precision === 'exact' ? fullDate(rel.date) : monthYear(rel.date);
+}
+
+// The archive, fetched once and shared. Codex entry pages read the same copy the
+// timeline does, so opening one from a link costs no second download.
+let archive = null;
+export function collectionsData() {
+  if (!archive) archive = fetch('/collections.json').then(res => {
+    if (!res.ok) throw new Error('collections.json');
+    return res.json();
+  }).catch(err => { archive = null; throw err; });
+  return archive;
 }
 
 export async function loadCollections() {
   const box = document.getElementById('collections-app');
   try {
-    const res = await fetch('/collections.json');
-    if (!res.ok) throw new Error();
-    data = await res.json();
+    data = await collectionsData();
   } catch {
     failed = true;
     if (box) {
@@ -203,7 +213,7 @@ function heroStrip(rel) {
     more > 0 ? `<span class="col-hero-more">+${num(more)}</span>` : ''}</div>`;
 }
 
-function catName(c) {
+export function catName(c) {
   const key = `col.cat.${c}`;
   const label = t(key);
   return label === key ? c.replace(/_/g, ' ') : label;
@@ -235,13 +245,13 @@ function zoomStyle(box) {
 // hash of the source bytes, so the URL names nothing: no Highrise item id reaches a
 // browser, and because the bytes behind an id can never change the server caches these
 // hard. 'full' is the whole render; 'thumb' is the pre-cropped 104px square.
-function artUrl(i, variant) {
+export function artUrl(i, variant) {
   return i.k ? `/api/collections/art/${variant}/${encodeURIComponent(i.k)}.webp` : null;
 }
 
 // The whole render, cropped to the item by a CSS window where the build worked one out.
 // Used at every size the item is shown big: the grid tile and the inspect card stage.
-function itemShot(i, { zoom = true, lazy = true } = {}) {
+export function itemShot(i, { zoom = true, lazy = true } = {}) {
   const src = artUrl(i, 'full');
   if (!src) {
     return `<span class="col-shot is-empty"><span class="col-item-none" aria-hidden="true">?</span></span>`;
@@ -255,14 +265,14 @@ function itemShot(i, { zoom = true, lazy = true } = {}) {
 
 // The same picture the stage shows, but whole. Only worth showing next to a cropped
 // stage, so the inspect card can say "here it is on an avatar".
-function fullShot(i) {
+export function fullShot(i) {
   return artUrl(i, 'full');
 }
 
 // A collapsed card's strip runs on the small variant: cropped to the item when the
 // picture was encoded, so no window and no shape guard here, and about 3 KB against the
 // full render's 21 KB. Seven per card, across 107 cards, is where that adds up.
-function thumbShot(i) {
+export function thumbShot(i) {
   const src = artUrl(i, 'thumb');
   if (!src) return itemShot(i);
   return `<span class="col-shot">
@@ -341,7 +351,7 @@ function card(rel, idx) {
           <span class="col-type"><span aria-hidden="true">${meta.ico}</span>${esc(t(`col.type1.${rel.type}`))}</span>
           ${rel.announced ? `<span class="col-badge" title="${esc(t('col.announced.tip'))}">${esc(t('col.announced'))}</span>` : ''}
         </header>
-        <h3 class="col-card-h">${esc(rel.name)}</h3>
+        <h3 class="col-card-h"><a class="col-card-link" href="${codexHref('release', rel.id)}">${esc(rel.name)}</a></h3>
         <p class="col-card-meta">
           <span><b>${num(rel.count)}</b> ${esc(t(rel.count === 1 ? 'col.meta.item' : 'col.meta.items'))}</span>
           ${rel.copies ? `<span title="${esc(num(rel.copies))}"><b>${compact(rel.copies)}</b> ${esc(t('col.meta.copies'))}</span>` : ''}
@@ -583,6 +593,10 @@ function openInspect(relId, idx) {
           <span class="col-insp-avatar-lbl">${esc(t(NOT_WORN.has(i.c) ? 'col.insp.fullart' : 'col.insp.onavatar'))}</span>
           <img src="${fullShot(i)}" alt="${esc(i.n)}" decoding="async">
         </div>` : ''}
+        <div class="col-insp-cta">
+          <a class="ctr-btn is-primary" href="${codexHref('item', i.n)}">${esc(t('cdx.open.item'))}</a>
+          <a class="ctr-btn" href="${codexHref('release', rel.id)}">${esc(t('cdx.open.release'))}</a>
+        </div>
         <div class="col-insp-nav">
           <button class="col-insp-step" type="button" data-step="-1" aria-label="${esc(t('col.insp.prev'))}">‹</button>
           <span class="col-insp-count">${num(idx + 1)} / ${num(rel.items.length)}</span>

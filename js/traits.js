@@ -1,4 +1,5 @@
 import { t, getCurrentLang } from './i18n.js';
+import { codexHref } from './entity-url.js';
 
 // Creature Traits — the Collections tab's second view, beside the release archive.
 //
@@ -623,7 +624,9 @@ function openInspect(ti, vi) {
         ${piecesHtml(val)}
         <div class="ctr-sales-wrap">${salesHtml(ty, val)}</div>
         <div class="ctr-insp-cta">
-          ${val.listed ? `<a class="ctr-btn is-primary" href="${tradeLink(ty, val, false)}">${
+          <a class="ctr-btn is-primary" href="${codexHref('trait', ty.type, val.v)}">${
+            esc(t('cdx.open.trait'))}</a>
+          ${val.listed ? `<a class="ctr-btn" href="${tradeLink(ty, val, false)}">${
             esc(t('ctr.insp.cta.sale').replace('{n}', num(val.listed)))}</a>` : ''}
           <a class="ctr-btn" href="${tradeLink(ty, val, true)}">${esc(t('ctr.insp.cta.all'))}</a>
         </div>
