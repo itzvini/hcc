@@ -1454,6 +1454,8 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
   background: linear-gradient(90deg, var(--accent), transparent 72%);
 }
 .rm-tile:hover { transform: translateY(-3px); border-color: var(--accent-soft); box-shadow: var(--hr-shadow-2); }
+/* Title-only tile: don't stretch to a neighbour's height, it reads as a broken card */
+.rm-tile-bare { align-self: start; }
 .rm-tile-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
 .rm-tile .rm-emoji { font-size: 1.45rem; line-height: 1; }
 
