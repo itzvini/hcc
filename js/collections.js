@@ -63,7 +63,7 @@ function compact(n) {
   return new Intl.NumberFormat(getCurrentLang(), { notation: 'compact', maximumFractionDigits: 1 }).format(n);
 }
 
-function monthYear(iso) {
+export function monthYear(iso) {
   const [y, m] = iso.split('-');
   const d = new Date(Date.UTC(+y, +m - 1, 1));
   return new Intl.DateTimeFormat(getCurrentLang(), { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(d);

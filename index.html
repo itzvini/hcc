@@ -11,7 +11,7 @@
 <meta property="og:title" content="Highrise Creature Club">
 <meta property="og:description" content="The member hub for the Highrise Creature Club. Live market prices, trading, guides, the roadmap, and the holder-elected Player Council.">
 <meta property="og:url" content="https://hcc.highrise.game/">
-<meta property="og:image" content="https://hcc.highrise.game/img/brands/icon_hcc_apple.png">
+<meta property="og:image" content="https://hcc.highrise.game/assets/og-default.png">
 <meta name="twitter:card" content="summary">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="192x192" href="/img/brands/icon_hcc_favicon.png">
@@ -1377,6 +1377,21 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
 <!-- Collections — the full release archive, oldest to newest. js/collections.js fills
      #collections-app from /collections.json; the loading spinner is the only static bit. -->
 <main id="panel-collections" class="tab-panel" role="region" aria-labelledby="tab-collections" hidden>
+  <!-- The codex front door. Sits above the sub-nav so it stays reachable from the
+       archive, the trait showcase and every entity page. js/codex.js fills the list. -->
+  <div class="wrap cdx-find-wrap">
+    <div class="cdx-find" role="search">
+      <label class="cdx-find-lbl" for="cdx-find" data-i18n="cdx.find.label">Search the archive</label>
+      <span class="cdx-find-ico" aria-hidden="true">&#128269;</span>
+      <input id="cdx-find" class="cdx-find-in" type="search" autocomplete="off" role="combobox"
+        aria-expanded="false" aria-controls="cdx-find-list" aria-autocomplete="list"
+        placeholder="Releases, items, traits, Creature numbers"
+        data-i18n-placeholder="cdx.find.ph">
+      <div id="cdx-find-list" class="cdx-find-list" role="listbox"
+        aria-label="Search results" data-i18n-aria="cdx.find.a11y.results" hidden></div>
+    </div>
+  </div>
+
   <!-- Codex entity pages (/collections/release|item|trait|creature/…). js/codex.js fills
        this and hides the sub-nav and both sub-panels while a page is open. Empty and
        hidden otherwise, so a visitor without JS still gets the archive below. -->
@@ -1385,6 +1400,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
   <nav class="guide-subnav wrap subnav-top" id="collections-top" role="tablist" aria-label="Collections sections" data-i18n-aria="a11y.collections.sections">
     <button class="guide-subtab is-active" type="button" role="tab" aria-selected="true" data-subtab="releases" data-i18n="col.sub.releases">Releases</button>
     <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="traits" data-i18n="col.sub.traits">Creature Traits</button>
+    <button class="guide-subtab" type="button" role="tab" aria-selected="false" data-subtab="glossary" data-i18n="col.sub.glossary">Glossary</button>
   </nav>
 
   <div class="guide-subpanel" data-subpanel="releases">
@@ -1412,6 +1428,20 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
     </div>
 
     <p class="apply-fineprint" data-i18n="ctr.fineprint">Counts come from all 11,111 Creatures, and the for-sale numbers from the live marketplace. Most tiles are the item's own art from the game. Body, outfit and background aren't items you can wear on their own, so those show on a Creature that has them.</p>
+  </section>
+  </div>
+
+  <div class="guide-subpanel" data-subpanel="glossary" hidden>
+  <section class="wrap col-wrap">
+    <div class="eyebrow" data-i18n="gloss.eyebrow">Every word we use</div>
+    <h2 data-i18n="gloss.h2">Glossary</h2>
+    <p class="lead" data-i18n="gloss.lead">The club's vocabulary in one place: what a grab is, what your coins can and can't do, how a rarity rank is worked out, and which chain your money needs to be on. Open any term for the long answer.</p>
+
+    <div id="glossary-app" class="col-box" aria-live="polite" aria-busy="true">
+      <div class="apply-loading"><div class="apply-spinner"></div></div>
+    </div>
+
+    <p class="apply-fineprint" data-i18n="gloss.fineprint">Where a term has an awkward answer, it says so rather than rounding it off. If something here is wrong or out of date, tell us in the Discord and we'll fix it.</p>
   </section>
   </div>
 </main>
@@ -1685,7 +1715,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
             <h3 class="guide-title" data-i18n="gm.fund.h">Get funds on the right network</h3>
           </div>
         </div>
-        <p class="guide-intro" data-i18n="gm.fund.p">Pick the situation that matches yours and watch exactly what happens, click by click. No crypto knowledge needed: getting coins, moving them between networks, and gas fees are all covered. Sold something and want your money out? That has its own step: see Cash out at the end.</p>
+        <p class="guide-intro" data-i18n="gm.fund.p">Pick the situation that matches yours and watch exactly what happens, click by click. No crypto knowledge needed: getting coins, moving them between networks, and gas fees are all covered. What each way in costs is at the bottom. Sold something and want your money out? That has its own step: see Cash out at the end.</p>
         <div class="wt-mkt-toggle">
           <div class="seg" role="tablist" data-mkt-toggle aria-label="Choose a collection" data-i18n-aria="a11y.collection.choose">
             <button class="seg-btn is-active" id="gm-fund-cr" type="button" role="tab" aria-selected="true" aria-controls="gm-fund-cr-p" data-mkt-btn="creatures" data-i18n="trade.coll.creatures">Creatures</button>
@@ -1702,6 +1732,112 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
           <div class="gdemo" data-gdemo="funding-land"></div>
           <p class="guide-note" data-i18n="gm.fund.la.note">LAND uses mainnet ETH for both the price and gas. There's nothing to bridge and no IMX needed.</p>
         </div>
+
+        <!-- Leg 1 of the funding step, and the mirror of #gm-paid in the Cash out card:
+             where the money comes FROM before any of the above can happen. Both collections
+             converge here (buy ETH, get it into your own wallet), so it sits OUTSIDE the
+             Creatures/LAND toggle and carries no data-mkt attribute — app.js hides every
+             [data-mkt] inside a panel when the toggle switches.
+             The figures are measured, not estimated. See the funding-costs note in the
+             brain before changing any of them. -->
+        <section class="gm-paid" id="gm-getfunds" aria-labelledby="gm-getfunds-h">
+          <div class="gm-paid-head">
+            <span class="gm-paid-eyebrow" data-i18n="gm.get.eyebrow">BEFORE YOU BUY</span>
+            <h4 class="gm-paid-h" id="gm-getfunds-h" data-i18n="gm.get.h">Where to get your ETH</h4>
+            <p class="gm-paid-lead" data-i18n="gm.get.lead">Two ways in. The card on our own Add funds page is one screen and lands ready to spend. An exchange takes more steps and costs a lot less. Here's what each really costs, and the one thing to get right.</p>
+          </div>
+
+          <h5 class="gm-paid-sub" data-i18n="gm.get.pick.h">Pick in ten seconds</h5>
+          <ul class="gm-pick" role="list">
+            <li class="gm-pick-row">
+              <span class="gm-pick-tag" data-i18n="gm.get.pick1.t">JUST TRYING THIS</span>
+              <p class="gm-pick-p" data-i18n="gm.get.pick1.p">Buying your first Creature? Take the card. It's one screen, the ETH lands on Immutable zkEVM ready to spend, and on a small amount the extra you pay is a few dollars.</p>
+            </li>
+            <li class="gm-pick-row">
+              <span class="gm-pick-tag" data-i18n="gm.get.pick2.t">SPENDING REAL MONEY</span>
+              <p class="gm-pick-p" data-i18n="gm.get.pick2.p">Four figures? An exchange costs well under 1% where the card costs about 4.5%. On $1,000 that's roughly $40 kept, for about ten more minutes of work.</p>
+            </li>
+            <li class="gm-pick-row">
+              <span class="gm-pick-tag" data-i18n="gm.get.pick3.t">CHECK FIRST</span>
+              <p class="gm-pick-p" data-i18n="gm.get.pick3.p">No exchange can send to Immutable zkEVM. Withdraw on Ethereum, Base, Arbitrum or OP Mainnet and the Add funds page moves it across for cents. Any other network leaves your ETH somewhere this site can't see.</p>
+            </li>
+          </ul>
+
+          <h5 class="gm-paid-sub" data-i18n="gm.get.opts.h">The two, side by side</h5>
+          <div class="gm-opts is-two" role="list" aria-label="Ways to get ETH into your wallet" data-i18n-aria="a11y.get.opts">
+
+            <article class="gm-opt is-default" role="listitem">
+              <div class="gm-opt-hd">
+                <span class="gm-opt-ico"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/><path d="M3 10h18"/><path d="M6.5 14.8h3.6"/></svg></span>
+                <span class="gm-opt-name">
+                  <b data-i18n="gm.get.card.name">Card, on this site</b>
+                  <span class="gm-opt-kind" data-i18n="gm.get.card.kind">The Add funds page</span>
+                </span>
+                <span class="gm-opt-badge" data-i18n="gm.get.card.badge">FASTEST</span>
+              </div>
+              <p class="gm-opt-what" data-i18n="gm.get.card.what">Card, Apple Pay or Google Pay, on our own Add funds page. The ETH arrives on Immutable zkEVM, so there's no bridge and nothing left to move afterwards.</p>
+              <dl class="gm-opt-facts">
+                <div><dt data-i18n="gm.paid.f.cost">What it costs</dt><dd data-i18n="gm.get.card.cost">About 4.5% all in. Transak's own quote showed a flat 3.74% fee in August 2026, and the rate you're offered sits a little under spot on top of it. No network fee on Immutable zkEVM.</dd></div>
+                <div><dt data-i18n="gm.paid.f.acct">What you need</dt><dd data-i18n="gm.get.card.acct">A Transak account and an ID check. Expect it: card to crypto is regulated everywhere, and there's no version of this that skips it.</dd></div>
+                <div><dt data-i18n="gm.paid.f.time">How long</dt><dd data-i18n="gm.get.card.time">A few minutes once you're verified. The first ID check can take longer.</dd></div>
+              </dl>
+              <p class="gm-opt-catch"><span class="gm-opt-catch-t" data-i18n="gm.paid.f.catch">The catch</span> <span data-i18n="gm.get.card.catch">The percentage is the same whatever you spend, so it stings most on large amounts. On $1,000 you're paying around $45 for the convenience.</span></p>
+            </article>
+
+            <article class="gm-opt" role="listitem">
+              <div class="gm-opt-hd">
+                <span class="gm-opt-ico"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m3 9.5 9-5.5 9 5.5"/><path d="M5.5 10.5v8"/><path d="M10 10.5v8"/><path d="M14 10.5v8"/><path d="M18.5 10.5v8"/><path d="M2.8 20.8h18.4"/></svg></span>
+                <span class="gm-opt-name">
+                  <b data-i18n="gm.get.cex.name">An exchange</b>
+                  <span class="gm-opt-kind">Coinbase, Kraken, Binance</span>
+                </span>
+                <span class="gm-opt-badge" data-i18n="gm.get.cex.badge">CHEAPEST</span>
+              </div>
+              <p class="gm-opt-what" data-i18n="gm.get.cex.what">Buy ETH on an exchange, then withdraw it to your own wallet. Come back to Add funds, pick where it landed, and the site brings it to Immutable zkEVM in about seven seconds.</p>
+              <dl class="gm-opt-facts">
+                <div><dt data-i18n="gm.paid.f.cost">What it costs</dt><dd data-i18n="gm.get.cex.cost">Well under 1% all in: a fraction of a percent to trade, a small withdrawal fee (about 17 cents on Binance in August 2026), and about a cent for the move across from Ethereum.</dd></div>
+                <div><dt data-i18n="gm.paid.f.acct">What you need</dt><dd data-i18n="gm.get.cex.acct">An account and an ID check at the exchange, plus a way to pay. Finish both before you buy, or your money waits on a document review.</dd></div>
+                <div><dt data-i18n="gm.paid.f.time">How long</dt><dd data-i18n="gm.get.cex.time">Ten minutes or so across three steps, once the account exists. The move to Immutable zkEVM takes seconds.</dd></div>
+              </dl>
+              <p class="gm-opt-catch"><span class="gm-opt-catch-t" data-i18n="gm.paid.f.catch">The catch</span> <span data-i18n="gm.get.cex.catch">Withdraw on Ethereum unless its network fee is spiking. Base, Arbitrum and OP Mainnet all work too, and cost less to withdraw to, but the move across costs about 40 cents more from there.</span></p>
+            </article>
+
+          </div>
+
+          <div class="gm-rules">
+            <div class="gm-rule">
+              <span class="gm-rule-n" aria-hidden="true">1</span>
+              <div class="gm-rule-t">
+                <b data-i18n="gm.get.rule1.t">Withdraw on a network we can pick up</b>
+                <p data-i18n="gm.get.rule1.p">Checked in August 2026 against their own systems: Coinbase sends ETH on Arbitrum, Base, Ethereum, Optimism, Polygon and Unichain. Binance sends it on nine networks. Neither lists Immutable zkEVM, and no other big exchange does either. Add funds picks up Ethereum, Base, Arbitrum and OP Mainnet, so choose one of those, paste your own wallet address, and send a small test before the rest.</p>
+              </div>
+            </div>
+          </div>
+
+          <h5 class="gm-paid-sub" data-i18n="gm.get.go.h">Where to go</h5>
+          <p class="gm-paid-note" data-i18n="gm.get.go.p">Every link shows exactly where it goes. Read it here, then match it against your address bar once you land.</p>
+          <!-- The link's visible text IS its href, same anti-phishing rule as #gm-paid.
+               Deliberately NOT translated. -->
+          <ul class="gm-go" role="list" aria-label="Official sites for each option" data-i18n-aria="a11y.get.go">
+            <li class="gm-go-row is-default">
+              <span class="gm-go-name"><span data-i18n="gm.get.go.here">Add funds, on this site</span></span>
+              <a class="gm-go-link" href="/trade/add-funds"><span class="gm-go-dom">hcc.<b>highrise.game</b>/trade/add-funds</span> <span class="gm-go-arrow" aria-hidden="true">→</span></a>
+            </li>
+            <li class="gm-go-row">
+              <span class="gm-go-name"><span data-i18n="gm.paid.go.cb">Coinbase</span></span>
+              <a class="gm-go-link" href="https://www.coinbase.com" target="_blank" rel="noopener noreferrer"><span class="gm-go-dom">www.<b>coinbase.com</b></span> <span class="gm-go-arrow" aria-hidden="true">↗</span></a>
+            </li>
+            <li class="gm-go-row">
+              <span class="gm-go-name"><span data-i18n="gm.paid.go.kr">Kraken</span></span>
+              <a class="gm-go-link" href="https://www.kraken.com" target="_blank" rel="noopener noreferrer"><span class="gm-go-dom">www.<b>kraken.com</b></span> <span class="gm-go-arrow" aria-hidden="true">↗</span></a>
+            </li>
+            <li class="gm-go-row">
+              <span class="gm-go-name"><span data-i18n="gm.paid.go.bn">Binance</span></span>
+              <a class="gm-go-link" href="https://www.binance.com" target="_blank" rel="noopener noreferrer"><span class="gm-go-dom">www.<b>binance.com</b></span> <span class="gm-go-arrow" aria-hidden="true">↗</span></a>
+            </li>
+          </ul>
+        </section>
+
         <div class="gm-cardfoot">
           <button class="gm-foot-prev" type="button" data-wt-cta-prev>
             <span aria-hidden="true">←</span> <span data-i18n="guide.wt.prev">Previous</span>
@@ -1849,13 +1985,178 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
           <p class="wt-mkt-where" data-i18n="gm.cash.cr.where">Creature sales pay you in ETH on Immutable zkEVM. We move it to Ethereum for you on this page.</p>
           <div class="gdemo" data-gdemo="cashout-creatures"></div>
           <p class="guide-note" data-i18n="gm.cash.cr.note">Don't send this ETH straight from Immutable zkEVM to an exchange. Most exchanges only accept ETH on Ethereum. That's what the Cash out button does: it moves your ETH to Ethereum first.</p>
-          <p class="guide-note" data-i18n="gm.cash.cr.note2">After it lands: open MetaMask, switch the network picker to Ethereum, and your ETH is right there (the site's "Show it in MetaMask" button does the switch for you). Sending it to Coinbase, Kraken or any exchange is then a normal transfer: copy the exchange's ETH deposit address, double-check it, send.</p>
+          <p class="guide-note" data-i18n="gm.cash.cr.note2">After it lands: open MetaMask, switch the network picker to Ethereum, and your ETH is right there (the site's "Show it in MetaMask" button does the switch for you). Where to sell it, and what each option costs, is just below.</p>
+          <p class="guide-note"><a class="gm-open-link" href="/trade/cash-out" data-i18n="gm.cash.openPage">Open the Cash out page &rarr;</a></p>
         </div>
         <div class="wt-mkt" id="gm-cash-la-p" data-mkt="land" role="tabpanel" aria-labelledby="gm-cash-la" style="--accent:#0DA6FC;--accent-soft:rgba(13,166,252,0.12)" hidden>
           <p class="wt-mkt-where" data-i18n="gm.cash.la.where">LAND sales pay you in WETH on Ethereum. One tap unwraps it to plain ETH, no bridging needed.</p>
           <div class="gdemo" data-gdemo="cashout-land"></div>
-          <p class="guide-note" data-i18n="gm.cash.la.note">WETH ("wrapped ETH") is worth exactly the same as ETH. It's just a different token, and some exchanges won't accept a WETH deposit. The unwrap is a 1:1 swap back to plain ETH that costs only gas. After that, send to your exchange as you always would.</p>
+          <p class="guide-note" data-i18n="gm.cash.la.note">WETH ("wrapped ETH") is worth exactly the same as ETH. It's just a different token, and none of the places below will credit a WETH deposit. The unwrap is a 1:1 swap back to plain ETH that costs only gas. After that, pick where to sell it below.</p>
         </div>
+
+        <!-- Leg 2 of the cash-out: the part we deliberately don't own. Both collections
+             converge here (Creatures bridge, LAND unwraps) on the same asset in the same
+             wallet, so this block sits OUTSIDE the Creatures/LAND toggle and carries no
+             data-mkt attribute — app.js:419 hides every [data-mkt] inside the panel.
+             Nothing above the .gm-paid-go row links out: you can't reach a link without
+             scrolling past both rules. -->
+        <section class="gm-paid" id="gm-paid" aria-labelledby="gm-paid-h">
+          <div class="gm-paid-head">
+            <span class="gm-paid-eyebrow" data-i18n="gm.paid.eyebrow">LAST LEG</span>
+            <h4 class="gm-paid-h" id="gm-paid-h" data-i18n="gm.paid.h">Where to sell your ETH</h4>
+            <p class="gm-paid-lead" data-i18n="gm.paid.lead">Your ETH is on Ethereum now, sitting in your own wallet. Nothing has to happen next and it's safe there for as long as you like. When you do want it as money in your bank, here's where people go, what each one costs, and what to watch for.</p>
+          </div>
+
+          <h5 class="gm-paid-sub" data-i18n="gm.paid.pick.h">Pick in ten seconds</h5>
+          <ul class="gm-pick" role="list">
+            <li class="gm-pick-row">
+              <span class="gm-pick-tag" data-i18n="gm.paid.pick1.t">START HERE</span>
+              <p class="gm-pick-p" data-i18n="gm.paid.pick1.p">On a computer, use MetaMask's own sell page. It's the only one here with no deposit address to copy and no network to choose, and those are the two steps where people lose the whole sale. On a phone, open the MetaMask app and use its Sell tab instead.</p>
+            </li>
+            <li class="gm-pick-row">
+              <span class="gm-pick-tag" data-i18n="gm.paid.pick2.t">SELLING A LOT</span>
+              <p class="gm-pick-p" data-i18n="gm.paid.pick2.p">Four figures or more? An exchange costs a fraction of the fee and the gap is worth the extra steps. Finish the ID checks and link your bank before you send any ETH, or your money sits waiting on a document review.</p>
+            </li>
+            <li class="gm-pick-row">
+              <span class="gm-pick-tag" data-i18n="gm.paid.pick3.t">CHECK FIRST</span>
+              <p class="gm-pick-p" data-i18n="gm.paid.pick3.p">Where you live changes the answer more than anything else on this page. Turkey, the UK and a few US states rule options out completely. The notes further down cover them.</p>
+            </li>
+          </ul>
+
+          <h5 class="gm-paid-sub" data-i18n="gm.paid.opts.h">The four, side by side</h5>
+          <div class="gm-opts" role="list" aria-label="Ways to turn your ETH into money" data-i18n-aria="a11y.paid.opts">
+
+            <article class="gm-opt is-default" role="listitem">
+              <div class="gm-opt-hd">
+                <span class="gm-opt-ico"><img src="/img/brands/metamask.svg" alt="" width="26" height="26"></span>
+                <span class="gm-opt-name">
+                  <b>MetaMask Sell</b>
+                  <span class="gm-opt-kind" data-i18n="gm.paid.mm.kind">Sells straight from your wallet</span>
+                </span>
+                <span class="gm-opt-badge" data-i18n="gm.paid.mm.badge">DEFAULT</span>
+              </div>
+              <p class="gm-opt-what" data-i18n="gm.paid.mm.what">One page inside MetaMask that asks several payment companies for a price at the same time. You pick the best offer, do that company's ID check on their site, then send the ETH. No deposit address to paste, and no network to pick.</p>
+              <dl class="gm-opt-facts">
+                <div><dt data-i18n="gm.paid.f.cost">What it costs</dt><dd data-i18n="gm.paid.mm.cost">The most you'll pay of the four. Measured across eleven countries and payment methods in August 2026, the all-in cost ran from 1% to over 10%. The offers differ a lot, so read the whole list rather than taking the first one.</dd></div>
+                <div><dt data-i18n="gm.paid.f.acct">What you need</dt><dd data-i18n="gm.paid.mm.acct">No account with us, and none with MetaMask. The company behind the offer you pick runs its own ID check, and you finish that before you send anything.</dd></div>
+                <div><dt data-i18n="gm.paid.f.time">How long</dt><dd data-i18n="gm.paid.mm.time">Minutes to a card. Instant on Brazilian Pix and UK Faster Payments. One to five days on a US or European bank transfer.</dd></div>
+              </dl>
+              <p class="gm-opt-catch"><span class="gm-opt-catch-t" data-i18n="gm.paid.f.catch">The catch</span> <span data-i18n="gm.paid.mm.catch">It only works in a browser on a computer. On a phone or tablet it shows an app advert instead, which looks broken but isn't. Small sales are punished hard: 0.005 ETH came back worth about 67% of its market value, where 0.05 ETH came back at 93%. Once you send, the payment company holds your money until it reaches you.</span></p>
+            </article>
+
+            <article class="gm-opt" role="listitem">
+              <div class="gm-opt-hd">
+                <span class="gm-opt-ico"><img src="/img/brands/coinbase.svg" alt="" width="26" height="26"></span>
+                <span class="gm-opt-name">
+                  <b>Coinbase</b>
+                  <span class="gm-opt-kind" data-i18n="gm.paid.cb.kind">Exchange. Send ETH in, sell it, withdraw cash.</span>
+                </span>
+              </div>
+              <p class="gm-opt-what" data-i18n="gm.paid.cb.what">The broadest coverage of the three, and the one members here name most often.</p>
+              <dl class="gm-opt-facts">
+                <div><dt data-i18n="gm.paid.f.cost">What it costs</dt><dd data-i18n="gm.paid.cb.cost">Much less than a sell tool, but it depends which screen you use. The one-tap Buy and Sell tile costs several times the Advanced order book for exactly the same trade. Check your own rate on its fee page before you sell.</dd></div>
+                <div><dt data-i18n="gm.paid.f.acct">What you need</dt><dd data-i18n="gm.paid.cb.acct">Yours to open, with ID checks. Do those and link your bank before you send anything.</dd></div>
+                <div><dt data-i18n="gm.paid.f.time">How long</dt><dd data-i18n="gm.paid.cb.time">Minutes for the deposit to land, then your bank's own speed. Instant on UK Faster Payments and Brazilian Pix, one to three working days on a US transfer.</dd></div>
+              </dl>
+              <p class="gm-opt-catch"><span class="gm-opt-catch-t" data-i18n="gm.paid.f.catch">The catch</span> <span data-i18n="gm.paid.cb.catch">No Turkish lira, and it won't take WETH. It will try to recover a deposit sent on the wrong network, but only on Ethereum, Polygon and BNB Chain, and it charges 5% of whatever is above $100. Nothing sent from Immutable zkEVM is recoverable anywhere.</span></p>
+            </article>
+
+            <article class="gm-opt" role="listitem">
+              <div class="gm-opt-hd">
+                <span class="gm-opt-ico"><img src="/img/brands/kraken.svg" alt="" width="26" height="26"></span>
+                <span class="gm-opt-name">
+                  <b>Kraken</b>
+                  <span class="gm-opt-kind" data-i18n="gm.paid.kr.kind">Exchange. The clearest about what it charges.</span>
+                </span>
+              </div>
+              <p class="gm-opt-what" data-i18n="gm.paid.kr.what">The same shape as Coinbase, with unusually plain published fees and strong Brazilian Pix in both directions.</p>
+              <dl class="gm-opt-facts">
+                <div><dt data-i18n="gm.paid.f.cost">What it costs</dt><dd data-i18n="gm.paid.kr.cost">Its Pro order book was 0.40% to place a price and 0.80% to take one when we checked in August 2026. The one-tap instant trade is 1%, or 1.5% on a custom order, plus a spread it doesn't publish. Cashing out costs nothing on a US transfer, 1 euro on SEPA, 1.95 pounds on Faster Payments and 0.50% on Brazilian Pix.</dd></div>
+                <div><dt data-i18n="gm.paid.f.acct">What you need</dt><dd data-i18n="gm.paid.kr.acct">Yours to open, with ID checks.</dd></div>
+                <div><dt data-i18n="gm.paid.f.time">How long</dt><dd data-i18n="gm.paid.kr.time">Minutes for the deposit. Instant SEPA and Brazilian Pix, near-instant UK Faster Payments, one to two days on a US transfer.</dd></div>
+              </dl>
+              <p class="gm-opt-catch"><span class="gm-opt-catch-t" data-i18n="gm.paid.f.catch">The catch</span> <span data-i18n="gm.paid.kr.catch">It says in writing that anything sent to the wrong deposit address won't be credited and won't be returned, and every token there has its own address even though they all start with 0x. No Turkish lira, and it doesn't serve Maine, New York or Japan.</span></p>
+            </article>
+
+            <article class="gm-opt" role="listitem">
+              <div class="gm-opt-hd">
+                <span class="gm-opt-ico is-diamond"><img src="/img/brands/binance.svg" alt="" width="26" height="26"></span>
+                <span class="gm-opt-name">
+                  <b>Binance</b>
+                  <span class="gm-opt-kind" data-i18n="gm.paid.bn.kind">Exchange. The cheapest, if you can use it.</span>
+                </span>
+              </div>
+              <p class="gm-opt-what" data-i18n="gm.paid.bn.what">The lowest trading fee of the three by a wide margin. The catch is which of its sites you're allowed to use.</p>
+              <dl class="gm-opt-facts">
+                <div><dt data-i18n="gm.paid.f.cost">What it costs</dt><dd data-i18n="gm.paid.bn.cost">0.10% on the spot order book, or 0.075% if you pay the fee in BNB. That price is on the order book screen, not the one-tap convert screen.</dd></div>
+                <div><dt data-i18n="gm.paid.f.acct">What you need</dt><dd data-i18n="gm.paid.bn.acct">Yours to open, on the right site for your country. binance.com for most of the world, binance.us in the United States, binance.tr for Turkish lira. ID checks don't carry across them, so each one is a fresh signup.</dd></div>
+                <div><dt data-i18n="gm.paid.f.time">How long</dt><dd data-i18n="gm.paid.bn.time">Minutes for the deposit, then one to three working days on a European transfer.</dd></div>
+              </dl>
+              <p class="gm-opt-catch"><span class="gm-opt-catch-t" data-i18n="gm.paid.f.catch">The catch</span> <span data-i18n="gm.paid.bn.catch">binance.com doesn't serve the United States at all, and Binance.US skips sixteen states, two of which take crypto but not dollars. It hasn't accepted a new UK customer since 16 October 2023, and that was still true on 29 August 2026.</span></p>
+            </article>
+
+          </div>
+
+          <h5 class="gm-paid-sub" data-i18n="gm.paid.region.h">Where you live changes the answer</h5>
+          <p class="gm-paid-note" data-i18n="gm.paid.region.p">We don't guess where you are and we don't track you, so pick your own. These are the cases where the answer actually changes.</p>
+          <div class="gm-region">
+            <details class="gm-region-i"><summary><span data-i18n="gm.paid.region.br.t">Brazil</span></summary><p data-i18n="gm.paid.region.br.p">All four work. MetaMask Sell offers Pix and card, Coinbase takes Pix, and Kraken takes Pix both ways at 0.50% with a 50 real minimum. Don't assume Pix beats card on price: on the same sale in the same minute the two landed within a real of each other, so compare the offers instead of picking on habit. Brazil also came in at the expensive end for MetaMask Sell, around 7%.</p></details>
+            <details class="gm-region-i"><summary><span data-i18n="gm.paid.region.tr.t">Turkey</span></summary><p data-i18n="gm.paid.region.tr.p">Binance TR at binance.tr is the one with a lira rail, and it's a separate signup from binance.com with its own ID check. Coinbase and Kraken hold no lira at all. MetaMask Sell does cover Turkey, but through a single payment company and paying out to a card rather than a bank account. We saw a live price for it. We haven't taken a Turkish payout ourselves, so read the quote and its terms before you commit.</p></details>
+            <details class="gm-region-i"><summary><span data-i18n="gm.paid.region.us.t">United States</span></summary><p data-i18n="gm.paid.region.us.p">MetaMask Sell works everywhere except New York, Louisiana, American Samoa, Guam, the Northern Mariana Islands and the US Minor Outlying Islands. That's MetaMask's own block rather than the payment company's, and those places can still buy. binance.com isn't an option at all, and Binance.US is a separate company that skips sixteen states. Kraken doesn't serve Maine or New York. Coinbase covers the most ground, New York included.</p></details>
+            <details class="gm-region-i"><summary><span data-i18n="gm.paid.region.uk.t">United Kingdom</span></summary><p data-i18n="gm.paid.region.uk.p">Coinbase and Kraken both pay out over Faster Payments, often within minutes. Binance hasn't taken a new UK customer since October 2023, so it's only on the table if you already have an account there.</p></details>
+            <details class="gm-region-i"><summary><span data-i18n="gm.paid.region.other.t">Anywhere else</span></summary><p data-i18n="gm.paid.region.other.p">MetaMask's sell page tells you whether your country is covered on its very first screen, before you connect a wallet or hand over anything. That's the fastest honest answer and it's always current. Its own help pages still say only the US, UK and parts of Europe are covered. That's out of date: we checked, and 219 countries can sell, Brazil and Turkey among them.</p></details>
+          </div>
+
+          <h5 class="gm-paid-sub" data-i18n="gm.paid.rules.h">Before you click away</h5>
+          <div class="gm-rules">
+            <div class="gm-rule">
+              <span class="gm-rule-n" aria-hidden="true">1</span>
+              <div class="gm-rule-t">
+                <b data-i18n="gm.paid.rule1.t">Send ETH, on Ethereum, and nothing else</b>
+                <p data-i18n="gm.paid.rule1.p">Every exchange here takes ETH on Ethereum. None of them takes anything on Immutable zkEVM, and a deposit sent that way is gone for good. Holding WETH from a LAND sale? Unwrap it to plain ETH first, because none of these will credit WETH, MetaMask Sell included. Paste the deposit address, check its first six and last six characters against the exchange's own screen, then send a small test before the rest.</p>
+              </div>
+            </div>
+            <div class="gm-rule">
+              <span class="gm-rule-n" aria-hidden="true">2</span>
+              <div class="gm-rule-t">
+                <b data-i18n="gm.paid.rule2.t">Read the address bar backwards</b>
+                <p data-i18n="gm.paid.rule2.p">Start at the last dot before the first slash. The two parts there have to be the real name: metamask.io, coinbase.com, kraken.com, binance.com. Anything in front of that means nothing, which is exactly how portfolio.metamask.en-eu.io works. That one is a real fake on MetaMask's own blocklist and it reads fine left to right. Nobody from HCC, Highrise, MetaMask or any exchange will ever ask you for your twelve words.</p>
+              </div>
+            </div>
+          </div>
+
+          <h5 class="gm-paid-sub" data-i18n="gm.paid.go.h">The four front doors</h5>
+          <p class="gm-paid-note" data-i18n="gm.paid.go.p">Every link below shows exactly where it goes. Read it here, then compare it with your address bar once you land.</p>
+          <!-- The link's visible text IS its href. Never replace these with friendly
+               words: the whole anti-phishing lesson in rule 2 depends on the member
+               being able to read the destination here and match it in the address bar.
+               These strings are deliberately NOT translated. -->
+          <ul class="gm-go" role="list" aria-label="Official sites for each option" data-i18n-aria="a11y.paid.go">
+            <li class="gm-go-row is-default">
+              <span class="gm-go-name"><span data-i18n="gm.paid.go.mm">MetaMask Sell</span> <em class="gm-go-when" data-i18n="gm.paid.go.mm.note">On a computer only</em></span>
+              <a class="gm-go-link" href="https://portfolio.metamask.io/sell" target="_blank" rel="noopener noreferrer"><span class="gm-go-dom">portfolio.<b>metamask.io</b>/sell</span> <span class="gm-go-arrow" aria-hidden="true">↗</span></a>
+            </li>
+            <li class="gm-go-row">
+              <span class="gm-go-name"><span data-i18n="gm.paid.go.cb">Coinbase</span></span>
+              <a class="gm-go-link" href="https://www.coinbase.com" target="_blank" rel="noopener noreferrer"><span class="gm-go-dom">www.<b>coinbase.com</b></span> <span class="gm-go-arrow" aria-hidden="true">↗</span></a>
+            </li>
+            <li class="gm-go-row">
+              <span class="gm-go-name"><span data-i18n="gm.paid.go.kr">Kraken</span></span>
+              <a class="gm-go-link" href="https://www.kraken.com" target="_blank" rel="noopener noreferrer"><span class="gm-go-dom">www.<b>kraken.com</b></span> <span class="gm-go-arrow" aria-hidden="true">↗</span></a>
+            </li>
+            <li class="gm-go-row is-split">
+              <span class="gm-go-name"><span data-i18n="gm.paid.go.bn">Binance</span></span>
+              <span class="gm-go-links">
+                <a class="gm-go-link" href="https://www.binance.com" target="_blank" rel="noopener noreferrer"><span class="gm-go-dom">www.<b>binance.com</b></span> <em class="gm-go-when" data-i18n="gm.paid.go.bn.world">Most of the world</em> <span class="gm-go-arrow" aria-hidden="true">↗</span></a>
+                <a class="gm-go-link" href="https://www.binance.us" target="_blank" rel="noopener noreferrer"><span class="gm-go-dom">www.<b>binance.us</b></span> <em class="gm-go-when" data-i18n="gm.paid.go.bn.us">United States</em> <span class="gm-go-arrow" aria-hidden="true">↗</span></a>
+                <a class="gm-go-link" href="https://www.binance.tr" target="_blank" rel="noopener noreferrer"><span class="gm-go-dom">www.<b>binance.tr</b></span> <em class="gm-go-when" data-i18n="gm.paid.go.bn.tr">Turkish lira</em> <span class="gm-go-arrow" aria-hidden="true">↗</span></a>
+              </span>
+            </li>
+          </ul>
+
+          <p class="gm-paid-fine" data-i18n="gm.paid.fine">We're not affiliated with any of these and nobody pays us to list them. There are no referral codes in these links, and the names and logos belong to their owners, shown here to identify each service and nothing more. Prices, fees and country coverage were checked on 29 August 2026 and they move, so trust what the site in front of you says today over what this page says.</p>
+        </section>
+
         <div class="gm-cardfoot">
           <button class="gm-foot-prev" type="button" data-wt-cta-prev>
             <span aria-hidden="true">←</span> <span data-i18n="guide.wt.prev">Previous</span>

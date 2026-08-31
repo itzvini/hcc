@@ -113,6 +113,14 @@ const ETH_RPC_URL             = process.env.ETH_RPC_URL || 'https://eth.blocksco
 // slow-changing) stay on ETH_RPC_URL to avoid hammering a public node.
 const ETH_BALANCE_RPC         = process.env.ETH_BALANCE_RPC || 'https://ethereum-rpc.publicnode.com';
 const ZK_RPC_URL              = process.env.ZK_RPC_URL || 'https://rpc.immutable.com'; // Immutable zkEVM (Creatures)
+// The L2s a member can fund FROM (see lib/layerswap-bridge.js). Read-only balance lookups,
+// so a public node is enough; the browser can't reach these itself because CSP pins
+// connect-src to 'self'. Keys match FUND_SOURCES in the bridge lib.
+const FUND_CHAIN_RPC = {
+  base: process.env.BASE_RPC_URL || 'https://base-rpc.publicnode.com',
+  arbitrum: process.env.ARBITRUM_RPC_URL || 'https://arbitrum-one-rpc.publicnode.com',
+  optimism: process.env.OPTIMISM_RPC_URL || 'https://optimism-rpc.publicnode.com',
+};
 // Transak card on-ramp credentials. As of Transak's June 2026 migration, query-param widget
 // URLs are dead — the widget loads ONLY with a sessionId minted server-side from the API key
 // + SECRET (see the on-ramp helpers near handleMarketplaceApi). The secret must never reach a
@@ -3069,10 +3077,10 @@ async function immutableOnrampKey() {
 
 // Mint a card on-ramp URL via Immutable's hosted checkout (rides Immutable's Transak account, so
 // no creds of ours). It serves BOTH networks:
-//   network 'immutablezkevm' → IMX (gas), delivered natively to zkEVM.
-//   network 'ethereum'       → ETH (Creature/LAND price), delivered to Ethereum — Transak has no
-//                              fiat→zkEVM-ETH product (confirmed by a live order: ETH lands on L1),
-//                              so the buyer then bridges to zkEVM via the in-panel bridge.
+//   network 'immutablezkevm' → IMX (gas), ETH (the Creature price token) or USDC, all delivered
+//                              natively to zkEVM. ETH here is what lets a buyer start from an
+//                              empty wallet: no mainnet ETH, no bridge, no bridge fee.
+//   network 'ethereum'       → ETH (the LAND price token) or USDC, delivered to Ethereum.
 // fiatUsd prefills the buy amount (integer USD). The returned global.transak.com?sessionId=… URL
 // is short-lived + single-use, so we mint on click.
 async function immutableOnrampUrl({ network, token, address, fiatUsd, referrerDomain }) {
@@ -3331,7 +3339,19 @@ async function handleMarketplaceApi(request, response, url) {
     if (imxRes.status === 'fulfilled' && imxRes.value) {
       try { mainnetImxWei = BigInt(imxRes.value).toString(); } catch { /* leave null */ }
     }
-    sendJson(response, 200, { mainnetEthWei, mainnetImxWei }, { 'Cache-Control': 'no-store' });
+    // ETH on the L2s we can fund from, so the source picker can show a balance beside each
+    // chain instead of asking the member to remember where their money is. All settled
+    // independently: one slow public node must not cost the others their figure, and a
+    // missing balance renders as "unknown" rather than as zero.
+    const l2Keys = Object.keys(FUND_CHAIN_RPC);
+    const l2Res = await Promise.allSettled(l2Keys.map(k => ethGetBalance(FUND_CHAIN_RPC[k], addr)));
+    const chains = {};
+    l2Keys.forEach((k, i) => {
+      const r = l2Res[i];
+      if (r.status === 'rejected') { console.error(`${k} ETH balance failed:`, r.reason?.message); chains[k] = null; return; }
+      try { chains[k] = BigInt(r.value).toString(); } catch { chains[k] = null; }
+    });
+    sendJson(response, 200, { mainnetEthWei, mainnetImxWei, chains }, { 'Cache-Control': 'no-store' });
     return;
   }
 
@@ -3920,8 +3940,76 @@ async function handleMarketplaceApi(request, response, url) {
     return;
   }
 
+  // --- Funding through Layerswap: the same solver, run the other way ---------------------
+  //
+  // Getting ETH ONTO zkEVM, from Ethereum or from an L2 the member already holds. Measured
+  // 2026-08-31, this beats the Squid funding route on both axes at once: $0.009 against
+  // $0.11 and 7 seconds against 17 minutes from Ethereum, and from an L2 it is not close
+  // ($1.28 against $17 on a $1,000 move, because Squid has to swap into thin zkEVM ETH).
+  // The Squid route stays on offer: it is the canonical bridge, non-custodial end to end.
+  //
+  // Same split as the cash-out: quote runs on every keystroke, create registers a swap.
+  if (pathname === '/api/market/creatures/topup/ls/sources' && request.method === 'GET') {
+    if (!layerswapBridge.fundConfigured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    sendJson(response, 200, { sources: layerswapBridge.fundSources() }, { 'Cache-Control': 'no-store' });
+    return;
+  }
+
+  if (pathname === '/api/market/creatures/topup/ls/limits' && request.method === 'GET') {
+    if (!layerswapBridge.fundConfigured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    const tlWait = rateLimited(`mkttopuplim:${ip}`, 30, 60 * 1000);
+    if (tlWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(tlWait) }); return; }
+    try {
+      sendJson(response, 200, await layerswapBridge.fundLimits(url.searchParams.get('source') || ''),
+        { 'Cache-Control': 'no-store' });
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  if (pathname === '/api/market/creatures/topup/ls/quote' && request.method === 'POST') {
+    if (!layerswapBridge.fundConfigured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    const tqWait = rateLimited(`mkttopupq:${ip}`, 30, 60 * 1000);
+    if (tqWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(tqWait) }); return; }
+
+    const body = await readJsonBody(request, 4 * 1024);
+    const wei = parseEthToWei(body.amountEth);
+    if (wei == null || wei > 100n * 10n ** 18n) { sendJson(response, 400, { error: 'bad_price' }); return; }
+    try {
+      sendJson(response, 200, await layerswapBridge.quoteTopup(wei, body.source), { 'Cache-Control': 'no-store' });
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // Mint the transaction the member signs. Unlike the cash-out this is a NATIVE send, so the
+  // money rides in `value` rather than inside calldata; createTopup decodes and checks the
+  // recipient, the amount, the source chain and the memo length before any of it comes back.
+  // Destination is pinned to the source address server-side: this can only pay the member's
+  // own wallet on zkEVM.
+  if (pathname === '/api/market/creatures/topup/ls/create' && request.method === 'POST') {
+    if (!layerswapBridge.fundConfigured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    const tcWait = rateLimited(`mkttopupc:${ip}`, 10, 60 * 1000);
+    if (tcWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(tcWait) }); return; }
+
+    const body = await readJsonBody(request, 4 * 1024);
+    const addr = String(body.address || '').toLowerCase();
+    const wei = parseEthToWei(body.amountEth);
+    if (!HEX_ADDRESS.test(addr)) { sendJson(response, 400, { error: 'bad_address' }); return; }
+    if (wei == null || wei > 100n * 10n ** 18n) { sendJson(response, 400, { error: 'bad_price' }); return; }
+    try {
+      sendJson(response, 200, await layerswapBridge.createTopup(wei, addr, body.source), { 'Cache-Control': 'no-store' });
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
   // Tracker poll. The swap id is opaque and carries no authority, so this needs no session:
-  // it reveals only the state of a swap whose id you already hold.
+  // it reveals only the state of a swap whose id you already hold. Direction-agnostic, so
+  // the funding swaps above poll this same route.
   if (pathname === '/api/market/creatures/cashout/ls/status' && request.method === 'GET') {
     if (!layerswapBridge.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
     const lsWait = rateLimited(`mktlsstatus:${ip}`, 60, 60 * 1000);
@@ -4046,11 +4134,14 @@ async function handleMarketplaceApi(request, response, url) {
 
   // Fiat on-ramp: mint a fresh, single-use card-on-ramp session via Immutable's hosted checkout
   // (rides Immutable's Transak account — no creds of ours, no dependency on our account being
-  // provisioned). Transak has no fiat→zkEVM-ETH product (a live test order delivered ETH to L1),
-  // so routing is by what each network can actually deliver:
-  //   chain=zkevm    → network 'immutablezkevm', IMX (gas) — native to zkEVM.
-  //   chain=ethereum → network 'ethereum', ETH (Creature/LAND price) — lands on Ethereum, then
-  //                    the buyer bridges to zkEVM via the in-panel bridge.
+  // provisioned).
+  //   chain=zkevm    → network 'immutablezkevm': IMX (gas), ETH (the Creature price token) or
+  //                    USDC. ETH here lands ON zkEVM, so a buyer starting from nothing needs no
+  //                    mainnet ETH and no bridge. This contradicts an older note in this file
+  //                    claiming Transak had no fiat→zkEVM-ETH product; Transak's own currency
+  //                    list marks ETH buyable on immutablezkevm, and a minted session shows
+  //                    "Immutablezkevm Network / ETH" in the widget. Re-check before narrowing.
+  //   chain=ethereum → network 'ethereum', ETH (the LAND price token) or USDC.
   // `fiat` prefills the buy amount in USD (editable). The minted URL is single-use + expires in
   // ~5 min, so the client mints on click. On failure the client falls back (zkEVM → Immutable's
   // keyless hosted page; ethereum → hides the CTA).
@@ -4062,12 +4153,13 @@ async function handleMarketplaceApi(request, response, url) {
     const addr = String(url.searchParams.get('address') || '').toLowerCase();
     const reqToken = String(url.searchParams.get('token') || 'ETH').toUpperCase();
     const fiatUsd = Number(url.searchParams.get('fiat'));
-    // Delivery is pinned by network: zkEVM delivers IMX (gas) or USDC (a USDC Creature buy);
-    // Ethereum delivers ETH (price) or USDC (a USDC LAND buy). USDC delivery depends on Transak
-    // offering it for that network — if not, the widget still opens and the buyer picks manually;
-    // the client falls back to Immutable's keyless page (zkEVM) or hides the CTA (ethereum).
+    // Delivery is pinned by network. zkEVM takes ETH (the Creature price token, delivered on
+    // zkEVM so no bridge is involved), IMX (gas) and USDC; Ethereum takes ETH (the LAND price
+    // token) and USDC. USDC delivery depends on Transak offering it for that network — if not,
+    // the widget still opens and the buyer picks manually; the client falls back to Immutable's
+    // keyless page (zkEVM) or hides the CTA (ethereum).
     const network = chain === 'zkevm' ? 'immutablezkevm' : chain === 'ethereum' ? 'ethereum' : null;
-    const ALLOWED = { zkevm: ['IMX', 'USDC'], ethereum: ['ETH', 'USDC'] };
+    const ALLOWED = { zkevm: ['ETH', 'IMX', 'USDC'], ethereum: ['ETH', 'USDC'] };
     if (!network) { sendJson(response, 400, { error: 'bad_chain' }); return; }
     if (!HEX_ADDRESS.test(addr)) { sendJson(response, 400, { error: 'bad_address' }); return; }
     if (!(ALLOWED[chain] || []).includes(reqToken)) { sendJson(response, 400, { error: 'bad_token' }); return; }
@@ -6804,7 +6896,7 @@ function resolveFile(requestUrl) {
    canonical, and the thing the page is actually about as og:image.
    The stamp is also what a reader without JS gets, and what a search engine indexes. */
 
-const CODEX_KINDS = new Set(['release', 'item', 'trait', 'creature']);
+const CODEX_KINDS = new Set(['release', 'item', 'trait', 'creature', 'term']);
 const SITE_ORIGIN = (process.env.SITE_ORIGIN || 'https://hcc.highrise.game').replace(/\/+$/, '');
 const SITE_NAME   = 'Highrise Creature Club';
 
@@ -6880,6 +6972,41 @@ function getCreatureNumbers() {
   return creatureNumbers.map;
 }
 
+// The English copy, for every card the site stamps. Cards are built here, where the
+// reader's language is unknown, so they are English only and this is the file that holds
+// English. Re-read when it changes, so edited copy lands without a restart; if it ever
+// becomes unreadable the last good copy is kept rather than serving a card of nulls.
+const localeCache = { mtimeMs: -1, doc: {}, terms: new Map() };
+function getLocaleDoc() {
+  let mtimeMs;
+  try { mtimeMs = fs.statSync(path.join(root, 'locales', 'en.json')).mtimeMs; }
+  catch { return localeCache.doc; }
+  if (mtimeMs === localeCache.mtimeMs) return localeCache.doc;
+  try {
+    const doc = JSON.parse(fs.readFileSync(path.join(root, 'locales', 'en.json'), 'utf8'));
+    const terms = new Map();
+    for (const [key, value] of Object.entries(doc)) {
+      const m = key.match(/^term\.([a-z0-9-]+)\.(t|p)$/);
+      if (!m) continue;
+      const entry = terms.get(m[1]) || {};
+      entry[m[2]] = value;
+      terms.set(m[1], entry);
+    }
+    localeCache.mtimeMs = mtimeMs;
+    localeCache.doc = doc;
+    localeCache.terms = terms;
+  } catch (err) {
+    console.error('Page meta: en.json unreadable:', err.message);
+  }
+  return localeCache.doc;
+}
+
+// Glossary copy for the term cards, indexed off the same read.
+function getTerms() {
+  getLocaleDoc();
+  return localeCache.terms;
+}
+
 const RARITY_WORD = { m: 'Mythical', l: 'Legendary', e: 'Epic', r: 'Rare', c: 'Common' };
 const TYPE_WORD = {
   drop: 'drop', grab: 'grab', store: 'Creature Store release', event: 'event',
@@ -6935,6 +7062,16 @@ async function codexPageMeta(route, origin) {
     };
   }
 
+  if (kind === 'term') {
+    const term = getTerms().get(args[0]);
+    if (!term || !term.t) return null;
+    return {
+      title: term.t === SITE_NAME ? SITE_NAME : `${term.t} · ${SITE_NAME}`,
+      description: term.p || '',
+      image: null,   // a word has no picture; the club's own icon is the honest stand-in
+    };
+  }
+
   if (kind === 'trait') {
     const doc = await getCreatureTraits().catch(() => null);
     if (!doc || doc.indexing) return null;
@@ -6971,6 +7108,313 @@ async function codexPageMeta(route, origin) {
     // A token id in the URL is the chain's name for it, not the club's. The card points
     // at the readable address, the same one the page itself settles on.
     url: number ? `${origin}/collections/creature/${number[1]}` : null,
+  };
+}
+
+/* --------------------------------------------------- cards for every route
+   The entity pages were the loud half of this problem; the rest of the site is the
+   larger half. Every tab, sub-tab and walkthrough step is its own URL served from the
+   same shell, so a link to the marketplace tour, the Council ballot or Scam Watch
+   unfurled in Discord as the site's front door: same title, same description, same
+   picture, whatever you actually linked. The club's project lead posted a link to the
+   transfer walkthrough and a link to the marketplace in one message and got two
+   identical cards.
+
+   So each route gets a card of its own, and the copy comes from the page's own strings
+   in locales/en.json wherever a key says it well. A card built from the page cannot
+   drift from the page. Cards are English only: they are stamped here, where the
+   reader's language is unknown, and a scraper caches one card per URL for everyone who
+   sees the link. */
+
+// Routes that render the same view as another. The card is looked up under the view.
+const CARD_ALIAS = new Map([
+  ['/', '/club'],
+  ['/council', '/council/about'],
+  ['/apply', '/council/vote'],
+  ['/holders', '/market/holders'],
+  ['/guides/scams', '/guides/safety'],
+  ['/collections/term', '/collections/glossary'],
+]);
+
+// Legacy paths the client rewrites in the address bar as soon as it loads. The card
+// points where the reader will actually end up, so a shared link and its canonical agree.
+const CANONICAL_ALIAS = new Map([
+  ['/apply', '/council/vote'],
+  ['/holders', '/market/holders'],
+  ['/guides/scams', '/guides/safety'],
+]);
+
+// path -> card. `tk` and `dk` name an en.json key, read at request time so the card
+// cannot drift from the page; `t` and `d` are literal, for the routes no single key
+// says well. `ttpl` wraps the keyed title, which is how the marketplace tour says which
+// tour it is: six of its steps are named for the thing they do ("Browse, buy & sell"),
+// which read as the marketplace itself rather than as a guide to it. `img` is a
+// site-relative picture; `art` asks for a picture from the archive; without either, the
+// club's own mark stands.
+//
+// Routes reached through CARD_ALIAS have no entry: they share the view they alias.
+const SECTION_CARDS = {
+  "/club": {
+    t: "What the club is, and how you get in",
+    d: "Start here. Own one of the 11,111 Creatures or a LAND plot and you're a member: what that gets you, how the club got here, and where everything else on the site lives.",
+  },
+  "/council/about": { tk: "council.top.h2", dk: "council.top.lead" },
+  "/council/vote": {
+    tk: "council.sub.vote",
+    d: "See where the election stands, then sign in with Discord to check whether you can vote and which seat you can run for, match yourself to the candidates, and cast your ballot.",
+  },
+  "/polls": { tk: "polls.h2", dk: "polls.lead" },
+  "/roadmap": {
+    tk: "nav.roadmap",
+    d: "Two boards. Milestones tracks what the club is building, from Done to The Goal, and the Gen 2 side explains what you're owed, with the pet and creature sets beside it.",
+  },
+  "/roadmap/milestones": {
+    tk: "roadmap.sub.milestones",
+    d: "The board of what the club is building, card by card, from Done through Now, Next, Soon and Later to The Goal. Dates go up as they're confirmed.",
+  },
+  "/roadmap/gen2-explained": { tk: "gx.h2", dk: "gx.lead" },
+  "/roadmap/pets": { tk: "g2p.h2", dk: "g2p.lead" },
+  "/roadmap/gen2": { tk: "g2.h2", dk: "g2.lead" },
+  "/collections": {
+    tk: "col.h2",
+    d: "The whole archive in one place: every club release, every Creature trait, and the glossary. One search box covers releases, items, traits, terms and Creature numbers.",
+    art: "newestRelease",
+  },
+  "/collections/releases": { tk: "col.sub.releases", dk: "col.lead", art: "newestRelease" },
+  "/collections/traits": {
+    tk: "ctr.h2",
+    d: "Every trait in the Creature collection, slot by slot, as it looks in game. Open one to see how many of the 11,111 Creatures wear it and jump to the marketplace filtered to it.",
+  },
+  "/collections/glossary": {
+    tk: "gloss.h2",
+    d: "Every word the club uses, defined in one place: what a grab is, what your Creature Coins can and can't do, how a rarity rank is worked out. Each term opens as its own page.",
+  },
+  "/guides": {
+    t: "Guides for Creature and LAND owners",
+    d: "Five sections to work through: what you actually own, Token Trove walkthroughs, a tour of this site's own marketplace, staying safe from scams, and the official links.",
+    img: "/assets/og-guides.png",
+  },
+  "/guides/basics": {
+    tk: "guide.what.h2",
+    d: "Your Creature and your LAND are NFTs you own on the blockchain, not just inside an app. Plus the four things you'll meet again and again: wallet, marketplace, ETH and IMX.",
+    img: "/assets/og-guides.png",
+  },
+  "/guides/walkthroughs": {
+    t: "Token Trove walkthroughs",
+    d: "Six walkthroughs, most with a video: link MetaMask, bridge ETH and IMX, buy, sell and transfer creatures, show them in Highrise, and mint LAND you bought with Deeds.",
+    img: "/assets/og-guides.png",
+  },
+  "/guides/marketplace": {
+    t: "Trading on this site, step by step",
+    d: "A click-by-click tour of our own marketplace: connect your wallet, fund the right network, buy and sell at 0% fee, transfer, and cash out. Each step covers Creatures and LAND.",
+    img: "/assets/og-guides.png",
+  },
+  "/guides/safety": {
+    tk: "guide.safe.h2",
+    d: "The scams actually hitting Highrise holders, the habits that stop them, a spot-the-scam drill, a safety checklist, and what to do if you've been hit.",
+    img: "/assets/og-guides.png",
+  },
+  "/guides/links": {
+    tk: "guide.links.h2",
+    d: "Official places to buy, explore, and manage your HCC assets: Highrise LAND, Token Trove, OpenSea for LAND and Gen 2, the Slime Pet Map, Immutable Explorer and MetaMask.",
+    img: "/assets/og-guides.png",
+  },
+  "/guides/walkthroughs/setup": {
+    tk: "guide.g1.h",
+    d: "Step 1 of the walkthroughs: find Token Trove through the Highrise Discord official links, connect MetaMask on Immutable zkEVM, then check your balances and creatures.",
+    img: "/assets/og-guides.png",
+  },
+  "/guides/walkthroughs/funding": {
+    tk: "guide.g2.h",
+    d: "Step 2 of the walkthroughs: swap a little ETH for IMX, then use Token Trove's Bridge to move both from Ethereum mainnet to Immutable zkEVM. ETH buys creatures, IMX pays the fee.",
+    img: "/assets/og-guides.png",
+  },
+  "/guides/walkthroughs/trading": {
+    t: "Buy & sell creatures on Token Trove",
+    d: "Step 3 of the walkthroughs: buy a creature on Token Trove with Buy Now, or list one of your own with List Now. Includes the network switch and the 5% creator royalty.",
+    img: "/assets/og-guides.png",
+  },
+  "/guides/walkthroughs/moving": {
+    tk: "guide.g4.h",
+    d: "Step 4 of the walkthroughs: send a creature from Token Trove to another wallet, either between your own wallets or as a gift. Paste the address, double-check it, pay the gas fee.",
+    img: "/assets/og-guides.png",
+  },
+  "/guides/walkthroughs/in-game": {
+    tk: "guide.g5.h",
+    d: "Step 5 of the walkthroughs: link your wallet on the Highrise website, in account Settings under Connect MetaMask Wallet, so your creatures show up under Your Collections.",
+    img: "/assets/og-guides.png",
+  },
+  "/guides/walkthroughs/land": { tk: "guide.g6.h", dk: "guide.g6.p", img: "/assets/og-guides.png" },
+  "/guides/marketplace/setup": {
+    tk: "gm.setup.h",
+    ttpl: "Marketplace tour: {k}",
+    dk: "gm.setup.p",
+    img: "/assets/og-guides.png",
+  },
+  "/guides/marketplace/funding": {
+    tk: "gm.fund.h",
+    ttpl: "Marketplace tour: {k}",
+    d: "Pick your situation, from no crypto at all to just short on gas, and watch the fix play out click by click. Plus what each way in really costs: a card is about 4.5%, an exchange well under 1%.",
+    img: "/assets/og-guides.png",
+  },
+  "/guides/marketplace/trading": {
+    tk: "gm.trade.h",
+    ttpl: "Marketplace tour: {k}",
+    d: "Find what you want, buy it, or list your own. We charge 0% marketplace fee, and Creature listings and offers are free to create, just a signature.",
+    img: "/assets/og-guides.png",
+  },
+  "/guides/marketplace/moving": {
+    tk: "gm.move.h",
+    ttpl: "Marketplace tour: {k}",
+    d: "Send a Creature on Immutable zkEVM or a LAND parcel on Ethereum, straight from the Trade tab. The address is checked on-chain before Send unlocks: a transfer can't be undone.",
+    img: "/assets/og-guides.png",
+  },
+  "/guides/marketplace/in-game": {
+    tk: "gm.game.h",
+    ttpl: "Marketplace tour: {k}",
+    d: "Link your wallet and your Creature shows up in your Highrise clothing inventory, while LAND brings its Slime pet. Linking is read-only, so your keys never leave MetaMask.",
+    img: "/assets/og-guides.png",
+  },
+  "/guides/marketplace/cashout": {
+    tk: "gm.cash.h",
+    ttpl: "Marketplace tour: {k}",
+    d: "Sold a Creature? Your ETH lands on Immutable zkEVM, and the Cash out button moves it to Ethereum, the network most exchanges accept. LAND pays in WETH, and one tap unwraps it.",
+    img: "/assets/og-guides.png",
+  },
+  "/market": {
+    t: "Market prices and holders",
+    d: "Two views of the market: floor prices with sale history for Creatures and LAND, and Holders for who owns what across every wallet.",
+    img: "/assets/og-market.png",
+  },
+  "/market/prices": {
+    t: "Prices and sale history",
+    d: "Live floor prices for Creatures and LAND with a daily history, and the sales behind them. Set the chart to floor, volume, sales count, or high and low sale.",
+    img: "/assets/og-market.png",
+  },
+  "/market/holders": {
+    tk: "holders.h2",
+    d: "A live look at HCC wallets: how many hold Creatures, LAND or both, how many NFTs each one holds, which rarity tiers they sit in, and how tightly each collection is held.",
+    img: "/assets/og-market.png",
+  },
+  "/trade": {
+    tk: "nav.marketplace",
+    d: "Buy, sell, make offers and transfer Creatures on Immutable zkEVM and LAND on Ethereum, priced in ETH or USDC. Your own wallet signs every trade and we charge no marketplace fee.",
+  },
+  "/profile": {
+    tk: "trade.profile.h",
+    d: "Switch on a public page that shows what you hold, so a buyer can see who they are dealing with. It is opt-in, and switching it off deletes it.",
+  },
+  "/profile/:slug": {
+    t: "{name}'s profile",
+    d: "Browse the Creatures and LAND {name} holds, read straight from the blockchain, and filter down to what's for sale. Holder profiles are opt-in.",
+  },
+  "/perks": {
+    tk: "perks.h2",
+    d: "Daily Creature Coins for every Creature and plot you hold, Premium LAND at three times the rate, Highrise+ Tier 1 renewed on the 1st, and a calculator for what yours earns.",
+    img: "/assets/og-perks.png",
+  },
+  "/announcements": { tk: "ann.h2", dk: "ann.lead" },
+  "/changelog": {
+    tk: "changelog.h2",
+    d: "The club's track record in two columns, newest first: what changed in the Creature Club, and what's shipped to this site.",
+  },
+  "/contribute": { tk: "contrib.gate.h", dk: "contrib.gate.p" },
+  "/terms": {
+    tk: "terms.h2",
+    d: "The rules you accept to take part in the Player Council: what a seat is and isn't, who can vote or run, how ballots are counted, and the code of conduct.",
+  },
+  "/privacy": {
+    tk: "privacy.h2",
+    d: "What the Council election collects when you log in with Discord, who it's shared with, what stays private, including your individual vote, and how to ask for your data.",
+  },
+};
+
+function cardCopy(entry) {
+  const doc = getLocaleDoc();
+  const pick = (key, literal) => {
+    const value = key ? doc[key] : null;
+    return typeof value === 'string' && value.trim() ? value.trim() : (literal || null);
+  };
+  let title = pick(entry.tk, entry.t);
+  if (title && entry.ttpl) title = entry.ttpl.split('{k}').join(title);
+  return { title, description: pick(entry.dk, entry.d) };
+}
+
+// The newest release's hero item, so the Collections card shows what the club shipped
+// last rather than a logo. It comes from collections.json, which is already on disk for
+// the entity cards, so a scraper triggers no upstream read for it.
+function newestReleaseArt(origin) {
+  const index = getArchiveIndex();
+  let newest = null;
+  for (const rel of index.releases.values()) {
+    if (!newest || String(rel.date || '') > String(newest.date || '')) newest = rel;
+  }
+  const hero = newest && (newest.hero || []).map(n => newest.items[n]).find(Boolean);
+  return hero ? artUrlFor(origin, 'full', hero.k) : null;
+}
+
+// The card for a path: itself, then the view it aliases, then its parent. The walk up is
+// what makes an unknown deep link (a renamed walkthrough step, a stale bookmark) unfurl
+// as the page it belongs to instead of as the front door.
+function findCard(pathname) {
+  let p = pathname;
+  for (let i = 0; i < 4 && p; i++) {
+    if (SECTION_CARDS[p]) return SECTION_CARDS[p];
+    const alias = CARD_ALIAS.get(p);
+    if (alias && SECTION_CARDS[alias]) return SECTION_CARDS[alias];
+    const cut = p.lastIndexOf('/');
+    if (cut <= 0) break;
+    p = p.slice(0, cut);
+  }
+  return null;
+}
+
+function sectionPageMeta(pathname, origin) {
+  const p = pathname.replace(/\/+$/, '') || '/';
+  const card = findCard(p);
+  if (!card) return null;
+  const { title, description } = cardCopy(card);
+  if (!title && !description) return null;
+  return {
+    title: !title || title === SITE_NAME ? SITE_NAME : `${title} · ${SITE_NAME}`,
+    description: description || '',
+    image: card.art === 'newestRelease' ? newestReleaseArt(origin)
+      : card.img ? origin + card.img : null,
+    url: origin + (CANONICAL_ALIAS.get(p) || p),
+    // A fixed set of routes with a fixed stamp each, so the gzipped copy is worth keeping.
+    // The origin is in the key because the stamp carries it: two hostnames serving the
+    // same route are two different bodies, and without it they would evict each other.
+    cacheKey: `shell:${origin}:${CARD_ALIAS.get(p) || p}`,
+  };
+}
+
+/* Holder profiles are the one card here built from a person's own row. A profile exists
+   only because its holder switched it on, and the card carries only what that page
+   already shows the world: the name they chose and their avatar. Never the wallet, never
+   a holding count (counting means reading two chains, and a scraper must never set that
+   off). A profile that is off, or a slug that never existed, gets no card of its own. */
+function profileRouteOf(pathname) {
+  const m = pathname.match(/^\/profile\/([a-z0-9-]{1,40})\/?$/);
+  return m ? m[1] : null;
+}
+
+async function profilePageMeta(slug, origin) {
+  const card = SECTION_CARDS['/profile/:slug'];
+  if (!card) return null;
+  let row = null;
+  try { row = await db.getHolderProfileBySlug(slug); } catch { row = null; }
+  // Disabling a profile deletes it, so dead links are normal. They unfurl as the feature
+  // they point at, which is true, rather than as the site's front door, which is not.
+  if (!row) return sectionPageMeta(`/profile/${slug}`, origin);
+  const name = String(row.display_name || '').slice(0, 40) || slug;
+  const { title, description } = cardCopy(card);
+  const fill = s => (s || '').split('{name}').join(name);
+  const avatar = String(row.avatar || '');
+  return {
+    title: `${fill(title)} · ${SITE_NAME}`,
+    description: fill(description),
+    image: /^https:\/\//.test(avatar) ? avatar : null,
+    url: `${origin}/profile/${row.slug || slug}`,
   };
 }
 
@@ -7013,6 +7457,93 @@ function stampPageMeta(html, meta) {
     if (missing.length) console.warn(`Page meta: ${missing.length} head tag(s) no longer match; those stamps are off.`);
   } catch { /* the shell is missing, which will announce itself elsewhere */ }
 })();
+
+/* ----------------------------------------------------------------- sitemap
+   The hand-written sitemap.xml lists the twenty tab routes and nothing else, so the
+   thousands of codex entity pages are invisible to every search engine. Outside Discord,
+   a search engine is how anyone finds a reference at all, so the file becomes a floor and
+   the real sitemap is generated from the same data the pages are.
+
+   Built at most once an hour and held in memory: it is one string, and a crawler asks for
+   it rarely. If any part of it can't be built, that part is left out rather than guessed —
+   a sitemap that lists a page we can't render is worse than a shorter one. */
+
+const SITEMAP_TTL_MS = 60 * 60 * 1000;
+const sitemapCache = { xml: null, at: 0, origin: null, inFlight: null };
+
+// The dates in collections.json are the release dates, which for these pages is exactly
+// what lastmod means. Nothing else gets one: a made-up date is worse than none.
+function urlEntry(loc, lastmod) {
+  return `<url><loc>${loc}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}</url>`;
+}
+
+async function buildSitemap(origin) {
+  const out = [];
+
+  // The hand-kept routes, read from the file so it stays the one place they are listed.
+  try {
+    const file = fs.readFileSync(path.join(root, 'sitemap.xml'), 'utf8');
+    for (const m of file.matchAll(/<url>[\s\S]*?<\/url>/g)) out.push(m[0].split(SITE_ORIGIN).join(origin));
+  } catch (err) {
+    console.error('Sitemap: static routes unreadable:', err.message);
+  }
+
+  // Every carded route, so a sub-tab or a walkthrough step is crawlable in its own right
+  // rather than living only inside the shell. The hand-kept file wins where the two
+  // overlap, because it carries the lastmod dates. Aliases are left out: they redirect to
+  // a route that is already listed, and a profile is its holder's to share, not ours.
+  const listed = new Set([...out.join('').matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1]));
+  for (const route of Object.keys(SECTION_CARDS)) {
+    if (route.startsWith('/profile') || CANONICAL_ALIAS.has(route)) continue;
+    const loc = origin + (route === '/club' ? '/club' : route);
+    if (!listed.has(loc)) out.push(urlEntry(loc, null));
+  }
+
+  const index = getArchiveIndex();
+  for (const rel of index.releases.values()) {
+    out.push(urlEntry(`${origin}/collections/release/${rel.id}`,
+      rel.precision === 'exact' ? rel.date : null));
+  }
+  for (const [key, { rel }] of index.items) {
+    out.push(urlEntry(`${origin}/collections/item/${key}`,
+      rel.precision === 'exact' ? rel.date : null));
+  }
+
+  // Traits and Creatures only once their indexes are built. A crawler that arrives during
+  // the boot sweep gets the shorter list and the full one an hour later.
+  const traits = await getCreatureTraits().catch(() => null);
+  if (traits && !traits.indexing) {
+    for (const ty of traits.types) {
+      for (const val of ty.values) {
+        out.push(urlEntry(`${origin}/collections/trait/${entitySlug(ty.type)}/${entitySlug(val.v)}`));
+      }
+    }
+  }
+  for (const slug of getTerms().keys()) {
+    out.push(urlEntry(`${origin}/collections/term/${slug}`));
+  }
+  const numbers = getCreatureNumbers();
+  if (numbers) {
+    for (const n of numbers.keys()) out.push(urlEntry(`${origin}/collections/creature/${n}`));
+  }
+
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${
+    out.join('\n')}\n</urlset>\n`;
+}
+
+async function getSitemap(origin) {
+  const fresh = sitemapCache.xml && sitemapCache.origin === origin
+    && Date.now() - sitemapCache.at < SITEMAP_TTL_MS;
+  if (fresh) return sitemapCache.xml;
+  // One build at a time: a crawler that opens several connections must not start several
+  // sweeps of the same data.
+  if (!sitemapCache.inFlight) {
+    sitemapCache.inFlight = buildSitemap(origin)
+      .then(xml => { sitemapCache.xml = xml; sitemapCache.at = Date.now(); sitemapCache.origin = origin; return xml; })
+      .finally(() => { sitemapCache.inFlight = null; });
+  }
+  return sitemapCache.inFlight;
+}
 
 // A link pasted into chat / a game / a sentence often picks up trailing punctuation —
 // e.g. "https://hcc.highrise.game/announcements." → the request path is "/announcements.",
@@ -7196,6 +7727,26 @@ const server = http.createServer((request, response) => {
     return;
   }
 
+  // The generated sitemap, ahead of the static file of the same name: the file still
+  // holds the hand-kept tab routes and is read as this one's first section.
+  if (request.url === '/sitemap.xml' || request.url.startsWith('/sitemap.xml?')) {
+    getSitemap(siteOrigin(request))
+      .then(xml => {
+        response.writeHead(200, {
+          'Content-Type': 'application/xml; charset=utf-8',
+          'Cache-Control': 'public, max-age=3600',
+          ...securityHeaders('.xml'),
+        });
+        response.end(xml);
+      })
+      .catch(error => {
+        console.error('Sitemap failed:', error.message);
+        response.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end('Sitemap unavailable');
+      });
+    return;
+  }
+
   const filePath = resolveFile(request.url);
 
   if (!filePath) {
@@ -7276,10 +7827,13 @@ const server = http.createServer((request, response) => {
     // Compress once per content version, then serve from memory. The cache is bounded
     // by the allowlisted static text files, and a stale entry self-evicts when the
     // file's ETag moves on.
-    // A stamped shell is a different body per URL, so it is compressed fresh and never
-    // cached: keying thousands of entity pages by file path would thrash the cache, and
-    // keying them by content would grow it without a bound.
-    const cached = pageMeta ? null : gzipCache.get(filePath);
+    // A stamped shell is a different body per URL. The section cards are a fixed set of
+    // about fifty routes and every one of them is a page people load, so those are cached
+    // under their own key. Entity and profile cards are not: keying thousands of them by
+    // path would thrash the cache, and keying them by content would grow it without a
+    // bound. A stale entry self-evicts, because the ETag moves with the bytes.
+    const gzipKey = pageMeta ? (pageMeta.cacheKey || null) : filePath;
+    const cached = gzipKey ? gzipCache.get(gzipKey) : null;
     if (cached && cached.etag === etag) {
       response.writeHead(200, { ...baseHeaders, 'Content-Encoding': 'gzip' });
       response.end(cached.body);
@@ -7291,21 +7845,32 @@ const server = http.createServer((request, response) => {
         response.end(data);
         return;
       }
-      if (!pageMeta) gzipCache.set(filePath, { etag, body: gzipped });
+      if (gzipKey) gzipCache.set(gzipKey, { etag, body: gzipped });
       response.writeHead(200, { ...baseHeaders, 'Content-Encoding': 'gzip' });
       response.end(gzipped);
     });
   });
 
-  // Only the codex entity pages need a head of their own, and only they pay for the
-  // lookup. Anything the stamp can't answer for — an unknown item, a trait catalogue
-  // still building — serves the shell unchanged rather than half a card.
+  // Every shell URL gets a head of its own: an entity page from the archive, a holder
+  // profile from its row, and every tab, sub-tab and walkthrough step from the copy on
+  // the page itself. Anything the stamp can't answer for — an unknown item, a trait
+  // catalogue still building, a route with no card — serves the shell unchanged rather
+  // than half a card. Static files never pay for any of this.
   const requested = parseRequestUrl(request);
-  const codex = requested && path.basename(filePath) === 'index.html'
-    ? codexRouteOf(requested.pathname) : null;
-  if (!codex) { serveShell(null); return; }
+  const isShell = requested && path.basename(filePath) === 'index.html';
+  if (!isShell) { serveShell(null); return; }
   const origin = siteOrigin(request);
-  codexPageMeta(codex, origin)
+  const codex = codexRouteOf(requested.pathname);
+  const profile = codex ? null : profileRouteOf(requested.pathname);
+  const section = () => sectionPageMeta(requested.pathname, origin);
+  const pending = codex
+    // A renamed release, a Creature number that never existed, a trait catalogue still
+    // indexing: the entity card can't be built, so the card for the part of the site it
+    // belongs to stands in. That is true of the link, which the generic card is not.
+    ? codexPageMeta(codex, origin).then(meta => meta || section())
+    : profile ? profilePageMeta(profile, origin)
+    : Promise.resolve(section());
+  pending
     .then(meta => serveShell(meta ? { ...meta, url: meta.url || origin + requested.pathname } : null))
     .catch(error => {
       console.error('Page meta failed:', error.message);

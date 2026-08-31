@@ -5,6 +5,21 @@ let currentLang = 'en';
 
 export function getCurrentLang() { return currentLang; }
 
+// The glossary decorator, loaded on its own and allowed to fail. One request, cached,
+// and if it never arrives the page is simply a page without glossary links.
+let linkerPromise = null;
+function glossaryLinker() {
+  if (!linkerPromise) {
+    linkerPromise = import('./glossary-link.js')
+      .then(mod => mod.linkGlossaryTerms)
+      .catch(error => {
+        console.error('[i18n] glossary-link.js did not load — prose keeps its plain words.', error);
+        return null;
+      });
+  }
+  return linkerPromise;
+}
+
 export function t(key) {
   return translations[key] ?? fallback[key] ?? key;
 }
@@ -32,6 +47,17 @@ function applyTranslations() {
   document.querySelectorAll('[data-i18n-alt]').forEach(el => {
     el.setAttribute('alt', t(el.dataset.i18nAlt));
   });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.setAttribute('placeholder', t(el.dataset.i18nPlaceholder));
+  });
+  // Glossary links go in HERE, not in app.js's re-render lists, because the loop above
+  // has just reset every translated element to plain textContent and taken any existing
+  // anchors with it. Decorating anywhere else means the links are silently gone for
+  // anyone who has touched the language switcher, with nothing erroring to say so.
+  //
+  // Fetched rather than imported: this module is the one thing every other module waits
+  // on, and a decoration must never be able to take the site's translations down with it.
+  glossaryLinker().then(link => link && link(document)).catch(() => {});
   // Plain numbers group differently per language (11,111 vs 11.111). The count-up in
   // app.js formats while it animates; this catches the settled value on load, on every
   // language switch, and under reduced motion, where nothing animates at all.

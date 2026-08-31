@@ -14,6 +14,9 @@
 // Mount point: <div class="gdemo" data-gdemo="trading-creatures"></div>
 // Wiring: initGuideDemos() once at boot, rerenderGuideDemos() after language switches.
 import { t } from './i18n.js';
+// The same icon set the real marketplace draws with. These replays copy its markup on
+// purpose, so they have to copy its icons too or the guide stops matching the screen.
+import { ico } from './market/core/icons.js';
 
 const motionOK = () => !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const rep = (key, subs) =>
@@ -107,13 +110,13 @@ function barOffHtml() {
 function barOnHtml(coll, { eth = '—', imx = '—', count = '—' } = {}, opts = {}) {
   const land = coll === 'land';
   const bals = land
-    ? `<span class="trade-bar-bal">🗺️ <b>${count}</b></span>
+    ? `<span class="trade-bar-bal">${ico('map', 13)} <b>${count}</b></span>
        <span class="trade-bar-bal">ETH <b data-gd="bal-eth">${eth}</b></span>`
-    : `<span class="trade-bar-bal">🐾 <b>${count}</b></span>
+    : `<span class="trade-bar-bal">${ico('paw', 13)} <b>${count}</b></span>
        <span class="trade-bar-bal">ETH <b data-gd="bal-eth">${eth}</b></span>
        <span class="trade-bar-bal">IMX <b>${imx}</b></span>`;
   const cash = opts.cashout
-    ? `<button class="trade-cashout-pill" data-gd="cashpill" type="button" tabindex="-1"><span aria-hidden="true">💸</span> ${t('trade.cashout.barBtn')}</button>`
+    ? `<button class="trade-cashout-pill" data-gd="cashpill" type="button" tabindex="-1"><span aria-hidden="true">${ico('fundsOut', 15)}</span> ${t('trade.cashout.barBtn')}</button>`
     : '';
   return `<div class="trade-bar is-connected gdemo-bar">
     <img class="trade-mm-dot" src="/img/brands/metamask.svg" alt="" />
@@ -152,16 +155,16 @@ function successHtml({ art, h, p, rcpt = true }) {
     <div class="gdemo-success-art">${art}</div>
     <h4>${h}</h4>
     <p>${p}</p>
-    ${rcpt ? `<span class="gdemo-rcpt">${t('trade.status.view')} ↗</span>` : ''}
+    ${rcpt ? `<span class="gdemo-rcpt">${t('trade.status.view')} ${ico('external', 12)}</span>` : ''}
   </div>`;
 }
 
 // Status rows reuse the live .trade-status shapes + live trade.* copy, so the demo
 // always says exactly what the real marketplace says.
 const row = {
-  ok:   txt => `<div class="trade-status is-ok"><span aria-hidden="true">✓</span><span>${txt}</span></div>`,
+  ok:   txt => `<div class="trade-status is-ok"><span aria-hidden="true">${ico('check', 17)}</span><span>${txt}</span></div>`,
   info: txt => `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${txt}</span></div>`,
-  err:  txt => `<div class="trade-status is-error"><span aria-hidden="true">⚠</span><span>${txt}</span></div>`,
+  err:  txt => `<div class="trade-status is-error"><span aria-hidden="true">${ico('alert', 17)}</span><span>${txt}</span></div>`,
 };
 
 const spedChip = () => `<span class="gdemo-sped">${t('gm.demo.spedUp')}</span>`;
@@ -392,7 +395,7 @@ const laBuyline = () => buylineHtml(FIX_SLIMES[0], 'slime', 'Fleby — LAND (200
 const loadingHtml = () => `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${t('trade.bridge.quote.loading')}</div>`;
 const bchip = (img, name) => `<span class="trade-bchip"><img src="/img/brands/${img}.png" alt="" width="14" height="14">${name}</span>`;
 const bcoin = (img, gas) => `<span class="trade-bcoin trade-bcoin-${img}">
-  <img src="/img/brands/${img}.png" alt="" width="30" height="30">${gas ? '<span class="trade-bcoin-spark" aria-hidden="true">⛽</span>' : ''}</span>`;
+  <img src="/img/brands/${img}.png" alt="" width="30" height="30">${gas ? `<span class="trade-bcoin-spark" aria-hidden="true">${ico('fuel', 12)}</span>` : ''}</span>`;
 
 function quoteAreaHtml({ x, y, fees, mins, gas }) {
   return `<div class="trade-bridge-quote">
@@ -408,7 +411,7 @@ function crossCardHtml({ title, from = 'eth', to = 'eth', gasSpark = false, acti
   stepKeys = ['trade.bridge.step1', 'trade.bridge.step2', 'trade.bridge.step3'] }) {
   const steps = stepKeys.map((k, i) => {
     const cls = i < active ? 'is-done' : i === active ? 'is-active' : '';
-    const ic = i < active ? '✓' : i === active ? '<span class="trade-mini-spin" aria-hidden="true"></span>' : '·';
+    const ic = i < active ? ico('check', 13) : i === active ? '<span class="trade-mini-spin" aria-hidden="true"></span>' : '·';
     return `<div class="trade-bstep ${cls}"><span class="trade-bstep-dot">${ic}</span><span class="trade-bstep-lbl">${t(k)}</span></div>`;
   }).join('');
   return `<div class="trade-bcard" role="status">
@@ -421,7 +424,7 @@ function crossCardHtml({ title, from = 'eth', to = 'eth', gasSpark = false, acti
       <div class="trade-bsteps"><span class="trade-bsteps-fill" style="width:${active * 33.4}%"></span>${steps}</div>
       <div class="trade-brows">
         <div class="trade-brow"><span class="trade-brow-ic" aria-hidden="true">↔</span><span class="trade-brow-lbl">${t('trade.bridge.row.sendrecv')}</span><span class="trade-brow-val">${send} <span class="trade-brow-sep">→</span> <span class="trade-brow-to">${recv}</span></span></div>
-        <div class="trade-brow"><span class="trade-brow-ic" aria-hidden="true">⛓</span><span class="trade-brow-lbl">${t('trade.bridge.row.route')}</span><span class="trade-brow-val">${bchip(routeFromImg, routeFrom)}<span class="trade-brow-sep">→</span>${bchip(routeToImg, routeTo)}</span></div>
+        <div class="trade-brow"><span class="trade-brow-ic" aria-hidden="true">${ico('chain', 15)}</span><span class="trade-brow-lbl">${t('trade.bridge.row.route')}</span><span class="trade-brow-val">${bchip(routeFromImg, routeFrom)}<span class="trade-brow-sep">→</span>${bchip(routeToImg, routeTo)}</span></div>
         <div class="trade-brow"><span class="trade-brow-ic" aria-hidden="true">◷</span><span class="trade-brow-lbl">${t('trade.bridge.row.time')}</span><span class="trade-brow-val"><b data-gd="clock">${clock}</b> ${t('trade.bridge.elapsed')} <span class="trade-brow-sep">→</span> <span class="trade-brow-to">${eta} ${t('trade.bridge.min')}</span></span></div>
       </div>
     </div></div>`;
@@ -429,11 +432,11 @@ function crossCardHtml({ title, from = 'eth', to = 'eth', gasSpark = false, acti
 
 function doneCardHtml({ h, recv, on = 'Immutable', onImg = 'immutable', took = '16m 40s' }) {
   return `<div class="trade-bcard is-ok" role="status">
-    <div class="trade-bcard-hd"><div class="trade-bcard-badge" aria-hidden="true">✓</div><h4>${h}</h4></div>
+    <div class="trade-bcard-hd"><div class="trade-bcard-badge" aria-hidden="true">${ico('check', 20)}</div><h4>${h}</h4></div>
     <div class="trade-bcard-body">
       <div class="trade-brows">
-        <div class="trade-brow"><span class="trade-brow-ic" aria-hidden="true">✓</span><span class="trade-brow-lbl">${t('trade.bridge.row.received')}</span><span class="trade-brow-val"><span class="trade-brow-to">${recv}</span></span></div>
-        <div class="trade-brow"><span class="trade-brow-ic" aria-hidden="true">⛓</span><span class="trade-brow-lbl">${t('trade.bridge.row.on')}</span><span class="trade-brow-val">${bchip(onImg, on)}</span></div>
+        <div class="trade-brow"><span class="trade-brow-ic" aria-hidden="true">${ico('check', 15)}</span><span class="trade-brow-lbl">${t('trade.bridge.row.received')}</span><span class="trade-brow-val"><span class="trade-brow-to">${recv}</span></span></div>
+        <div class="trade-brow"><span class="trade-brow-ic" aria-hidden="true">${ico('chain', 15)}</span><span class="trade-brow-lbl">${t('trade.bridge.row.on')}</span><span class="trade-brow-val">${bchip(onImg, on)}</span></div>
         <div class="trade-brow"><span class="trade-brow-ic" aria-hidden="true">◷</span><span class="trade-brow-lbl">${t('trade.bridge.row.took')}</span><span class="trade-brow-val"><b>${took}</b> ${spedChip()}</span></div>
       </div>
     </div></div>`;
@@ -455,13 +458,13 @@ const FUND_QUOTE = { x: '0.0655 ETH (≈ $161)', y: '0.0648 ETH (≈ $159)', fee
 
 function fundsPanelHtml(quote) {
   return `<div class="trade-funds">
-    <div class="trade-funds-h"><span aria-hidden="true">💡</span> ${t('trade.funds.bridgeH')}</div>
+    <div class="trade-funds-h"><span aria-hidden="true">${ico('bulb', 18)}</span> ${t('trade.funds.bridgeH')}</div>
     <ul class="trade-funds-list">
-      <li><span class="trade-funds-ic" aria-hidden="true">↗</span><div>
+      <li><span class="trade-funds-ic" aria-hidden="true">${ico('external', 12)}</span><div>
         <b>ETH</b> — ${t('trade.funds.ethTitle')}<br>
         <span>${rep('trade.funds.youHaveOnEth', { x: '0.08 ETH (≈ $197)' })} · ${rep('trade.funds.bridgeNeed', { x: '0.0655 ETH' })}</span>
       </div></li>
-      <li class="is-ok"><span class="trade-funds-ic" aria-hidden="true">✓</span><div>${t('trade.funds.imxGood')}<br><span>${t('trade.funds.have')} 12.4 IMX</span></div></li>
+      <li class="is-ok"><span class="trade-funds-ic" aria-hidden="true">${ico('check', 12)}</span><div>${t('trade.funds.imxGood')}<br><span>${t('trade.funds.have')} 12.4 IMX</span></div></li>
     </ul>
     <div data-gd="quotearea">${quote ? quoteAreaHtml(FUND_QUOTE) : loadingHtml()}</div>
   </div>`;
@@ -553,7 +556,7 @@ function acquirePanelHtml(o) {
   const note = o.splitNote
     ? `<p class="trade-funds-net">${rep('trade.funds.notEnoughToBridge', { x: o.mainHave, y: o.cardAmt })}</p>` : '';
   return `<div class="trade-funds">
-    <div class="trade-funds-h"><span aria-hidden="true">💡</span> ${t('trade.funds.h')}</div>
+    <div class="trade-funds-h"><span aria-hidden="true">${ico('bulb', 18)}</span> ${t('trade.funds.h')}</div>
     <ul class="trade-funds-list">
       <li><span class="trade-funds-ic" aria-hidden="true">•</span><div>
         <b>ETH</b> — ${t('trade.funds.forPrice')}<br>
@@ -563,7 +566,7 @@ function acquirePanelHtml(o) {
     </ul>
     ${note}
     <p class="trade-funds-net">${t('trade.onramp.net')}</p>
-    <button class="trade-funds-btn" data-gd="onramp" type="button" tabindex="-1">${t('trade.onramp.btn')} ↗</button>
+    <button class="trade-funds-btn" data-gd="onramp" type="button" tabindex="-1">${t('trade.onramp.btn')} ${ico('card', 15)}</button>
     <p class="trade-funds-foot">${t('trade.onramp.fundsFoot')}</p>
   </div>`;
 }
@@ -713,7 +716,7 @@ const GAS_QUOTE = { x: '0.002 ETH (≈ $5)', y: '4.9 IMX', fees: '0.04', mins: 1
 
 function gasPanelHtml(quote) {
   return `<div class="trade-funds trade-gas">
-    <div class="trade-funds-h"><span aria-hidden="true">⛽</span> ${t('trade.gas.h')}</div>
+    <div class="trade-funds-h"><span aria-hidden="true">${ico('fuel', 18)}</span> ${t('trade.gas.h')}</div>
     <ul class="trade-funds-list">
       <li><span class="trade-funds-ic" aria-hidden="true">•</span><div>
         <b>IMX</b> — ${t('trade.gas.imxLine')}<br>
@@ -802,7 +805,7 @@ function cashSheetHtml(land) {
       <div class="trade-safety-card gdemo-safety-card">
         <span class="apply-pill">${t('trade.cashout.badge')}</span>
         <h3 class="trade-safety-h">${t('trade.cashout.guide.h')}</h3>
-        <div class="trade-cashout-warn"><span aria-hidden="true">⚠️</span><p>${t('trade.cashout.land.warn')}</p></div>
+        <div class="trade-cashout-warn"><span aria-hidden="true">${ico('alert', 19)}</span><p>${t('trade.cashout.land.warn')}</p></div>
         <ol class="trade-cashout-steps">${stepKeys.map((k, i) =>
           `<li><span class="trade-cashout-num">${i + 1}</span><span>${t(k)}</span></li>`).join('')}</ol>
         <div class="trade-safety-actions">
@@ -884,7 +887,9 @@ const CASH_MOVE = {
     { label: 'gm.demo.beat.open',    cap: 'gm.demo.cash2.c2' },
     { label: 'gm.demo.beat.confirm', cap: 'gm.demo.cash2.c3' },
     { label: 'gm.demo.beat.cross',   cap: 'gm.demo.cash2.c4' },
-    { label: 'gm.demo.beat.bank',    cap: 'gm.demo.cash2.c5' },
+    // "Landed", not "To bank": the beat ends with the ETH on Ethereum and hands off to
+    // the "Where to sell your ETH" section below the demo. No bank appears on stage.
+    { label: 'gm.demo.beat.landed',  cap: 'gm.demo.cash2.c5' },
   ],
   stageHtml() {
     return `<div data-gd="bar">${barOnHtml('creatures', { eth: '0.0585', imx: '12.4', count: 2 }, { cashout: true })}</div>`
@@ -972,7 +977,7 @@ function landAcquirePanelHtml(short) {
   return (short ? row.err(t('gm.demo.la.short')) : '')
     + `<div class="trade-funds">
       <p class="trade-funds-net">${t('gm.demo.onramp.landNet')}</p>
-      <button class="trade-funds-btn" data-gd="onramp" type="button" tabindex="-1">${t('trade.onramp.btn')} ↗</button>
+      <button class="trade-funds-btn" data-gd="onramp" type="button" tabindex="-1">${t('trade.onramp.btn')} ${ico('card', 15)}</button>
     </div>`;
 }
 
@@ -1159,12 +1164,14 @@ function makeMovingSpec(coll) {
     ? FIX_SLIMES.slice(0, 3).map((f, i) => ({ art: artImg(f, 'slime', i, 'is-pet'), label: `${f.nick} — ${f.coords}` }))
     : FIX_CREATURES.slice(0, 3).map((f, i) => ({ art: artImg(f, 'creature', i, ''), label: f.name.replace('Creature ', '') }));
   // Mirrors the live transferCheckHtml row markup (.trade-check-row, not .trade-status).
-  const checkRow = (kind, ico, txt) =>
-    `<div class="trade-check-row is-${kind}"><span aria-hidden="true">${ico}</span><span>${txt}</span></div>`;
+  // `art` is built markup, not a glyph — and NOT called `ico`, which would shadow the icon
+  // helper for anything later added to this body.
+  const checkRow = (kind, art, txt) =>
+    `<div class="trade-check-row is-${kind}"><span aria-hidden="true">${art}</span><span>${txt}</span></div>`;
   const checksOk = () =>
-    checkRow('ok', '✓', t('trade.check.checksumOk'))
-    + checkRow('ok', '✓', t(k('trade.check.active')))
-    + checkRow('ok', '✓', rep(k('trade.check.holds'), { n: land ? 1 : 2 }));
+    checkRow('ok', ico('check', 15), t('trade.check.checksumOk'))
+    + checkRow('ok', ico('check', 15), t(k('trade.check.active')))
+    + checkRow('ok', ico('check', 15), rep(k('trade.check.holds'), { n: land ? 1 : 2 }));
 
   return {
     title: land ? 'gm.demo.title.movingLand' : 'gm.demo.title.movingCreatures',
@@ -1209,14 +1216,14 @@ function makeMovingSpec(coll) {
       addr.value = b === 1 ? ADDR_BAD : b >= 2 ? ADDR_GOOD : '';
       const checks = stage.querySelector('[data-gd="checks"]');
       checks.innerHTML =
-        b === 1 ? `<div class="trade-check-row is-err"><span aria-hidden="true">⛔</span><span>${t('trade.check.checksumBad')}</span></div>`
+        b === 1 ? `<div class="trade-check-row is-err"><span aria-hidden="true">${ico('block', 15)}</span><span>${t('trade.check.checksumBad')}</span></div>`
         : b >= 2 ? checksOk()
         : '';
       const send = stage.querySelector('[data-gd="send"]');
       send.disabled = b < 2;
       const status = stage.querySelector('[data-gd="status"]');
       status.innerHTML = b >= 3
-        ? row.ok(`${t('gm.demo.sent')} <span class="gdemo-fauxlink">${t('trade.status.view')} ↗</span>`)
+        ? row.ok(`${t('gm.demo.sent')} <span class="gdemo-fauxlink">${t('trade.status.view')} ${ico('external', 12)}</span>`)
         : '';
     },
     async choreo(ctx, b) {
@@ -1239,7 +1246,7 @@ function makeMovingSpec(coll) {
         checks.innerHTML = `<div class="trade-check-row is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${t(k('trade.check.checking'))}</span></div>`;
         await sleep(900); if (!ok()) return;
         await say('gm.demo.n.badaddr');
-        checks.innerHTML = pop(`<div class="trade-check-row is-err"><span aria-hidden="true">⛔</span><span>${t('trade.check.checksumBad')}</span></div>`);
+        checks.innerHTML = pop(`<div class="trade-check-row is-err"><span aria-hidden="true">${ico('block', 15)}</span><span>${t('trade.check.checksumBad')}</span></div>`);
         await sleep(1200);
       } else if (b === 2) {
         await say('gm.demo.n.retype');
@@ -1268,7 +1275,7 @@ function makeMovingSpec(coll) {
         await say('gm.demo.n.sending');
         status.innerHTML = row.info(t('gm.demo.sending'));
         await sleep(1100); if (!ok()) return;
-        status.innerHTML = row.ok(`${t('gm.demo.sent')} <span class="gdemo-fauxlink">${t('trade.status.view')} ↗</span>`);
+        status.innerHTML = row.ok(`${t('gm.demo.sent')} <span class="gdemo-fauxlink">${t('trade.status.view')} ${ico('external', 12)}</span>`);
       }
     },
   };
@@ -1287,8 +1294,8 @@ function makeSetupSpec(coll) {
       <span class="apply-pill">${t('trade.safety.badge')}</span>
       <h3 class="trade-safety-h">${t('trade.safety.h')}</h3>
       <ul class="trade-safety-rules">
-        ${[['🤫', 1], ['💬', 2], ['🧐', 3], ['🔗', 4]].map(([ico, i], idx) => `
-          <li style="--i:${idx}"><span class="trade-safety-ico" aria-hidden="true">${ico}</span>
+        ${[['shield', 1], ['chat', 2], ['search', 3], ['chain', 4]].map(([art, i], idx) => `
+          <li style="--i:${idx}"><span class="trade-safety-ico" aria-hidden="true">${ico(art, 24)}</span>
           <div><b>${t(`trade.safety.r${i}h`)}</b></div></li>`).join('')}
       </ul>
       <div class="trade-safety-track" aria-hidden="true"><div class="trade-safety-barfill" data-gd="sbar" style="width:0%"></div></div>
@@ -1435,7 +1442,7 @@ function makeIngameSpec(coll) {
     <div class="gdemo-app-row">
       <span>Wallet</span>
       ${linked
-        ? `<span class="gdemo-app-linked">✓ <code>${DEMO_ADDR}</code> · ${t('gm.demo.linked')}</span>`
+        ? `<span class="gdemo-app-linked">${ico('check', 13)} <code>${DEMO_ADDR}</code> · ${t('gm.demo.linked')}</span>`
         : `<button class="trade-mm-btn is-sm" data-gd="hrconnect" type="button" tabindex="-1">
             <img class="trade-mm-logo" src="/img/brands/metamask.svg" alt="" /><span>Connect MetaMask Wallet</span></button>`}
     </div>
@@ -1462,7 +1469,7 @@ function makeIngameSpec(coll) {
         + `<div class="gdemo-perks" data-gd="perks">
             <div class="gdemo-success-art">${art}</div>
             <h4>${t('gm.demo.perks.h')}</h4>
-            <div class="gdemo-perkchips">${perkKeys.map(k2 => `<span>✓ ${t(k2)}</span>`).join('')}</div>
+            <div class="gdemo-perkchips">${perkKeys.map(k2 => `<span>${ico('check', 13)} ${t(k2)}</span>`).join('')}</div>
             <span class="gdemo-spark" style="--sx:24%;--sy:26%;--sc:var(--hr-primary)"></span>
             <span class="gdemo-spark" style="--sx:74%;--sy:30%;--sc:var(--hr-banana);--sd:.4s"></span>
             <span class="gdemo-spark" style="--sx:70%;--sy:66%;--sc:var(--hr-secondary);--sd:.8s"></span>

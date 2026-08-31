@@ -1,0 +1,393 @@
+// The codex glossary: which terms exist, how they group, and what each one points at.
+// The words themselves live in the locale files (term.<slug>.*) like all other copy on
+// the site, so a translator never has to touch this file.
+//
+// Each term carries: the group it belongs to, other terms worth reading next, pages where
+// it is used, a fact table and a dated history. A fact row is [label, form, value], where
+// form is 'v' for a value printed as written, 'k' for a locale key, 'd' for a date the
+// page formats in the reader's language, and 'c' for a figure worked out in the browser
+// from the archive. A history row is [date, key].
+//
+// Copy keys per term: .t title, .p one-line definition, .b the opening paragraph,
+// .use how the club uses the word, .note a caveat, .fN a fact value, .hN a history line.
+// Anything missing is simply left out of the page.
+//
+// Both this file and locales/en.json can be edited by hand; the local
+// tools/build-glossary.py writes them together when you would rather not, and refuses if
+// a term links to one that doesn't exist or if any entry addresses the reader.
+
+export const TERM_GROUPS = [
+  { key: 'club', terms: ['creature-club', 'creature', 'gen-2', 'land', 'parcel', 'estate', 'premium-land', 'deed', 'pet', 'slime', 'creature-coins', 'holder', 'holder-profile'] },
+  { key: 'ships', terms: ['release', 'drop', 'grab', 'creature-store', 'giveaway', 'event-collab', 'announced', 'approx-date'] },
+  { key: 'parts', terms: ['trait', 'slot', 'outfit', 'piece', 'one-of-one', 'rarity-tier', 'rarity-rank', 'trait-share'] },
+  { key: 'chain', terms: ['nft', 'wallet', 'metamask', 'token-trove', 'immutable-zkevm', 'ethereum-mainnet', 'bridging', 'gas', 'currencies', 'listing', 'offer', 'floor', 'all-in-price', 'approval', 'mint', 'on-ramp', 'cash-out', 'seed-phrase', 'token-id'] },
+  { key: 'council', terms: ['player-council', 'election', 'ballot', 'confirmation-vote', 'electorate-snapshot', 'voting-advice'] },
+];
+
+export const TERMS = {
+  'creature-club': {
+    group: 'club',
+    related: ['creature', 'land', 'holder', 'player-council'],
+    aka: ['HCC'],
+    facts: [['since', 'd', '2021-11'], ['eligible', 'k', 'term.creature-club.f2'], ['inarchive', 'c', 'archive.all']],
+    history: [['2021-11', 'term.creature-club.h1'], ['2022', 'term.creature-club.h2'], ['2023', 'term.creature-club.h3'], ['2025-12', 'term.creature-club.h4'], ['2026-05-28', 'term.creature-club.h5'], ['2026-05-30', 'term.creature-club.h6']],
+    see: [{ href: '/perks', key: 'nav.perks' }, { href: '/collections', key: 'nav.collections' }],
+  },
+  'creature': {
+    group: 'club',
+    related: ['trait', 'slot', 'gen-2', 'token-id', 'rarity-rank'],
+    facts: [['supply', 'v', '11,111'], ['chain', 'v', 'Immutable zkEVM'], ['contract', 'v', '0xCf44b1cBC959295bbBb49935B1b339cC0AA77cdA'], ['introduced', 'd', '2021-11'], ['applies', 'k', 'term.creature.f5']],
+    history: [['2021-11', 'term.creature.h1'], ['2023', 'term.creature.h2'], ['2026-06-21', 'term.creature.h3']],
+    see: [{ href: '/collections/traits', key: 'col.sub.traits' }, { href: '/trade', key: 'nav.marketplace' }],
+  },
+  'gen-2': {
+    group: 'club',
+    related: ['land', 'pet', 'slime', 'premium-land'],
+    facts: [['status', 'k', 'term.gen-2.f1'], ['applies', 'k', 'term.gen-2.f2'], ['cadence', 'k', 'term.gen-2.f3']],
+    history: [['2023', 'term.gen-2.h1'], ['2026-06-12', 'term.gen-2.h2'], ['2026-08-08', 'term.gen-2.h3'], ['2026-08-21', 'term.gen-2.h4']],
+    see: [{ href: '/roadmap/gen2-explained', key: 'cdx.see.gen2explained' }, { href: '/roadmap', key: 'nav.roadmap' }],
+  },
+  'land': {
+    group: 'club',
+    related: ['parcel', 'premium-land', 'deed', 'slime', 'estate'],
+    facts: [['chain', 'v', 'Ethereum mainnet'], ['contract', 'v', '0x8bf3a40ea2337e6e4f6e540680ea6390cb3b4e11'], ['introduced', 'd', '2022'], ['scale', 'k', 'term.land.f4']],
+    history: [['2022', 'term.land.h1'], ['2023', 'term.land.h2'], ['2024', 'term.land.h3'], ['2026-06-21', 'term.land.h4']],
+    see: [{ href: '/perks', key: 'nav.perks' }, { href: '/trade', key: 'nav.marketplace' }],
+  },
+  'parcel': {
+    group: 'club',
+    related: ['land', 'estate', 'slime'],
+    aka: ['Plot'],
+    facts: [['chain', 'v', 'Ethereum mainnet']],
+    see: [{ href: '/holders', key: 'nav.holders' }],
+  },
+  'estate': {
+    group: 'club',
+    related: ['land', 'parcel'],
+    facts: [['chain', 'v', 'Ethereum mainnet'], ['contract', 'v', '0x8dcbcafacfdc935d084dc19983194509813da6bd'], ['holds', 'k', 'term.estate.f3']],
+    see: [{ href: '/holders', key: 'nav.holders' }],
+  },
+  'premium-land': {
+    group: 'club',
+    related: ['land', 'creature-coins', 'gen-2', 'rarity-tier'],
+    facts: [['scale', 'k', 'term.premium-land.f1'], ['setby', 'k', 'term.premium-land.f2'], ['applies', 'k', 'term.premium-land.f3']],
+    history: [['2022', 'term.premium-land.h1'], ['2023', 'term.premium-land.h2']],
+    see: [{ href: '/perks', key: 'nav.perks' }],
+  },
+  'deed': {
+    group: 'club',
+    related: ['land', 'mint', 'parcel'],
+    facts: [['chain', 'v', 'Ethereum mainnet'], ['status', 'k', 'term.deed.f2']],
+    history: [['2022', 'term.deed.h1']],
+    see: [{ href: '/guides/walkthroughs', key: 'guide.sub.walkthroughs' }],
+  },
+  'pet': {
+    group: 'club',
+    related: ['slime', 'gen-2', 'giveaway'],
+    facts: [['supply', 'v', '11'], ['since', 'd', '2023-07'], ['applies', 'k', 'term.pet.f3']],
+    history: [['2023-07', 'term.pet.h1'], ['2026-08', 'term.pet.h2']],
+    see: [{ href: '/collections', key: 'nav.collections' }],
+  },
+  'slime': {
+    group: 'club',
+    related: ['pet', 'land', 'gen-2'],
+    facts: [['introduced', 'd', '2022'], ['applies', 'k', 'term.slime.f2']],
+    history: [['2022', 'term.slime.h1'], ['2023', 'term.slime.h2'], ['2026-08-21', 'term.slime.h3']],
+    see: [{ href: '/trade', key: 'nav.marketplace' }, { href: '/roadmap', key: 'nav.roadmap' }],
+  },
+  'creature-coins': {
+    group: 'club',
+    related: ['holder', 'creature-store', 'grab', 'premium-land'],
+    aka: ['Land Tokens'],
+    facts: [['paidin', 'k', 'term.creature-coins.f1'], ['applies', 'k', 'term.creature-coins.f2'], ['status', 'k', 'term.creature-coins.f3']],
+    history: [['2022', 'term.creature-coins.h1'], ['2023', 'term.creature-coins.h2'], ['2026-07-16', 'term.creature-coins.h3']],
+    see: [{ href: '/perks', key: 'nav.perks' }],
+  },
+  'holder': {
+    group: 'club',
+    related: ['holder-profile', 'creature-coins', 'player-council'],
+    facts: [['eligible', 'k', 'term.holder.f1'], ['source', 'k', 'term.holder.f2'], ['applies', 'k', 'term.holder.f3']],
+    history: [['2026-07-17', 'term.holder.h1']],
+    see: [{ href: '/perks', key: 'nav.perks' }, { href: '/holders', key: 'nav.holders' }],
+  },
+  'holder-profile': {
+    group: 'club',
+    related: ['holder'],
+    facts: [['status', 'k', 'term.holder-profile.f1'], ['onsite', 'd', '2026-07-20'], ['setby', 'k', 'term.holder-profile.f3']],
+    history: [['2026-07-20', 'term.holder-profile.h1']],
+    see: [{ href: '/trade', key: 'nav.marketplace' }],
+  },
+  'release': {
+    group: 'ships',
+    related: ['drop', 'grab', 'creature-store', 'giveaway'],
+    facts: [['inarchive', 'c', 'archive.all'], ['scale', 'k', 'term.release.f2'], ['onsite', 'd', '2026-07-27']],
+    history: [['2026-07-27', 'term.release.h1']],
+    see: [{ href: '/collections', key: 'nav.collections' }],
+  },
+  'drop': {
+    group: 'ships',
+    related: ['release', 'grab', 'creature-store'],
+    facts: [['inarchive', 'c', 'archive.drop'], ['cost', 'k', 'term.drop.f2'], ['cadence', 'k', 'term.drop.f3']],
+    history: [['2025-12', 'term.drop.h1']],
+    see: [{ href: '/collections', key: 'nav.collections' }],
+  },
+  'grab': {
+    group: 'ships',
+    related: ['creature-coins', 'creature-store', 'drop'],
+    facts: [['inarchive', 'c', 'archive.grab'], ['paidin', 'v', 'Creature Coins'], ['eligible', 'k', 'term.grab.f3']],
+    see: [{ href: '/perks', key: 'nav.perks' }],
+  },
+  'creature-store': {
+    group: 'ships',
+    related: ['creature-coins', 'grab', 'drop'],
+    facts: [['inarchive', 'c', 'archive.store'], ['paidin', 'v', 'Creature Coins'], ['cadence', 'k', 'term.creature-store.f3']],
+    history: [['2025-12', 'term.creature-store.h1']],
+    see: [{ href: '/collections', key: 'nav.collections' }],
+  },
+  'giveaway': {
+    group: 'ships',
+    related: ['release', 'pet'],
+    facts: [['inarchive', 'c', 'archive.giveaway'], ['cost', 'v', 'Free'], ['runby', 'k', 'term.giveaway.f3']],
+    history: [['2023-07', 'term.giveaway.h1']],
+    see: [{ href: '/collections', key: 'nav.collections' }],
+  },
+  'event-collab': {
+    group: 'ships',
+    related: ['release'],
+    facts: [['inarchive', 'c', 'archive.eventish']],
+    see: [{ href: '/collections', key: 'nav.collections' }],
+  },
+  'announced': {
+    group: 'ships',
+    related: ['release', 'approx-date'],
+    facts: [['source', 'k', 'term.announced.f1'], ['onsite', 'd', '2026-07-15']],
+    history: [['2026-07-15', 'term.announced.h1']],
+    see: [{ href: '/announcements', key: 'nav.announcements' }],
+  },
+  'approx-date': {
+    group: 'ships',
+    related: ['release', 'announced'],
+    facts: [['inarchive', 'c', 'archive.approx'], ['source', 'k', 'term.approx-date.f2'], ['scale', 'k', 'term.approx-date.f3']],
+    history: [['2026-07-27', 'term.approx-date.h1']],
+    see: [{ href: '/collections', key: 'nav.collections' }],
+  },
+  'trait': {
+    group: 'parts',
+    related: ['slot', 'outfit', 'rarity-rank', 'trait-share'],
+    facts: [['supply', 'v', '466 values across 13 slots'], ['source', 'k', 'term.trait.f2'], ['onsite', 'd', '2026-08-04']],
+    history: [['2026-08-04', 'term.trait.h1']],
+    see: [{ href: '/collections/traits', key: 'col.sub.traits' }],
+  },
+  'slot': {
+    group: 'parts',
+    related: ['trait', 'outfit'],
+    facts: [['supply', 'v', '13'], ['scale', 'k', 'term.slot.f2']],
+    history: [['2026-08-04', 'term.slot.h1']],
+    see: [{ href: '/collections/traits', key: 'col.sub.traits' }],
+  },
+  'outfit': {
+    group: 'parts',
+    related: ['piece', 'trait'],
+    facts: [['supply', 'v', '58 values'], ['scale', 'k', 'term.outfit.f2']],
+    history: [['2026-08-04', 'term.outfit.h1']],
+    see: [{ href: '/collections/traits', key: 'col.sub.traits' }],
+  },
+  'piece': {
+    group: 'parts',
+    related: ['outfit', 'trait'],
+    facts: [['applies', 'k', 'term.piece.f1']],
+    see: [{ href: '/collections/traits', key: 'col.sub.traits' }],
+  },
+  'one-of-one': {
+    group: 'parts',
+    related: ['rarity-rank', 'rarity-tier', 'trait'],
+    facts: [['supply', 'v', '10'], ['applies', 'k', 'term.one-of-one.f2']],
+    see: [{ href: '/collections/traits', key: 'col.sub.traits' }],
+  },
+  'rarity-tier': {
+    group: 'parts',
+    related: ['rarity-rank', 'premium-land', 'one-of-one'],
+    facts: [['scale', 'k', 'term.rarity-tier.f1'], ['applies', 'k', 'term.rarity-tier.f2'], ['setby', 'k', 'term.rarity-tier.f3']],
+    see: [{ href: '/collections', key: 'nav.collections' }],
+  },
+  'rarity-rank': {
+    group: 'parts',
+    related: ['one-of-one', 'trait-share', 'rarity-tier'],
+    facts: [['scale', 'k', 'term.rarity-rank.f1'], ['sample', 'k', 'term.rarity-rank.f2'], ['source', 'k', 'term.rarity-rank.f3']],
+    history: [['2026-06-21', 'term.rarity-rank.h1']],
+    see: [{ href: '/trade', key: 'nav.marketplace' }],
+  },
+  'trait-share': {
+    group: 'parts',
+    related: ['trait', 'rarity-rank'],
+    facts: [['scale', 'k', 'term.trait-share.f1'], ['source', 'k', 'term.trait-share.f2']],
+    history: [['2026-08-04', 'term.trait-share.h1']],
+    see: [{ href: '/collections/traits', key: 'col.sub.traits' }],
+  },
+  'nft': {
+    group: 'chain',
+    related: ['wallet', 'creature', 'land'],
+    facts: [['applies', 'k', 'term.nft.f1'], ['holds', 'k', 'term.nft.f2']],
+    see: [{ href: '/guides', key: 'nav.guides' }],
+  },
+  'wallet': {
+    group: 'chain',
+    related: ['metamask', 'seed-phrase', 'approval'],
+    facts: [['holds', 'k', 'term.wallet.f1'], ['applies', 'k', 'term.wallet.f2']],
+    history: [['2026-06-01', 'term.wallet.h1']],
+    see: [{ href: '/guides/walkthroughs', key: 'guide.sub.walkthroughs' }],
+  },
+  'metamask': {
+    group: 'chain',
+    related: ['wallet', 'approval'],
+    facts: [['runby', 'k', 'term.metamask.f1'], ['applies', 'k', 'term.metamask.f2']],
+    see: [{ href: '/guides/marketplace', key: 'guide.sub.marketplace' }],
+  },
+  'token-trove': {
+    group: 'chain',
+    related: ['listing', 'immutable-zkevm'],
+    facts: [['runby', 'k', 'term.token-trove.f1'], ['applies', 'k', 'term.token-trove.f2']],
+    see: [{ href: '/guides/links', key: 'guide.sub.links' }],
+  },
+  'immutable-zkevm': {
+    group: 'chain',
+    related: ['ethereum-mainnet', 'bridging', 'gas', 'currencies'],
+    facts: [['paidin', 'v', 'IMX'], ['holds', 'k', 'term.immutable-zkevm.f2'], ['contract', 'v', '0xCf44b1cBC959295bbBb49935B1b339cC0AA77cdA']],
+    history: [['2023', 'term.immutable-zkevm.h1']],
+    see: [{ href: '/guides', key: 'nav.guides' }],
+  },
+  'ethereum-mainnet': {
+    group: 'chain',
+    related: ['immutable-zkevm', 'bridging', 'land'],
+    facts: [['paidin', 'v', 'ETH'], ['holds', 'k', 'term.ethereum-mainnet.f2'], ['contract', 'v', '0x8bf3a40ea2337e6e4f6e540680ea6390cb3b4e11']],
+    see: [{ href: '/guides', key: 'nav.guides' }],
+  },
+  'bridging': {
+    group: 'chain',
+    related: ['ethereum-mainnet', 'immutable-zkevm', 'gas'],
+    facts: [['runby', 'k', 'term.bridging.f1'], ['applies', 'k', 'term.bridging.f2']],
+    see: [{ href: '/guides/walkthroughs/funding', key: 'guide.sub.walkthroughs' }],
+  },
+  'gas': {
+    group: 'chain',
+    related: ['currencies', 'bridging'],
+    facts: [['paidin', 'k', 'term.gas.f1'], ['holds', 'k', 'term.gas.f2']],
+    see: [{ href: '/guides/walkthroughs/funding', key: 'guide.sub.walkthroughs' }],
+  },
+  'currencies': {
+    group: 'chain',
+    related: ['gas', 'bridging', 'offer'],
+    facts: [['applies', 'k', 'term.currencies.f1'], ['scale', 'k', 'term.currencies.f2']],
+    see: [{ href: '/guides/walkthroughs/funding', key: 'guide.sub.walkthroughs' }],
+  },
+  'listing': {
+    group: 'chain',
+    related: ['offer', 'floor', 'all-in-price'],
+    facts: [['setby', 'k', 'term.listing.f1'], ['holds', 'k', 'term.listing.f2'], ['paidin', 'v', 'ETH or USDC'], ['onsite', 'd', '2026-06-21']],
+    history: [['2026-06-21', 'term.listing.h1']],
+    see: [{ href: '/trade', key: 'nav.marketplace' }],
+  },
+  'offer': {
+    group: 'chain',
+    related: ['listing', 'currencies'],
+    facts: [['setby', 'k', 'term.offer.f1'], ['paidin', 'k', 'term.offer.f2'], ['decides', 'k', 'term.offer.f3']],
+    history: [['2026-06-21', 'term.offer.h1']],
+    see: [{ href: '/trade', key: 'nav.marketplace' }],
+  },
+  'floor': {
+    group: 'chain',
+    related: ['listing', 'all-in-price'],
+    facts: [['source', 'k', 'term.floor.f1'], ['onsite', 'd', '2026-06-02']],
+    history: [['2026-06-02', 'term.floor.h1']],
+    see: [{ href: '/market', key: 'nav.market' }],
+  },
+  'all-in-price': {
+    group: 'chain',
+    related: ['floor', 'listing'],
+    facts: [['cost', 'k', 'term.all-in-price.f1'], ['applies', 'k', 'term.all-in-price.f2'], ['holds', 'k', 'term.all-in-price.f3']],
+    history: [['2026-06-21', 'term.all-in-price.h1']],
+    see: [{ href: '/trade', key: 'nav.marketplace' }],
+  },
+  'approval': {
+    group: 'chain',
+    related: ['wallet', 'listing', 'seed-phrase'],
+    facts: [['applies', 'k', 'term.approval.f1'], ['cost', 'k', 'term.approval.f2']],
+    history: [['2026-06-21', 'term.approval.h1']],
+    see: [{ href: '/guides/marketplace', key: 'guide.sub.marketplace' }],
+  },
+  'mint': {
+    group: 'chain',
+    related: ['deed', 'land'],
+    facts: [['applies', 'k', 'term.mint.f1'], ['cost', 'k', 'term.mint.f2']],
+    history: [['2021-11', 'term.mint.h1']],
+    see: [{ href: '/guides/walkthroughs', key: 'guide.sub.walkthroughs' }],
+  },
+  'on-ramp': {
+    group: 'chain',
+    related: ['cash-out', 'currencies'],
+    facts: [['runby', 'k', 'term.on-ramp.f1'], ['applies', 'k', 'term.on-ramp.f2']],
+    // These two now have a page each rather than a tab to hunt through.
+    see: [{ href: '/trade/add-funds', key: 'trade.topup.view.h' }, { href: '/trade', key: 'nav.marketplace' }],
+  },
+  'cash-out': {
+    group: 'chain',
+    related: ['on-ramp', 'currencies'],
+    facts: [['runby', 'k', 'term.cash-out.f1']],
+    see: [{ href: '/trade/cash-out', key: 'trade.cashout.view.h' }, { href: '/guides/marketplace/cashout', key: 'gm.cash.tag' }],
+  },
+  'seed-phrase': {
+    group: 'chain',
+    related: ['wallet'],
+    facts: [['applies', 'k', 'term.seed-phrase.f1'], ['status', 'k', 'term.seed-phrase.f2']],
+    history: [['2026-07-17', 'term.seed-phrase.h1']],
+    see: [{ href: '/guides/safety', key: 'guide.sub.safety' }],
+  },
+  'token-id': {
+    group: 'chain',
+    related: ['creature', 'immutable-zkevm'],
+    facts: [['scale', 'k', 'term.token-id.f1'], ['source', 'k', 'term.token-id.f2']],
+    history: [['2023', 'term.token-id.h1']],
+    see: [{ href: '/trade', key: 'nav.marketplace' }],
+  },
+  'player-council': {
+    group: 'council',
+    related: ['election', 'ballot', 'holder'],
+    facts: [['seats', 'v', '7: 4 elected, 3 appointed'], ['term', 'k', 'term.player-council.f2'], ['decides', 'k', 'term.player-council.f3'], ['introduced', 'd', '2026-05-28']],
+    history: [['2026-05-28', 'term.player-council.h1'], ['2026-06-08', 'term.player-council.h2'], ['2026-06-17', 'term.player-council.h3'], ['2026-07-08', 'term.player-council.h4'], ['2026-07-16', 'term.player-council.h5']],
+    see: [{ href: '/council', key: 'nav.council' }],
+  },
+  'election': {
+    group: 'council',
+    related: ['player-council', 'ballot', 'voting-advice'],
+    facts: [['seats', 'v', '4 elected, in 3 brackets'], ['eligible', 'k', 'term.election.f2'], ['scale', 'k', 'term.election.f3'], ['introduced', 'd', '2026-06-09']],
+    history: [['2026-06-09', 'term.election.h1'], ['2026-06-13', 'term.election.h2'], ['2026-06-17', 'term.election.h3']],
+    see: [{ href: '/council', key: 'nav.council' }],
+  },
+  'ballot': {
+    group: 'council',
+    related: ['election', 'electorate-snapshot', 'confirmation-vote'],
+    facts: [['eligible', 'k', 'term.ballot.f1'], ['source', 'k', 'term.ballot.f2'], ['status', 'k', 'term.ballot.f3'], ['introduced', 'd', '2026-06-13']],
+    history: [['2026-06-13', 'term.ballot.h1'], ['2026-06-17', 'term.ballot.h2']],
+    see: [{ href: '/council/vote', key: 'nav.council' }],
+  },
+  'confirmation-vote': {
+    group: 'council',
+    related: ['ballot', 'election'],
+    facts: [['applies', 'k', 'term.confirmation-vote.f1'], ['decides', 'k', 'term.confirmation-vote.f2']],
+    see: [{ href: '/council/vote', key: 'nav.council' }],
+  },
+  'electorate-snapshot': {
+    group: 'council',
+    related: ['ballot', 'holder'],
+    facts: [['source', 'k', 'term.electorate-snapshot.f1'], ['status', 'k', 'term.electorate-snapshot.f2'], ['eligible', 'k', 'term.electorate-snapshot.f3']],
+    history: [['2026-06-13', 'term.electorate-snapshot.h1']],
+    see: [{ href: '/council/vote', key: 'nav.council' }],
+  },
+  'voting-advice': {
+    group: 'council',
+    related: ['election', 'ballot'],
+    facts: [['status', 'k', 'term.voting-advice.f1'], ['source', 'k', 'term.voting-advice.f2'], ['onsite', 'd', '2026-06-09']],
+    history: [['2026-06-09', 'term.voting-advice.h1']],
+    see: [{ href: '/council/vote', key: 'nav.council' }],
+  },
+};

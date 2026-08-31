@@ -46,14 +46,20 @@ const { loadApply, rerenderApply } = lazy('./apply.js');
 const { loadElection, rerenderElection } = lazy('./election.js');
 const { loadBallot, rerenderBallot } = lazy('./ballot.js');
 const { loadVote, rerenderVote } = lazy('./vote.js');
-const { loadMarketplace, rerenderMarketplace, openProfileView, closeProfileView } = lazy('./marketplace.js');
+const { loadMarketplace, rerenderMarketplace, openProfileView, closeProfileView, closeTradeModal,
+  openFundsView, exitFundsView } = lazy('./marketplace.js');
 const { loadPolls, rerenderPolls } = lazy('./polls.js');
 const { loadAnnouncements, rerenderAnnouncements } = lazy('./announcements.js');
 const { loadGen2, rerenderGen2 } = lazy('./gen2.js');
 const { initGuideDemos, rerenderGuideDemos } = lazy('./guide-demos.js');
 const { loadCollections, rerenderCollections } = lazy('./collections.js');
 const { loadTraits, rerenderTraits } = lazy('./traits.js');
-const { openCodex, closeCodex, rerenderCodex } = lazy('./codex.js');
+const { openCodex, closeCodex, rerenderCodex, initCodexFind, renderGlossary } = lazy('./codex.js');
+// Glossary links in prose. i18n.js decorates after every translation pass, which covers a
+// cold load and a language switch; this covers the third way a panel becomes visible,
+// which is someone clicking the nav. A panel nobody has looked at yet has no layout, and
+// the decorator skips what it cannot measure.
+const { linkGlossaryTerms } = lazy('./glossary-link.js');
 const { initCouncilBoard, rerenderCouncilBoard } = lazy('./council.js');
 const { initPerks, rerenderPerks } = lazy('./perks.js');
 const { initSafety, rerenderSafety } = lazy('./safety.js');
@@ -76,6 +82,7 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
     rerenderCollections();
     rerenderTraits();
     rerenderCodex();
+    if (glossaryPainted) renderGlossary();
     rerenderGuideDemos();
     rerenderCouncilBoard();
     rerenderPerks();
@@ -231,13 +238,19 @@ function selectTab(name, updateUrl = true) {
   // Re-selecting Trade (nav click, or a popstate back to /trade) while its profile
   // view is open should land on the marketplace, not a stale profile. route()'s
   // /profile/{slug} path re-opens the view right after, so deep links still work.
-  else if (name === 'trade') closeProfileView();
+  else if (name === 'trade') { closeProfileView(); exitFundsView(); }
   if (name === 'roadmap'   && !roadmapLoaded)   { roadmapLoaded   = true; loadGen2(); }
-  if (name === 'collections' && !collectionsLoaded) { collectionsLoaded = true; loadCollections(); }
+  if (name === 'collections' && !collectionsLoaded) {
+    collectionsLoaded = true;
+    loadCollections();
+    initCodexFind();   // the search spans all four kinds, so it doesn't wait on the archive
+  }
   // A nav click on Collections means the archive, not whatever codex page was last open.
   // route() re-opens the page straight after when the URL asks for one.
   if (name === 'collections') closeCodex();
   if (updateUrl && location.pathname !== urlFor(name)) history.pushState(null, '', urlFor(name));
+  const panel = document.getElementById(`panel-${name}`);
+  if (panel) linkGlossaryTerms(panel);
 }
 
 tabButtons.forEach(btn => btn.addEventListener('click', () => selectTab(btn.dataset.tab)));
@@ -256,6 +269,14 @@ function ensureTraitsLoaded() {
   if (!traitsLoaded) { traitsLoaded = true; loadTraits(); }
 }
 document.querySelector('#panel-collections [data-subtab="traits"]')?.addEventListener('click', ensureTraitsLoaded);
+
+// The glossary is 54 rows of copy already in the locale, so it costs no fetch. It still
+// waits for its sub-tab, because it renders from translations that land after boot.
+let glossaryPainted = false;
+function ensureGlossary() {
+  if (!glossaryPainted) { glossaryPainted = true; renderGlossary(); }
+}
+document.querySelector('#panel-collections [data-subtab="glossary"]')?.addEventListener('click', ensureGlossary);
 
 // The brand mark opens The Club and returns to the top, like clicking a site logo
 document.querySelector('.nav-logo')?.addEventListener('click', () => {
@@ -289,6 +310,9 @@ function selectSubTab(scope, name) {
     btn.setAttribute('aria-selected', String(active));
   });
   scope.querySelectorAll('[data-subpanel]').forEach(p => { p.hidden = p.dataset.subpanel !== name; });
+  // A sub-panel that was hidden has no layout, so the decorator skipped it. Now that it is
+  // on screen it can be measured, and its first mentions are its own.
+  linkGlossaryTerms(scope.querySelector(`[data-subpanel="${name}"]`) || scope);
 }
 function jumpSubTab(el, name) {
   const scope = el.closest('.tab-panel');
@@ -359,6 +383,10 @@ function initStepper(nav) {
     // keeps the brand hero in view; other steppers just scroll their nav as before.
     if (scroll)   (nav.closest('.gm-cockpit') || nav).scrollIntoView({ behavior: 'smooth', block: 'start' });
     if (focusTab) tabs.find(t => Number(t.dataset.wt) === n)?.focus();
+    // Glossary links, now that this panel has a box. The decorator skips anything with no
+    // client rects, so a step that was hidden when the tab opened was never decorated —
+    // which was every step but the first.
+    linkGlossaryTerms(panels.find(p => Number(p.dataset.wtPanel) === n) || scope);
   }
 
   tabs.forEach(t => t.addEventListener('click', () => show(Number(t.dataset.wt), { scroll: true, updateUrl: true })));
@@ -434,7 +462,7 @@ const ROUTE_TABS = ['club', 'announcements', 'council', 'apply', 'polls', 'roadm
 // Codex entity pages hang off Collections: /collections/item/<slug> and friends. They
 // are the reference layer's addresses, so anything that renders one of these links (a
 // release page, a trait tile, a Creature card) gets in-page navigation for free.
-const CODEX_KINDS = new Set(['release', 'item', 'trait', 'creature']);
+const CODEX_KINDS = new Set(['release', 'item', 'trait', 'creature', 'term']);
 
 function urlFor(name, sub) {
   return name === 'club' && !sub ? '/' : `/${name}${sub ? `/${sub}` : ''}`;
@@ -464,6 +492,20 @@ function route(pathname) {
     openProfileView(sub, { updateUrl: false });
     return;
   }
+  // The marketplace's two money views own real paths (/trade/add-funds, /trade/cash-out).
+  // Routed before the generic sub-tab lookup below, which would read them as sub-tabs that
+  // #panel-trade does not have and silently leave Browse on screen at a bogus URL.
+  if (tab === 'trade' && (sub === 'add-funds' || sub === 'cash-out')) {
+    selectTab('trade', false);
+    openFundsView(sub, { updateUrl: false });
+    return;
+  }
+  // Any other /trade/<x> is a stale bookmark or a typo — normalise it rather than leaving
+  // the address bar claiming a page that isn't there (same treatment /apply and /holders get).
+  if (tab === 'trade' && sub) {
+    sub = null;
+    history.replaceState(null, '', '/trade' + location.search);
+  }
   // Codex entity pages: /collections/<kind>/<…>. They take over the Collections panel,
   // so they're routed before the sub-tab lookup below, which would otherwise read
   // "release" or "item" as a sub-tab that doesn't exist.
@@ -481,6 +523,7 @@ function route(pathname) {
   }
   if (tab === 'market' && sub === 'holders') ensureHoldersLoaded();
   if (tab === 'collections' && sub === 'traits') ensureTraitsLoaded();
+  if (tab === 'collections' && sub === 'glossary') ensureGlossary();
   // Deep link to a specific step, e.g. /guides/walkthroughs/funding or
   // /guides/marketplace/trading
   if (tab === 'guides' && sub && segs[2] && stepperRouters[sub]) {
@@ -494,16 +537,31 @@ window.addEventListener('popstate', () => route(location.pathname));
 // Codex links are written into HTML by several modules, so they're caught here once
 // rather than wired up per render. They stay real <a href> elements: crawlable, and a
 // modified or middle click still opens a new tab.
+// The marketplace's two money views own paths too, and the glossary and the Guides link
+// straight at them. Without this they fall through to the browser: a full reload and a
+// white flash on the way to a page the app could have painted in place.
+const MARKET_SUBS = new Set(['add-funds', 'cash-out']);
 document.addEventListener('click', event => {
-  const link = event.target.closest && event.target.closest('a[href^="/collections/"]');
+  const link = event.target.closest && event.target.closest('a[href^="/collections/"], a[href^="/trade/"]');
   if (!link) return;
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
   const segs = link.getAttribute('href').split('?')[0].split('/').filter(Boolean);
-  if (segs[0] !== 'collections' || !CODEX_KINDS.has(segs[1])) return;
+  if (segs[0] === 'trade') {
+    if (!MARKET_SUBS.has(segs[1])) return;
+  } else {
+    // Any Collections address, not just the entity kinds. The glossary breadcrumb on every
+    // term page points at /collections/glossary, and while that fell through to the browser
+    // it meant a full reload and a white flash on the trip readers make most.
+    if (segs[0] !== 'collections') return;
+    if (segs[1] && !CODEX_KINDS.has(segs[1]) && !document.querySelector(
+      `#panel-collections [data-subtab="${segs[1]}"]`)) return;
+  }
   event.preventDefault();
-  // These links also sit inside the archive's and the trait grid's quick-look dialogs,
-  // which would otherwise stay open on top of the page they just sent you to.
+  // These links also sit inside overlays that would otherwise stay open on top of the
+  // page they just sent you to: the archive's and the trait grid's quick-look dialogs,
+  // and the marketplace's token modal, which is a plain div and closes on its own terms.
   document.querySelectorAll('dialog[open]').forEach(d => d.close());
+  if (document.body.classList.contains('trade-modal-open')) closeTradeModal();
   history.pushState(null, '', link.getAttribute('href'));
   route(location.pathname);
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -548,6 +606,7 @@ initI18n().then(() => {
   rerenderCollections();
   rerenderTraits();
   rerenderCodex();
+  if (glossaryPainted) renderGlossary();
   rerenderGuideDemos();
   rerenderCouncilBoard();
   rerenderPerks();

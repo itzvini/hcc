@@ -1,7 +1,9 @@
 import { t } from './i18n.js';
 import { slug, codexHref } from './entity-url.js';
+import { TERM_GROUPS, TERMS } from './glossary.js';
+import { linkPhrasesInHtml } from './glossary-link.js';
 import {
-  collectionsData, TYPES, NOT_WORN, esc, num, fullDate, dateLabel, catName,
+  collectionsData, TYPES, NOT_WORN, esc, num, fullDate, monthYear, dateLabel, catName,
   itemShot, fullShot, discordMarkup,
 } from './collections.js';
 
@@ -23,7 +25,7 @@ import {
 // release it shipped in, a trait names its pieces, a creature names its traits. Following
 // those links is the whole point.
 
-const KINDS = new Set(['release', 'item', 'trait', 'creature']);
+const KINDS = new Set(['release', 'item', 'trait', 'creature', 'term']);
 
 let view = null;          // the #codex-view element, once found
 let current = null;       // { kind, args } of the open page, so a language switch repaints it
@@ -70,7 +72,7 @@ function dated(rel) {
 
 // Every page is the same six blocks. Passing them in as strings keeps each renderer
 // about its subject and nothing else.
-function shell({ accent, crumbs, kind, title, lead, art, cta, facts, blocks, note }) {
+function shell({ accent, crumbs, kind, title, lead, leadMore, art, cta, facts, blocks, note }) {
   const factRows = (facts || []).filter(Boolean)
     .map(([k, v]) => `<div class="cdx-fact"><dt>${esc(k)}</dt><dd>${v}</dd></div>`).join('');
   return `
@@ -88,6 +90,7 @@ function shell({ accent, crumbs, kind, title, lead, art, cta, facts, blocks, not
           <span class="cdx-kind">${esc(kind)}</span>
           <h2 class="cdx-title">${esc(title)}</h2>
           ${lead ? `<p class="cdx-lead">${lead}</p>` : ''}
+          ${leadMore || ''}
           ${cta ? `<div class="cdx-cta">${cta}</div>` : ''}
         </div>
       </header>
@@ -404,6 +407,435 @@ function creaturePage(token, listing, doc) {
   });
 }
 
+/* --------------------------------------------------------------------- terms
+   The glossary. Everything above catalogues what the club has made; this explains the
+   words it uses to talk about it. A term is a page like any other kind, so it can be
+   linked from a guide, quoted in Discord and found by the same search.
+
+   Where a term has an awkward truth behind it — three rarity scales that don't line up,
+   a rank whose top ten is a tie, parcel counts we know over-report — it says so. A
+   reference that only prints the flattering half is one nobody checks twice. */
+
+const TERM_ACCENT = {
+  club:    'var(--hr-primary)',
+  ships:   'var(--hr-secondary)',
+  parts:   'var(--hr-banana)',
+  chain:   'var(--hr-blueberry)',
+  council: 'var(--hr-tangerine)',
+};
+
+function termTitle(slug) {
+  const label = t(`term.${slug}.t`);
+  return label === `term.${slug}.t` ? slug.replace(/-/g, ' ') : label;
+}
+
+// Inside the glossary every term is fair game as a target, because the reader is already
+// here for definitions. The 54 bodies and 9 caveats carry 115 mentions of each other, and
+// leaving those flat was the real version of the complaint that started this: a glossary
+// whose own definitions don't link is a glossary you read once and leave.
+//
+// Capped at two per paragraph, once per page for any one term, and never the term the
+// reader already has open.
+let termSeen = null;
+function linkTerms(escaped, skip) {
+  const phrases = Object.keys(TERMS).map(s => [s, termTitle(s)]);
+  return linkPhrasesInHtml(escaped, phrases, { skip, max: 2, seen: termSeen });
+}
+
+function termTile(slug) {
+  const term = TERMS[slug];
+  if (!term) return '';
+  return `<a class="cdx-tile is-wide" href="${codexHref('term', slug)}"
+    style="--accent:${TERM_ACCENT[term.group] || 'var(--hr-primary)'}">
+    <span class="cdx-tile-n">${esc(termTitle(slug))}</span>
+    <span class="cdx-tile-c">${esc(t(`cdx.g.${term.group}`))}</span>
+  </a>`;
+}
+
+// A term page is written as a reference entry rather than a note to the reader: a
+// one-line definition, the paragraph behind it, a fact table, how the club uses the word,
+// and a dated history where the club's own record can carry one. Anything a term does not
+// have is simply left out.
+
+// t() that answers empty rather than echoing the key back, so an absent block disappears.
+function tx(key) {
+  const s = t(key);
+  return s === key ? '' : s;
+}
+
+// A history date is a year, a month or a day, and each is printed as precisely as it is
+// known. Nothing here invents a day the club's record does not have.
+function stamp(date) {
+  const parts = String(date).split('-');
+  if (parts.length === 3) return fullDate(date);
+  if (parts.length === 2) return monthYear(date);
+  return String(date);
+}
+
+// Figures worked out from the archive the site has already downloaded, so a count on a
+// term page can never drift from the timeline it describes. A failed archive read costs
+// the row and nothing else.
+const ARCHIVE_KINDS = {
+  'archive.all': null,
+  'archive.drop': ['drop'],
+  'archive.grab': ['grab'],
+  'archive.store': ['store'],
+  'archive.giveaway': ['giveaway'],
+  'archive.eventish': ['event', 'collab', 'competition'],
+};
+
+function archiveFact(token, archive) {
+  if (!archive) return '';
+  const all = archive.releases || [];
+  let rows = all;
+  if (token === 'archive.approx') rows = all.filter(r => r.precision !== 'exact');
+  else if (ARCHIVE_KINDS[token]) rows = all.filter(r => ARCHIVE_KINDS[token].includes(r.type));
+  else if (token !== 'archive.all') return '';
+  if (!rows.length) return '';
+  const dates = rows.map(r => r.date).filter(Boolean).sort();
+  const span = dates.length
+    ? tr('cdx.f.archiveRange', { from: monthYear(dates[0]), to: monthYear(dates[dates.length - 1]) })
+    : '';
+  return `<b>${esc(tr('cdx.f.archiveCount', { n: num(rows.length) }))}</b>${
+    span ? `<span class="cdx-sub">${esc(span)}</span>` : ''}`;
+}
+
+// Explorers for the two chains the club's contracts sit on. A contract address is the
+// one fact on these pages a reader may want to check for themselves, and sending them to
+// the block explorer is the whole point of printing it.
+const EXPLORER = {
+  'Immutable zkEVM': 'https://explorer.immutable.com/token/',
+  'Ethereum mainnet': 'https://etherscan.io/address/',
+};
+
+function contractValue(address, term) {
+  const chain = (term.facts || []).find(f => f[0] === 'chain');
+  const base = chain && EXPLORER[chain[2]];
+  const shown = `<span class="cdx-addr">${esc(address)}</span>`;
+  return base
+    ? `<a class="cdx-addr-l" href="${esc(base + address)}" target="_blank" rel="noopener noreferrer">${shown}</a>`
+    : shown;
+}
+
+function factValue([label, form, value], slug, archive, term) {
+  if (form === 'v') return label === 'contract' ? contractValue(value, term) : esc(value);
+  if (form === 'd') return esc(stamp(value));
+  if (form === 'c') return archiveFact(value, archive);
+  return linkTerms(esc(t(value)), slug);
+}
+
+function termPage(slug, archive) {
+  const term = TERMS[slug];
+  if (!term) return missing(t('cdx.missing.term'));
+  termSeen = new Set();     // first mention wins, across the whole entry
+  const short = tx(`term.${slug}.p`);
+  const body = tx(`term.${slug}.b`);
+  const use = tx(`term.${slug}.use`);
+  const note = tx(`term.${slug}.note`);
+  const history = term.history || [];
+
+  // The group is every term's first fact, so the table starts the same way on all 54.
+  const facts = [[t('cdx.f.category'), esc(t(`cdx.g.${term.group}`))]];
+  if ((term.aka || []).length) {
+    facts.push([t('cdx.f.aka'), esc(term.aka.join(', '))]);
+  }
+  for (const row of term.facts || []) {
+    const value = factValue(row, slug, archive, term);
+    if (value) facts.push([t(`cdx.f.${row[0]}`), value]);
+  }
+
+  return shell({
+    accent: TERM_ACCENT[term.group] || 'var(--hr-primary)',
+    crumbs: [
+      { label: t('cdx.crumb.glossary'), href: '/collections/glossary' },
+      { label: t(`cdx.g.${term.group}`), href: '/collections/glossary' },
+      { label: termTitle(slug) },
+    ],
+    kind: t('cdx.term.kind'),
+    title: termTitle(slug),
+    lead: linkTerms(esc(short), slug),
+    leadMore: body ? `<p class="cdx-body">${linkTerms(esc(body), slug)}</p>` : '',
+    facts,
+    blocks: [
+      note ? `<aside class="cdx-callout">
+        <span class="cdx-callout-h">${esc(t('cdx.term.worthKnowing'))}</span>
+        <p>${linkTerms(esc(note), slug)}</p>
+      </aside>` : '',
+      // data-no-gloss: this entry links its own words as it renders them, with the
+      // reader's own term skipped. The site-wide linker decorates .cdx-prose for release
+      // notes and Creature descriptions, and left to itself it would link "grab" on the
+      // page about grabs.
+      use ? `<section class="cdx-sec" data-no-gloss>
+        <header class="cdx-sec-h"><h3>${esc(t('cdx.term.usage'))}</h3></header>
+        <div class="cdx-prose"><p>${linkTerms(esc(use), slug)}</p></div>
+      </section>` : '',
+      history.length ? `<section class="cdx-sec">
+        <header class="cdx-sec-h"><h3>${esc(t('cdx.term.history'))}</h3></header>
+        <ol class="cdx-time">${history.map(([date, key, src]) => {
+          const source = src ? tx(src) : '';
+          return `<li class="cdx-time-r">
+            <span class="cdx-time-d">${esc(stamp(date))}</span>
+            <span class="cdx-time-t">${linkTerms(esc(t(key)), slug)}${
+              // Where the line came from. A dated claim on a reference page is worth what
+              // its record is worth, so the record is named next to it.
+              source ? `<span class="cdx-time-s">${esc(source)}</span>` : ''}</span>
+          </li>`;
+        }).join('')}</ol>
+      </section>` : '',
+      railBlock(t('cdx.term.related'), (term.related || []).map(termTile)),
+      (term.see || []).length ? `<section class="cdx-sec">
+        <header class="cdx-sec-h"><h3>${esc(t('cdx.term.where'))}</h3></header>
+        <div class="cdx-cta">${term.see.map(s =>
+          `<a class="ctr-btn" href="${esc(s.href)}">${esc(t(s.key))}</a>`).join('')}</div>
+      </section>` : '',
+    ],
+    note: esc(t('cdx.src.term')),
+  });
+}
+
+// The index: every term, grouped, on the Glossary sub-tab. Rendered here rather than
+// written into the markup so it stays one list, in one order, in every language.
+export function renderGlossary() {
+  const box = document.getElementById('glossary-app');
+  if (!box) return;
+  box.setAttribute('aria-busy', 'false');
+  box.innerHTML = TERM_GROUPS.map(g => `
+    <section class="cdx-gloss-g" style="--accent:${TERM_ACCENT[g.key] || 'var(--hr-primary)'}">
+      <header class="cdx-sec-h">
+        <h3>${esc(t(`cdx.g.${g.key}`))}</h3>
+        <span class="cdx-sec-sub">${esc(tr('cdx.gloss.count', { n: num(g.terms.length) }))}</span>
+      </header>
+      <div class="cdx-gloss-list">${g.terms.map(slug => `
+        <a class="cdx-gloss-row" href="${codexHref('term', slug)}">
+          <span class="cdx-gloss-t">${esc(termTitle(slug))}</span>
+          <span class="cdx-gloss-p">${esc(t(`term.${slug}.p`))}</span>
+        </a>`).join('')}</div>
+    </section>`).join('');
+}
+
+/* --------------------------------------------------------------------- find
+   The front door. Every codex page is reachable by link, which is worth nothing if the
+   only way to find one is to already know where it lives. One box searches all four
+   kinds at once and every result is a page, not a filter: the two boxes inside the grids
+   narrow what you are already looking at, this one takes you somewhere.
+
+   Releases and items come out of the archive the timeline already holds, traits out of
+   the catalogue the trait pages already fetch, so a search costs no request of its own.
+   A Creature is searched by the number people actually say. */
+
+const FIND_PER_GROUP = 6;
+let findBox = null;      // the input
+let findList = null;     // the results panel
+let findRows = [];       // what is currently listed, in order, for the arrow keys
+let findAt = -1;         // which row is highlighted
+let findSeq = 0;
+
+// Rank: something that starts with what you typed beats something that merely contains
+// it, and a shorter name beats a longer one. That puts "Zedd" above "Zedd Plushie" when
+// you type "zedd", which is what you meant.
+function findScore(name, q) {
+  const n = name.toLowerCase();
+  const at = n.indexOf(q);
+  if (at < 0) return null;
+  return (at === 0 ? 0 : 1000) + at + n.length / 100;
+}
+
+function findRow(href, label, meta, kind, art) {
+  return { href, label, meta, kind, art };
+}
+
+async function findResults(raw) {
+  const q = raw.trim().toLowerCase();
+  if (q.length < 2 && !/^\d+$/.test(q)) return null;
+
+  const groups = [];
+  // The trait catalogue is the one source a search may have to fetch. Failing to get it
+  // narrows the results; it never costs the archive ones.
+  const [archive, doc] = await Promise.all([
+    collectionsData().catch(() => null),
+    traitCatalogue().catch(() => null),
+  ]);
+
+  // A bare number is almost always a Creature. Offered only when it could be one, so a
+  // search for "2021" doesn't invent Creature #2021 out of a release name.
+  if (/^\d{1,5}$/.test(q) && doc && doc.total && Number(q) >= 1 && Number(q) <= doc.total) {
+    groups.push({
+      key: 'creature',
+      rows: [findRow(codexHref('creature', q), `Highrise Creature #${q}`,
+        t('cdx.find.creature'), 'creature', null)],
+      total: 1,
+    });
+  }
+
+  // Terms first among the named things: someone typing "floor" or "grab" almost always
+  // wants to know what the word means, not which items happen to contain it.
+  const termHits = [];
+  for (const slug of Object.keys(TERMS)) {
+    const title = t(`term.${slug}.t`);
+    const score = findScore(title === `term.${slug}.t` ? slug : title, q);
+    if (score != null) termHits.push({ score, slug });
+  }
+  termHits.sort((a, b) => a.score - b.score);
+  if (termHits.length) groups.push({
+    key: 'term',
+    total: termHits.length,
+    rows: termHits.slice(0, FIND_PER_GROUP).map(({ slug: sl }) => findRow(
+      codexHref('term', sl), t(`term.${sl}.t`), t(`cdx.g.${TERMS[sl].group}`), 'term', null)),
+  });
+
+  if (doc && !doc.indexing) {
+    const hits = [];
+    for (const ty of doc.types) {
+      for (const val of ty.values) {
+        const score = findScore(val.v, q);
+        if (score != null) hits.push({ score, ty, val });
+      }
+    }
+    hits.sort((a, b) => a.score - b.score || b.val.n - a.val.n);
+    if (hits.length) groups.push({
+      key: 'trait',
+      total: hits.length,
+      rows: hits.slice(0, FIND_PER_GROUP).map(({ ty, val }) => findRow(
+        codexHref('trait', ty.type, val.v), val.v,
+        `${slotName(ty.type, doc)} · ${tr('cdx.trait.wearers', { n: num(val.n) })}`,
+        'trait',
+        val.art ? `/api/collections/art/trait/${encodeURIComponent(val.art)}.webp` : null)),
+    });
+  }
+
+  if (archive) {
+    const items = new Map();   // one row per name, first appearance, as the pages are
+    const releases = [];
+    for (const rel of archive.releases) {
+      const relScore = findScore(rel.name, q);
+      if (relScore != null) releases.push({ score: relScore, rel });
+      for (const it of rel.items) {
+        const score = findScore(it.n, q);
+        if (score == null) continue;
+        const key = slug(it.n);
+        if (!items.has(key)) items.set(key, { score, it, rel });
+      }
+    }
+    const itemHits = [...items.values()].sort((a, b) => a.score - b.score);
+    if (itemHits.length) groups.push({
+      key: 'item',
+      total: itemHits.length,
+      rows: itemHits.slice(0, FIND_PER_GROUP).map(({ it, rel }) => findRow(
+        codexHref('item', it.n), it.n,
+        `${catName(it.c)} · ${rel.name}`, 'item',
+        it.k ? `/api/collections/art/thumb/${encodeURIComponent(it.k)}.webp` : null)),
+    });
+
+    releases.sort((a, b) => a.score - b.score);
+    if (releases.length) groups.push({
+      key: 'release',
+      total: releases.length,
+      rows: releases.slice(0, FIND_PER_GROUP).map(({ rel }) => findRow(
+        codexHref('release', rel.id), rel.name,
+        `${t(`col.type1.${rel.type}`)} · ${dated(rel)}`, 'release', null)),
+    });
+  }
+
+  return groups;
+}
+
+function findRender(groups, q) {
+  if (!findList) return;
+  if (!groups) { findClose(); return; }
+  findRows = groups.flatMap(g => g.rows);
+  findAt = -1;
+  if (!findRows.length) {
+    findList.innerHTML = `<p class="cdx-find-none">${esc(tr('cdx.find.none', { q }))}</p>`;
+  } else {
+    findList.innerHTML = groups.map(g => `
+      <div class="cdx-find-group" role="group" aria-label="${esc(t(`cdx.find.g.${g.key}`))}">
+        <span class="cdx-find-g-h">${esc(t(`cdx.find.g.${g.key}`))}${
+          g.total > g.rows.length ? `<i>${esc(tr('cdx.find.more', { n: num(g.total - g.rows.length) }))}</i>` : ''}</span>
+        ${g.rows.map(r => `
+          <a class="cdx-find-row" role="option" aria-selected="false" href="${esc(r.href)}" id="cdx-find-${
+            findRows.indexOf(r)}">
+            <span class="cdx-find-shot${r.art ? '' : ' is-empty'}">${r.art
+              ? `<img src="${esc(r.art)}" alt="" loading="lazy" decoding="async">` : ''}</span>
+            <span class="cdx-find-t">
+              <span class="cdx-find-n">${esc(r.label)}</span>
+              <span class="cdx-find-m">${esc(r.meta)}</span>
+            </span>
+          </a>`).join('')}
+      </div>`).join('');
+  }
+  // Art that 404s (an item whose picture was never baked) leaves a broken-image glyph,
+  // which reads as a fault rather than an absence. CSP forbids an inline onerror, so the
+  // picture is dropped here and the empty frame stands in.
+  findList.querySelectorAll('.cdx-find-shot img').forEach(img =>
+    img.addEventListener('error', () => {
+      img.parentElement?.classList.add('is-empty');
+      img.remove();
+    }, { once: true }));
+  findList.hidden = false;
+  findBox.setAttribute('aria-expanded', 'true');
+}
+
+function findClose() {
+  if (!findList) return;
+  findList.hidden = true;
+  findList.innerHTML = '';
+  findRows = [];
+  findAt = -1;
+  findBox.setAttribute('aria-expanded', 'false');
+  findBox.removeAttribute('aria-activedescendant');
+}
+
+// Arrow keys walk the flattened list, so they cross group boundaries without the reader
+// having to know there were groups.
+function findMove(delta) {
+  if (!findRows.length) return;
+  findAt = (findAt + delta + findRows.length) % findRows.length;
+  const rows = findList.querySelectorAll('.cdx-find-row');
+  rows.forEach((el, i) => {
+    const on = i === findAt;
+    el.classList.toggle('is-on', on);
+    el.setAttribute('aria-selected', String(on));
+    if (on) {
+      el.scrollIntoView({ block: 'nearest' });
+      findBox.setAttribute('aria-activedescendant', el.id);
+    }
+  });
+}
+
+export function initCodexFind() {
+  if (findBox) return;
+  findBox = document.getElementById('cdx-find');
+  findList = document.getElementById('cdx-find-list');
+  if (!findBox || !findList) return;
+
+  let timer;
+  findBox.addEventListener('input', () => {
+    clearTimeout(timer);
+    const value = findBox.value;
+    timer = setTimeout(async () => {
+      const mine = ++findSeq;
+      const groups = await findResults(value);
+      if (mine === findSeq) findRender(groups, value.trim());
+    }, 140);
+  });
+
+  findBox.addEventListener('keydown', event => {
+    if (event.key === 'ArrowDown') { event.preventDefault(); findMove(1); }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); findMove(-1); }
+    else if (event.key === 'Escape') { findClose(); findBox.blur(); }
+    else if (event.key === 'Enter' && findAt >= 0) {
+      event.preventDefault();
+      findList.querySelectorAll('.cdx-find-row')[findAt]?.click();
+    }
+  });
+
+  // Following a result leaves the box holding a query for a page you are now looking at.
+  findList.addEventListener('click', () => { findBox.value = ''; findClose(); });
+  document.addEventListener('click', event => {
+    if (!findList.hidden && !event.target.closest('.cdx-find')) findClose();
+  });
+}
+
 /* ---------------------------------------------------------------- the view */
 
 function ensureView() {
@@ -452,6 +884,8 @@ export async function openCodex(kind, args) {
     if (kind === 'release' || kind === 'item') {
       const archive = await collectionsData();
       html = kind === 'release' ? releasePage(archive, args[0]) : itemPage(archive, args[0]);
+    } else if (kind === 'term') {
+      html = termPage(args[0], await collectionsData().catch(() => null));
     } else if (kind === 'trait') {
       html = traitPage(await traitCatalogue(), args[0], args[1]);
     } else {
@@ -492,10 +926,9 @@ export async function openCodex(kind, args) {
   if (mine !== seq) return;   // a newer page opened while this one was still fetching
   v.innerHTML = html;
   const name = v.querySelector('.cdx-title');
-  document.title = name ? `${name.textContent} · ${siteTitle}` : siteTitle;
-  v.querySelectorAll('[data-codex-close]').forEach(a => a.addEventListener('click', e => {
-    e.preventDefault();
-    history.pushState(null, '', '/collections');
-    closeCodex();
-  }));
+  // The club's own entry is titled with the club's name, and "HCC · HCC" reads as a bug.
+  const label = name ? name.textContent.trim() : '';
+  document.title = label && label !== siteTitle ? `${label} · ${siteTitle}` : siteTitle;
+  // No per-link handler for the crumbs: app.js routes every /collections address in page
+  // now, and wiring it here as well pushed two history entries for one click.
 }

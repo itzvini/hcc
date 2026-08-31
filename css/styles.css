@@ -215,12 +215,18 @@ h1 .pop { color: var(--hr-primary); }
 .tab-panel[hidden] { display: none; }
 .roadmap-panel { padding: 6px 0 10px; }
 
-.nav-bar { position: relative; display: flex; align-items: center; gap: 14px; }
+/* The pill row is wider than the 920px content column `.wrap` sets, so the bar drops
+   that cap and centres its cluster with auto margins on the outer children. Auto
+   margins, not `justify-content: center`: when the row does outgrow the viewport they
+   collapse to 0 and it overflows only to the right, whereas centring would push the
+   brand mark off the left edge where nothing can scroll it back (body is
+   overflow-x: hidden). The mobile layer puts the 920px cap back. */
+.nav-bar { position: relative; display: flex; align-items: center; gap: 14px; max-width: none; }
 
 /* Brand mark doubles as the home link */
 .nav-logo {
   flex: none; display: inline-flex; align-items: center; gap: 9px;
-  padding: 6px 12px 6px 6px; margin-right: auto;
+  padding: 6px 12px 6px 6px; margin-left: auto;
   border: 1px solid transparent; border-radius: var(--hr-radius-pill);
   background: transparent; cursor: pointer;
   transition: transform .15s cubic-bezier(.2,0,0,1), background .12s;
@@ -234,7 +240,7 @@ h1 .pop { color: var(--hr-primary); }
 }
 
 /* Inline menu (desktop) */
-.nav-menu { display: flex; align-items: center; gap: 8px; }
+.nav-menu { display: flex; align-items: center; gap: 8px; margin-right: auto; }
 .nav-links { display: flex; align-items: center; gap: 4px; list-style: none; }
 .nav-links > li { display: flex; }
 
@@ -364,10 +370,12 @@ h1 .pop { color: var(--hr-primary); }
    both places or neither. */
 @media (max-width: 1150px) {
   .page-tabs { padding: 8px 0; }
-  .nav-bar { gap: 10px; }
+  /* Back to the `.wrap` cap: the compact bar fits inside the content column, and
+     without this the logo and toggle would sit out at the screen edges on a tablet. */
+  .nav-bar { gap: 10px; max-width: 920px; }
 
   /* Brand: mark only, plus current-section label and the menu toggle */
-  .nav-logo { margin-right: 0; padding: 4px; }
+  .nav-logo { margin-left: 0; padding: 4px; }
   .nav-logo-word { display: none; }
   .nav-current {
     display: block; flex: 1 1 auto; min-width: 0;
@@ -2974,7 +2982,10 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
 .gm-card .wt-mkt-toggle { order: 1; margin: 0 0 9px; }
 .gm-card .wt-mkt        { order: 2; }
 .gm-card .gm-calm       { order: 3; margin: 14px 0 0; }
-.gm-card .gm-cardfoot   { order: 4; }
+/* Leg 2 of the cash-out sits under the reassurance cards, so the demo still fits in one
+   viewport and the "where do I sell it" answer is what you scroll into next. */
+.gm-card .gm-paid       { order: 4; }
+.gm-card .gm-cardfoot   { order: 5; }
 .gm-card .wt-mkt-toggle .seg-btn { padding: 7px 15px; font-size: 12px; }
 .gm-card .gdemo      { margin-bottom: 0; }
 .gm-card .guide-note { margin-top: 10px; font-size: 12.5px; padding: 10px 14px; }
@@ -3106,6 +3117,213 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
 .gm-calm-card b { display: block; font-family: var(--hr-sans); font-weight: 800; font-size: 13.5px; color: var(--hr-fg-0); margin-bottom: 4px; }
 .gm-calm-card p { margin: 0; font-size: 12px; line-height: 1.55; color: var(--hr-fg-2); }
 @media (max-width: 700px) { .gm-calm { grid-template-columns: 1fr; } }
+
+/* ---------- CASH OUT, LEG 2: "Where to sell your ETH" (#gm-paid) ----------
+   The step-6 card ends with the ETH sitting on Ethereum, which is where the site's job
+   stops and the member's question starts. This block answers it: a ten-second verdict
+   strip, four options with their downsides on the same footing, region notes, then the
+   two rules, and only then the outbound links.
+
+   Two accents, and only two: mint marks the one we recommend, lavender marks the
+   alternatives. Per-exchange brand colours were deliberately not used — a row of
+   exchange marks in their own hues reads as a partner wall, and none of the three
+   publishes a licence that would cover it.
+
+   Order matters here. `.gm-card.guide-card` is a flex column that reorders its children
+   (toggle 1, demo 2, calm cards 3), so this block needs an explicit `order` or it lands
+   above the demo. See the `.gm-card` rules further up. */
+.gm-paid {
+  /* All four sides: the site-wide `section { padding: 40px 0 }` would otherwise leave
+     40px of dead air between the fine print and the card footer. */
+  margin: 22px 0 0; padding: 22px 0 0; text-align: left;
+  border-top: 1px solid var(--hr-line-strong);
+  position: relative;
+  /* The in-app "Where to sell it" button scrolls straight here, so clear the sticky nav. */
+  scroll-margin-top: var(--nav-clear);
+}
+/* The leg break: a short mint bar over the rule, so the card reads as two halves rather
+   than as one page that kept going. */
+.gm-paid::before {
+  content: ''; position: absolute; top: -1px; left: 0; width: 68px; height: 2px;
+  background: linear-gradient(90deg, var(--hr-primary), transparent);
+}
+.gm-paid-head { margin-bottom: 18px; }
+.gm-paid-eyebrow {
+  display: inline-block; margin-bottom: 8px;
+  font: 800 10px/1 var(--hr-sans); letter-spacing: var(--hr-tracking-caps);
+  text-transform: uppercase; color: var(--hr-primary);
+}
+.gm-paid-h { margin: 0 0 8px; font: 900 20px/1.2 var(--hr-sans); color: var(--hr-fg-0); }
+.gm-paid-lead { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--hr-fg-1); }
+.gm-paid-sub {
+  margin: 22px 0 10px; font: 800 13px/1.3 var(--hr-sans); color: var(--hr-fg-0);
+}
+.gm-paid-note { margin: 0 0 10px; font-size: 12.5px; line-height: 1.55; color: var(--hr-fg-2); }
+
+/* --- The verdict strip: the answer, above the evidence --- */
+.gm-pick { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.gm-pick-row {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 11px 14px; border-radius: var(--hr-radius-md);
+  background: color-mix(in srgb, var(--hr-primary) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--hr-primary) 18%, transparent);
+}
+.gm-pick-tag {
+  flex: 0 0 auto; margin-top: 1px; padding: 4px 9px; border-radius: var(--hr-radius-pill);
+  background: var(--hr-primary-25); color: var(--hr-primary);
+  font: 800 9.5px/1 var(--hr-sans); letter-spacing: var(--hr-tracking-caps);
+  text-transform: uppercase; white-space: nowrap;
+}
+.gm-pick-p { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--hr-fg-1); }
+
+/* --- The four options --- */
+.gm-opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.gm-opt {
+  --accent: var(--hr-secondary);
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; gap: 9px;
+  padding: 14px 15px; border-radius: var(--hr-radius-lg);
+  background: linear-gradient(160deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
+  border: 1px solid var(--hr-line);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.gm-opt::before {
+  content: ''; position: absolute; inset: -50% -50% auto auto; width: 150px; height: 150px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%);
+  pointer-events: none;
+}
+/* The recommendation: mint frame and glow, and it spans the row above its three
+   alternatives so the default never sits in a ragged trailing cell. */
+.gm-opt.is-default {
+  --accent: var(--hr-primary);
+  grid-column: 1 / -1;
+  border-color: color-mix(in srgb, var(--hr-primary) 38%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 10px 30px -18px var(--hr-primary);
+}
+/* A <div>, not a <header>: the page-level `header { padding: 70px 0 50px; text-align:
+   center }` at the top of this file would otherwise inflate and centre every card. */
+.gm-opt-hd { display: flex; align-items: center; gap: 10px; }
+/* All four carry their real mark, on the same white tile .brand-ico uses elsewhere on the
+   site. White is the only ground all four read on: Coinbase blue would sink into a dark
+   tile and Binance gold would sink into a light-tinted one. Each mark is the company's
+   own file, unaltered in geometry, so never recolour these or tint the tile. */
+.gm-opt-ico {
+  flex: 0 0 auto; width: 38px; height: 38px; display: grid; place-items: center;
+  padding: 6px; border-radius: var(--hr-radius-sm);
+  background: #fff; box-shadow: var(--hr-shadow-1);
+}
+.gm-opt-ico img { width: 100%; height: 100%; object-fit: contain; display: block; }
+/* Optical balance, not a change to the artwork: a diamond inscribed in a square covers
+   half the area of a disc in the same box, so Binance's mark reads small beside
+   Coinbase's ring. The extra 12% grows into the tile's own padding and never clips. */
+.gm-opt-ico.is-diamond img { width: 112%; height: 112%; }
+.gm-opt-name { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.gm-opt-name b { font: 800 14px/1.2 var(--hr-sans); color: var(--hr-fg-0); }
+.gm-opt-kind { font-size: 11px; line-height: 1.4; color: var(--hr-fg-3); }
+.gm-opt-badge {
+  flex: 0 0 auto; padding: 4px 9px; border-radius: var(--hr-radius-pill);
+  background: var(--hr-primary); color: var(--hr-on-primary);
+  font: 900 9.5px/1 var(--hr-sans); letter-spacing: var(--hr-tracking-caps);
+}
+.gm-opt-what { margin: 0; font-size: 12px; line-height: 1.55; color: var(--hr-fg-1); }
+.gm-opt-facts { margin: 0; display: flex; flex-direction: column; gap: 7px; }
+.gm-opt-facts > div { display: flex; flex-direction: column; gap: 2px; }
+.gm-opt-facts dt {
+  font: 800 9.5px/1 var(--hr-sans); letter-spacing: var(--hr-tracking-caps);
+  text-transform: uppercase; color: var(--hr-fg-3);
+}
+.gm-opt-facts dd { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--hr-fg-2); }
+/* Every card carries a catch, the recommended one included. The symmetry is the point:
+   a comparison that only lists downsides for the options it isn't selling reads as an ad. */
+.gm-opt-catch {
+  margin: 1px 0 0; padding: 9px 11px; border-radius: var(--hr-radius-sm);
+  background: color-mix(in srgb, var(--hr-tangerine) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--hr-tangerine) 26%, transparent);
+  font-size: 11.5px; line-height: 1.5; color: var(--hr-fg-1);
+}
+.gm-opt-catch-t {
+  font: 800 9.5px/1 var(--hr-sans); letter-spacing: var(--hr-tracking-caps);
+  text-transform: uppercase; color: var(--hr-tangerine); margin-right: 4px;
+}
+
+/* --- Region notes: collapsed, so they cost nothing to the reader they don't apply to --- */
+.gm-region { display: flex; flex-direction: column; gap: 6px; }
+.gm-region-i { margin-top: 0; background: rgba(255,255,255,.03); border-radius: var(--hr-radius-md); }
+.gm-region-i > summary { padding: 10px 14px; font: 800 12.5px/1.3 var(--hr-sans); }
+.gm-region-i > summary::after { font-size: 1.1rem; }
+.gm-region-i > p { padding: 0 14px 13px; font-size: 12px; line-height: 1.55; }
+
+/* --- The two rules. They sit above the links on purpose: no anchor in this section is
+       reachable without scrolling past them. --- */
+.gm-rules { display: flex; flex-direction: column; gap: 8px; }
+.gm-rule {
+  display: flex; gap: 11px; align-items: flex-start;
+  padding: 12px 14px; border-radius: var(--hr-radius-md);
+  background: var(--hr-alert-15); border: 1px solid rgba(255,91,149,.4);
+}
+.gm-rule-n {
+  flex: 0 0 auto; width: 22px; height: 22px; display: grid; place-items: center;
+  border-radius: 50%; background: rgba(255,91,149,.28); color: var(--hr-fg-0);
+  font: 900 12px/1 var(--hr-sans);
+}
+.gm-rule-t { min-width: 0; }
+.gm-rule-t b { display: block; font: 800 12.5px/1.3 var(--hr-sans); color: var(--hr-fg-0); margin-bottom: 4px; }
+.gm-rule-t p { margin: 0; font-size: 12px; line-height: 1.55; color: var(--hr-fg-1); }
+
+/* --- The links. Every one prints its own destination: what you read is where you go,
+       which is the check rule 2 above asks the reader to perform. --- */
+.gm-go { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.gm-go-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 10px 14px; border-radius: var(--hr-radius-md);
+  background: rgba(255,255,255,.035); border: 1px solid var(--hr-line);
+}
+.gm-go-row.is-default {
+  background: color-mix(in srgb, var(--hr-primary) 7%, transparent);
+  border-color: color-mix(in srgb, var(--hr-primary) 30%, transparent);
+}
+.gm-go-row.is-split { align-items: flex-start; }
+.gm-go-name { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font: 800 13px/1.3 var(--hr-sans); color: var(--hr-fg-0); }
+.gm-go-when { font: 600 10.5px/1.3 var(--hr-sans); font-style: normal; color: var(--hr-fg-3); white-space: nowrap; }
+.gm-go-links { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+.gm-go-link {
+  display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
+  padding: 6px 11px; border-radius: var(--hr-radius-pill);
+  background: rgba(255,255,255,.05); border: 1px solid var(--hr-line-strong);
+  transition: transform .15s, border-color .15s, background .15s;
+}
+.gm-go-link:hover { border-color: var(--hr-primary); background: color-mix(in srgb, var(--hr-primary) 10%, transparent); transform: translateY(-1px); }
+.gm-go-link:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; }
+/* The address, set as data rather than as a label. The registrable half is the loud one,
+   because that is the half a lookalike has to change. */
+.gm-go-dom {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px;
+  color: var(--hr-fg-3); word-break: normal;
+}
+.gm-go-dom b { font-weight: 700; color: var(--hr-fg-0); }
+.gm-go-arrow { font-size: 11px; color: var(--hr-primary); }
+.gm-paid-fine { margin: 14px 0 0; font-size: 11px; line-height: 1.55; color: var(--hr-fg-3); }
+
+@media (min-width: 901px) {
+  /* The default card spans the row, so its three facts read as columns rather than as
+     one stack of 900px-wide lines. */
+  .gm-opt.is-default .gm-opt-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; align-items: start; }
+}
+@media (max-width: 900px) {
+  .gm-opts { grid-template-columns: 1fr; }
+  .gm-opt.is-default { grid-column: auto; }
+}
+@media (max-width: 560px) {
+  .gm-go-row, .gm-go-row.is-split { flex-direction: column; align-items: stretch; }
+  .gm-go-links { align-items: stretch; }
+  .gm-go-link { justify-content: space-between; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gm-go-link { transition: none; }
+  .gm-go-link:hover { transform: none; }
+  .gm-region-i > summary::after { transition: none; }
+}
 
 /* ---------- INTERACTIVE GUIDE DEMOS (js/guide-demos.js) ----------
    Scripted replays of the live marketplace inside the walkthrough cards. The stage
@@ -6122,8 +6340,11 @@ a.trade-buy-btn { display: inline-flex; }
 .trade-cashout-card .trade-safety-actions { margin-top: 14px; }
 .trade-cashout-diy { color: var(--hr-fg-3); text-decoration: underline; font-size: 11.5px; }
 .trade-cashout-diy:hover { color: var(--hr-fg-1); }
-.trade-bcard-btn.is-ghost { background: rgba(255,255,255,.06); border: 1px solid var(--hr-line-strong); color: var(--hr-fg-0); margin-bottom: 8px; }
-.trade-bcard-btn.is-ghost:hover { border-color: var(--hr-primary); color: var(--hr-primary); }
+.trade-bcard-btn.is-ghost { background: rgba(255,255,255,.06); border: 1px solid var(--hr-line-strong); color: var(--hr-fg-0); margin-bottom: 8px; box-shadow: none; }
+/* Needs its own background: without one, `.trade-bcard-btn:hover` further down still
+   paints mint, and the mint label on it disappears. Neutral fill keeps the ghost reading
+   as secondary beside the mint primary underneath. */
+.trade-bcard-btn.is-ghost:hover { background: rgba(255,255,255,.12); border-color: var(--hr-primary); color: var(--hr-primary); }
 
 @media (prefers-reduced-motion: reduce) {
   .trade-cashout-opt, .trade-cashout-opt:hover, .trade-cashout-pill, .trade-cashout-pill:hover,
@@ -8898,9 +9119,11 @@ span.hp-statchip-ico { font-size: 17px; line-height: 22px; text-align: center; c
 .cdx-crumbs a:hover { color: var(--accent); }
 .cdx-crumb-here { color: var(--hr-fg-1); }
 
-/* The site-wide `header` rule centres text and pads 70px above, which is right for a
-   page masthead and wrong for every header inside a card. Both of these are cards. */
+/* Two site-wide rules are right for a page and wrong inside a card, and both of these
+   are cards: `header` centres its text and pads 70px above, and `section` pads 40px top
+   and bottom, which stacked 80px of dead air between every block below. */
 .cdx-head, .cdx-sec-h { padding: 0; text-align: left; }
+.cdx-sec { padding: 0; }
 .cdx-head {
   display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
   gap: clamp(20px, 3vw, 40px); align-items: center;
@@ -8958,6 +9181,14 @@ span.hp-statchip-ico { font-size: 17px; line-height: 22px; text-align: center; c
 .cdx-fact dd { margin: 8px 0 0; font: 500 14px/1.35 var(--hr-sans); color: var(--hr-fg-1); }
 .cdx-fact dd b { font-weight: 800; color: var(--hr-fg-0); }
 .cdx-sub { display: block; margin-top: 3px; font: 600 11.5px/1.3 var(--hr-sans); color: var(--hr-fg-3); }
+/* A contract address is 42 characters of hex in a 175px cell, so it wraps and it wraps
+   anywhere. It is also the one fact on a term page a reader can go and check, so it
+   carries a link to the chain's own explorer. */
+.cdx-fact dd { overflow-wrap: anywhere; }
+.cdx-addr { font: 600 11.5px/1.45 var(--hr-mono, ui-monospace, SFMono-Regular, Menlo, monospace); letter-spacing: -.01em; }
+.cdx-addr-l { color: inherit; font-weight: inherit; text-decoration: none;
+  border-bottom: 1px dotted color-mix(in srgb, var(--accent) 60%, transparent); }
+.cdx-addr-l:hover, .cdx-addr-l:focus-visible { color: var(--accent); border-bottom-color: var(--accent); }
 .cdx-dim { color: var(--hr-fg-3); }
 .cdx-mono { font-variant-numeric: tabular-nums; }
 .cdx-rar { display: inline-flex; align-items: center; gap: 7px; }
@@ -9065,3 +9296,526 @@ span.hp-statchip-ico { font-size: 17px; line-height: 22px; text-align: center; c
   .col-card-link::after { transition: none; }
   .col-card-link:hover::after { transform: none; }
 }
+
+/* The codex front door. One box over releases, items, traits and Creature numbers, sitting
+   above the sub-nav so it is there on the archive, the trait showcase and every entity
+   page. Results are links, never filters. */
+.cdx-find-wrap { max-width: 1180px; margin: 0 auto; padding: 26px 24px 0; }
+.cdx-find { position: relative; z-index: 30; }
+.cdx-find-lbl {
+  position: absolute; width: 1px; height: 1px; margin: -1px;
+  padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+.cdx-find-ico {
+  /* Above the input: the input paints its own background and comes after this in the
+     document, so without a layer of its own the icon disappears under it. */
+  position: absolute; left: 17px; top: 50%; transform: translateY(-50%); z-index: 1;
+  font-size: 14px; opacity: .5; pointer-events: none;
+}
+.cdx-find-in {
+  width: 100%; box-sizing: border-box; padding: 14px 18px 14px 44px;
+  border-radius: var(--hr-radius-pill); font: 600 14px/1 var(--hr-sans);
+  color: var(--hr-fg-0); border: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(40,39,45,.5), rgba(20,19,23,.75));
+  backdrop-filter: blur(8px);
+  transition: border-color .2s, box-shadow .2s;
+}
+.cdx-find-in::placeholder { color: var(--hr-fg-4); }
+.cdx-find-in:focus {
+  outline: none; border-color: var(--hr-primary);
+  box-shadow: 0 0 0 3px var(--hr-primary-25);
+}
+
+.cdx-find-list {
+  position: absolute; left: 0; right: 0; top: calc(100% + 8px);
+  max-height: min(64vh, 520px); overflow-y: auto; padding: 8px;
+  border-radius: var(--hr-radius-lg); border: 1px solid var(--hr-line-strong);
+  background: rgba(18,17,21,.97); backdrop-filter: blur(14px);
+  box-shadow: var(--hr-shadow-2);
+}
+.cdx-find-group + .cdx-find-group { margin-top: 6px; border-top: 1px solid var(--hr-line); padding-top: 6px; }
+.cdx-find-g-h {
+  display: flex; align-items: baseline; gap: 8px; padding: 8px 10px 6px;
+  font: 800 10.5px/1 var(--hr-sans); letter-spacing: .08em;
+  text-transform: uppercase; color: var(--hr-fg-3);
+}
+.cdx-find-g-h i { font: 600 10.5px/1 var(--hr-sans); font-style: normal; color: var(--hr-fg-4); text-transform: none; letter-spacing: 0; }
+.cdx-find-row {
+  display: flex; align-items: center; gap: 11px; padding: 8px 10px;
+  border-radius: var(--hr-radius-md); text-decoration: none;
+}
+.cdx-find-row:hover, .cdx-find-row.is-on { background: rgba(255,255,255,.07); }
+.cdx-find-shot {
+  flex: 0 0 auto; width: 38px; height: 38px; overflow: hidden;
+  border-radius: var(--hr-radius-sm); background: rgba(255,255,255,.04);
+}
+.cdx-find-shot img { width: 100%; height: 100%; object-fit: contain; }
+.cdx-find-shot.is-empty { background: rgba(255,255,255,.02); }
+.cdx-find-t { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cdx-find-n { font: 700 13px/1.25 var(--hr-sans); color: var(--hr-fg-0); }
+.cdx-find-m { font: 600 11.5px/1.2 var(--hr-sans); color: var(--hr-fg-3); }
+.cdx-find-none { margin: 0; padding: 20px 12px; text-align: center; font: 600 13px/1.4 var(--hr-sans); color: var(--hr-fg-3); }
+
+@media (max-width: 760px) {
+  .cdx-find-wrap { padding: 18px 16px 0; }
+  .cdx-find-in { padding: 12px 15px 12px 40px; font-size: 16px; }  /* 16px stops iOS zooming on focus */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cdx-find-in { transition: none; }
+}
+
+/* The glossary index and the term pages. A term has no picture, so its page leans on
+   type and on the accent its group carries. */
+.cdx-gloss-g { margin-top: 34px; padding: 0; }   /* the site-wide section padding again */
+.cdx-gloss-g:first-child { margin-top: 26px; }
+.cdx-gloss-g .cdx-sec-h { padding: 0; text-align: left; border-bottom: 1px solid var(--hr-line); padding-bottom: 10px; }
+.cdx-gloss-g .cdx-sec-h h3 { color: var(--accent); }
+.cdx-gloss-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; margin-top: 14px; }
+.cdx-gloss-row {
+  display: flex; flex-direction: column; gap: 5px; padding: 14px 16px;
+  border-radius: var(--hr-radius-lg); text-decoration: none;
+  border: 1px solid var(--hr-line); background: rgba(255,255,255,.03);
+  transition: transform .2s, border-color .2s, background .2s;
+}
+.cdx-gloss-row:hover {
+  transform: translateY(-2px); background: rgba(255,255,255,.06);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.cdx-gloss-t { font: 800 14px/1.25 var(--hr-sans); color: var(--hr-fg-0); }
+.cdx-gloss-p {
+  font: 500 12.5px/1.45 var(--hr-sans); color: var(--hr-fg-3);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* A term page leads with its definition, so the lead carries the weight the fact list
+   carries on the other four kinds. */
+.cdx-lead:only-child, .cdx-intro > .cdx-lead { max-width: 62ch; }
+#codex-view .cdx-title + .cdx-lead { font-size: 16.5px; line-height: 1.6; color: var(--hr-fg-1); }
+
+/* The awkward half. Marked out rather than buried, because it is the part a reader came
+   for once they stopped trusting the one-line answer. */
+.cdx-callout {
+  margin-top: 34px; padding: 18px 20px;
+  border-radius: var(--hr-radius-lg);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  border-left-width: 3px;
+}
+.cdx-callout-h {
+  display: block; margin-bottom: 7px;
+  font: 800 10.5px/1 var(--hr-sans); letter-spacing: .08em;
+  text-transform: uppercase; color: var(--accent);
+}
+.cdx-callout p { margin: 0; font: 500 14px/1.6 var(--hr-sans); color: var(--hr-fg-1); max-width: 68ch; }
+
+/* The paragraph under the one-line definition. A reference entry leads with what the
+   thing is and then says the rest of it, so this reads a step quieter than the lead
+   without dropping to the size of a caption. */
+.cdx-body {
+  margin: 12px 0 0; max-width: 68ch;
+  font: 500 14.5px/1.65 var(--hr-sans); color: var(--hr-fg-2);
+}
+
+/* The dated history. Each line is something the club's own record can date: an archive
+   release, an announcement, a Council decision. The rail makes the order readable at a
+   glance and keeps the dates in one column so they can be scanned without reading. */
+.cdx-time { margin: 0; padding: 0; list-style: none; }
+.cdx-time-r {
+  position: relative;
+  display: grid; grid-template-columns: 122px 1fr; gap: 0 18px;
+  padding: 0 0 16px 20px;
+}
+.cdx-time-r::before {
+  content: ""; position: absolute; left: 0; top: 6px;
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.cdx-time-r::after {
+  content: ""; position: absolute; left: 4px; top: 17px; bottom: -1px;
+  width: 1px; background: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+.cdx-time-r:last-child { padding-bottom: 0; }
+.cdx-time-r:last-child::after { display: none; }
+.cdx-time-d {
+  font: 800 11px/1.5 var(--hr-sans); letter-spacing: .06em;
+  text-transform: uppercase; color: var(--accent);
+  padding-top: 1px;
+}
+.cdx-time-t { font: 500 14px/1.6 var(--hr-sans); color: var(--hr-fg-1); max-width: 66ch; }
+.cdx-time-s {
+  display: block; margin-top: 4px;
+  font: 600 11.5px/1.4 var(--hr-sans); color: var(--hr-fg-3);
+}
+
+@media (max-width: 620px) {
+  .cdx-time-r { grid-template-columns: 1fr; gap: 4px; }
+  .cdx-time-t { max-width: none; }
+}
+
+@media (max-width: 760px) {
+  .cdx-gloss-list { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cdx-gloss-row { transition: none; }
+  .cdx-gloss-row:hover { transform: none; }
+}
+
+/* Glossary links inside prose. The site-wide rule is
+   `a { color: var(--hr-primary); text-decoration: none; font-weight: 700 }`, which is
+   right for a call to action and wrong here twice over: a paragraph with three mint bold
+   words in it reads as a menu, and colour alone as the only signal fails WCAG 1.4.1 for
+   anyone who can't separate mint from white. So these keep the body's own colour and
+   weight and carry a dotted underline instead, the same approach .ann-body a.ann-link
+   already takes for links inside announcement copy. */
+.gloss-link {
+  color: inherit;
+  font-weight: inherit;
+  text-decoration: none;
+  border-bottom: 1px dotted color-mix(in srgb, var(--hr-primary) 60%, transparent);
+  transition: color .15s, border-color .15s;
+}
+.gloss-link:hover,
+.gloss-link:focus-visible {
+  color: var(--hr-primary);
+  border-bottom-color: var(--hr-primary);
+  border-bottom-style: solid;
+}
+.gloss-link:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 3px; border-radius: 2px; }
+
+/* Windows high contrast strips custom colours; the underline has to survive on its own. */
+@media (forced-colors: active) {
+  .gloss-link { border-bottom: 1px dotted currentColor; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gloss-link { transition: none; }
+}
+
+/* ==========================================================================
+   Money views — Add funds and Cash out as dedicated marketplace pages
+   ==========================================================================
+   These two were 460px modals. As pages they share one shell: a header carrying
+   the way out, the flow card on the left, and a "where your money is" rail on
+   the right that the modal never had room for.
+
+   The card itself keeps .trade-safety-card .trade-cashout-card so every rule and
+   every patch selector written for the modal still applies. `.is-view` is the only
+   thing that changes: it widens the card, drops the dialog's 90vh cap, and
+   un-centres the text now that there is a real column to read down.
+
+   One accent per direction, taken from the two pills that already carry those
+   colours in the wallet bar: mint for money coming in, lavender for money going out. */
+.trade-money-view {
+  --accent: var(--hr-primary);
+  --accent-soft: var(--hr-primary-25);
+  display: flex; flex-direction: column; gap: 18px;
+  animation: apply-rise .45s cubic-bezier(.16,.84,.3,1) both;
+}
+.trade-money-view.is-out { --accent: var(--hr-secondary); --accent-soft: rgba(133,97,255,.22); }
+
+/* --- Header: the way out, then what this page is ------------------------- */
+.trade-money-head {
+  position: relative;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  padding: 18px 20px;
+  border: 1px solid var(--hr-line-strong); border-radius: var(--hr-radius-xl);
+  background:
+    radial-gradient(520px 150px at 4% 0%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%),
+    radial-gradient(420px 140px at 96% 100%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%),
+    linear-gradient(180deg, rgba(40,39,45,.66), rgba(20,19,23,.82));
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--hr-shadow-2), inset 0 1px 0 rgba(255,255,255,.06);
+}
+/* The panel's shared surfaces centre their text; a page column reads down the left. */
+.trade-money-head, .trade-money-rail { text-align: left; }
+/* The badge belongs to the page, so the card must not repeat it two inches below. The
+   card keeps its own h3: that one asks the step's question, which is not the page's title. */
+.trade-money-head .apply-pill { align-self: flex-start; }
+.trade-cashout-card.is-view > .apply-pill { display: none; }
+/* Tint the badge with the page's direction, so a cash-out page reads lavender throughout
+   instead of wearing the mint chip that means "money in". */
+.trade-money-view.is-out .trade-money-head .apply-pill {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent);
+}
+/* A page has no backdrop to click, so this is the only way out. It sits in the header
+   rather than in the card so it survives every state the card can be in, including a
+   dead-end quote error, which is exactly when a member most needs it. */
+.trade-money-back {
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  padding: 0 13px; height: 32px; border-radius: var(--hr-radius-pill);
+  background: rgba(255,255,255,.05); border: 1px solid var(--hr-line);
+  font-family: var(--hr-sans); font-weight: 800; font-size: 12.5px; color: var(--hr-fg-1);
+  transition: transform .15s, border-color .15s, color .15s, background .15s;
+}
+.trade-money-back:hover {
+  color: var(--hr-fg-0); border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  transform: translateX(-2px);
+}
+.trade-money-h {
+  font-family: var(--hr-sans); font-weight: 900; font-size: clamp(22px, 3.2vw, 30px);
+  line-height: 1.12; color: var(--hr-fg-0); margin: 0;
+}
+.trade-money-lead {
+  margin: 0; max-width: 66ch; font-size: 14px; line-height: 1.6; color: var(--hr-fg-1);
+}
+
+/* --- The two columns ------------------------------------------------------ */
+/* The card is capped rather than fluid: .trade-cashout-amt is 19px type and
+   .trade-funds-btn is width:100%, so a full-width card turns the amount row into a
+   slab and the CTA into a banner. 520px is the modal's 460 plus breathing room. */
+.trade-money-grid {
+  display: grid; grid-template-columns: minmax(0, 520px) minmax(0, 1fr);
+  gap: 20px; align-items: start;
+}
+.trade-cashout-card.is-view {
+  width: auto; max-width: none;
+  max-height: none; overflow: visible;   /* the dialog's 90vh scroll box has no place here */
+  text-align: left;
+  animation: none;                       /* the wrapper already handled the entrance */
+}
+.trade-cashout-card.is-view .trade-safety-h { margin-top: 0; }
+.trade-cashout-card.is-view .trade-cashout-opts,
+.trade-cashout-card.is-view .trade-bridge-quote { text-align: left; }
+/* The CTA spans the card's full measure on purpose: capping it short of the amount row
+   directly above left the two edges misaligned, which reads as a broken button rather
+   than a considered one. The card's own 520px cap is what keeps it from becoming a banner. */
+.trade-cashout-card.is-view .trade-gas-chip { flex: 0 1 auto; min-width: 64px; }
+
+/* --- The rail: where the money actually is -------------------------------- */
+.trade-money-rail {
+  position: sticky; top: calc(var(--trade-nav-clear, 90px) + 8px);
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 18px 18px 20px;
+  border: 1px solid var(--hr-line-strong); border-radius: var(--hr-radius-xl);
+  background:
+    radial-gradient(300px 140px at 10% 0%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 70%),
+    linear-gradient(180deg, rgba(40,39,45,.66), rgba(20,19,23,.82));
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--hr-shadow-2), inset 0 1px 0 rgba(255,255,255,.06);
+}
+.trade-money-rail-h {
+  font-family: var(--hr-sans); font-weight: 800; font-size: 12px;
+  letter-spacing: .05em; text-transform: uppercase; color: var(--hr-fg-2); margin: 0;
+}
+.trade-money-chaingrp { display: flex; flex-direction: column; gap: 7px; }
+.trade-money-chain {
+  font-family: var(--hr-sans); font-weight: 800; font-size: 12.5px;
+  color: var(--accent); margin: 0;
+}
+.trade-money-bals { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.trade-money-bal {
+  display: flex; align-items: center; gap: 9px;
+  padding: 10px 12px; border-radius: var(--hr-radius-md);
+  background: rgba(0,0,0,.26); border: 1px solid var(--hr-line);
+}
+.trade-money-bal-k { font-size: 12px; color: var(--hr-fg-2); flex: 1; min-width: 0; }
+.trade-money-bal-v {
+  font-family: var(--hr-sans); font-weight: 800; font-size: 13px; color: var(--hr-fg-0);
+  font-variant-numeric: tabular-nums; text-align: right;
+}
+.trade-money-bal .trade-bcoin { flex: 0 0 auto; }
+.trade-money-railarrow {
+  align-self: center; width: 24px; height: 24px; margin: -2px 0;
+  display: grid; place-items: center; border-radius: 50%;
+  background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  color: var(--accent); font-weight: 900; font-size: 13px;
+}
+.trade-money-rail-p { margin: 4px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--hr-fg-3); }
+.trade-money-rail-link {
+  margin-top: 2px; font-family: var(--hr-sans); font-weight: 800; font-size: 12.5px; color: var(--accent);
+}
+.trade-money-rail-link:hover { text-decoration: underline; }
+
+/* --- Narrow screens ------------------------------------------------------- */
+/* The rail goes BELOW the card, not above it: on a phone the first thing a member
+   wants is the control they came for, not a summary of it. */
+@media (max-width: 980px) {
+  .trade-money-grid { grid-template-columns: minmax(0, 1fr); }
+  .trade-money-rail { position: static; }
+}
+@media (max-width: 600px) {
+  .trade-money-head { padding: 15px 15px 17px; }
+  .trade-money-lead { font-size: 13.5px; }
+}
+/* On a phone "ETH on Immutable zkEVM" wraps to three lines and squeezes the figure into a
+   sliver. Give the row two lines of its own instead. */
+@media (max-width: 430px) {
+  .trade-money-bal { flex-wrap: wrap; row-gap: 2px; }
+  .trade-money-bal-k { flex: 1 1 100%; order: 1; }
+  .trade-money-bal-v { order: 2; flex: 1; text-align: left; font-size: 14px; }
+  .trade-money-bal .trade-bcoin { order: 3; }
+}
+/* Now that these two pills are primary page navigation rather than a modal trigger,
+   they need a thumb-sized band like every other nav control. */
+@media (max-width: 1150px) {
+  .trade-cashout-pill, .trade-topup-pill { min-height: 46px; padding: 0 16px; font-size: 13px; }
+  .trade-money-back { min-height: 46px; padding: 0 18px; font-size: 13.5px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trade-money-view { animation: none; }
+  .trade-money-back { transition: none; }
+  .trade-money-back:hover { transform: none; }
+}
+
+/* The panel's standing fine print already explains custody and names the cash-out route
+   picker, so under a money view it repeats the page's own foot line back at the reader.
+   The views carry their own custody sentence; this one stands down while they are up. */
+.trade-wrap:has(.trade-money-view) > .apply-fineprint { display: none; }
+
+/* --- Line icons (js/market/core/icons.js) ---------------------------------------------
+   The marketplace used to label things with emoji: 💎 for ETH, ⛽ for gas, 🦊 for MetaMask.
+   On a screen that asks a member to sign a real transaction that reads as a mock-up, and
+   every platform draws them differently, so the same page looked like three designs. They
+   are now one 24x24 stroke set in `currentColor`, which is also what lets a single icon
+   inherit mint on Add funds and lavender on Cash out.
+
+   Sizing: an SVG carries its own width/height and ignores font-size, so the slots that
+   sized their glyph that way (the tile placeholders, the empty states) get `1em` here —
+   that keeps every existing per-context font-size override working untouched. Everywhere
+   else the call site passes the pixel size.
+
+   The rest of this block exists for one reason: an inline SVG sits on the text baseline and
+   reserves descender space under itself, which dropped every status glyph a few pixels
+   below the sentence beside it. Centring the slot is the fix. */
+.trade-ico { display: block; flex: 0 0 auto; }
+.trade-ico-coin { display: block; flex: 0 0 auto; border-radius: 50%; }
+
+.trade-status > span:first-child,
+.trade-bridgebar > span:first-child,
+.trade-check-row > span:first-child,
+.trade-mmwarn > span:first-child,
+.apply-alert > span:first-child,
+.trade-sold-top > span:first-child,
+.trade-cashout-warn > span:first-child,
+.trade-funds-h > span:first-child,
+.trade-cashout-opt-ico,
+.trade-cashout-opt-arrow,
+.trade-instant-ico,
+.trade-confirm-ico,
+.trade-sell-sel-ph,
+.trade-myoffer-warn,
+.trade-hp-wlock,
+.trade-bar-bal > .trade-ico,
+.gdemo-app-linked > .trade-ico,
+.gdemo-perkchips span > .trade-ico { display: inline-grid; place-items: center; flex: 0 0 auto; }
+
+/* Slots whose size comes from the cascade, not the call site. */
+.trade-tile-noimg .trade-ico,
+.trade-grid-state-ico .trade-ico,
+.apply-state-ico .trade-ico { width: 1em; height: 1em; }
+.trade-grid-state-ico, .apply-state-ico { display: flex; justify-content: center; }
+/* The emoji brought their own colour; a stroke icon takes the surface's. Muted for the
+   "nothing here" states, so the sentence under it still leads. */
+.trade-grid-state-ico { color: var(--hr-fg-3); }
+.apply-state-ico { color: var(--hr-fg-2); }
+.apply-state-ico.is-brand img { display: block; }
+.trade-tile-noimg .trade-ico { opacity: .45; }
+/* A 20px check in a 52px badge reads as an afterthought. */
+.trade-bcard-badge .trade-ico { width: 26px; height: 26px; }
+
+/* Chips that pair an icon with a word: the gap the emoji gave for free. */
+.trade-bar-bal, .gdemo-app-linked, .gdemo-perkchips span { display: inline-flex; align-items: center; gap: 5px; }
+
+/* The wallet-bar pills sit at 12px text; hold the icon a touch above it so the pair reads
+   as one object rather than an icon with a caption. */
+.trade-cashout-pill > span:first-child { display: inline-grid; place-items: center; flex: 0 0 auto; }
+
+@media (prefers-reduced-motion: reduce) {
+  .trade-ico, .trade-ico-coin { transition: none; }
+}
+
+/* The rail's "where to sell it" link is icon-plus-word: keep the chevron on the word's line
+   rather than letting it wrap alone onto the next one. */
+.trade-money-rail-link { display: inline-flex; align-items: center; gap: 4px; }
+/* A chain group we genuinely cannot read (the wallet is on the other network). Dimmed, with
+   the reason stated, so two em dashes don't get read as "you have nothing here". */
+.trade-money-chaingrp.is-unknown .trade-money-bals { opacity: .55; }
+.trade-money-chain-note {
+  margin: 6px 2px 0; font-size: 11px; line-height: 1.5; color: var(--hr-fg-3);
+}
+
+/* --- Money-view buttons ----------------------------------------------------------------
+   `.trade-funds-btn` never reset the browser's default button border, so every <button>
+   wearing it carried `2px outset white` — the pale bevel ring around the orange CTA — while
+   the <a> version of the same class had none. Same class, two different widths and two
+   different edges depending on the tag. */
+.trade-funds-btn { border: 0; box-sizing: border-box; gap: 8px; }
+
+/* In the money views the primary action and its Back button were two full-width slabs of
+   near-equal weight, so "Back" read as loud as "Move to Ethereum with MetaMask". The action
+   keeps the full width; Back steps down to a quiet, self-sized pill under it. */
+.trade-cashout-card.is-view .trade-funds-btn {
+  padding: 13px 20px; font-size: 14.5px;
+  box-shadow: 0 6px 16px rgba(255, 92, 22, .28);
+}
+.trade-cashout-card.is-view .trade-funds-btn:hover { box-shadow: 0 10px 22px rgba(255, 92, 22, .4); }
+.trade-cashout-card.is-view .trade-safety-actions { justify-content: center; }
+.trade-cashout-card.is-view .trade-safety-actions .apply-btn-ghost {
+  flex: 0 0 auto; min-width: 0; width: auto;
+  padding: 9px 26px; font-size: 13px; font-weight: 700;
+  background: transparent; color: var(--hr-fg-2);
+}
+.trade-cashout-card.is-view .trade-safety-actions .apply-btn-ghost:hover {
+  background: rgba(255, 255, 255, .06); color: var(--hr-fg-0);
+}
+/* A Back sitting alone next to a primary CTA elsewhere in the card keeps its pair layout. */
+.trade-cashout-card.is-view .trade-safety-actions .trade-safety-ok { flex: 1 1 auto; }
+
+/* Funding's "Where to get your ETH" reuses the cash-out section's classes wholesale, but it
+   compares two ways in rather than four ways out. Two cards in a three-column grid leave a
+   hole; this is the only rule the whole section needs. */
+.gm-opts.is-two { grid-template-columns: repeat(2, 1fr); }
+/* In the four-way cash-out grid the featured card spans the row. Here there are only two,
+   and a spanning card would stack them instead of comparing them. It keeps the mint border
+   and the badge; it just stops hogging the row. */
+.gm-opts.is-two .gm-opt.is-default { grid-column: auto; }
+/* Same reason: three fact columns need the full row, and this card is now half of one. */
+@media (min-width: 901px) {
+  .gm-opts.is-two .gm-opt.is-default .gm-opt-facts { display: flex; }
+}
+/* Collapse where the rest of the section collapses, not at some breakpoint of its own. */
+@media (max-width: 900px) { .gm-opts.is-two { grid-template-columns: 1fr; } }
+/* The card and bank marks here are line icons, not brand logos, so they take the colour of
+   the tile the way the <img> logos carry their own. */
+.gm-opt-ico svg { width: 100%; height: 100%; display: block; color: var(--hr-fg-2); }
+.gm-opt.is-default .gm-opt-ico svg { color: var(--hr-primary); }
+
+/* --- Funding source picker ---------------------------------------------------------------
+   Four chips above the amount box: which chain the ETH is coming from, and what's on each.
+   Deliberately not the cash-out's two-up .trade-route-pick grid — that compares two ROUTES
+   with three facts each, this picks one of four places and needs to stay one line tall. */
+.trade-src-picks {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 0 0 14px;
+}
+.trade-src-chip {
+  display: flex; flex-direction: column; gap: 2px; align-items: flex-start; cursor: pointer;
+  padding: 9px 10px; border-radius: var(--hr-radius-md);
+  background: rgba(255, 255, 255, .04); border: 1px solid var(--hr-line); color: var(--hr-fg-1);
+  font: inherit; text-align: left;
+  transition: border-color .15s, background .15s, transform .15s;
+}
+.trade-src-chip:hover:not([disabled]) { border-color: var(--hr-primary); transform: translateY(-1px); }
+.trade-src-chip[disabled] { opacity: .55; cursor: default; }
+.trade-src-chip.is-on {
+  background: rgba(81, 255, 165, .1);
+  border-color: color-mix(in srgb, var(--hr-primary) 55%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+.trade-src-net { font: 800 11.5px/1.25 var(--hr-sans); color: var(--hr-fg-0); }
+.trade-src-chip.is-on .trade-src-net { color: var(--hr-primary); }
+.trade-src-bal { font-size: 11px; color: var(--hr-fg-3); font-variant-numeric: tabular-nums; }
+/* Four chips need ~72px each to keep "Arbitrum One" on two lines rather than three. */
+@media (max-width: 620px) {
+  .trade-src-picks { grid-template-columns: repeat(2, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trade-src-chip, .trade-src-chip:hover:not([disabled]) { transition: none; transform: none; }
+}
+.trade-src-note { margin: -8px 0 12px; font-size: 11.5px; line-height: 1.5; color: var(--hr-fg-3); }
