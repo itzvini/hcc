@@ -416,6 +416,24 @@ function initStepper(nav) {
 
 document.querySelectorAll('.wt-nav').forEach(initStepper);
 
+// Glossary links for prose that lives inside a collapsed <details> (the guide's option
+// accordions, the region notes): the decorator skips anything with no client rects, so
+// those bodies are invisible to it until they open. 'toggle' doesn't bubble — capture it.
+document.addEventListener('toggle', e => {
+  if (e.target instanceof HTMLDetailsElement && e.target.open) linkGlossaryTerms(e.target);
+}, true);
+
+// Chromium keeps :focus-visible on a <summary> after a plain mouse click, so the focus
+// ring lingers on a card someone just closed and reads as a broken border. Tag
+// pointer-driven focus; the CSS shows the ring only when the tag is absent (keyboard).
+document.addEventListener('pointerdown', e => {
+  const sum = e.target instanceof Element && e.target.closest('summary');
+  if (sum) sum.classList.add('is-pointer');
+}, true);
+document.addEventListener('focusout', e => {
+  if (e.target instanceof Element && e.target.matches('summary')) e.target.classList.remove('is-pointer');
+}, true);
+
 // In-card collection toggle (the marketplace walkthrough's Creatures ⇄ LAND switch).
 // Scoped to its own card so it never clashes with the steppers or the live Trade panel.
 document.querySelectorAll('[data-mkt-toggle]').forEach(group => {
