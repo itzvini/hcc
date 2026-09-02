@@ -5551,6 +5551,36 @@ function leaveFundsState() {
 const fundsSigning = () => cashOutSigning() || addFundsSigning();
 
 /**
+ * Hand off to Guides › Marketplace › Cash out, landing on the element with `id`. Pure
+ * navigation: pushState plus a synthetic popstate reuses app.js's own router (route() is
+ * synchronous), so this needs no import and no reload.
+ *
+ * The scroll is done by hand (scrollTo, not scrollIntoView) because Chromium ignores
+ * scroll-margin when the scrollIntoView target is a <details> element, which parks the
+ * row's title under the sticky nav. The panel can also finish its layout AFTER the scroll
+ * (the demo media replaces its placeholder late), so once things settle an instant
+ * re-scroll corrects any drift.
+ */
+function gotoCashoutGuide(id) {
+  if (onFundsView()) leaveFundsState();
+  history.pushState(null, '', '/guides/marketplace/cashout');
+  window.dispatchEvent(new PopStateEvent('popstate'));
+  const scrollToEl = (el, behavior) => {
+    const margin = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+    window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - margin, behavior });
+  };
+  const smooth = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const first = document.getElementById(id);
+  if (first) scrollToEl(first, smooth ? 'smooth' : 'instant');
+  setTimeout(() => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const margin = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+    if (Math.abs(el.getBoundingClientRect().top - margin) > 24) scrollToEl(el, 'instant');
+  }, 950);
+}
+
+/**
  * Open one of the money views. `opts.step` lets an entry point that has already stated its
  * intent skip the chooser. `opts.updateUrl === false` is for the router, which owns the
  * address bar itself and must not be fought over it.
@@ -7197,11 +7227,18 @@ function onClick(e) {
     case 'cashout-howto': {
       // The done card also renders inside the buy modal's funds panel, so close that too.
       if (modalToken) closeModal();
-      if (onFundsView()) leaveFundsState();
-      history.pushState(null, '', '/guides/marketplace/cashout');
-      window.dispatchEvent(new PopStateEvent('popstate'));
-      const smooth = !matchMedia('(prefers-reduced-motion: reduce)').matches;
-      document.getElementById('gm-paid')?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' });
+      gotoCashoutGuide('gm-paid');
+      return;
+    }
+    // Same hand-off for a USDT refund. The payout lands on Ethereum mainnet, so the in-site
+    // mover (zkEVM ETH) has nothing to do — the guide's USDT row is the whole answer. Opens
+    // the row so the reader doesn't land on a collapsed page. Not in WRITE_ACTS, same
+    // reason as cashout-howto.
+    case 'cashout-usdt': {
+      if (modalToken) closeModal();
+      const row = document.getElementById('gm-usdt');
+      if (row) row.open = true;
+      gotoCashoutGuide(row ? 'gm-usdt' : 'gm-paid');
       return;
     }
     case 'cancel-offer':   return handleCancelOffer(target.dataset.offer);

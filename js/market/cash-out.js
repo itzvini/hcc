@@ -135,6 +135,14 @@ function cashoutIntentInner() {
         <span class="trade-cashout-opt-tx"><b>${esc(t('trade.cashout.opt.keep.h'))}</b><span>${esc(t('trade.cashout.opt.keep.p'))}</span></span>
         <span class="trade-cashout-opt-arrow" aria-hidden="true">${ico('chevronRight', 16)}</span>
       </button>
+      <button class="trade-cashout-opt" data-act="cashout-usdt" type="button">
+        ${/* Refund-program payouts (USDT on Ethereum mainnet) never touch zkEVM, so the
+              in-site mover has nothing to do for them — the guide's USDT row is the whole
+              answer, and this hand-off opens it directly. */''}
+        <span class="trade-cashout-opt-ico" aria-hidden="true">${ico('receipt', 22)}</span>
+        <span class="trade-cashout-opt-tx"><b>${esc(t('trade.cashout.opt.usdt.h'))}</b><span>${esc(t('trade.cashout.opt.usdt.p'))}</span></span>
+        <span class="trade-cashout-opt-arrow" aria-hidden="true">${ico('chevronRight', 16)}</span>
+      </button>
     </div>`;
 }
 // Quote-less fallback (Squid not configured / unavailable): the old step guide with the

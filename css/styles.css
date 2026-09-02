@@ -3313,6 +3313,11 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
 .gm-region-i > summary { padding: 10px 14px; font: 800 12.5px/1.3 var(--hr-sans); }
 .gm-region-i > summary::after { font-size: 1.1rem; }
 .gm-region-i > p { padding: 0 14px 13px; font-size: 12px; line-height: 1.55; }
+/* The USDT row borrows the region-note chrome and the numbered guide-steps chips,
+   sized down to fit the compact stage. */
+.gm-usdt { scroll-margin-top: var(--nav-clear); }  /* the marketplace's cashout-usdt hand-off lands here */
+.gm-usdt-steps { margin: 0; padding: 0 14px 14px; }
+.gm-usdt-steps li { font-size: 12px; line-height: 1.55; padding: 10px 13px 10px 42px; }
 
 /* --- The two rules. They sit above the links on purpose: no anchor in this section is
        reachable without scrolling past them. One alert surface, hairline between rules,
