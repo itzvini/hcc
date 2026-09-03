@@ -2188,10 +2188,10 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
             <p data-i18n="gm.paid.usdt.intro">Club refunds are paid in USDT on Ethereum, sent to the wallet that returned the assets. That's good news: USDT is a dollar coin, so 210 USDT is worth about 210 dollars today, next week and next month. Your refund doesn't ride the crypto market while you decide, there's no clock on selling it, and every route above takes it at close to face value. Here's the trip, step by step.</p>
             <ol class="guide-steps gm-usdt-steps">
               <li data-i18n="gm.paid.usdt.s1">Switch MetaMask to Ethereum. That's the network refunds arrive on, and yours shows as a USDT balance under your tokens, usually within five business days of your transfer. Got USDT from somewhere else instead? Check the network picker first: coins on Tron, Solana or another network take a different road, and these steps fit Ethereum only.</li>
-              <li data-i18n="gm.paid.usdt.s2">Ignore copycat tokens. Scammers watch these payouts and send a fake coin also named "USDT" minutes after the real one, so a block explorer may show your refund twice. The balance MetaMask shows on its own is the real one. Never open a website a strange token points you to, and never swap or approve a coin you didn't expect.</li>
+              <li data-i18n="gm.paid.usdt.s2">Ignore copycat tokens. Scammers watch these payouts and send a fake coin also named "USDT" minutes after the real one, so a block explorer may show your refund twice. The balance MetaMask shows on its own is the real one. They strike again the moment you send: a fake token fakes a second send from your wallet to an address that starts and ends like the real one. Never open a website a strange token points you to, never swap or approve a coin you didn't expect, and never copy an address from your history.</li>
               <li data-i18n="gm.paid.usdt.s3">Keep a little ETH in the same wallet. Moving USDT costs a small fee paid in ETH, so with zero ETH the coins can't move at all. A few dollars' worth is plenty.</li>
               <li data-i18n="gm.paid.usdt.s4">The easy route is the same sell page as for ETH: portfolio.metamask.io/sell, on a computer. Pick USDT as the coin to sell and compare the offers. It quoted mainnet USDT when we checked on 30 August 2026, at about 3% under face value.</li>
-              <li data-i18n="gm.paid.usdt.s5">The cheap route is an exchange, and all three above take USDT. On the deposit screen pick USDT first, then the network, and it must say Ethereum or ERC-20 to match your wallet. Kraken alone offers eighteen networks for USDT, which is exactly how picking by eye loses the coins. Send a small test before the rest.</li>
+              <li data-i18n="gm.paid.usdt.s5">The cheap route is an exchange, and all three above take USDT. On the deposit screen pick USDT first, then the network, and it must say Ethereum or ERC-20 to match your wallet. Kraken alone offers eighteen networks for USDT, which is exactly how picking by eye loses the coins. Send a small test before the rest, and paste the address fresh from the exchange for the rest. Your history is where the fakes live.</li>
               <li data-i18n="gm.paid.usdt.s6">Once it lands, sell the USDT for your currency (near 1:1, since it's a dollar coin) and withdraw to your bank the way the cards above describe.</li>
             </ol>
           </details>
@@ -2541,12 +2541,18 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
             <div class="scam-block scam-how">
               <h5 data-i18n="guide.scam.l.how">How it works</h5>
               <p data-i18n="guide.scam.t9.how">The club's refund program pays in real USDT on Ethereum. Scammers watch those payouts on-chain and, minutes later, send the same wallets a worthless copy: a token with the same name and the same amount. On a block explorer the two look identical, so it reads like a second refund. The copy exists to make you touch it. Trying to sell, swap or "claim" it leads to a site whose approval hands your wallet over. We've watched this shadow real refund payouts, about fifteen minutes behind each one.</p>
+              <!-- Second act, seen live 2 Sep 2026: 12 seconds after a refunded member sent a
+                   1 USDT test, a homoglyph token ("USDߠ", 0xAB531C00…a1eA) emitted a spoofed
+                   send FROM their wallet to a lookalike of the real recipient (same last four
+                   characters, same amount). Address poisoning aimed at the "rest" transfer. -->
+              <p data-i18n="guide.scam.t9.how2">There's a second act. The moment you send real USDT anywhere, even a one-dollar test to an exchange, a fake token fakes a send from your wallet to an address that starts and ends like the real one. Your history now shows two sends. Copy the wrong one for the rest and it's gone for good. We watched this hit a refunded member twelve seconds after their test.</p>
             </div>
             <div class="scam-block scam-flags">
               <h5 data-i18n="guide.scam.l.flags">Red flags</h5>
               <ul>
                 <li data-i18n="guide.scam.t9.f1">Your refund shows twice on a block explorer, but MetaMask lists it once.</li>
                 <li data-i18n="guide.scam.t9.f2">A "USDT" balance pushes you toward a website, or a swap you didn't start.</li>
+                <li data-i18n="guide.scam.t9.f3">Right after you send USDT, a second send you never made appears in your history, to an address that starts and ends like the real one.</li>
               </ul>
             </div>
             <div class="scam-block scam-do">
@@ -2554,6 +2560,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
               <ul>
                 <li data-i18n="guide.scam.t9.d1">Trust the balance MetaMask shows on its own. That's the real USDT, and the double is the fake.</li>
                 <li data-i18n="guide.scam.t9.d2">Don't sell, swap or approve the copy. It can't hurt you sitting there. Then cash out the real one with the USDT steps in the Marketplace guide.</li>
+                <li data-i18n="guide.scam.t9.d3">When you send the rest, don't copy the address from your history. Paste it fresh from the exchange's deposit screen and check the whole thing, middle included.</li>
               </ul>
             </div>
           </div>

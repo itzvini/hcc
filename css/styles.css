@@ -8132,6 +8132,9 @@ a.ann-embed-title:hover { color: var(--hr-secondary); }
   margin-bottom: 7px; display: inline-flex; align-items: center; gap: 6px;
 }
 .scam-block p { font-size: 13.5px; color: var(--hr-fg-1); line-height: 1.55; }
+/* The FAQ-wide `details p { padding: 0 22px 20px }` reaches in here; a card with two
+   paragraphs would otherwise open a 20px hole between them. */
+.scam-block p:not(:last-child) { padding-bottom: 8px; }
 .scam-block ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
 .scam-block li { position: relative; padding-left: 20px; font-size: 13.5px; color: var(--hr-fg-1); line-height: 1.5; }
 .scam-block li::before { position: absolute; left: 0; top: 0; font-weight: 900; }
