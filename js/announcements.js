@@ -15,6 +15,8 @@ const root = () => document.getElementById('announcements-app');
 
 let data = null;      // /api/announcements payload | { error } | null while loading
 let revealed = false; // entrance animation plays once
+let openId = null;    // the announcement a permalink asked for, or null for the feed
+let single = null;    // one fetched by id, for a post that has scrolled off the feed
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c =>
@@ -80,16 +82,20 @@ function fmtDiscordTs(unix, style) {
 // Drop a leading line that's nothing but Discord pings (the "@role @role" / "@everyone"
 // header ping most announcements open with). Website readers aren't being pinged, so it's
 // pure noise up top. Only the first such line is removed; real content is untouched.
+// A run of pings at the very start of the post. Only at the start: a ping inside a
+// sentence names someone and belongs in the text.
+const LEADING_PINGS = /^(?:\s*(?:<@[!&]?\d+>|<#\d+>|@everyone|@here))+\s*/;
+
 function stripLeadingPingLine(raw) {
   let lines = String(raw).split('\n');
   while (lines.length && lines[0].trim() === '') lines.shift();
   if (lines.length) {
-    const stripped = lines[0]
-      .replace(/<@[!&]?\d+>/g, '')
-      .replace(/<#\d+>/g, '')
-      .replace(/@everyone|@here/g, '')
-      .trim();
-    if (stripped === '') lines.shift();
+    const rest = lines[0].replace(LEADING_PINGS, '').trim();
+    // The club's posts usually open "<@&role> <@&role> ## Heading" on ONE line. Dropping
+    // the line whole took the heading with it; keeping it whole left the heading mid-line,
+    // where the markdown pass can't see it, so "## Heading" printed as text.
+    if (rest === '') lines.shift();
+    else lines[0] = rest;
   }
   while (lines.length && lines[0].trim() === '') lines.shift();
   return lines.join('\n');
@@ -233,7 +239,13 @@ function embedsNode(embeds, mentions) {
     </div>`).join('');
 }
 
-function card(a, i) {
+// Every card carries its own address. The path is built by the server and handed over in
+// the feed, so the browser never derives a second version of it that could drift.
+function permalink(a) {
+  return a.path || `/announcements/${encodeURIComponent(a.id)}`;
+}
+
+function card(a, i, { single = false } = {}) {
   const editedChip = a.editedAt
     ? `<span class="ann-edited" title="${esc(fmtFull(a.editedAt))}">${esc(t('ann.edited'))}</span>` : '';
   const rendered = a.content ? renderContent(a.content, a.mentions || {}, { stripLeadingPings: true }) : '';
@@ -247,7 +259,9 @@ function card(a, i) {
           <span class="ann-author">${esc(a.author.name)}</span>
           <span class="ann-sub">
             <span class="ann-badge">${esc(t('ann.badge'))}</span>
-            <time class="ann-when" datetime="${esc(a.postedAt || '')}" title="${esc(fmtFull(a.postedAt))}">${esc(fmtRelative(a.postedAt))}</time>
+            <a class="ann-when" href="${esc(permalink(a))}" title="${esc(t('ann.permalink'))}">
+              <time datetime="${esc(a.postedAt || '')}">${esc(fmtRelative(a.postedAt))}</time>
+            </a>
             ${editedChip}
           </span>
         </div>
@@ -260,6 +274,10 @@ function card(a, i) {
           <span class="ann-discord-logo" aria-hidden="true">${DISCORD_SVG}</span>
           <span>${esc(t('ann.viewon'))}</span>
         </a>
+        <span class="ann-foot-links">
+          ${single ? '' : `<a class="ann-permalink" href="${esc(permalink(a))}">${esc(t('ann.open'))}</a>`}
+          <button class="ann-copy" type="button" data-copy="${esc(permalink(a))}">${esc(t('ann.copy'))}</button>
+        </span>
       </div>
     </article>`;
 }
@@ -304,6 +322,59 @@ function listView(d) {
     </div>`;
 }
 
+// One announcement on its own page. The feed is still the whole payload, so the
+// neighbours either side come free and reading through the club's posts in order works
+// the same way it does on a release page in the archive.
+function singleView(d) {
+  const list = (d.announcements || []).filter(hasRenderable);
+  const at = list.findIndex(a => String(a.id) === String(openId));
+  // Older than the feed's window, but the server found it. No neighbours to offer, since
+  // the posts either side of it are not loaded either.
+  if (at < 0 && single && String(single.id) === String(openId) && hasRenderable(single)) {
+    if (location.pathname !== permalink(single)) history.replaceState(null, '', permalink(single));
+    return `
+      <div class="ann-topbar" data-reveal>
+        <a class="ann-back" href="/announcements">${esc(t('ann.back'))}</a>
+        ${channelCta(d)}
+      </div>
+      <div class="ann-feed is-single" data-reveal>${card(single, 0, { single: true })}</div>`;
+  }
+  if (at < 0) {
+    return `
+      <div class="ann-empty" data-reveal>
+        <div class="apply-aurora" aria-hidden="true"></div>
+        <div class="ann-empty-ico" aria-hidden="true"><img src="/img/ui/megaphone.png" alt="" /></div>
+        <h4>${esc(t('ann.gone.h'))}</h4>
+        <p>${esc(t('ann.gone.p'))}</p>
+        <a class="apply-btn-ghost ann-back" href="/announcements">${esc(t('ann.back'))}</a>
+      </div>`;
+  }
+  const a = list[at];
+  // Land the readable address in the bar, whichever form was asked for: a bare id, or a
+  // slug from before the post was edited. The id resolved it either way.
+  const canonical = permalink(a);
+  if (location.pathname !== canonical) history.replaceState(null, '', canonical);
+  // The feed is newest first, so the one before this in the list is the newer post.
+  const newer = list[at - 1];
+  const older = list[at + 1];
+  const step = (item, isNewer) => `
+    <a class="ann-step${isNewer ? ' is-newer' : ''}" href="${esc(permalink(item))}">
+      <span class="ann-step-dir">${esc(t(isNewer ? 'ann.newer' : 'ann.older'))}</span>
+      <span class="ann-step-t">${esc(item.title || fmtFull(item.postedAt))}</span>
+    </a>`;
+  return `
+    <div class="ann-topbar" data-reveal>
+      <a class="ann-back" href="/announcements">${esc(t('ann.back'))}</a>
+      ${channelCta(d)}
+    </div>
+    <div class="ann-feed is-single" data-reveal>
+      ${card(a, 0, { single: true })}
+    </div>
+    ${(newer || older) ? `<nav class="ann-steps" data-reveal aria-label="${esc(t('ann.nearby'))}">
+      ${newer ? step(newer, true) : ''}${older ? step(older, false) : ''}
+    </nav>` : ''}`;
+}
+
 function errorView() {
   return `
     <div class="ann-card ann-error" data-reveal>
@@ -314,6 +385,22 @@ function errorView() {
 
 function bind(el) {
   el.querySelector('#ann-retry')?.addEventListener('click', () => loadAnnouncements(true));
+  // Copy the whole address, not the path: what gets pasted has to work in Discord.
+  el.querySelectorAll('.ann-copy').forEach(btn => btn.addEventListener('click', async () => {
+    const url = location.origin + btn.dataset.copy;
+    try {
+      await navigator.clipboard.writeText(url);
+      btn.textContent = t('ann.copied');
+      btn.classList.add('is-done');
+      setTimeout(() => { btn.textContent = t('ann.copy'); btn.classList.remove('is-done'); }, 1800);
+    } catch {
+      // Clipboard refused (an insecure origin, or the reader said no). Select it instead,
+      // so copying by hand is one keystroke rather than a retype.
+      const box = document.createElement('input');
+      box.value = url; box.className = 'ann-copy-fallback';
+      btn.after(box); box.select();
+    }
+  }));
   // Spoilers reveal on click/enter.
   el.querySelectorAll('.ann-spoiler').forEach(sp => {
     sp.setAttribute('role', 'button');
@@ -324,13 +411,30 @@ function bind(el) {
   });
 }
 
+// The tab keeps its heading on a single post, because the post is still part of that
+// section. Only the lead steps aside: "every announcement, mirrored here" describes the
+// feed, and above one post it describes something the reader is not looking at.
+function setIntro(hidden) {
+  const panel = document.getElementById('panel-announcements');
+  panel?.querySelectorAll('[data-ann-intro]').forEach(n => { n.hidden = hidden; });
+}
+
 function render() {
   const el = root();
   if (!el || data === null) return;
   el.setAttribute('aria-busy', 'false');
-  el.innerHTML = data.error ? errorView() : listView(data);
+  el.innerHTML = data.error ? errorView() : openId ? singleView(data) : listView(data);
   bind(el);
+  setIntro(!!openId && !data.error);
   if (!data.error) revealed = true;
+  // A shared link should arrive with the post's own name in the tab, not the feed's.
+  if (!data.error && openId) {
+    const one = (data.announcements || []).find(a => String(a.id) === String(openId)) || single;
+    if (one && one.title) {
+      const site = document.querySelector('meta[property="og:site_name"]')?.content || '';
+      document.title = site ? `${one.title} · ${site}` : one.title;
+    }
+  }
 }
 
 export async function loadAnnouncements(showSpinner = true) {
@@ -352,4 +456,25 @@ export async function loadAnnouncements(showSpinner = true) {
 // Re-render with cached data after a language switch (relative times + labels refresh).
 export function rerenderAnnouncements() {
   if (data !== null) render();
+}
+
+// Open one announcement, or the feed when id is null. Called by the router on every
+// /announcements address, including back and forward.
+export async function openAnnouncement(id) {
+  const next = id ? String(id) : null;
+  const changed = next !== openId;
+  openId = next;
+  if (data === null) { await loadAnnouncements(); }      // the feed answers most links
+  else if (changed) render();
+  if (!openId || data?.error) return;
+  const inFeed = (data.announcements || []).some(a => String(a.id) === String(openId));
+  if (inFeed || (single && String(single.id) === String(openId))) return;
+  // Not in the feed's window. The server can still find it, and until it answers the
+  // reader sees the "not here" card rather than a spinner over the whole tab.
+  try {
+    const res = await fetch(`/api/announcements/${encodeURIComponent(openId)}`,
+      { headers: { Accept: 'application/json' } });
+    single = res.ok ? (await res.json()).announcement : null;
+  } catch { single = null; }
+  if (single) render();
 }

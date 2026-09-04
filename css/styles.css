@@ -7999,6 +7999,72 @@ a.ann-embed-title:hover { color: var(--hr-secondary); }
 .ann-discord-logo { display: inline-flex; }
 .ann-discord-logo svg { width: 20px; height: 15px; display: block; fill: currentColor; }
 
+/* Every card is now a page of its own, so the footer holds two things: where the post
+   came from, and how to send someone to it. The link controls sit right, away from the
+   Discord link, so the row reads source on one side, address on the other. */
+.ann-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ann-foot-links { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
+.ann-permalink, .ann-copy {
+  font: 700 12.5px/1 var(--hr-sans); color: var(--hr-fg-3);
+  background: transparent; border: 1px solid var(--hr-line); border-radius: 999px;
+  padding: 7px 13px; cursor: pointer; text-decoration: none;
+  transition: color .2s, border-color .2s, background .2s;
+}
+.ann-permalink:hover, .ann-copy:hover,
+.ann-permalink:focus-visible, .ann-copy:focus-visible {
+  color: var(--hr-primary); border-color: color-mix(in srgb, var(--hr-primary) 45%, transparent);
+  background: color-mix(in srgb, var(--hr-primary) 8%, transparent);
+}
+.ann-copy.is-done { color: var(--hr-primary); border-color: var(--hr-primary); }
+.ann-copy-fallback {
+  width: 220px; margin-left: 8px; padding: 6px 10px;
+  font: 600 12px/1 var(--hr-sans); color: var(--hr-fg-1);
+  background: var(--hr-bg-2); border: 1px solid var(--hr-line-strong); border-radius: 8px;
+}
+
+/* The timestamp is the permalink. It keeps the muted weight it had as plain text: a
+   card with a mint link in its header would pull the eye off the announcement. */
+a.ann-when { color: inherit; text-decoration: none; border-bottom: 1px dotted transparent; }
+a.ann-when:hover, a.ann-when:focus-visible {
+  color: var(--hr-fg-1); border-bottom-color: color-mix(in srgb, var(--hr-fg-1) 45%, transparent);
+}
+
+.ann-back {
+  font: 700 13px/1 var(--hr-sans); color: var(--hr-fg-2); text-decoration: none;
+  display: inline-flex; align-items: center; gap: 7px;
+}
+.ann-back::before { content: "‹"; font-size: 17px; line-height: 1; }
+.ann-back:hover { color: var(--hr-primary); }
+
+/* Neighbours, so reading the club's posts in order works from any one of them. */
+.ann-steps {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 20px;
+}
+.ann-step {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 14px 16px; border-radius: var(--hr-radius-lg);
+  border: 1px solid var(--hr-line); background: rgba(18,17,21,.7);
+  text-decoration: none; transition: border-color .2s, transform .2s;
+}
+.ann-step:hover { border-color: color-mix(in srgb, var(--hr-primary) 40%, transparent); transform: translateY(-2px); }
+.ann-step.is-newer { text-align: right; }
+.ann-step-dir {
+  font: 900 10.5px/1 var(--hr-sans); letter-spacing: var(--hr-tracking-caps);
+  text-transform: uppercase; color: var(--hr-fg-3);
+}
+.ann-step-t { font: 700 13.5px/1.4 var(--hr-sans); color: var(--hr-fg-1); }
+
+@media (max-width: 620px) {
+  .ann-steps { grid-template-columns: 1fr; }
+  .ann-step.is-newer { text-align: left; }
+  .ann-foot-links { margin-left: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ann-step, .ann-permalink, .ann-copy, a.ann-when { transition: none; }
+  .ann-step:hover { transform: none; }
+}
+
 /* Empty + error states */
 .ann-empty, .ann-error {
   position: relative; overflow: hidden; isolation: isolate;

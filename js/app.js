@@ -49,7 +49,7 @@ const { loadVote, rerenderVote } = lazy('./vote.js');
 const { loadMarketplace, rerenderMarketplace, openProfileView, closeProfileView, closeTradeModal,
   openFundsView, exitFundsView } = lazy('./marketplace.js');
 const { loadPolls, rerenderPolls } = lazy('./polls.js');
-const { loadAnnouncements, rerenderAnnouncements } = lazy('./announcements.js');
+const { loadAnnouncements, rerenderAnnouncements, openAnnouncement } = lazy('./announcements.js');
 const { loadGen2, rerenderGen2 } = lazy('./gen2.js');
 const { initGuideDemos, rerenderGuideDemos } = lazy('./guide-demos.js');
 const { loadCollections, rerenderCollections } = lazy('./collections.js');
@@ -524,6 +524,17 @@ function route(pathname) {
     sub = null;
     history.replaceState(null, '', '/trade' + location.search);
   }
+  // Announcements: every post has an address of its own, /announcements/<slug>-<id>. The
+  // id is the last long run of digits so a slug carrying its own numbers ("gen-2") can't
+  // be read as one. Called on the bare tab too, so going back to /announcements from a
+  // post puts the feed back rather than leaving the reader on one card.
+  if (tab === 'announcements') {
+    selectTab('announcements', false);
+    const m = /(?:^|-)(\d{15,25})$/.exec(segs[1] || '');
+    openAnnouncement(m ? m[1] : null);
+    return;
+  }
+
   // Codex entity pages: /collections/<kind>/<…>. They take over the Collections panel,
   // so they're routed before the sub-tab lookup below, which would otherwise read
   // "release" or "item" as a sub-tab that doesn't exist.
@@ -560,11 +571,14 @@ window.addEventListener('popstate', () => route(location.pathname));
 // white flash on the way to a page the app could have painted in place.
 const MARKET_SUBS = new Set(['add-funds', 'cash-out']);
 document.addEventListener('click', event => {
-  const link = event.target.closest && event.target.closest('a[href^="/collections/"], a[href^="/trade/"]');
+  const link = event.target.closest && event.target.closest(
+    'a[href^="/collections/"], a[href^="/trade/"], a[href^="/announcements"]');
   if (!link) return;
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
   const segs = link.getAttribute('href').split('?')[0].split('/').filter(Boolean);
-  if (segs[0] === 'trade') {
+  if (segs[0] === 'announcements') {
+    // Nothing to check: the tab handles its own addresses, including the feed itself.
+  } else if (segs[0] === 'trade') {
     if (!MARKET_SUBS.has(segs[1])) return;
   } else {
     // Any Collections address, not just the entity kinds. The glossary breadcrumb on every

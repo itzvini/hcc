@@ -3205,5 +3205,15 @@
   "term.voting-advice.use": "The matcher sits beside the ballot and is optional. Its ranking is advice; the ballot is the vote.",
   "term.voting-advice.f1": "Advisory, casts no vote",
   "term.voting-advice.f2": "The candidates' own published answers",
-  "term.voting-advice.h1": "The voting advice matcher goes live with nominations."
+  "term.voting-advice.h1": "The voting advice matcher goes live with nominations.",
+  "ann.permalink": "Open this announcement on its own page",
+  "ann.open": "Open",
+  "ann.copy": "Copy link",
+  "ann.copied": "Link copied",
+  "ann.back": "All announcements",
+  "ann.newer": "Newer",
+  "ann.older": "Older",
+  "ann.nearby": "Announcements either side of this one",
+  "ann.gone.h": "That announcement is not here",
+  "ann.gone.p": "It may have been deleted in Discord, or it is older than the posts this page keeps."
 }

@@ -6283,6 +6283,107 @@ function groupAnnouncementRows(rows) {
   return merged;
 }
 
+/* Each announcement is its own page. The feed was one URL for everything the club has
+   ever posted, so a link to a specific announcement could only ever be a link to Discord.
+   Now every post has an address of its own that survives a reload and a share.
+
+   The address is <slug>-<message id>. The id is the truth and the only thing resolved,
+   the same way this file already treats a Creature's number and its 39-digit token id: a
+   post can be edited in Discord, its title can change with it, and every link ever shared
+   still lands. The slug is there so the URL says what it points at.
+
+   The title comes from the post itself, in the order Discord authors actually write:
+   a markdown heading, then a bold opening line, then the first line of text. */
+
+// Discord markup, out. Custom emoji, pings, links, emphasis and headings all become the
+// words a reader would say out loud.
+function plainDiscord(text) {
+  return String(text || '')
+    .replace(/<@[!&]?\d+>|@(everyone|here)/g, '')       // pings, first: a club post opens
+    .replace(/<a?:(\w+):\d+>/g, '')                    // custom emoji, and a heading
+    .replace(/<#\d+>/g, '')                             // channel links, sits after them
+    .replace(/\[([^\]]+)\]\((?:[^)]+)\)/g, '$1')       // [text](url) keeps the text
+    .replace(/^[ 	]*#{1,6}\s+/gm, '')                  // headings
+    .replace(/[*_~`|]/g, '')                            // emphasis, spoilers, code ticks
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function trimWords(text, max) {
+  const s = String(text || '').trim();
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max);
+  const space = cut.lastIndexOf(' ');
+  return (space > max * 0.6 ? cut.slice(0, space) : cut).replace(/[\s,;:.]+$/, '');
+}
+
+// The title, and whether the post carried one of its own. A heading or a bold opening
+// line is a title and the body starts after it; a post that just starts talking has its
+// first words used as a title, and then the body has to start at the beginning or the
+// card opens mid-sentence.
+function announcementParts(row) {
+  const lines = String(row.content || '').split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].replace(/<@[!&]?\d+>|@(everyone|here)/g, '').replace(/<a?:\w+:\d+>/g, '').trim();
+    if (!line) continue;
+    const heading = /^#{1,6}\s+(.+)$/.exec(line);
+    const bold = heading ? null : /^\*\*(.+?)\*\*[\s.:!]*$/.exec(line);
+    const rest = () => plainDiscord(lines.slice(i + 1).join(' '));
+    if (heading) return { title: trimWords(plainDiscord(heading[1]), 80), titled: true, body: rest() };
+    if (bold) return { title: trimWords(plainDiscord(bold[1]), 80), titled: true, body: rest() };
+    const plain = plainDiscord(line);
+    if (plain) {
+      return { title: trimWords(plain, 80), titled: false,
+               body: plainDiscord(lines.slice(i).join(' ')) };
+    }
+  }
+  return { title: '', titled: false, body: '' };
+}
+
+function announcementTitle(row) {
+  return announcementParts(row).title;
+}
+
+function announcementPath(row) {
+  const id = String(row.message_id || '');
+  const full = entitySlug(announcementTitle(row) || '');
+  // Cut on a hyphen so the slug ends on a whole word. It is decoration either way, but a
+  // URL that stops mid-word looks like it was truncated by accident.
+  let slug = full.slice(0, 60);
+  if (full.length > 60) slug = slug.slice(0, slug.lastIndexOf('-') + 1);
+  slug = slug.replace(/-+$/, '');
+  return slug && slug !== 'x' ? `/announcements/${slug}-${id}` : `/announcements/${id}`;
+}
+
+// The id is the last long run of digits, so a slug that carries its own numbers ("gen-2",
+// "update-6") can never be mistaken for it. A bare id works too, for a link made by hand.
+function announcementRouteOf(pathname) {
+  const m = /^\/announcements\/(?:.*?-)?(\d{15,25})\/?$/.exec(pathname);
+  return m ? m[1] : null;
+}
+
+async function announcementPageMeta(id, origin) {
+  let row = null;
+  try { row = await db.getAnnouncementById(id); } catch { row = null; }
+  // A deleted post drops off the site, so its link falls back to the feed's own card
+  // rather than claiming an announcement that is no longer there.
+  if (!row) return sectionPageMeta('/announcements', origin);
+  const { title, body } = announcementParts(row);
+  // Only a picture this server holds. Discord's own attachment URLs expire within a day,
+  // and a card is scraped once and cached for everyone, so an expiring link would leave
+  // a broken image on every share made after it.
+  const shot = (Array.isArray(row.attachments) ? row.attachments : [])
+    .filter(isImageAttachment)
+    .map(a => safeFeedImg(a.url))
+    .find(u => u && MEDIA_PATH_RE.test(u));
+  return {
+    title: !title || title === SITE_NAME ? SITE_NAME : `${title} · ${SITE_NAME}`,
+    description: trimWords(body, 180) || trimWords(plainDiscord(row.content || ''), 180),
+    image: shot ? origin + shot : null,
+    url: origin + announcementPath(row),
+  };
+}
+
 // Shape a stored row for the public feed. Announcements are already public in Discord,
 // so nothing here is sensitive — but URLs are still constrained to Discord's CDNs and
 // image/file attachments are split so the client renders each correctly.
@@ -6307,6 +6408,9 @@ function shapeAnnouncement(row) {
   return {
     id: row.message_id,
     url: discordMessageUrl(row.message_id),
+    // Built here so the browser never has to derive it: one implementation, no drift.
+    title: announcementTitle(row),
+    path: announcementPath(row),
     author: {
       name: row.author_display || row.author_name || 'Highrise Creature Club',
       avatar: safeDiscordImg(row.author_avatar) || null,
@@ -6404,6 +6508,19 @@ async function handleAnnouncementsApi(request, response, url) {
       channelUrl: `https://discord.com/channels/${DISCORD_GUILD_ID}/${ANNOUNCEMENTS_CHANNEL_ID}`,
       announcements: groupAnnouncementRows(rows).map(shapeAnnouncement),
     }, { 'Cache-Control': 'public, max-age=60' });
+    return;
+  }
+
+  // One announcement by id, for a link to a post that has scrolled off the feed. It reads
+  // a wider window and groups it exactly as the feed does, so a permalink to a post that
+  // was split across several Discord messages shows the whole thing, not its first part.
+  const oneMatch = pathname.match(/^\/api\/announcements\/(\d{15,25})$/);
+  if (oneMatch && request.method === 'GET') {
+    const rows = await db.getAnnouncements({ limit: 200 });
+    const one = groupAnnouncementRows(rows).find(r => String(r.message_id) === oneMatch[1]);
+    if (!one) { sendJson(response, 404, { error: 'not_found' }); return; }
+    sendJson(response, 200, { announcement: shapeAnnouncement(one) },
+      { 'Cache-Control': 'public, max-age=60' });
     return;
   }
 
@@ -7499,6 +7616,19 @@ async function buildSitemap(origin) {
     if (!listed.has(loc)) out.push(urlEntry(loc, null));
   }
 
+  // Every live announcement, with the date it was posted as its lastmod. If the database
+  // is unreachable the sitemap is shorter by that many lines, which is the rule the rest
+  // of this builder follows: leave it out rather than guess it.
+  try {
+    for (const row of await db.getAnnouncements({ limit: 200 })) {
+      const when = row.edited_at || row.posted_at;
+      out.push(urlEntry(origin + announcementPath(row),
+        when ? new Date(when).toISOString().slice(0, 10) : null));
+    }
+  } catch (err) {
+    console.error('Sitemap: announcements unreadable:', err.message);
+  }
+
   const index = getArchiveIndex();
   for (const rel of index.releases.values()) {
     out.push(urlEntry(`${origin}/collections/release/${rel.id}`,
@@ -7862,8 +7992,10 @@ const server = http.createServer((request, response) => {
   const origin = siteOrigin(request);
   const codex = codexRouteOf(requested.pathname);
   const profile = codex ? null : profileRouteOf(requested.pathname);
+  const announcement = codex || profile ? null : announcementRouteOf(requested.pathname);
   const section = () => sectionPageMeta(requested.pathname, origin);
-  const pending = codex
+  const pending = announcement ? announcementPageMeta(announcement, origin)
+    : codex
     // A renamed release, a Creature number that never existed, a trait catalogue still
     // indexing: the entity card can't be built, so the card for the part of the site it
     // belongs to stands in. That is true of the link, which the generic card is not.
