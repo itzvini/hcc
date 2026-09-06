@@ -10,7 +10,7 @@ import { loadProfile } from './profile.js';
 // Contracts, chains, call selectors, brand marks and the bridge/gas thresholds now live in
 // js/market/core/consts.js — pure values, importable by any market module without a cycle.
 import {
-  CREATURE_CONTRACT, ZK_CHAIN_ID_HEX, ZK_NETWORK, EXPLORER,
+  CREATURE_CONTRACT, IMX_STARKEX_CREATURE, ZK_CHAIN_ID_HEX, ZK_NETWORK, EXPLORER,
   LAND_CONTRACT_L1, COLL_ICONS, COLLECTIONS,
   SEL_SAFE_TRANSFER, SEL_BALANCE_OF, SEL_OWNER_OF, SEL_WETH_WITHDRAW,
   SEL_APPROVE, SEL_ERC20_TRANSFER, SEL_ALLOWANCE,
@@ -235,6 +235,23 @@ let salesTotal = null;
 let salesSort = 'recent';      // 'recent' | 'oldest' | 'price-asc' | 'price-desc'
 let salesFacets = null;
 let salesReqId = 0;
+// Price chart over the SAME matched set the list below shows: every sale as a dot, a
+// bucketed average through them, and the headline numbers. Arrives with page 0 only (it
+// describes the whole match, not the page), so "load more" never clears it.
+let salesSeries = null;        // {from,to,bucket,points,buckets,stats,sampled,detail} | null
+let salesChart = null;         // the live Chart.js instance — destroyed before every rebuild
+let salesScale = 'auto';       // y axis: 'auto' (log when the spread demands it) | 'linear' | 'log'
+// Zoom into a period and the figures above the chart answer for that period instead of the
+// whole run. null = showing everything.
+let salesWindow = null;        // {from, to} in ms — the visible slice of the timeline
+let salesWindowStats = null;   // its exact stats; null falls the rail back to the full range
+let salesWindowBusy = false;
+let salesWindowReq = 0;
+let salesWindowTimer = null;
+// Trait-name search inside the filter sidebar. Creatures have 466 trait values across 13
+// dropdowns, so "which drawer is Glowing Torn Socket Eyes in" was a real question; this
+// searches the whole vocabulary at once.
+let traitQ = '';
 let fltOpenMobile = false;     // filter drawer expanded (mobile)
 let fltDebounce = null;
 let browseReqId = 0;           // drops stale responses when filters change mid-flight
@@ -296,6 +313,7 @@ function resetFilters() {
   // Scope is a view mode, not a filter — clearing filters keeps you where you are.
   flt = { q: '', traits: new Map(), min: '', max: '', sort: flt.sort, scope: flt.scope };
   openFacet = null;
+  traitQ = '';
 }
 
 // Switching collection (Creatures⟷LAND) starts a fresh browse: drop the grid, modal,
@@ -313,6 +331,7 @@ function resetBrowseForView() {
   // Sales History shares this collection scope — drop its sold set + facets so the new
   // collection reloads its own (via maybeLoadSales on the next render).
   salesItems = null; salesFacets = null; salesPage = 0; salesHasMore = false; salesTotal = null; salesError = false;
+  salesSeries = null; salesScale = 'auto'; clearSalesWindow(); destroySalesChart();
   setFltSheet(false);
   clearTimeout(fltDebounce);
 }
@@ -1016,7 +1035,11 @@ function loadListings(reset = true) { return loadBrowse(reset); }
 async function loadBrowse(reset = true, quiet = false) {
   if (!reset && (!browseHasMore || listingsLoading)) return;
   const page = reset ? 0 : browsePage + 1;
-  if (reset && !quiet) { listings = []; browsePage = 0; browseHasMore = false; listingsError = false; }
+  // NOT `listings = []`: the tiles on screen are the last true answer, and clearing them
+  // here dropped the grid to eight skeletons for the length of the request. The page height
+  // collapsed with them and took the scroll position along, which is what made picking a
+  // trait feel like the whole page had reset. They're replaced when the new rows land.
+  if (reset && !quiet) { browsePage = 0; browseHasMore = false; listingsError = false; }
   const rid = ++browseReqId;
   // Typing in the search box fires a request every 300ms. The request id already stopped a
   // superseded response from painting, but the browser still downloaded the whole body
@@ -1029,7 +1052,13 @@ async function loadBrowse(reset = true, quiet = false) {
   const ds = browseDataset();
   const reqColl = coll; // captured at send time, so a late response can't paint the wrong tab
   let added = null;     // rows this page added, when it was a "load more" rather than a reset
-  if (!quiet) { listingsLoading = true; if (reset) patchGrid(); else patchLoadMore(); patchFilters(); }
+  if (!quiet) {
+    listingsLoading = true;
+    // Dim what's there; only paint skeletons when there's genuinely nothing to dim.
+    if (reset) { if (listings.length) setFeedBusy(true); else patchGrid(); }
+    else patchLoadMore();
+    patchFilters();
+  }
   try {
     const qs = browseQuery(page);
     const res = await fetch(`${ds.api}${qs ? '?' + qs : ''}`, { headers: { Accept: 'application/json' }, signal: ctl.signal });
@@ -1073,10 +1102,13 @@ async function loadBrowse(reset = true, quiet = false) {
     if (err?.name === 'AbortError') return; // superseded on purpose — not a failure
     if (rid !== browseReqId) return;
     console.error('Browse load failed:', err);
-    if (reset && !quiet) listingsError = true;
+    // Rows kept through the request are now stale AND unexplained — drop them so the error
+    // state and its retry button are what the member actually sees.
+    if (reset && !quiet) { listings = []; listingsError = true; }
   } finally {
     if (rid === browseReqId) {
       listingsLoading = false;
+      setFeedBusy(false);
       if (!added || !appendTiles('#trade-grid', '#trade-loadmore', added, tileHtml, loadMoreHtml, 'trade-tile')) patchGrid();
       patchFilters();
       // Still cataloguing? The trait facets (and the full "All" set) aren't ready yet —
@@ -1218,7 +1250,9 @@ function loadMoreHtml() {
 
 function patchGrid() {
   const g = root()?.querySelector('#trade-grid');
-  if (g) g.innerHTML = gridInnerHtml();
+  if (!g) return;
+  g.classList.remove('is-busy');
+  g.innerHTML = gridInnerHtml();
   patchLoadMore();
 }
 
@@ -4156,7 +4190,77 @@ function traitPopHtml(f) {
   </div>`;
 }
 
+// --- Trait search ------------------------------------------------------------------------
+// Thirteen dropdowns hold 466 trait values between them, which turns "show me the Glowing
+// Torn Socket Eyes ones" into a hunt for the right drawer first. This searches every drawer
+// at once: type a few letters and pick from the matches, whatever slot they belong to.
+
+const TRAIT_HITS_MAX = 60; // a longer list than this is a sign to keep typing, not to scroll
+
+// Every facet value whose name (or its slot's name) contains the query. Rarity is excluded —
+// it has its own always-visible chip group, and repeating it here would just be a second
+// place to click the same two tiers.
+function traitSearchHits(q) {
+  const needle = q.toLowerCase();
+  const hits = [];
+  for (const f of curFacets() || []) {
+    if (/rarity/i.test(f.type)) continue;
+    const typeAt = f.type.toLowerCase().indexOf(needle);
+    for (const val of f.values) {
+      const at = String(val.v).toLowerCase().indexOf(needle);
+      if (at < 0 && typeAt < 0) continue;
+      hits.push({ type: f.type, v: val.v, n: val.n, pct: val.pct, at });
+    }
+  }
+  // A hit on the value itself beats a hit on the slot name; an earlier match beats a later
+  // one ("Bat" should lead with "Bat Nose", not "Big Pierced Bat Ears"); then the values
+  // with the most matches, then alphabetically so the order never wobbles.
+  hits.sort((a, b) =>
+    (a.at < 0) - (b.at < 0)
+    || (a.at < 0 ? 0 : a.at - b.at)
+    || (b.n || 0) - (a.n || 0)
+    || String(a.v).localeCompare(String(b.v)));
+  return hits;
+}
+
+// Escape first, then mark the match — done the other way round, an <em> in the highlight
+// would be escaped along with the text and show up as tags.
+function markMatch(value, q) {
+  const str = String(value);
+  const at = q ? str.toLowerCase().indexOf(q.toLowerCase()) : -1;
+  if (at < 0) return esc(str);
+  return `${esc(str.slice(0, at))}<mark class="trade-flt-mark">${esc(str.slice(at, at + q.length))}</mark>${esc(str.slice(at + q.length))}`;
+}
+
+function traitSearchHtml() {
+  if (!curFacets()) return `<span class="trade-flt-loading">${esc(t('trade.filter.loading'))}</span>`;
+  const hits = traitSearchHits(traitQ);
+  if (!hits.length) {
+    return `<p class="trade-flt-nohits">${esc(t('trade.filter.traitNoHits').replace('{q}', traitQ))}</p>`;
+  }
+  const shown = hits.slice(0, TRAIT_HITS_MAX);
+  const more = hits.length - shown.length;
+  return `<div class="trade-flt-hits" role="listbox" aria-label="${esc(t('trade.filter.traitSearch'))}">
+    ${shown.map(h => {
+      const sel = traitSelected(h.type, h.v);
+      const pctStr = fmtTraitPct(h.pct);
+      return `<button type="button" class="trade-flt-opt trade-flt-hit ${sel ? 'is-on' : ''}" role="option"
+        aria-selected="${sel}" data-act="flt-val" data-type="${esc(h.type)}" data-val="${esc(h.v)}"
+        ${h.n === 0 && !sel ? 'disabled' : ''}>
+        <span class="trade-flt-check" aria-hidden="true">${sel ? ico('check', 13) : ''}</span>
+        <span class="trade-flt-optv"><span class="trade-flt-hit-v">${markMatch(h.v, traitQ)}</span><span class="trade-flt-hit-type">${esc(h.type)}</span></span>
+        ${pctStr ? `<span class="trade-flt-pct" title="${esc(t('trade.filter.rarityPct'))}">${esc(pctStr)}</span>` : ''}
+        <span class="trade-flt-n">${h.n}</span>
+      </button>`;
+    }).join('')}
+    ${more > 0 ? `<p class="trade-flt-hits-more">${esc(t('trade.filter.traitMore').replace('{n}', more.toLocaleString()))}</p>` : ''}
+  </div>`;
+}
+
 function traitDropsHtml() {
+  // A search replaces the drawers with its results — the drawers are how you browse the
+  // vocabulary, the search is how you skip it.
+  if (traitQ) return traitSearchHtml();
   if (!curFacets()) return `<span class="trade-flt-loading">${esc(t('trade.filter.loading'))}</span>`;
   // 'Tier' is rendered as its own chip group (see tierChipsHtml), so keep it out here.
   return curFacets().filter(f => !/rarity/i.test(f.type) && f.type !== 'Tier').map(f => {
@@ -4297,6 +4401,13 @@ function filterSideHtml() {
       </div>
       <div class="trade-side-sec">
         <h4 class="trade-side-h">${esc(t('trade.filter.traitsH'))}</h4>
+        <!-- Deliberately OUTSIDE #flt-traits: patchFilters() rewrites that node on every
+             keystroke, and an input inside it would lose focus and caret each time. -->
+        <label class="trade-flt-search is-mini">
+          <svg class="trade-flt-sico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M16.5 16.5L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <input id="flt-tq" type="search" autocomplete="off" enterkeyhint="search" placeholder="${esc(t('trade.filter.traitSearch'))}" value="${esc(traitQ)}" aria-label="${esc(t('trade.filter.traitSearch'))}" />
+          <button type="button" class="trade-flt-sclear" data-act="flt-tq-clear" aria-label="${esc(t('trade.filter.traitSearchClear'))}" ${traitQ ? '' : 'hidden'}>×</button>
+        </label>
         <div class="trade-flt-traits" id="flt-traits">${traitDropsHtml()}</div>
         <!-- These dropdowns are 466 trait names with no pictures. The showcase is the same
              vocabulary with the art beside it, and it links back here filtered, so anyone
@@ -4362,6 +4473,12 @@ function patchFilters() {
   }
 }
 
+// The trait search's × only shows while there's something to clear.
+function syncTraitSearchClear() {
+  const btn = root()?.querySelector('[data-act="flt-tq-clear"]');
+  if (btn) btn.hidden = !traitQ;
+}
+
 // Push state back into the inputs after a programmatic change (chip ×, clear all).
 function syncFilterInputs() {
   const r = root();
@@ -4369,6 +4486,7 @@ function syncFilterInputs() {
   const q  = r.querySelector('#flt-q');   if (q)  q.value = flt.q;
   const mn = r.querySelector('#flt-min'); if (mn) mn.value = flt.min;
   const mx = r.querySelector('#flt-max'); if (mx) mx.value = flt.max;
+  const tq = r.querySelector('#flt-tq'); if (tq) { tq.value = traitQ; syncTraitSearchClear(); }
 }
 
 // Mobile filter sheet open/close — one place owns the class + body scroll lock.
@@ -4631,7 +4749,12 @@ async function loadSales(reset = true) {
   const api = `/api/market/${coll === 'land' ? 'land' : 'creatures'}/sales`;
   let added = null; // rows this page added, when it was a "load more" rather than a reset
   salesLoading = true;
-  if (reset) patchSalesGrid(); else patchSalesLoadMore();
+  // Rows already on screen are the last true answer to a slightly different question —
+  // dim them and swap when the new ones land. Rebuilding the grid here tore every card
+  // down and replayed its entrance animation, and the collapse in page height dragged the
+  // scroll position with it: picking one trait read as the whole page reloading.
+  if (reset) { if (salesItems && salesItems.length) setFeedBusy(true); else patchSalesGrid(); }
+  else patchSalesLoadMore();
   patchFilters();
   try {
     const qs = salesQuery(page);
@@ -4648,6 +4771,10 @@ async function loadSales(reset = true) {
     salesHasMore = !!data.hasMore;
     salesTotal = data.total ?? null;
     if (data.facets) salesFacets = data.facets;
+    // Only page 0 carries the chart; a "load more" response must not blank it.
+    // A new matched set is a new timeline: whatever period was on screen no longer means
+    // anything, and the chart's axis resets to the new range below.
+    if (reset) { salesSeries = data.series || null; clearSalesWindow(); }
   } catch (err) {
     if (rid !== salesReqId) return;
     console.error('Sales history load failed:', err);
@@ -4655,10 +4782,22 @@ async function loadSales(reset = true) {
   } finally {
     if (rid === salesReqId) {
       salesLoading = false;
+      setFeedBusy(false);
       if (!added || !appendTiles('#trade-sales-grid', '#trade-sales-loadmore', added,
         (s, i) => saleCardHtml(s, i), salesLoadMoreHtml, 'trade-sale-card')) patchSalesGrid();
+      if (reset) patchSalesChart();
       patchFilters();
     }
+  }
+}
+
+// Dim the results (grid + chart) while a filter reload is in flight, without touching a
+// single node inside them. Shared by Browse and Sales — both had the same flash.
+function setFeedBusy(busy) {
+  const r = root();
+  if (!r) return;
+  for (const sel of ['#trade-grid', '#trade-sales-grid', '#trade-chart-slot']) {
+    r.querySelector(sel)?.classList.toggle('is-busy', busy);
   }
 }
 function maybeLoadSales() {
@@ -4692,6 +4831,425 @@ function salesCountHtml() {
   return `<span class="trade-flt-count ${salesLoading ? 'is-stale' : ''}" role="status">${esc(t(key).replace('{n}', salesTotal.toLocaleString()))}</span>`;
 }
 
+// --- Sales price chart -------------------------------------------------------------------
+// The list answers "what sold"; the chart answers "for how much, and which way is it going"
+// — which is the question a filter like `Eyes: Glowing Torn Socket` is really asking. It
+// plots the WHOLE matched set (the server sends it with page 0), not the 24 cards below it,
+// so narrowing to one trait draws every sale that trait has ever had.
+//
+// Chart.js is already on the page for the Market tab's price history, so this borrows it.
+// If it failed to load, the stats row above the canvas still tells the whole story.
+
+const CHART_MINT = '#51FFA5';
+const CHART_LAV  = '#8561FF';
+const CHART_FONT = "'Museo Sans Rounded', sans-serif";
+const chartNarrow = () => window.matchMedia('(max-width: 640px)').matches;
+const chartStill  = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// One sale's price in the display currency. ETH is native; USD is what the sale was worth
+// on its own day (the server valued it, using the archive's own rate for pre-migration
+// trades); every other fiat scales today's USD→X — the same proxy fmtSaleFiat uses.
+function chartValue(eth, usd) {
+  if (currency === 'eth') return eth ?? null;
+  if (usd == null) return null;
+  if (currency === 'usd') return usd;
+  const rate = fxRates[currency];
+  return rate == null ? null : usd * rate;
+}
+function fmtChartMoney(v) {
+  if (v == null) return '—';
+  if (currency === 'eth') return fmtEth(v);
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency.toUpperCase(),
+      maximumFractionDigits: Math.abs(v) < 100 ? 2 : 0 }).format(v);
+  } catch { return `${Math.round(v).toLocaleString()} ${currency.toUpperCase()}`; }
+}
+// Axis labels are read in a column, so they stay short: "0.12 Ξ", "$1,200".
+function fmtChartAxis(v) {
+  return currency === 'eth'
+    ? `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 4 })} Ξ`
+    : fmtChartMoney(v);
+}
+// A date label sized to the window on screen: five years of history wants months, three
+// weeks wants days.
+function fmtChartTick(ms, spanDays) {
+  try {
+    const d = new Date(ms);
+    // "Sep 20" for a year reads as the 20th of September — spell the year out.
+    return spanDays > 400
+      ? d.toLocaleDateString(undefined, { year: 'numeric', month: 'short' })
+      : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  } catch { return ''; }
+}
+const chartSpanDays = ser => (ser ? Math.max(1, (ser.to - ser.from) / 86400000) : 1);
+
+// The x axis ends where the sales do. Left to pick its own round numbers, Chart.js drew a
+// 2020–2027 axis for a 2021–2026 collection and spent a quarter of the width on years that
+// never had a sale in them.
+function chartXBounds(ser) {
+  const pad = Math.max((ser.to - ser.from) * .02, 86400000);
+  return { min: ser.from - pad, max: ser.to + pad };
+}
+
+// Creature prices run from a hundredth of an ETH to five ETH. On a linear axis that puts
+// almost every dot on the floor, so a wide spread defaults to a log axis — the toggle in
+// the chart head pins it either way.
+function salesScaleMode() {
+  if (salesScale !== 'auto') return salesScale;
+  const st = salesSeries?.stats;
+  return st && st.loEth > 0 && st.hiEth / st.loEth > 50 ? 'log' : 'linear';
+}
+
+// "Weekly average" — names the trend line after the bucket the server chose.
+function chartAvgLabel() {
+  const keys = { day: 'trade.chart.avgDay', week: 'trade.chart.avgWeek', month: 'trade.chart.avgMonth' };
+  return t(keys[salesSeries?.bucket] || 'trade.chart.avgDay');
+}
+
+// The figures for what's on screen: the zoomed window when there is one, the whole run
+// otherwise. A failed window lookup falls back rather than showing nothing.
+function chartStats() { return salesWindowStats || salesSeries?.stats || null; }
+
+function chartStatsHtml() {
+  const st = chartStats();
+  if (!st) return '';
+  const cell = (k, v, cls = '') => `<div class="trade-chart-stat ${cls}">
+    <span class="trade-chart-stat-k">${esc(t(k))}</span>
+    <span class="trade-chart-stat-v">${esc(v)}</span></div>`;
+  return cell('trade.chart.statSales', st.n.toLocaleString())
+    + cell('trade.chart.statAvg', fmtChartMoney(chartValue(st.avgEth, st.avgUsd)), 'is-key')
+    + cell('trade.chart.statMedian', fmtChartMoney(chartValue(st.medEth, st.medUsd)))
+    + cell('trade.chart.statLow', fmtChartMoney(chartValue(st.loEth, st.loUsd)))
+    + cell('trade.chart.statHigh', fmtChartMoney(chartValue(st.hiEth, st.hiUsd)))
+    + cell('trade.chart.statVolume', fmtChartMoney(chartValue(st.volEth, st.volUsd)));
+}
+
+// What the chart is and isn't showing, said plainly: the window it covers, and — when the
+// scatter had to be thinned — that it was.
+function chartNoteHtml() {
+  const ser = salesSeries;
+  if (!ser) return '';
+  const notes = [esc(`${fmtSaleDate(new Date(ser.from).toISOString())} – ${fmtSaleDate(new Date(ser.to).toISOString())}`)];
+  if (ser.sampled) notes.push(esc(t('trade.chart.sampled')
+    .replace('{n}', ser.shown.toLocaleString()).replace('{total}', ser.stats.n.toLocaleString())));
+  else if (ser.detail) notes.push(esc(t('trade.chart.clickHint')));
+  return notes.join(' · ');
+}
+
+// One switch with a fixed label, on or off. Labelling it with the CURRENT mode instead read
+// backwards the moment it was off: an unpressed pill saying "Linear scale" looks like linear
+// is the thing that's been turned off.
+function clearSalesWindow() {
+  clearTimeout(salesWindowTimer);
+  salesWindowReq++; // any answer still in flight is for a period nobody is looking at now
+  salesWindow = null; salesWindowStats = null; salesWindowBusy = false;
+}
+
+/**
+ * Exact stats for a period, straight from the points already in the browser — but ONLY when
+ * the scatter is the whole matched set. Past a few hundred sales the server sends an even
+ * sample, and a sample can answer "what did these go for" but not "how many" or "how much":
+ * a summed sample would report a thirty-fifth of the real volume. Those go to the server.
+ */
+function localWindowStats(win) {
+  const ser = salesSeries;
+  if (!ser || ser.sampled) return null;
+  const pts = ser.points.filter(p => p.t >= win.from && p.t <= win.to);
+  const eth = pts.map(p => p.e).filter(v => v != null).sort((a, b) => a - b);
+  const usd = pts.map(p => p.u).filter(v => v != null).sort((a, b) => a - b);
+  const sum = a => a.reduce((acc, v) => acc + v, 0);
+  const mid = a => (!a.length ? null : a.length % 2 ? a[a.length >> 1] : (a[(a.length >> 1) - 1] + a[a.length >> 1]) / 2);
+  return {
+    n: pts.length,
+    loEth: eth[0] ?? null, hiEth: eth[eth.length - 1] ?? null,
+    avgEth: eth.length ? sum(eth) / eth.length : null, medEth: mid(eth),
+    volEth: eth.length ? sum(eth) : null,
+    loUsd: usd[0] ?? null, hiUsd: usd[usd.length - 1] ?? null,
+    avgUsd: usd.length ? sum(usd) / usd.length : null, medUsd: mid(usd),
+    volUsd: usd.length ? sum(usd) : null,
+  };
+}
+
+// Same filters, same view on the server, sliced by time — so the numbers can't drift from
+// the cards below or from what the chart is drawing.
+async function fetchWindowStats(win, rid) {
+  const api = `/api/market/${coll === 'land' ? 'land' : 'creatures'}/sales`;
+  const qs = new URLSearchParams(salesQuery(0));
+  qs.set('from', String(win.from));
+  qs.set('to', String(win.to));
+  try {
+    const res = await fetch(`${api}?${qs}`, { headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error('http ' + res.status);
+    const data = await res.json();
+    if (rid !== salesWindowReq) return;
+    salesWindowStats = data.stats || { n: 0 };
+  } catch (err) {
+    if (rid !== salesWindowReq) return;
+    console.error('Sales window stats failed:', err);
+    salesWindowStats = null; // the rail says so by going back to the full-range figures
+  } finally {
+    if (rid === salesWindowReq) { salesWindowBusy = false; patchChartStats(); }
+  }
+}
+
+function setSalesWindow(win) {
+  const same = win && salesWindow && win.from === salesWindow.from && win.to === salesWindow.to;
+  if (same || (!win && !salesWindow)) return;
+  clearTimeout(salesWindowTimer);
+  const rid = ++salesWindowReq;
+  salesWindow = win;
+  if (!win) { salesWindowStats = null; salesWindowBusy = false; patchChartStats(); return; }
+  const local = localWindowStats(win);
+  if (local) { salesWindowStats = local; salesWindowBusy = false; patchChartStats(); return; }
+  // Held back a beat: a wheel zoom fires this every notch, and each one would otherwise be
+  // a request for a window the member has already scrolled past.
+  salesWindowBusy = true;
+  patchChartStats();
+  salesWindowTimer = setTimeout(() => fetchWindowStats(win, rid), 260);
+}
+
+// The chart moved. Work out whether that's a period or just the whole range again.
+function onChartViewChanged() {
+  syncChartResetBtn();
+  const x = salesChart?.scales?.x;
+  const full = salesSeries ? chartXBounds(salesSeries) : null;
+  if (!x || !full) return;
+  const whole = Math.abs(x.min - full.min) <= 1 && Math.abs(x.max - full.max) <= 1;
+  setSalesWindow(whole ? null : { from: Math.round(x.min), to: Math.round(x.max) });
+}
+
+// Says which period the figures above it describe. Absent when they describe everything —
+// the note under the chart already gives the full span.
+function chartWindowHtml() {
+  if (!salesWindow || !salesWindowStats) return '';
+  const label = t('trade.chart.window')
+    .replace('{from}', fmtSaleDate(new Date(salesWindow.from).toISOString()))
+    .replace('{to}', fmtSaleDate(new Date(salesWindow.to).toISOString()));
+  return `<p class="trade-chart-window" role="status">${esc(label)}
+    <button type="button" class="trade-chart-window-all" data-act="chart-reset">${esc(t('trade.chart.windowAll'))}</button></p>`;
+}
+
+function patchChartStats() {
+  const card = root()?.querySelector('#trade-chart-slot .trade-chart-card');
+  if (!card) return;
+  const st = card.querySelector('#trade-chart-stats');
+  if (st) { st.innerHTML = chartStatsHtml(); st.classList.toggle('is-stale', salesWindowBusy); }
+  const wi = card.querySelector('#trade-chart-window');
+  if (wi) wi.innerHTML = chartWindowHtml();
+}
+
+function chartScaleToggleHtml() {
+  const on = salesScaleMode() === 'log';
+  return `<button type="button" class="trade-chart-toggle" data-act="chart-scale" aria-pressed="${on}"
+    title="${esc(t('trade.chart.scaleWhy'))}">${esc(t('trade.chart.scaleLog'))}</button>`;
+}
+
+// The whole card, built from scratch. patchSalesChart() only reaches for this when the card
+// isn't on screen yet — an update to a chart that's already drawn animates its data instead
+// of replacing the canvas underneath it.
+function salesChartHtml() {
+  const ser = salesSeries;
+  if (!ser || !ser.points.length) return '';
+  const st = ser.stats;
+  // The canvas says nothing to a screen reader, so the same finding goes in words.
+  const summary = t('trade.chart.a11y')
+    .replace('{n}', st.n.toLocaleString())
+    .replace('{from}', fmtSaleDate(new Date(ser.from).toISOString()))
+    .replace('{to}', fmtSaleDate(new Date(ser.to).toISOString()))
+    .replace('{avg}', fmtChartMoney(chartValue(st.avgEth, st.avgUsd)))
+    .replace('{lo}', fmtChartMoney(chartValue(st.loEth, st.loUsd)))
+    .replace('{hi}', fmtChartMoney(chartValue(st.hiEth, st.hiUsd)));
+  return `<div class="trade-chart-card">
+    <div class="trade-chart-head">
+      <div class="trade-chart-titles">
+        <span class="trade-chart-eyebrow">${ico('chart', 13)}${esc(t('trade.chart.eyebrow'))}</span>
+        <p class="trade-chart-lead">${esc(t(fltActive() ? 'trade.chart.leadFiltered' : 'trade.chart.lead'))}</p>
+      </div>
+      <div class="trade-chart-actions">
+        ${chartScaleToggleHtml()}
+        <button type="button" class="trade-chart-toggle is-reset" data-act="chart-reset" hidden>${esc(t('trade.chart.reset'))}</button>
+      </div>
+    </div>
+    <div class="trade-chart-stats" id="trade-chart-stats">${chartStatsHtml()}</div>
+    <div id="trade-chart-window">${chartWindowHtml()}</div>
+    <div class="trade-chart-box">
+      <canvas id="trade-sales-canvas" role="img" aria-label="${esc(summary)}"></canvas>
+    </div>
+    <p class="trade-chart-note" id="trade-chart-note">${chartNoteHtml()}</p>
+  </div>`;
+}
+
+// Datasets for the current series + display currency: the dots (one per sale) and the trend
+// line through the server's buckets.
+function chartDatasets() {
+  const ser = salesSeries;
+  const dots = ser.points
+    .map(p => ({ x: p.t, y: chartValue(p.e, p.u), id: p.id || null, label: p.n || null }))
+    .filter(p => p.y != null && p.y > 0);
+  const line = ser.buckets
+    .map(b => ({ x: b.t, y: chartValue(b.avgEth, b.avgUsd) }))
+    .filter(p => p.y != null && p.y > 0);
+  return [
+    {
+      type: 'scatter', label: t('trade.chart.legendSales'), data: dots,
+      backgroundColor: 'rgba(81,255,165,.55)', borderColor: CHART_MINT, borderWidth: 1,
+      pointRadius: dots.length > 250 ? 2 : 3.4, pointHoverRadius: 6, order: 1,
+    },
+    {
+      type: 'line', label: chartAvgLabel(), data: line, showLine: true,
+      borderColor: CHART_LAV, backgroundColor: CHART_LAV, borderWidth: 2.4,
+      pointRadius: 0, pointHoverRadius: 4, tension: .32, spanGaps: true, order: 2,
+    },
+  ];
+}
+
+function destroySalesChart() {
+  if (salesChart) { try { salesChart.destroy(); } catch { /* already torn down */ } salesChart = null; }
+}
+
+// Build the chart, or — when one is already drawn on a canvas that's still in the document —
+// feed it the new numbers so Chart.js tweens between them. Swapping the canvas on every
+// filter change is the chart's own version of the flash this view is trying to avoid.
+function renderSalesChart() {
+  const cv = root()?.querySelector('#trade-sales-canvas');
+  if (!cv || typeof Chart === 'undefined' || !salesSeries?.points?.length) { destroySalesChart(); return; }
+  const datasets = chartDatasets();
+  if (salesChart && salesChart.canvas === cv) {
+    // Redrawing for a new currency or a flipped y axis must leave the timeline alone —
+    // resetting the x bounds every time would throw away the period the member zoomed to.
+    const newSeries = salesChart.$hccSeries !== salesSeries;
+    salesChart.data.datasets[0].data = datasets[0].data;
+    salesChart.data.datasets[0].pointRadius = datasets[0].pointRadius;
+    salesChart.data.datasets[1].data = datasets[1].data;
+    salesChart.data.datasets[1].label = datasets[1].label;
+    salesChart.options.scales.y.type = salesScaleMode() === 'log' ? 'logarithmic' : 'linear';
+    if (newSeries) {
+      // New data means a new full range, so the window resets to it. Writing the bounds IS
+      // the reset — resetZoom() would put back the range the plugin cached at build time,
+      // which is a window from before the filter and may not contain a single sale.
+      if (salesChart.$zoom) salesChart.$zoom._originalScaleLimits = null;
+      Object.assign(salesChart.options.scales.x, chartXBounds(salesSeries));
+      salesChart.$hccSeries = salesSeries;
+    }
+    salesChart.update();
+    syncChartResetBtn(); // the axis only settles on its new bounds once the update has run
+    return;
+  }
+  destroySalesChart();
+  const spanDays = chartSpanDays(salesSeries);
+  salesChart = new Chart(cv, {
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: chartStill() ? false : { duration: 450 },
+      interaction: { mode: 'nearest', intersect: true },
+      // A dot is a Creature that sold — open it. Only while the server still labels each
+      // point (below a few hundred matches); past that the ids aren't sent.
+      onClick(_evt, els) {
+        const hit = els?.find(e => e.datasetIndex === 0);
+        const pt = hit ? this.data.datasets[0].data[hit.index] : null;
+        if (pt?.id) openDeepLink(String(pt.id), {});
+      },
+      onHover(evt, els) {
+        const over = els?.some(e => e.datasetIndex === 0 && this.data.datasets[0].data[e.index]?.id);
+        const cv2 = evt.native?.target;
+        if (cv2?.style) cv2.style.cursor = over ? 'pointer' : 'default';
+      },
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { font: { family: CHART_FONT, size: 11, weight: '700' }, color: '#CCCADC',
+            padding: 16, usePointStyle: true, pointStyleWidth: 12, boxHeight: 7 },
+        },
+        tooltip: {
+          callbacks: {
+            title: items => {
+              const x = items[0]?.parsed?.x;
+              return x == null ? '' : fmtSaleDate(new Date(x).toISOString());
+            },
+            label: ctx => {
+              const money = fmtChartMoney(ctx.parsed.y);
+              if (ctx.datasetIndex === 1) return `  ${chartAvgLabel()}: ${money}`;
+              const name = ctx.raw?.label;
+              return name ? `  ${name}: ${money}` : `  ${money}`;
+            },
+          },
+        },
+        // Same gestures as the Market tab's chart: scroll or pinch to zoom the timeline,
+        // drag to pan. Inert unless chartjs-plugin-zoom loaded, so it degrades cleanly.
+        zoom: {
+          pan: { enabled: true, mode: 'x', onPanComplete: onChartViewChanged },
+          zoom: { wheel: { enabled: true, speed: .08 }, pinch: { enabled: true }, mode: 'x', onZoomComplete: onChartViewChanged },
+          limits: { x: { min: 'original', max: 'original' } },
+        },
+      },
+      scales: {
+        x: {
+          type: 'linear', ...chartXBounds(salesSeries),
+          grid: { display: false }, border: { display: false },
+          ticks: {
+            font: { family: CHART_FONT, size: chartNarrow() ? 10.5 : 10, weight: '700' },
+            color: '#7D7C88', maxTicksLimit: chartNarrow() ? 4 : 7, maxRotation: 0, autoSkip: true,
+            callback: v => fmtChartTick(v, spanDays),
+          },
+        },
+        y: {
+          type: salesScaleMode() === 'log' ? 'logarithmic' : 'linear',
+          grid: { color: 'rgba(255,255,255,.08)' }, border: { display: false },
+          ticks: {
+            font: { family: CHART_FONT, size: 10, weight: '700' }, color: '#7D7C88',
+            maxTicksLimit: 6, callback: fmtChartAxis,
+          },
+        },
+      },
+    },
+  });
+  salesChart.$hccSeries = salesSeries;
+  syncChartResetBtn();
+}
+
+// The Reset pill shows when the window on screen isn't the whole range — read off the axis
+// itself rather than tracked as a flag. The plugin can't answer this for us either way: its
+// zoom level compares against the axis the chart was BUILT with, so a filter that shortens
+// the timeline reads as a zoom nobody performed, and its own reset fires the zoom callback.
+function syncChartResetBtn() {
+  const btn = root()?.querySelector('[data-act="chart-reset"]');
+  if (!btn) return;
+  const x = salesChart?.scales?.x;
+  const full = salesSeries ? chartXBounds(salesSeries) : null;
+  btn.hidden = !(x && full && (Math.abs(x.min - full.min) > 1 || Math.abs(x.max - full.max) > 1));
+}
+function resetChartZoom() {
+  clearSalesWindow();
+  salesChart?.resetZoom?.();
+  // The plugin caches the bounds it first saw and pins panning to them; a filter can move
+  // those bounds by years, so let it re-read rather than trapping the view in an old window.
+  if (salesChart?.$zoom) salesChart.$zoom._originalScaleLimits = null;
+  syncChartResetBtn();
+}
+
+// Repaint the card for new data (or a new currency/scale). Patches the numbers in place when
+// the card is already up, rebuilds it when it isn't.
+function patchSalesChart() {
+  if (tradeTab !== 'sales') return;
+  const slot = root()?.querySelector('#trade-chart-slot');
+  if (!slot) return;
+  const live = slot.querySelector('.trade-chart-card');
+  const want = !!(salesSeries && salesSeries.points.length);
+  if (want && live) {
+    patchChartStats();
+    const nt = live.querySelector('#trade-chart-note');  if (nt) nt.innerHTML = chartNoteHtml();
+    const sc = live.querySelector('[data-act="chart-scale"]'); if (sc) sc.outerHTML = chartScaleToggleHtml();
+    const ld = live.querySelector('.trade-chart-lead');
+    if (ld) ld.textContent = t(fltActive() ? 'trade.chart.leadFiltered' : 'trade.chart.lead');
+  } else {
+    destroySalesChart();
+    slot.innerHTML = salesChartHtml();
+  }
+  renderSalesChart();
+}
+
 function salesHtml() {
   return `<section class="trade-browse has-side">
     ${filterSideHtml()}
@@ -4706,6 +5264,7 @@ function salesHtml() {
         </div>
       </div>
       ${salesToolbarHtml()}
+      <div id="trade-chart-slot">${salesChartHtml()}</div>
       <div class="trade-sales" id="trade-sales-grid">${salesGridInnerHtml()}</div>
       <div class="trade-loadmore" id="trade-sales-loadmore">${salesLoadMoreHtml()}</div>
     </div>
@@ -4741,7 +5300,16 @@ function saleTraitChips(s) {
   return chips.length ? `<div class="trade-sale-traits">${chips.join('')}</div>` : '';
 }
 
-function saleCardHtml(s, i = 0) {
+// Pre-migration sales come from immutascan's StarkEx archive, where the trade — and the
+// Creature's whole Immutable X life — is still browsable. There's no zkEVM transaction to
+// point at, so the link goes there instead, and the chip says why.
+function saleEraLinkHtml(s) {
+  if (s.era !== 'imx') return '';
+  const url = `https://immutascan.io/address/${IMX_STARKEX_CREATURE}/${encodeURIComponent(s.tokenId)}?tab=0`;
+  return `<a href="${esc(url)}" target="_blank" rel="noopener" class="trade-sale-link">${esc(t('trade.sales.imxTrade'))} ${ico('external', 12)}</a>`;
+}
+
+function saleCardHtml(s, i = 0, swap = false) {
   const pet = coll === 'land' ? petUrl(s) : null;
   const src = pet || s.image;
   const fallback = pet && s.image ? ` data-fallback="${esc(s.image)}"` : '';
@@ -4758,7 +5326,8 @@ function saleCardHtml(s, i = 0) {
   if (s.seller) wallets.push(`<span class="trade-sale-party"><span class="trade-sale-party-k">${esc(t('trade.sales.seller'))}</span><code>${esc(shortWallet(s.seller))}</code></span>`);
   if (s.buyer) wallets.push(`<span class="trade-sale-party"><span class="trade-sale-party-k">${esc(t('trade.sales.buyer'))}</span><code>${esc(shortWallet(s.buyer))}</code></span>`);
   const txLink = s.tx
-    ? `<a href="${esc(txExplorerUrl(s.tx))}" target="_blank" rel="noopener" class="trade-sale-link">${esc(t('trade.sales.tx'))} ${ico('external', 12)}</a>` : '';
+    ? `<a href="${esc(txExplorerUrl(s.tx))}" target="_blank" rel="noopener" class="trade-sale-link">${esc(t('trade.sales.tx'))} ${ico('external', 12)}</a>`
+    : saleEraLinkHtml(s);
   const assetLink = `<a href="${esc(tokenExplorerUrl(s.tokenId))}" target="_blank" rel="noopener" class="trade-sale-link">${esc(t('trade.sales.asset'))} ${ico('external', 12)}</a>`;
   const viewBtn = `<button type="button" class="trade-sale-link is-view" ${openAttrs}>${esc(t('trade.sales.view'))}</button>`;
   // Status: currently for sale (with its live all-in price) or not listed. Doubles as the
@@ -4766,16 +5335,20 @@ function saleCardHtml(s, i = 0) {
   const status = listed
     ? `<span class="trade-sale-status is-listed">${esc(t('trade.sales.forSale'))} · ${esc(fmtEth(s.listedNow))}</span>`
     : `<span class="trade-sale-status is-unlisted">${esc(t('trade.sales.notListed'))}</span>`;
-  const delay = Math.min(i * 35, 350);
+  // Cards that REPLACE cards fade rather than making an entrance: the staggered reveal is
+  // for arriving at the list, and replaying it on every filter tweak read as a page reload.
+  const anim = swap ? '' : ` style="animation-delay:${Math.min(i * 35, 350)}ms"`;
+  const era = s.era === 'imx'
+    ? `<span class="trade-sale-era" title="${esc(t('trade.sales.imxWhy'))}">${esc(t('trade.sales.imxChip'))}</span>` : '';
   return `
-    <article class="trade-sale-card" style="animation-delay:${delay}ms">
+    <article class="trade-sale-card ${swap ? 'is-swap' : ''}"${anim}>
       <button type="button" class="trade-sale-media" ${openAttrs} aria-label="${esc(t('trade.sales.view'))}">${img}</button>
       <div class="trade-sale-body">
         <div class="trade-sale-top">
           <button type="button" class="trade-sale-name" ${openAttrs}>${esc(s.name)}</button>
           <span class="trade-sale-type">${esc(saleTypeLabel(s))}</span>
         </div>
-        <div class="trade-sale-tags">${rarityChip(s.rarity)}${rankChip(s.rank)}${status}</div>
+        <div class="trade-sale-tags">${rarityChip(s.rarity)}${rankChip(s.rank)}${status}${era}</div>
         ${saleTraitChips(s)}
         <div class="trade-sale-meta">
           ${wallets.join('')}
@@ -4790,7 +5363,7 @@ function saleCardHtml(s, i = 0) {
     </article>`;
 }
 
-function salesGridInnerHtml() {
+function salesGridInnerHtml(swap = false) {
   if (salesLoading && !(salesItems && salesItems.length)) {
     return `<div class="trade-grid-state"><span class="trade-mini-spin" aria-hidden="true"></span><p>${esc(t('trade.sales.loading'))}</p></div>`;
   }
@@ -4805,7 +5378,7 @@ function salesGridInnerHtml() {
     }
     return `<div class="trade-grid-state"><div class="trade-grid-state-ico" aria-hidden="true">${ico('receipt', 40)}</div><p>${esc(t('trade.sales.none'))}</p></div>`;
   }
-  return salesItems.map((s, i) => saleCardHtml(s, i)).join('');
+  return salesItems.map((s, i) => saleCardHtml(s, i, swap)).join('');
 }
 
 function salesLoadMoreHtml() {
@@ -4816,7 +5389,12 @@ function salesLoadMoreHtml() {
 function patchSalesGrid() {
   if (tradeTab !== 'sales') return;
   const g = root()?.querySelector('#trade-sales-grid');
-  if (g) g.innerHTML = salesGridInnerHtml();
+  if (!g) return;
+  // Were there cards here a moment ago? Then this is a swap, not an arrival — and that's
+  // true of a currency switch as much as a filter change.
+  const swap = !!g.querySelector('.trade-sale-card');
+  g.classList.remove('is-busy');
+  g.innerHTML = salesGridInnerHtml(swap);
   patchSalesLoadMore();
 }
 
@@ -7002,7 +7580,10 @@ function render() {
   // History is read-only by address — load it even when the wallet isn't on the right chain.
   if (account && tradeTab === 'history') maybeLoadHistory();
   // Sales History is public — no wallet needed. Load it the first time the tab is shown.
-  if (tradeTab === 'sales') maybeLoadSales();
+  // The canvas above was just replaced wholesale, so any chart still bound to the old one
+  // is holding a detached node and its resize listener — drop it and draw on the new one.
+  destroySalesChart();
+  if (tradeTab === 'sales') { maybeLoadSales(); renderSalesChart(); }
   // The holder-profile pill shows on every tab, so fetch the Discord session state once.
   wireProfileEvents();
   fetchMeForProfile();
@@ -7308,6 +7889,22 @@ function onClick(e) {
       syncFilterInputs();
       return applyFilters();
     }
+    case 'flt-tq-clear': {
+      traitQ = '';
+      const tq = root()?.querySelector('#flt-tq');
+      if (tq) { tq.value = ''; tq.focus(); }
+      syncTraitSearchClear();
+      const tr = root()?.querySelector('#flt-traits');
+      if (tr) tr.innerHTML = traitDropsHtml();
+      return;
+    }
+    case 'chart-scale':
+      // Cycle the pin: whichever mode is showing, the tap asks for the other one.
+      salesScale = salesScaleMode() === 'log' ? 'linear' : 'log';
+      return patchSalesChart();
+    case 'chart-reset':
+      resetChartZoom();
+      return patchChartStats();
     case 'flt-drawer':
       return setFltSheet(!fltOpenMobile);
     // --- Inventory filter (Sell/Transfer pickers) ---
@@ -7424,7 +8021,8 @@ function onChange(e) {
   setCurrency(e.target.value);
   try { localStorage.setItem('hcc-trade-cur', currency); } catch { /* private mode — fine */ }
   patchGrid();
-  patchSalesGrid(); // re-render sale prices in the newly picked currency (no-op off the Sales tab)
+  patchSalesGrid();  // re-render sale prices in the newly picked currency (no-op off the Sales tab)
+  patchSalesChart(); // and the axis, stats and tooltips that quote them
   if (modalToken) patchModal();
 }
 function onInput(e) {
@@ -7464,6 +8062,15 @@ function onInput(e) {
     const convId = e.target.id === 'trade-coll-offer-price' ? '#trade-coll-offer-conv' : '#trade-offer-conv';
     const convEl = root()?.querySelector(convId);
     if (convEl) convEl.textContent = offerCurrency === 'usdc' ? '' : offerConvHtml(e.target.value); // USDC = dollars, no conversion
+    return;
+  }
+  if (e.target?.id === 'flt-tq') {
+    traitQ = e.target.value.trim();
+    syncTraitSearchClear();
+    // The results live inside #flt-traits, which is NOT this input — repaint just that and
+    // the caret stays exactly where it was. No request either: the vocabulary is already here.
+    const tr = root()?.querySelector('#flt-traits');
+    if (tr) tr.innerHTML = traitDropsHtml();
     return;
   }
   if (e.target?.id === 'flt-q') {

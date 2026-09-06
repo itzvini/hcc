@@ -27,6 +27,7 @@ const LS_LIMITS_TTL_MS = 5 * 60 * 1000;
 const LS_LIMITS_FAIL_MS = 60 * 1000;
 const creatureFallback = require('./lib/creature-fallback'); // Blockscout read-only browse fallback
 const slimeIndex = require('./lib/slime-index');
+const imxArchive = require('./lib/imx-archive');        // pre-migration (StarkEx) Creature sales
 const { computeEligibility, BRACKETS } = require('./lib/eligibility');
 const { PROPOSITIONS, PROPOSITION_IDS } = require('./lib/propositions');
 const { POLLS, pollStatus } = require('./lib/polls');
@@ -36,7 +37,11 @@ const derive = require('./lib/derive-positions');
 // "on", so a minor env value doesn't silently leave a flag off. Used for APPLICATIONS_OPEN.
 const envFlag = v => /^(1|true|yes|on)$/i.test(String(v ?? '').trim());
 
-db.init()
+// Held so the warm-ups that read their own tables can wait for them to exist. On a database
+// that has been through this before, init is a handful of no-op CREATE IF NOT EXISTS calls;
+// on a fresh one it is the difference between the first market rebuild finding its history
+// and finding nothing.
+const dbReady = db.init()
   .then(() => db.recordEvent({ event: 'system.startup', detail: { applicationsOpen: envFlag(process.env.APPLICATIONS_OPEN), usingPostgres: db.usingPostgres } }))
   .catch(err => console.error('DB init failed:', err.message));
 
@@ -152,6 +157,33 @@ const fetchProgress  = { phase: 'idle', creaturePages: 0, landPages: 0 };
 // eligibility check can look up a single wallet without re-querying the chain.
 const holderCounts   = { creature: new Map(), land: new Map(), fetchedAt: 0 };
 
+// Blockscout is slow well before it is broken: a page of these endpoints normally takes six
+// to nine seconds, and a sweep is sixty-odd of them in a row. On a fifteen-second budget with
+// no second try, one ordinary slow page threw away the whole sweep — which is how a parcel
+// count that had already cost seven minutes of paging turned into "LAND unavailable" for the
+// next twelve hours. So: room to be slow, and two more goes before a page gives up. A 4xx we
+// caused is not retried; a 429 or a 5xx or a timeout is.
+const BLOCKSCOUT_TIMEOUT_MS = 30000;
+
+async function blockscoutFetch(url, label) {
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await new Promise(r => setTimeout(r, 1000 * attempt));
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(BLOCKSCOUT_TIMEOUT_MS) });
+      if (res.ok) return res.json();
+      const err = new Error(`Blockscout API ${res.status} for ${label}`);
+      err.retryable = res.status >= 500 || res.status === 429;
+      if (!err.retryable) throw err;
+      lastErr = err;
+    } catch (err) {
+      if (err.retryable === false) throw err;
+      lastErr = err; // timeouts and dropped connections are worth another go
+    }
+  }
+  throw lastErr;
+}
+
 // Fetch all pages from any Blockscout-style /holders endpoint.
 // Returns Map<lowercaseAddress, nftCount>.
 // onPage() is called after each page is received.
@@ -164,9 +196,7 @@ async function fetchHolderCounts(baseUrl, onPage) {
     if (pageParams) {
       for (const [k, v] of Object.entries(pageParams)) url.searchParams.set(k, v);
     }
-    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(15000) });
-    if (!res.ok) throw new Error(`Blockscout API ${res.status} for ${baseUrl}`);
-    const body = await res.json();
+    const body = await blockscoutFetch(url.toString(), baseUrl);
     for (const item of (body.items ?? [])) {
       const addr = item.address?.hash;
       if (typeof addr === 'string') counts.set(addr.toLowerCase(), Number(item.value) || 1);
@@ -186,9 +216,7 @@ async function fetchBlockscoutPages(baseUrl, onBody, extraParams = {}) {
     const url = new URL(baseUrl);
     for (const [k, v] of Object.entries(extraParams)) url.searchParams.set(k, v);
     if (pageParams) for (const [k, v] of Object.entries(pageParams)) url.searchParams.set(k, v);
-    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(15000) });
-    if (!res.ok) throw new Error(`Blockscout API ${res.status} for ${baseUrl}`);
-    const body = await res.json();
+    const body = await blockscoutFetch(url.toString(), baseUrl);
     onBody(body);
     pageParams = body.next_page_params ?? null;
   } while (pageParams);
@@ -640,8 +668,13 @@ const OPENSEA_API_KEY   = process.env.OPENSEA_API_KEY || '';
 const LAND_ETH_SYMBOLS  = new Set(['ETH', 'WETH']); // 1:1 ETH-equivalent payment tokens
 const MARKET_CACHE_TTL_MS = 30 * 60 * 1000;
 const DAY_MS              = 24 * 60 * 60 * 1000;
-const HISTORY_DAYS        = 730; // how far back the price chart reaches (~2y; LAND has the depth, Creatures ~9.5mo)
-const HISTORY_MS          = HISTORY_DAYS * DAY_MS;
+// How many days of our own floor snapshots we read. Neither price line is bounded by it any
+// more: Creatures run from the collection's first day in November 2021 (the live zkEVM feed on
+// top of lib/imx-archive.js) and LAND from OpenSea's oldest sale in April 2022.
+const HISTORY_DAYS        = 730;
+// How far back each market rebuild re-reads LAND's sales. Everything older is held from the
+// one deep sweep, so this only has to cover what can have changed since.
+const LAND_RECENT_MS      = 45 * DAY_MS;
 const MAX_MARKET_PAGES    = 30; // safety cap; current data is well within this
 
 const marketCache = { data: null, fetchedAt: 0, inFlight: null };
@@ -756,9 +789,13 @@ function cgFetch(url) {
   });
 }
 
-// Daily ETH→USD lookup from CoinGecko. Returns { at(ts), current }.
-// at(ts) finds the closest prior day's price (within a week) so each historical
-// sale is valued in USD at the rate that actually applied then, not today's.
+// Daily ETH→USD lookup. Returns { at(ts), current }; at(ts) answers with the rate that
+// actually applied on that day, so a 2022 sale is valued in 2022 dollars.
+//
+// CoinGecko's free tier only gives us the last 365 days. The years before that come from the
+// pre-migration archive, where every trade carries the rate that applied when it settled.
+// Between the two lies a hole (the archive stops at the July 2025 migration, CoinGecko's
+// window keeps sliding forward), and days in it take the rate of the nearest day we know.
 async function fetchEthUsd() {
   const res = await cgFetch(
     'https://api.coingecko.com/api/v3/coins/ethereum/market_chart?vs_currency=usd&days=365&interval=daily',
@@ -769,23 +806,38 @@ async function fetchEthUsd() {
   const byDay = new Map();
   for (const [ms, usd] of prices) byDay.set(Math.floor(ms / DAY_MS), usd);
   const current = prices.length ? prices[prices.length - 1][1] : null;
-  const dayKeys = [...byDay.keys()];
-  const minDay = dayKeys.length ? Math.min(...dayKeys) : null;
-  const maxDay = dayKeys.length ? Math.max(...dayKeys) : null;
-  // Free CoinGecko only covers ~365 days; for dates outside that, clamp to the
-  // nearest known rate (the 2-year LAND tail predates the rate history).
-  const at = ts => {
-    if (minDay == null) return current;
-    const day = Math.floor(ts / DAY_MS);
-    if (day <= minDay) return byDay.get(minDay);
-    if (day >= maxDay) return byDay.get(maxDay);
-    for (let i = 0; i <= 10; i++) {
-      if (byDay.has(day - i)) return byDay.get(day - i);
-      if (byDay.has(day + i)) return byDay.get(day + i);
+  // CoinGecko wins where both have a day, then our own stored rates, then the archive's —
+  // which is only consulted on the one boot that sweeps it, before anything has been stored.
+  const stored = await db.getStoredEthUsd().catch(err => {
+    console.error('Stored ETH/USD read failed:', err.message);
+    return new Map();
+  });
+  for (const source of [stored, imxArchive.archiveRates()]) {
+    for (const [date, rate] of source) {
+      const day = dayIndex(date);
+      if (!byDay.has(day) && rate > 0) byDay.set(day, rate);
     }
-    return current;
+  }
+  // Sorted once so a lookup is a binary search for the nearest known day rather than a
+  // scan outwards — the table is now years long and holed, and a scan that ran off the
+  // end used to fall back to TODAY's rate, the one number a historical sale must never wear.
+  const days = [...byDay.keys()].sort((a, b) => a - b);
+  const at = ts => {
+    if (!days.length) return current;
+    const day = Math.floor(ts / DAY_MS);
+    let lo = 0, hi = days.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (days[mid] < day) lo = mid + 1; else hi = mid;
+    }
+    const after = days[lo];
+    const before = lo > 0 ? days[lo - 1] : after;
+    const nearest = Math.abs(after - day) <= Math.abs(day - before) ? after : before;
+    return byDay.get(nearest);
   };
-  return { at, current };
+  // The oldest day the table can speak for, so a caller can tell a full one from the
+  // 365-day version built before the archive sweep landed.
+  return { at, current, from: days.length ? days[0] : null };
 }
 
 // Extra display currencies (USD stays the canonical fiat; these are derived from
@@ -837,25 +889,19 @@ async function getEthUsdDaily() {
   return ethUsdDailyCache.data || ethUsdDailyCache.inFlight;
 }
 
-// Bucket sales into daily aggregates: low/high sale, total volume, and trade
-// count, in both ETH and USD. Each sale: { ts, eth, usd } (usd may be null if no
-// rate was available). The client picks a metric, then sums or averages per interval.
+// Bucket sales into daily aggregates: cheapest sale, dearest sale, ETH volume and trade
+// count, from sales of { ts, eth }. No dollars here — the store keeps one rate per day and
+// every USD figure on the chart is derived from it, so a day is valued once, not per sale.
 function aggregateByDay(sales) {
   const byDay = new Map();
   for (const s of sales) {
     const day = Math.floor(s.ts / DAY_MS);
-    let a = byDay.get(day);
-    if (!a) { a = { ethLow: s.eth, ethHigh: s.eth, ethSum: 0, count: 0, usdLow: null, usdHigh: null, usdSum: 0, usdCount: 0 }; byDay.set(day, a); }
-    a.ethLow = Math.min(a.ethLow, s.eth);
-    a.ethHigh = Math.max(a.ethHigh, s.eth);
-    a.ethSum += s.eth;
-    a.count++;
-    if (s.usd != null) {
-      a.usdLow = a.usdLow == null ? s.usd : Math.min(a.usdLow, s.usd);
-      a.usdHigh = a.usdHigh == null ? s.usd : Math.max(a.usdHigh, s.usd);
-      a.usdSum += s.usd;
-      a.usdCount++;
-    }
+    const a = byDay.get(day);
+    if (!a) { byDay.set(day, { lowEth: s.eth, highEth: s.eth, volEth: s.eth, sales: 1 }); continue; }
+    a.lowEth = Math.min(a.lowEth, s.eth);
+    a.highEth = Math.max(a.highEth, s.eth);
+    a.volEth += s.eth;
+    a.sales++;
   }
   return byDay;
 }
@@ -875,6 +921,78 @@ async function recordFloorSnapshot(collection, day, ethFloor, usdFloor) {
   }
 }
 
+// 'YYYY-MM-DD' → the day index the series maps are keyed by (UTC days since the epoch),
+// and back again.
+const dayIndex = date => Math.floor(Date.parse(`${date}T00:00:00Z`) / DAY_MS);
+const dayIso = day => new Date(day * DAY_MS).toISOString().slice(0, 10);
+// Postgres hands NUMERIC back as a string; every stored number comes through here.
+const num = v => (v == null || v === '' ? null : Number(v));
+const round4or = v => (v == null ? null : round4(v));
+
+// The chart's stored history: { creature: Map(day -> row), land: Map(day -> row) }. A read
+// failure is not fatal — the rebuild simply starts from nothing and writes what it learns.
+async function readMarketDaily() {
+  const out = { creature: new Map(), land: new Map() };
+  let rows = [];
+  try { rows = await db.getMarketDaily(); }
+  catch (err) { console.error('Market history read failed:', err.message); return out; }
+  for (const r of rows) {
+    const days = out[r.collection];
+    if (!days) continue;
+    days.set(dayIndex(r.date), {
+      lowEth: num(r.low_eth), highEth: num(r.high_eth), volEth: num(r.vol_eth),
+      sales: r.sales != null ? Number(r.sales) : null,
+      floorEth: num(r.floor_eth), ethUsd: num(r.eth_usd),
+    });
+  }
+  return out;
+}
+
+// Near enough to be the same number: NUMERIC round-trips through Postgres, and rewriting a
+// row because the fourteenth decimal moved is not a change worth a write.
+const sameNumber = (a, b) => a != null && Math.abs(a - b) <= Math.abs(b) * 1e-9;
+
+/**
+ * Fold what a source knows about one day into the store, and note the write it implies.
+ *
+ * A field left out says nothing about that field and leaves the stored value alone — a
+ * source that only knows the floor never erases the day's sales. A field equal to what is
+ * already stored writes nothing at all, which is what keeps an ordinary rebuild down to the
+ * day or two that actually moved instead of the whole five years.
+ *
+ * Several sources speak about the same day — a pre-migration day has its sales from the
+ * trade sweep and its floor from the daily roll-up — so what is noted here is the day, not
+ * the change. The row is read back off the store at the end, once, whole.
+ */
+function mergeDay(state, collection, day, fields, source) {
+  const days = state.store[collection];
+  if (!days || !Number.isFinite(day)) return;
+  const prev = days.get(day) || {};
+  const next = { ...prev };
+  let moved = false;
+  for (const [key, value] of Object.entries(fields)) {
+    if (value == null || !Number.isFinite(value)) continue;
+    if (!sameNumber(prev[key], value)) moved = true;
+    next[key] = value;
+  }
+  if (!moved) return;
+  next.source = source;
+  days.set(day, next);
+  state.dirty.add(`${collection}|${day}`);
+}
+
+// The days this rebuild moved, each as one whole row. One row per day is not a tidiness
+// point: a batch that named the same day twice would be rejected outright.
+function dirtyRows(state) {
+  const rows = [];
+  for (const key of state.dirty) {
+    const [collection, day] = key.split('|');
+    const d = state.store[collection]?.get(Number(day));
+    if (d) rows.push({ date: dayIso(Number(day)), collection, ...d });
+  }
+  return rows;
+}
+
 // Read stored listing-floor snapshots into per-collection day-index maps of { eth, usd }.
 async function getListingSnapshots() {
   const out = { creature: new Map(), land: new Map() };
@@ -887,71 +1005,204 @@ async function getListingSnapshots() {
     const eth = r.eth_floor != null ? Number(r.eth_floor) : null;
     const usd = r.usd_floor != null ? Math.round(Number(r.usd_floor)) : null;
     if (eth == null && usd == null) continue;
-    const day = Math.floor(new Date(`${r.date}T00:00:00Z`).getTime() / DAY_MS);
-    m.set(day, { eth, usd });
+    m.set(dayIndex(r.date), { eth, usd });
   }
   return out;
 }
 
-// One daily series per collection: every day with a sale and/or a floor snapshot
-// becomes a point carrying that day's high sale, low sale, and listing floor (any
-// may be null). Sale history runs ~2y back; the floor only exists from launch day
-// on. The client chooses a metric, buckets by interval, and averages.
-function buildCollectionSeries(saleDays, floorDays) {
-  const days = [...new Set([...saleDays.keys(), ...floorDays.keys()])].sort((a, b) => a - b);
-  return days.map(day => {
-    const s = saleDays.get(day);
-    const f = floorDays.get(day);
+// Where our own snapshots stop, the orderbook still remembers. Immutable keeps every
+// Creature listing it has ever taken — filled, cancelled, expired — each stamped with when
+// it was created and when it stopped standing, so the cheapest listing that stood on any
+// past day can be rebuilt from them. That covers the months between the July 2025 migration
+// and the day we started recording a floor of our own, which nothing else does: the StarkEx
+// orderbook went off with the rollup and the zkEVM one only remembers back to August 2025.
+//
+// A day's value is the cheapest listing that stood at any point in it, so it answers "what
+// was the least a Creature could be bought for that day". Our own snapshots sample the book
+// at one moment instead, and where both have a day, the sample wins — it is a floor someone
+// actually saw.
+//
+// The whole book is ~2,500 orders in ~15 pages and nothing about a closed order ever
+// changes, so this is swept once per process. ETH only: USDC listings arrived long after our
+// own snapshots did, and pricing them would need a rate for a day we may not have one for.
+const zkFloorCache = { data: null, inFlight: null, failedAt: 0 };
+const ZK_FLOOR_RETRY_MS = 30 * 60 * 1000;
+
+async function sweepZkFloorHistory() {
+  const now = Date.now();
+  const today = Math.floor(now / DAY_MS);
+  const byDay = new Map();
+  const base = `https://api.immutable.com/v1/chains/${IMX_ZKEVM_CHAIN}/orders/listings`;
+  for (const status of ['FILLED', 'CANCELLED', 'EXPIRED', 'ACTIVE']) {
+    await imxPaged(base, {
+      sell_item_contract_address: CREATURE_CONTRACT,
+      buy_item_contract_address: IMX_ETH_TOKEN,
+      status,
+      page_size: '200',
+      sort_by: 'created_at',
+      sort_direction: 'asc',
+    }, items => {
+      for (const o of items) {
+        const from = Date.parse(o.created_at);
+        // A listing stops standing when it fills or is cancelled, and never outlives its own
+        // expiry — whichever came first ends it. An active one still stands today.
+        const ends = [Date.parse(o.end_at)];
+        if (status === 'FILLED' || status === 'CANCELLED') ends.push(Date.parse(o.updated_at));
+        const until = Math.min(now, ...ends.filter(Number.isFinite));
+        const eth = Number(o.buy?.[0]?.amount) / 1e18;
+        if (!Number.isFinite(from) || !Number.isFinite(until) || !(eth > 0)) continue;
+        const last = Math.min(today, Math.floor(until / DAY_MS));
+        for (let day = Math.floor(from / DAY_MS); day <= last; day++) {
+          const cheapest = byDay.get(day);
+          if (cheapest == null || eth < cheapest) byDay.set(day, eth);
+        }
+      }
+    });
+  }
+  console.log(`zkEVM floor history: ${byDay.size} days rebuilt from the Creature orderbook`);
+  return byDay;
+}
+
+/** Day index -> cheapest ETH listing that stood that day. Empty map if the sweep failed. */
+function getZkFloorHistory() {
+  if (zkFloorCache.data) return Promise.resolve(zkFloorCache.data);
+  if (!zkFloorCache.inFlight && Date.now() - zkFloorCache.failedAt > ZK_FLOOR_RETRY_MS) {
+    zkFloorCache.inFlight = sweepZkFloorHistory()
+      .then(map => { zkFloorCache.data = map; return map; })
+      .catch(err => {
+        zkFloorCache.failedAt = Date.now();
+        console.error('zkEVM floor history sweep failed:', err.message);
+        return new Map();
+      })
+      .finally(() => { zkFloorCache.inFlight = null; });
+  }
+  return zkFloorCache.inFlight || Promise.resolve(new Map());
+}
+
+// One daily series for the chart, oldest first. Every dollar figure is derived from the
+// rate stored against that same day, so a 2022 point stays in 2022 money for good — no
+// upstream we can no longer query, and no rate table that only reaches back a year.
+function buildCollectionSeries(days) {
+  return [...days.keys()].sort((a, b) => a - b).map(day => {
+    const d = days.get(day);
+    const rate = d.ethUsd;
+    const usd = eth => (eth != null && rate != null ? Math.round(eth * rate) : null);
     return {
-      date: new Date(day * DAY_MS).toISOString().slice(0, 10),
-      highEth: s ? round4(s.ethHigh) : null,
-      highUsd: s && s.usdHigh != null ? Math.round(s.usdHigh) : null,
-      lowEth:  s ? round4(s.ethLow) : null,
-      lowUsd:  s && s.usdLow != null ? Math.round(s.usdLow) : null,
-      floorEth: f ? f.eth : null,
-      floorUsd: f ? f.usd : null,
-      count:   s ? s.count : null,
-      volEth:  s ? round4(s.ethSum) : null,
-      volUsd:  s && s.usdCount ? Math.round(s.usdSum) : null,
+      date: dayIso(day),
+      highEth: round4or(d.highEth), highUsd: usd(d.highEth),
+      lowEth:  round4or(d.lowEth),  lowUsd:  usd(d.lowEth),
+      floorEth: round4or(d.floorEth), floorUsd: usd(d.floorEth),
+      count:  d.sales ?? null,
+      volEth: round4or(d.volEth), volUsd: usd(d.volEth),
     };
   });
 }
 
-// LAND via OpenSea: current floor + 30d volume + ETH-denominated sale history.
-async function fetchLandFromOpenSea(cutoff) {
-  const headers = { Accept: 'application/json', 'X-API-KEY': OPENSEA_API_KEY };
+// OpenSea rate-limits, and an 81-page sweep is exactly the shape of request that trips it.
+// A 429 or a 5xx used to end the sweep and shorten the LAND line by years, so those are
+// retried with a pause; a 4xx of our own making still fails at once.
+async function osFetch(url, headers) {
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await new Promise(r => setTimeout(r, 1500 * attempt));
+    try {
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
+      if (res.ok) return res.json();
+      const err = new Error(`OpenSea ${res.status} for ${url}`);
+      if (res.status < 500 && res.status !== 429) throw err;
+      lastErr = err;
+    } catch (err) {
+      if (err.message?.startsWith('OpenSea 4') && !err.message.startsWith('OpenSea 429')) throw err;
+      lastErr = err;
+    }
+  }
+  throw lastErr;
+}
 
-  const statsRes = await fetch(`https://api.opensea.io/api/v2/collections/${LAND_OS_SLUG}/stats`, {
-    headers, signal: AbortSignal.timeout(20000),
-  });
-  if (!statsRes.ok) throw new Error(`OpenSea stats ${statsRes.status}`);
-  const statsBody = await statsRes.json();
-  const total = statsBody.total ?? {};
-  const intervals = {};
-  for (const it of (statsBody.intervals ?? [])) intervals[it.interval] = it;
-
+// Page OpenSea's sale events backwards until they run past `cutoff` (or the page cap).
+// Returns the sales and the moment they actually reach back to, which is what lets the
+// caller join them to the deep sweep without overlap. 50 an event page is OpenSea's max.
+async function fetchLandSales(headers, cutoff, maxPages) {
   const sales = [];
-  let cursor = null, pages = 0, reachedCutoff = false;
+  let cursor = null, pages = 0, reachedCutoff = false, oldest = Infinity;
   do {
     const url = new URL(`https://api.opensea.io/api/v2/events/collection/${LAND_OS_SLUG}`);
     url.searchParams.set('event_type', 'sale');
     url.searchParams.set('limit', '50');
     if (cursor) url.searchParams.set('next', cursor);
-    const res = await fetch(url.toString(), { headers, signal: AbortSignal.timeout(20000) });
-    if (!res.ok) throw new Error(`OpenSea events ${res.status}`);
-    const body = await res.json();
+    const body = await osFetch(url.toString(), headers);
     for (const e of (body.asset_events ?? [])) {
-      const p = e.payment;
-      if (!p || !LAND_ETH_SYMBOLS.has(p.symbol)) continue;
-      const price = Number(p.quantity) / Math.pow(10, p.decimals ?? 18);
       const ts = Number(e.event_timestamp) * 1000; // OpenSea timestamps are epoch seconds
-      if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(ts)) continue;
+      if (Number.isFinite(ts)) oldest = Math.min(oldest, ts);
+      const p = e.payment;
+      // A LAND sale settles in ETH or in WETH, which is the same money; anything else
+      // (a sale paid in some other token) has no ETH price and is left out.
+      if (!p || !LAND_ETH_SYMBOLS.has(p.symbol)) continue;
+      const eth = Number(p.quantity) / Math.pow(10, p.decimals ?? 18);
+      if (!Number.isFinite(eth) || eth <= 0 || !Number.isFinite(ts)) continue;
       if (ts < cutoff) { reachedCutoff = true; continue; }
-      sales.push({ ts, price });
+      sales.push({ ts, eth });
     }
     cursor = body.next ?? null;
     pages++;
-  } while (cursor && !reachedCutoff && pages < MAX_MARKET_PAGES);
+  } while (cursor && !reachedCutoff && pages < maxPages);
+  // Where the window really starts: the cutoff if we reached it, otherwise the oldest
+  // event we saw. Reporting the cutoff either way would open a hole under the tail.
+  return { sales, from: reachedCutoff ? cutoff : Math.min(oldest, cutoff) };
+}
+
+// LAND's whole sale history, swept once. OpenSea holds it all — 4,000-odd events back to
+// April 2022 — but it takes 81 pages and half a minute to page through, which is not a
+// thing to redo every half hour when only the last few days can have changed. So: one deep
+// sweep, held for the life of the process, with each rebuild fetching just the window since
+// and joining them. Same shape as the Creature archive, and the same failure behaviour —
+// an empty result costs the tail of the LAND line and nothing else.
+const LAND_ARCHIVE_MAX_PAGES = 200;
+const landSalesArchive = { data: null, inFlight: null, failedAt: 0, sweptAt: Date.now() };
+
+function getLandSalesArchive() {
+  if (landSalesArchive.data) return Promise.resolve(landSalesArchive.data);
+  if (!OPENSEA_API_KEY) return Promise.resolve([]);
+  if (!landSalesArchive.inFlight && Date.now() - landSalesArchive.failedAt > MARKET_CACHE_TTL_MS) {
+    const startedAt = Date.now();
+    landSalesArchive.inFlight = fetchLandSales(
+      { Accept: 'application/json', 'X-API-KEY': OPENSEA_API_KEY }, 0, LAND_ARCHIVE_MAX_PAGES,
+    )
+      .then(({ sales }) => {
+        landSalesArchive.data = sales;
+        // The recent window is told to reach back at least this far, so a process that
+        // outlives its own history window still hands over without a gap.
+        landSalesArchive.sweptAt = startedAt;
+        console.log(`OpenSea LAND archive: ${sales.length} sales back to ${sales.length ? new Date(Math.min(...sales.map(s => s.ts))).toISOString().slice(0, 10) : '-'}`);
+        return sales;
+      })
+      .catch(err => {
+        landSalesArchive.failedAt = Date.now();
+        console.error('OpenSea LAND archive sweep failed:', err.message);
+        return [];
+      })
+      .finally(() => { landSalesArchive.inFlight = null; });
+  }
+  return landSalesArchive.inFlight || Promise.resolve([]);
+}
+
+// LAND via OpenSea: current floor + 30d volume + ETH-denominated sale history.
+async function fetchLandFromOpenSea(cutoff, deep) {
+  const headers = { Accept: 'application/json', 'X-API-KEY': OPENSEA_API_KEY };
+
+  const statsBody = await osFetch(`https://api.opensea.io/api/v2/collections/${LAND_OS_SLUG}/stats`, headers);
+  const total = statsBody.total ?? {};
+  const intervals = {};
+  for (const it of (statsBody.intervals ?? [])) intervals[it.interval] = it;
+
+  // `deep` asks for the whole history, which is wanted exactly once — the day it goes into
+  // our own store. After that this reads the recent window alone and the store holds the
+  // rest. The join is by time, so there is nothing to de-duplicate: whatever came before the
+  // window opens belongs to the older list.
+  const older = deep ? await getLandSalesArchive().catch(() => []) : [];
+  const from = older.length ? Math.min(cutoff, landSalesArchive.sweptAt) : cutoff;
+  const recent = await fetchLandSales(headers, from, MAX_MARKET_PAGES);
+  const sales = [...older.filter(s => s.ts < recent.from), ...recent.sales];
 
   return {
     currency: 'ETH',
@@ -982,30 +1233,59 @@ async function fetchLandFromCoinGecko() {
   };
 }
 
-async function fetchLandData(cutoff) {
+async function fetchLandData(cutoff, deep) {
   if (OPENSEA_API_KEY) {
-    try { return await fetchLandFromOpenSea(cutoff); }
+    try { return await fetchLandFromOpenSea(cutoff, deep); }
     catch (err) { console.error('OpenSea LAND failed, falling back to CoinGecko:', err.message); }
   }
   return fetchLandFromCoinGecko();
 }
 
 async function computeMarketStats() {
-  const cutoff = Date.now() - HISTORY_MS;
   const cutoff30d = Date.now() - 30 * DAY_MS;
+
+  // Which closed histories have already been read into our own store. Each is a sweep of an
+  // upstream that will never say anything new about those days — a rollup that has been shut
+  // off, an orderbook's dead listings, a marketplace's own event log — so it is read once in
+  // the life of the site and kept, not re-read on every restart. Delete a `market_sync` row
+  // to make the next rebuild read that source again.
+  const synced = await db.getMarketSync().catch(err => {
+    console.error('Market sync state read failed:', err.message);
+    return {};
+  });
+  const state = { store: await readMarketDaily(), dirty: new Set() };
+  // A day that counted sales but priced none of them is the fingerprint of a bug, not of a
+  // quiet market — every sale has a price. Rows like that can't be mended from the recent
+  // window, so the sweep that wrote them is un-sealed and run once more. It is also the only
+  // check that would have caught the field-name slip that put LAND in this state.
+  const unpriced = collection => {
+    const days = [...state.store[collection].values()].filter(d => d.sales > 0 && d.lowEth == null).length;
+    if (days) console.warn(`Market history: ${days} ${collection} day(s) have sales but no price — re-reading that source`);
+    return days > 0;
+  };
+  const needArchive = !synced['imx-archive'] || unpriced('creature');
+  const needZkFloor = !synced['zk-orderbook'];
+  const needLandArchive = !synced['opensea-archive'] || unpriced('land');
 
   // Each source degrades independently — a transient failure in one (e.g. the
   // orderbook 500ing) blanks just that figure instead of taking down the whole tab.
   // ethUsd + fxRates come from the shared caches (getEthUsdDaily / getMarketplaceFx),
   // the same ones the marketplace endpoints use, so the snapshot rebuild doesn't spend
   // extra CoinGecko credit on rates it can read from cache.
-  const [creatureSalesRaw, creatureFloorEth, creatureFloorUsdc, land, ethUsd, fx] = await Promise.all([
+  const [creatureSalesRaw, creatureFloorEth, creatureFloorUsdc, land, ethUsd, fx, archiveSales, archiveDays, zkFloorDays] = await Promise.all([
     fetchCreatureSales().catch(err => { console.error('Creature sales failed:', err.message); return []; }),
     fetchCreatureFloorEth().catch(err => { console.error('Creature floor failed:', err.message); return null; }),
     fetchCreatureFloorUsdc().catch(err => { console.error('Creature USDC floor failed:', err.message); return null; }),
-    fetchLandData(cutoff).catch(err => { console.error('LAND market data failed:', err.message); return null; }),
+    fetchLandData(Date.now() - LAND_RECENT_MS, needLandArchive).catch(err => { console.error('LAND market data failed:', err.message); return null; }),
     getEthUsdDaily().then(d => d || { at: () => null, current: null }).catch(err => { console.error('ETH/USD rate failed:', err.message); return { at: () => null, current: null }; }),
     getMarketplaceFx().catch(err => { console.error('FX rates failed:', err.message); return { fxRates: { usd: 1 } }; }),
+    // The years the live feeds have no memory of: the StarkEx sales and daily floors up to
+    // the July 2025 migration, and the zkEVM floor rebuilt from the months after it. Four
+    // fifths of every Creature ever sold was sold before the migration, so without these the
+    // chart opens mid-story. Skipped outright once they are in the store.
+    needArchive ? getImxSales() : [],
+    needArchive ? imxArchive.getArchiveMetrics().catch(() => []) : [],
+    needZkFloor ? getZkFloorHistory().catch(() => new Map()) : new Map(),
   ]);
 
   const fxRates = fx.fxRates || { usd: 1 };
@@ -1014,38 +1294,114 @@ async function computeMarketStats() {
   // Normalize every Creature sale to an ETH price: USDC sales convert at their OWN day's rate
   // (so historical volume is valued correctly), dropping any USDC sale from a day with no rate.
   const creatureSales = creatureSalesRaw.map(s => {
-    if (s.currency === 'usdc') { const r = ethUsd.at(s.ts); return r ? { ts: s.ts, price: s.amt / r } : null; }
-    return { ts: s.ts, price: s.price };
+    if (s.currency === 'usdc') { const r = ethUsd.at(s.ts); return r ? { ts: s.ts, eth: s.amt / r } : null; }
+    return { ts: s.ts, eth: s.price };
   }).filter(Boolean);
   // Headline floor = the cheapest listing across BOTH currencies (the USDC floor converted to
   // ETH at the current rate), so a below-ETH-floor USDC listing correctly moves the floor.
   const usdcFloorEth = creatureFloorUsdc != null && rate ? creatureFloorUsdc / rate : null;
   const creatureFloor = [creatureFloorEth, usdcFloorEth].filter(v => v != null && v > 0).reduce((m, v) => (m == null || v < m ? v : m), null);
-  // Tag each sale with the USD value at its own time, then aggregate.
-  const withUsd = s => ({ ts: s.ts, eth: s.price, usd: ethUsd.at(s.ts) != null ? s.price * ethUsd.at(s.ts) : null });
 
   // 30-day Creature activity
   let creatureSales30 = 0, creatureVol30 = 0;
-  for (const s of creatureSales) if (s.ts >= cutoff30d) { creatureSales30++; creatureVol30 += s.price; }
+  for (const s of creatureSales) if (s.ts >= cutoff30d) { creatureSales30++; creatureVol30 += s.eth; }
 
-  // Daily lowest-sale aggregates seed the pre-launch history (the only price
-  // signal that exists for past days).
-  const creatureDays = aggregateByDay(creatureSales.filter(s => s.ts >= cutoff).map(withUsd));
-  const landDays = aggregateByDay((land?.sales ?? []).filter(s => s.ts >= cutoff).map(withUsd));
-
-  // Sample today's *listing* floor and store it, so the chart becomes a true
-  // daily floor from here on (listings override the sale proxy day by day).
+  // Sample today's *listing* floor and store it. This is the raw observation — the floor as
+  // it stood when we looked — and it is the only record of the floor on any day since we
+  // started taking them.
   const today = new Date().toISOString().slice(0, 10);
   await recordFloorSnapshot('creature', today, creatureFloor, toUsd(creatureFloor));
-  if (land) {
-    const landEth = land.currency === 'ETH' ? land.floor : null;
-    const landUsd = land.floorUsd ?? toUsd(land.floor);
-    await recordFloorSnapshot('land', today, landEth, landUsd);
+  const landFloorEth = land ? (land.currency === 'ETH' ? land.floor : (land.floorUsd != null && rate ? land.floorUsd / rate : null)) : null;
+  if (land) await recordFloorSnapshot('land', today, land.currency === 'ETH' ? land.floor : null, land.floorUsd ?? toUsd(land.floor));
+
+  // --- the chart's history: what is stored, plus whatever this rebuild learned -------------
+  // Each day is valued at its own rate. Pre-migration days take theirs straight from the
+  // trades that settled that day, which is both the best number available and one that does
+  // not depend on the rate table having been rebuilt since the archive sweep landed.
+  const archiveRates = needArchive ? imxArchive.archiveRates() : new Map();
+  const rateFor = day => archiveRates.get(dayIso(day)) ?? ethUsd.at(day * DAY_MS);
+  // Marking a source done is a promise that what was written is right, so it waits until the
+  // rate table actually reaches back through the years — at boot the market can be rebuilt
+  // before the sweep that widens it has landed.
+  const rateTableDeep = ethUsd.from != null && ethUsd.from < dayIndex('2024-01-01');
+
+  if (needArchive) {
+    const archiveDaySales = [];
+    for (const a of archiveSales) {
+      const ts = Date.parse(a.at);
+      if (Number.isFinite(ts)) archiveDaySales.push({ ts, eth: a.priceEth });
+    }
+    for (const [day, agg] of aggregateByDay(archiveDaySales)) {
+      mergeDay(state, 'creature', day, { ...agg, ethUsd: rateFor(day) }, 'imx-archive');
+    }
+    // The archive publishes a dollar floor of its own, but it can come off a listing priced
+    // in another coin — a fifth of its days imply an ETH rate more than 10% from the real
+    // one — so only the ETH floor is taken, and the day's own rate turns it into dollars.
+    for (const d of archiveDays) {
+      const day = dayIndex(d.date);
+      mergeDay(state, 'creature', day, { floorEth: d.floorEth, ethUsd: rateFor(day) }, 'imx-archive');
+    }
+  }
+  for (const [day, eth] of zkFloorDays) {
+    mergeDay(state, 'creature', day, { floorEth: eth, ethUsd: rateFor(day) }, 'zk-orderbook');
+  }
+  // What the live feeds cover — the recent end of both lines, re-read every rebuild.
+  for (const [day, agg] of aggregateByDay(creatureSales)) {
+    mergeDay(state, 'creature', day, { ...agg, ethUsd: rateFor(day) }, 'zkevm');
+  }
+  for (const [day, agg] of aggregateByDay(land?.sales ?? [])) {
+    mergeDay(state, 'land', day, { ...agg, ethUsd: rateFor(day) }, 'opensea');
+  }
+  // Our own floor snapshots, the only record of the floor on any day since June.
+  const listing = await getListingSnapshots();
+  for (const collection of ['creature', 'land']) {
+    for (const [day, v] of listing[collection]) {
+      const dayRate = rateFor(day);
+      // A snapshot taken while LAND was falling back to CoinGecko has dollars but no ETH.
+      const eth = v.eth ?? (v.usd != null && dayRate ? v.usd / dayRate : null);
+      mergeDay(state, collection, day, { floorEth: eth, ethUsd: dayRate }, 'snapshot');
+    }
+  }
+  // Today's floor, rounded exactly as the snapshot above stored it — otherwise the two
+  // disagree in the ninth decimal and every past day gets rewritten on every rebuild.
+  const todayIdx = Math.floor(Date.now() / DAY_MS);
+  mergeDay(state, 'creature', todayIdx, { floorEth: round4or(creatureFloor), ethUsd: rate }, 'live');
+  mergeDay(state, 'land', todayIdx, { floorEth: round4or(landFloorEth), ethUsd: rate }, 'live');
+
+  let stored = true;
+  const writes = dirtyRows(state);
+  if (writes.length) {
+    try {
+      await db.upsertMarketDaily(writes);
+      const swept = [needArchive && 'imx-archive', needZkFloor && 'zk-orderbook', needLandArchive && 'opensea-archive'].filter(Boolean);
+      console.log(`Market history: ${writes.length} day(s) written; creature ${state.store.creature.size}, land ${state.store.land.size} held${swept.length ? `; swept ${swept.join(' + ')}` : ''}`);
+    } catch (err) { console.error('Market history write failed:', err.message); stored = false; }
+  }
+  // A sweep only counts as done once its days are safely written — otherwise a failed write
+  // would retire the sweep and leave the years it covers missing for good.
+  if (stored && rateTableDeep) {
+    const seal = (source, from, to, rows) => db.setMarketSync(source, { from, to, rows })
+      .then(() => console.log(`Market history: ${source} sealed, ${rows} days ${from} to ${to} — not read again`))
+      .catch(err => console.error(`Market sync mark (${source}) failed:`, err.message));
+    if (needArchive && archiveSales.length && archiveDays.length) {
+      await seal('imx-archive', archiveDays[0].date, archiveDays[archiveDays.length - 1].date, archiveDays.length);
+    }
+    if (needZkFloor && zkFloorDays.size) {
+      const days = [...zkFloorDays.keys()].sort((a, b) => a - b);
+      await seal('zk-orderbook', dayIso(days[0]), dayIso(days[days.length - 1]), days.length);
+    }
+    if (needLandArchive && landSalesArchive.data?.length) {
+      const days = new Set(landSalesArchive.data.map(x => Math.floor(x.ts / DAY_MS)));
+      await seal('opensea-archive', dayIso(Math.min(...days)), today, days.size);
+    }
   }
 
-  const listing = await getListingSnapshots();
-  const creatureHistory = buildCollectionSeries(creatureDays, listing.creature);
-  const landHistory = buildCollectionSeries(landDays, listing.land);
+  const creatureHistory = buildCollectionSeries(state.store.creature);
+  const landHistory = buildCollectionSeries(state.store.land);
+  if (!landHistory.length) {
+    console.warn(`LAND history is empty: live read ${land ? `returned ${land.sales?.length ?? 0} sales via ${land.source}` : 'failed'}, store holds nothing.`
+      + ' The deep OpenSea sweep has not succeeded yet; it retries on the next rebuild.');
+  }
 
   return {
     ethUsd: rate,
@@ -1058,15 +1414,19 @@ async function computeMarketStats() {
       volume30d: round4(creatureVol30),
       history: creatureHistory,
     },
-    land: land ? {
-      currency: land.currency,
-      source: land.source,
-      floor: land.floor != null ? round4(land.floor) : null,
-      floorUsd: land.floorUsd != null ? Math.round(land.floorUsd) : toUsd(land.floor),
-      owners: land.owners ?? null,
-      sales30d: land.sales30d ?? null,
-      volume30d: land.volume30d ?? null,
-      floorChange24h: land.floorChange24h ?? null,
+    // A bad read of today's LAND figures is not a reason to withhold the years we already
+    // have. When the live fetch fails the headline numbers go blank — the page prints "—"
+    // for them — and the chart keeps every stored day. Only a collection we know nothing at
+    // all about is null.
+    land: (land || landHistory.length) ? {
+      currency: land?.currency ?? 'ETH',
+      source: land?.source ?? 'store',
+      floor: land?.floor != null ? round4(land.floor) : null,
+      floorUsd: land?.floorUsd != null ? Math.round(land.floorUsd) : toUsd(land?.floor),
+      owners: land?.owners ?? null,
+      sales30d: land?.sales30d ?? null,
+      volume30d: land?.volume30d ?? null,
+      floorChange24h: land?.floorChange24h ?? null,
       history: landHistory,
     } : null,
     lastFetched: new Date().toISOString(),
@@ -1098,8 +1458,8 @@ function getMarketStats() {
   return marketCache.inFlight;
 }
 
-// Warm up market cache in the background on startup
-getMarketStats().catch(err => console.error('Market stats prefetch failed:', err.message));
+// Warm up market cache in the background on startup, once its tables are there to read.
+dbReady.then(() => getMarketStats()).catch(err => console.error('Market stats prefetch failed:', err.message));
 
 // Re-run periodically so today's floor snapshot is captured even on quiet days
 // with no visitors (computeMarketStats records the floor as a side effect).
@@ -2555,6 +2915,114 @@ async function getCreatureSalesFeed() {
   return creatureSalesFeed.data || creatureSalesFeed.inFlight;
 }
 
+/**
+ * Every pre-migration Creature sale, newest first — from our own table if they are in it,
+ * from immutascan's archive if they are not, in which case they go into the table on the way
+ * past. Thirteen thousand settled trades on a rollup that was switched off: read once, kept.
+ *
+ * `swept` says which of the two happened, because the sweep is also the only thing that can
+ * tell us what a dollar was worth on a day in 2022 before those rates are stored.
+ */
+const imxSales = { rows: null, inFlight: null, swept: false };
+
+async function loadImxSales() {
+  const synced = await db.getMarketSync().catch(() => ({}));
+  if (synced['imx-sales']) {
+    const rows = await db.getCreatureSalesImx().catch(err => {
+      console.error('Stored pre-migration sales read failed:', err.message);
+      return [];
+    });
+    if (rows.length) {
+      console.log(`Pre-migration sales: ${rows.length} read from store, archive not swept`);
+      return rows.map(r => ({
+        tokenId: String(r.token_id),
+        currency: 'eth',
+        priceAmt: Number(r.price_eth),
+        priceEth: Number(r.price_eth),
+        usdRate: r.usd_rate != null ? Number(r.usd_rate) : null,
+        at: r.at,
+        // StarkEx had no per-trade hash — immutascan is where a rollup transaction id
+        // resolves, and `era` is what sends the client's links there instead of to the
+        // zkEVM explorer.
+        era: 'imx',
+        tx: null,
+        txnId: String(r.txn_id),
+        buyer: r.buyer,
+        seller: r.seller,
+      }));
+    }
+    console.warn('Pre-migration sales: marked stored but the table is empty — sweeping again');
+  }
+  const rows = await imxArchive.getArchiveSales().catch(() => []);
+  if (!rows.length) return [];
+  imxSales.swept = true;
+  try {
+    await db.insertCreatureSalesImx(rows);
+    // Sealed only after the write lands, so a failed write means the next boot tries again
+    // rather than trusting an empty table.
+    await db.setMarketSync('imx-sales', { from: rows[rows.length - 1].at.slice(0, 10), to: rows[0].at.slice(0, 10), rows: rows.length });
+    console.log(`Pre-migration sales: ${rows.length} stored — archive not swept again`);
+  } catch (err) {
+    console.error('Pre-migration sales write failed:', err.message);
+  }
+  return rows;
+}
+
+function getImxSales() {
+  if (imxSales.rows) return Promise.resolve(imxSales.rows);
+  if (!imxSales.inFlight) {
+    imxSales.inFlight = loadImxSales()
+      .then(rows => { imxSales.rows = rows; return rows; })
+      .catch(err => { console.error('Pre-migration sales failed:', err.message); return []; })
+      .finally(() => { imxSales.inFlight = null; });
+  }
+  return imxSales.inFlight;
+}
+
+// zkEVM sales + the StarkEx years that came before them, one list. Creatures traded on
+// Immutable X from 2021 until the July 2025 migration, and that's most of the collection's
+// price history — a "sales history" that starts at the migration would be showing a member
+// the last year of a five-year market. Token ids carried over 1:1, so the two eras join on
+// the same catalogue and filter identically. The archive is only ever additive: if its
+// sweep hasn't landed (or never lands), this is exactly the live feed.
+const mergedSalesFeed = { rows: null, liveAt: 0, archiveN: -1 };
+async function getCreatureSalesWithArchive() {
+  const [live, archived] = await Promise.all([
+    getCreatureSalesFeed(),
+    getImxSales(),
+  ]);
+  if (!archived.length) return live;
+  // Both inputs only change when one of them is rebuilt, so merge once and keep it: this
+  // runs on every request, and re-sorting fourteen thousand settled sales per page view is
+  // work with a known answer.
+  const m = mergedSalesFeed;
+  if (!m.rows || m.liveAt !== creatureSalesFeed.at || m.archiveN !== archived.length) {
+    m.rows = [...live, ...archived].sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0));
+    m.liveAt = creatureSalesFeed.at;
+    m.archiveN = archived.length;
+  }
+  return m.rows;
+}
+// Warm the pre-migration sales at boot so the first visitor to the Sales tab isn't the one
+// who waits. Once they are stored that is a single query; the first time, it is ~70 paged
+// calls to the archive, and those carry the only ETH/USD rates we have for the years before
+// CoinGecko's free window — so on that one run, anything already built without them is
+// thrown away and rebuilt. Nobody waits on it: the market snapshot serves its old copy while
+// the new one is being made.
+dbReady.then(() => getImxSales())
+  .then(() => {
+    if (!imxSales.swept) return; // rates already come from the store
+    // Drop the table rather than just ageing it: an aged one is still served while the
+    // replacement is fetched, and the market snapshot would rebuild against the old rates.
+    ethUsdDailyCache.data = null;
+    ethUsdDailyCache.at = 0;
+    return getEthUsdDaily()
+      // Rebuild the market snapshot ourselves rather than leaving it to the next visitor: an
+      // expired cache is served while it refreshes, so a visitor would read the old copy.
+      .then(() => { marketCache.fetchedAt = 0; return getMarketStats(); });
+  })
+  .catch(() => {});
+
 // Sales-history sort — its own small set (Browse's price-asc default makes no sense for a
 // time-ordered log). Recent first by default.
 const SALES_SORTS = {
@@ -2568,15 +3036,163 @@ function parseSalesSort(searchParams) {
   return SALES_SORTS[s] ? s : 'recent';
 }
 
+// --- Sales price series: the same matched set, plotted over time --------------------------
+// The card list answers "what sold"; the chart answers "for how much, and which way is it
+// moving" — the question a filter like `t=Eyes:Cutesy` is really being asked. It's built
+// from the WHOLE matched set (not the page on screen), so narrowing to one trait plots
+// every sale that trait ever had, and it rides along with page 0 like the facets do.
+const SALES_SERIES_MAX_POINTS = 400;   // a scatter past this is a smear; sample it evenly
+const SALES_SERIES_DETAIL_MAX = 300;   // above this, dots are a cloud — drop the per-sale label
+
+// Bucket width for the trend line: enough buckets to show a shape, few enough to mean
+// something. A three-week window buckets by day, five years by month.
+function salesBucketSize(spanMs) {
+  const days = spanMs / DAY_MS;
+  if (days <= 90) return { key: 'day', ms: DAY_MS };
+  if (days <= 730) return { key: 'week', ms: 7 * DAY_MS };
+  return { key: 'month', ms: 0 }; // calendar months — width varies, so keyed by date
+}
+const monthStart = ts => { const d = new Date(ts); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1); };
+
+const round6 = n => (n == null ? null : Math.round(n * 1e6) / 1e6);
+const round2 = n => (n == null ? null : Math.round(n * 100) / 100);
+function median(sorted) {
+  if (!sorted.length) return null;
+  const mid = sorted.length >> 1;
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/**
+ * A price-over-time series for a filtered sales set: every sale as a point, plus a bucketed
+ * average for the trend line, plus the headline stats. Null when nothing priced matched —
+ * the client hides the chart rather than drawing an empty axis.
+ *
+ * Prices ride in BOTH currencies per point (ETH and the USD it was worth on its own day),
+ * because the display currency is the client's to choose and re-picking it must not cost a
+ * round trip. Sales with no ETH-equivalent (a USDC sale on a day with no rate) are dropped:
+ * a point that can't be valued is worse than a gap.
+ */
+// Every priceable matched sale as a bare {t, eth, usd} point, oldest first. Kept on the
+// memoized view, because both the chart and any later "what about just this window" question
+// are slices of exactly this list.
+function salesPricePoints(matched) {
+  const pts = [];
+  for (const r of matched) {
+    const t = Date.parse(r.at) || 0;
+    if (!t || !Number.isFinite(r.priceEth) || r.priceEth <= 0) continue;
+    pts.push({ t, eth: r.priceEth, usd: r.priceUsd ?? null, id: r.tokenId, name: r.name });
+  }
+  return pts.sort((a, b) => a.t - b.t);
+}
+
+/** The six headline figures over a set of price points, in both currencies. */
+function salesStatsOf(pts) {
+  if (!pts.length) return null;
+  const ethSorted = pts.map(p => p.eth).sort((a, b) => a - b);
+  // Sorted, so min/max/median all read straight off the ends and the middle — and no
+  // Math.min(...arr) spread, which would put fourteen thousand arguments on the stack.
+  const usdSorted = pts.map(p => p.usd).filter(v => v != null).sort((a, b) => a - b);
+  const usdSum = usdSorted.reduce((sum, v) => sum + v, 0);
+  return {
+    n: pts.length,
+    loEth: round6(ethSorted[0]), hiEth: round6(ethSorted[ethSorted.length - 1]),
+    avgEth: round6(ethSorted.reduce((sum, v) => sum + v, 0) / ethSorted.length),
+    medEth: round6(median(ethSorted)),
+    volEth: round6(ethSorted.reduce((sum, v) => sum + v, 0)),
+    avgUsd: usdSorted.length ? round2(usdSum / usdSorted.length) : null,
+    medUsd: usdSorted.length ? round2(median(usdSorted)) : null,
+    loUsd: usdSorted.length ? round2(usdSorted[0]) : null,
+    hiUsd: usdSorted.length ? round2(usdSorted[usdSorted.length - 1]) : null,
+    volUsd: usdSorted.length ? round2(usdSum) : null,
+  };
+}
+
+function buildSalesSeries(pts) {
+  if (!pts.length) return null;
+  const from = pts[0].t, to = pts[pts.length - 1].t;
+  const bucket = salesBucketSize(Math.max(to - from, 1));
+  const acc = new Map(); // bucket start ms -> running aggregate
+  for (const p of pts) {
+    const k = bucket.ms ? Math.floor(p.t / bucket.ms) * bucket.ms : monthStart(p.t);
+    let a = acc.get(k);
+    if (!a) acc.set(k, a = { t: k, n: 0, sumEth: 0, sumUsd: 0, usdN: 0, lo: Infinity, hi: -Infinity });
+    a.n++; a.sumEth += p.eth; a.lo = Math.min(a.lo, p.eth); a.hi = Math.max(a.hi, p.eth);
+    if (p.usd != null) { a.sumUsd += p.usd; a.usdN++; }
+  }
+  const buckets = [...acc.values()].sort((a, b) => a.t - b.t).map(a => ({
+    t: a.t, n: a.n,
+    avgEth: round6(a.sumEth / a.n),
+    avgUsd: a.usdN ? round2(a.sumUsd / a.usdN) : null,
+    loEth: round6(a.lo), hiEth: round6(a.hi),
+    volEth: round6(a.sumEth),
+  }));
+
+  // Sample evenly rather than truncating: a capped scatter must still span the whole
+  // window, and the first and last sale are the two points anyone looks for. Spread the
+  // survivors across the cap instead of striding — 644 sales at stride 2 would throw away
+  // half a set that nearly fits.
+  const sampled = pts.length > SALES_SERIES_MAX_POINTS;
+  const kept = sampled
+    ? Array.from({ length: SALES_SERIES_MAX_POINTS },
+        (_, i) => pts[Math.round(i * (pts.length - 1) / (SALES_SERIES_MAX_POINTS - 1))])
+    : pts;
+  // Which asset a dot is only matters while dots are still individually readable. Past a
+  // few hundred the chart is a cloud you read as a whole, and 39-digit token ids for every
+  // one of them would be most of the response.
+  const detail = pts.length <= SALES_SERIES_DETAIL_MAX;
+  return {
+    from, to, bucket: bucket.key, sampled, shown: kept.length, detail,
+    points: kept.map(p => (detail
+      ? { t: p.t, e: round6(p.eth), u: round2(p.usd), id: p.id, n: p.name }
+      : { t: p.t, e: round6(p.eth), u: round2(p.usd) })),
+    buckets,
+    stats: salesStatsOf(pts),
+  };
+}
+
+// A zoom on the chart is a question about a period, so `from`/`to` (ms) ask for the same six
+// figures over just that slice. Exact, not derived from the drawn scatter: past a few hundred
+// matches that scatter is a sample, and a sampled "volume" would be a fraction of the truth.
+function parseSalesWindow(searchParams) {
+  const ms = v => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : null; };
+  const from = ms(searchParams.get('from')), to = ms(searchParams.get('to'));
+  return from != null && to != null && to > from ? { from, to } : null;
+}
+
 // Shared shaper: enrich each raw sale with catalogue metadata (name/image/traits/rank),
 // value it in USD at its own day's rate, filter by the Browse query, sort, paginate. A
 // full wallet address in `q` matches the buyer OR seller instead of the name.
-function shapeSalesHistory(feed, f, sortKey, meta) {
+function shapeSalesHistory(feed, f, sortKey, meta, win) {
   const rate = ts => (meta.daily && ts ? meta.daily.at(ts) : null) ?? meta.ethUsd ?? null;
+  // Memoized on the same terms as Browse: one view per (data snapshot, query-without-page).
+  // It matters more here than it did — the Creature feed grew from a few hundred live sales
+  // to fourteen thousand once the pre-migration archive joined it, and re-shaping and
+  // re-facetting the lot to slice out 24 rows is not something to redo per "load more".
+  const view = browseView(`${meta.kind}:${sortKey}`, meta.stamps, f, () => buildSalesView(feed, f, sortKey, meta, rate));
+  // A window query wants the numbers, not the page: same filters, same memoized view, one
+  // slice by time. Answering it here rather than on its own route means it can't drift from
+  // what the chart is drawing.
+  if (win) {
+    const inWindow = view.pricePoints.filter(p => p.t >= win.from && p.t <= win.to);
+    return { window: win, stats: salesStatsOf(inWindow), fetchedAt: view.fetchedAt };
+  }
+  return browsePage(view, f, {
+    ethUsd: meta.ethUsd,
+    fxRates: meta.fxRates,
+    // The chart describes the whole matched set, so it's the same for every page of one
+    // query. Like the facets, it rides with page 0 and the client keeps its copy.
+    ...(f.page === 0 && view.series ? { series: view.series } : {}),
+  });
+}
+
+function buildSalesView(feed, f, sortKey, meta, rate) {
   const rows = feed.map(s => {
     const known = meta.lookup(s.tokenId);
     const ts = Date.parse(s.at) || 0;
-    const usd = rate(ts);
+    // A sale that knows the ETH/USD rate it happened at (the pre-migration archive records
+    // one per trade) is valued with it: our daily table only reaches back a year and would
+    // otherwise price a 2022 sale at last September's rate.
+    const usd = s.usdRate ?? rate(ts);
     // Is this token listed RIGHT NOW? (drives the "For sale / Not listed" badge + the
     // in-marketplace deep link.) meta.listed returns the current all-in list price or null.
     const listedNow = meta.listed ? (meta.listed(s.tokenId) ?? null) : null;
@@ -2609,32 +3225,41 @@ function shapeSalesHistory(feed, f, sortKey, meta) {
   const matched = rows.filter(r =>
     (!isAddr || r.buyer === f.q || r.seller === f.q) && browseMatch(r, fq)
   ).sort(SALES_SORTS[sortKey]);
-  return browsePage({
+  const pricePoints = salesPricePoints(matched);
+  return {
     matched,
-    strip: ({ search, ...pub }) => pub,
+    // usdRate did its job in the shaper above (it valued the sale); priceUsd is what the
+    // client reads, so the rate itself stays server-side.
+    strip: ({ search, usdRate, ...pub }) => pub,
     facets: computeBrowseFacets(rows, fq),
+    // Never serialized — browsePage picks the response's fields by name. This is here so a
+    // window query is a filter over a list that already exists.
+    pricePoints,
+    series: buildSalesSeries(pricePoints),
     // The sales feed's own cache time: when the DATA was read, not when this response was
     // assembled, so paging through settled history doesn't churn the response's validator.
     fetchedAt: new Date(meta.at || Date.now()).toISOString(),
-  }, f, {
-    ethUsd: meta.ethUsd,
-    fxRates: meta.fxRates,
-  });
+  };
 }
 
 async function getCreatureSalesHistory(searchParams) {
   const f = parseBrowseQuery(searchParams);
   const sortKey = parseSalesSort(searchParams);
-  const [feed, fx, daily, listIdx] = await Promise.all([getCreatureSalesFeed(), getMarketplaceFx(), getEthUsdDaily(), getBrowseIndex()]);
+  const win = parseSalesWindow(searchParams);
+  const [feed, fx, daily, listIdx] = await Promise.all([getCreatureSalesWithArchive(), getMarketplaceFx(), getEthUsdDaily(), getBrowseIndex()]);
   const coll = getCollectionIndex(); // null until the first catalogue build lands
   const listedMap = new Map((listIdx?.items || []).map(it => [String(it.tokenId), it.totalEth ?? it.priceEth]));
   return shapeSalesHistory(feed, f, sortKey, {
+    kind: 'sales:creatures',
+    // Every input the view is derived from: the live feed's read time, the catalogue build,
+    // and how many archived rows have landed (0 before the sweep finishes, fixed after).
+    stamps: [creatureSalesFeed.at, collectionIndex.at, feed.length],
     at: creatureSalesFeed.at,
     daily, ethUsd: fx.ethUsd, fxRates: fx.fxRates,
     lookup: id => coll?.byId.get(String(id)) || null,
     listed: id => listedMap.get(String(id)) ?? null,
     fallbackName: id => `Highrise Creature #${id}`,
-  });
+  }, win);
 }
 
 // --- Unified LAND browse: every parcel, shown via its attached Slime ---
@@ -2796,9 +3421,12 @@ async function getLandSalesFeed() {
 async function getLandSalesHistory(searchParams) {
   const f = parseBrowseQuery(searchParams);
   const sortKey = parseSalesSort(searchParams);
+  const win = parseSalesWindow(searchParams);
   const [feed, fx, daily, listings] = await Promise.all([getLandSalesFeed(), getMarketplaceFx(), getEthUsdDaily(), landListingsByToken()]);
   const index = slimeIndex.getSlimeIndex(); // null while the first sweep runs
   const data = shapeSalesHistory(feed, f, sortKey, {
+    kind: 'sales:land',
+    stamps: [landSalesFeed.at, index?.builtAt ?? 0, feed.length],
     at: landSalesFeed.at,
     daily, ethUsd: fx.ethUsd, fxRates: fx.fxRates,
     listed: id => { const L = listings.get(String(id)); if (!L) return null; return L.currency === 'usdc' ? (fx.ethUsd ? Math.round(L.priceAmt / fx.ethUsd * 1e4) / 1e4 : null) : (L.priceEth ?? L.priceAmt ?? null); },
@@ -2809,10 +3437,10 @@ async function getLandSalesHistory(searchParams) {
         coords: s.coords, search: `${s.slimeName || ''} ${s.parcelName} ${s.coords?.x ?? ''} ${s.coords?.y ?? ''}` } : null;
     },
     fallbackName: id => `Highrise LAND #${id}`,
-  });
+  }, win);
   // Attach a collection-wide trait % (as LAND browse does) so the shared filter bar shows
   // the same rarity tags on the Sales tab.
-  if (index && index.total) for (const facet of data.facets) for (const val of facet.values) {
+  if (index && index.total) for (const facet of data.facets || []) for (const val of facet.values) {
     const c = index.traitFreq.get(`${facet.type}:${val.v}`);
     if (c != null) { val.total = c; val.pct = c / index.total; }
   }

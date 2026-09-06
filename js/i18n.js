@@ -24,6 +24,14 @@ export function t(key) {
   return translations[key] ?? fallback[key] ?? key;
 }
 
+// Does the ACTIVE language really carry this key, or is t() about to hand back English?
+// A view that formats its own names, dates or lists through Intl needs to know: formatting
+// them in the reader's language while the sentence around them falls back to English
+// produces a line in two languages. Ask about one key from the family you're rendering.
+export function hasTranslation(key) {
+  return key in translations;
+}
+
 async function loadLocale(lang) {
   const res = await fetch(`/locales/${lang}.json`);
   if (!res.ok) throw new Error();

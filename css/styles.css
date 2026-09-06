@@ -3319,6 +3319,149 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
 .gm-usdt-steps { margin: 0; padding: 0 14px 14px; }
 .gm-usdt-steps li { font-size: 12px; line-height: 1.55; padding: 10px 13px 10px 42px; }
 
+/* --- Where you live: the country picker and the answer it computes (js/region-pick.js).
+       One glass container in the section's lavender accent (a question, not a
+       recommendation), with the picker bar on top and the computed answer below the
+       hairline: a verdict line, one row per option with a status chip, the country notes
+       and the checked-on fine print. The two selects are native on purpose: 245 entries
+       is a phone's own picker, not a custom listbox. --- */
+.gm-geo {
+  position: relative; overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--hr-secondary) 32%, var(--hr-line));
+  border-radius: var(--hr-radius-lg);
+  background: linear-gradient(160deg, rgba(133,97,255,.10), rgba(255,255,255,.015) 58%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 12px 34px -22px var(--hr-secondary);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.gm-geo::before {
+  content: ''; position: absolute; inset: -60% auto auto -20%; width: 260px; height: 260px;
+  background: radial-gradient(circle, var(--hr-secondary-25), transparent 68%);
+  pointer-events: none;
+}
+.gm-geo > * { position: relative; }
+.gm-geo-bar { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: flex-end; padding: 14px 15px 12px; }
+.gm-geo-field { display: flex; flex-direction: column; gap: 5px; flex: 1 1 200px; min-width: 0; }
+.gm-geo-lbl {
+  font: 800 10px/1 var(--hr-sans); letter-spacing: var(--hr-tracking-caps);
+  text-transform: uppercase; color: var(--hr-secondary);
+}
+/* The picker: the site's pill select, sized for a hand rather than a toolbar. */
+.gm-geo-sel {
+  width: 100%; min-height: 42px;
+  font: 700 13px/1.2 var(--hr-sans); color: var(--hr-fg-0);
+  background-color: var(--hr-bg-2); border: 1px solid var(--hr-line-strong);
+  border-radius: var(--hr-radius-pill); padding: 10px 36px 10px 14px; cursor: pointer;
+  appearance: none; -webkit-appearance: none; color-scheme: dark;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23A8A7B5' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center;
+  transition: border-color .15s, box-shadow .15s;
+}
+.gm-geo-sel:hover { border-color: color-mix(in srgb, var(--hr-secondary) 55%, var(--hr-line-strong)); }
+.gm-geo-sel:focus-visible { outline: none; border-color: var(--hr-secondary); box-shadow: 0 0 0 3px var(--hr-secondary-25); }
+/* The one nudge: a region the browser already declares, offered as a button. */
+.gm-geo-hint {
+  align-self: flex-end; min-height: 42px; padding: 9px 14px; cursor: pointer;
+  font: 700 12px/1.2 var(--hr-sans); color: var(--hr-fg-0);
+  background: color-mix(in srgb, var(--hr-secondary) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--hr-secondary) 45%, transparent);
+  border-radius: var(--hr-radius-pill);
+  transition: background .15s, border-color .15s, transform .15s;
+}
+.gm-geo-hint:hover { background: color-mix(in srgb, var(--hr-secondary) 26%, transparent); border-color: var(--hr-secondary); transform: translateY(-1px); }
+.gm-geo-hint:focus-visible { outline: 2px solid var(--hr-secondary); outline-offset: 2px; }
+.gm-geo-hint[hidden] { display: none; }
+.gm-geo > .gm-paid-note { margin: 0; padding: 0 15px 12px; }
+.gm-geo-out { border-top: 1px solid var(--hr-line); }
+/* Before a pick: what the box will do, and the countries members here come from most. */
+.gm-geo-empty { display: flex; flex-direction: column; gap: 10px; padding: 13px 15px 14px; }
+.gm-geo-empty p { margin: 0; padding: 0; font-size: 12.5px; line-height: 1.55; color: var(--hr-fg-2); }
+.gm-geo-common { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.gm-geo-common-l {
+  margin-right: 4px; font: 800 9.5px/1 var(--hr-sans); letter-spacing: var(--hr-tracking-caps);
+  text-transform: uppercase; color: var(--hr-fg-3);
+}
+.gm-geo-chip {
+  cursor: pointer; padding: 6px 11px; border-radius: var(--hr-radius-pill);
+  font: 700 11.5px/1.2 var(--hr-sans); color: var(--hr-fg-1);
+  background: rgba(255,255,255,.04); border: 1px solid var(--hr-line);
+  transition: color .15s, border-color .15s, background .15s, transform .15s;
+}
+.gm-geo-chip:hover { color: var(--hr-fg-0); border-color: var(--hr-secondary); background: color-mix(in srgb, var(--hr-secondary) 12%, transparent); transform: translateY(-1px); }
+.gm-geo-chip:focus-visible { outline: 2px solid var(--hr-secondary); outline-offset: 2px; }
+/* The answer. Hairline rows, and the mint tag carries the place name. */
+.gm-geo-res { display: flex; flex-direction: column; animation: gm-body-in .28s cubic-bezier(.16,.84,.3,1) backwards; }
+.gm-geo-res > * + * { border-top: 1px solid var(--hr-line); }
+.gm-geo-verdict { display: flex; gap: 12px; align-items: flex-start; padding: 12px 15px; }
+.gm-geo-verdict .gm-pick-tag { white-space: normal; text-align: center; }
+.gm-geo-verdict p { margin: 0; padding: 0; font-size: 12.5px; line-height: 1.55; color: var(--hr-fg-1); }
+.gm-geo-alert {
+  margin: 0; padding: 10px 15px; font-size: 12px; line-height: 1.55; color: var(--hr-fg-0);
+  background: var(--hr-alert-15); border-top-color: rgba(255,91,149,.35) !important;
+}
+.gm-geo-alert.is-soft { background: color-mix(in srgb, var(--hr-tangerine) 10%, transparent); border-top-color: color-mix(in srgb, var(--hr-tangerine) 30%, transparent) !important; }
+.gm-geo-rows { list-style: none; margin: 0; padding: 0; }
+.gm-geo-row {
+  display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 6px 12px; align-items: center;
+  padding: 10px 15px; animation: gm-geo-row .35s cubic-bezier(.16,.84,.3,1) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+@keyframes gm-geo-row { from { opacity: 0; transform: translateY(5px); } }
+.gm-geo-row + .gm-geo-row { border-top: 1px solid var(--hr-line); }
+.gm-geo-row.is-no .gm-geo-main, .gm-geo-row.is-no .gm-geo-ico { opacity: .62; }
+/* Real marks on the white tile, same as the cards above; the card and local rows get a
+   neutral line icon, since a made-up mark would be worse than none. */
+.gm-geo-ico {
+  width: 34px; height: 34px; display: grid; place-items: center; padding: 6px;
+  border-radius: var(--hr-radius-sm); background: #fff; box-shadow: var(--hr-shadow-1);
+}
+.gm-geo-ico img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.gm-geo-ico.is-diamond img { width: 112%; height: 112%; }
+.gm-geo-ico.is-plain { background: rgba(255,255,255,.06); color: var(--hr-fg-2); box-shadow: none; border: 1px solid var(--hr-line); }
+.gm-geo-main { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.gm-geo-hd { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; }
+.gm-geo-name { font: 800 13px/1.2 var(--hr-sans); color: var(--hr-fg-0); }
+button.gm-geo-name {
+  cursor: pointer; background: none; border: 0; padding: 0; text-align: left;
+  text-decoration: underline dotted; text-decoration-color: transparent; text-underline-offset: 3px;
+  transition: color .15s, text-decoration-color .15s;
+}
+button.gm-geo-name:hover { color: var(--hr-primary); text-decoration-color: var(--hr-primary); }
+button.gm-geo-name:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; border-radius: 3px; }
+.gm-geo-st, .gm-geo-tag, .gm-geo-reg {
+  padding: 4px 8px; border-radius: var(--hr-radius-pill);
+  font: 800 9.5px/1 var(--hr-sans); letter-spacing: var(--hr-tracking-caps); text-transform: uppercase;
+  white-space: nowrap;
+}
+.gm-geo-st.is-ok  { color: var(--hr-primary);   background: var(--hr-primary-25); }
+.gm-geo-st.is-ltd { color: var(--hr-banana);    background: var(--hr-banana-25); }
+.gm-geo-st.is-no  { color: var(--hr-alert);     background: var(--hr-alert-15); }
+.gm-geo-st.is-unk { color: var(--hr-fg-2);      background: rgba(255,255,255,.07); }
+.gm-geo-tag { color: var(--hr-secondary); background: var(--hr-secondary-25); }
+.gm-geo-reg { color: var(--hr-fg-3); background: rgba(255,255,255,.05); border: 1px solid var(--hr-line); text-transform: none; letter-spacing: 0; font-weight: 700; }
+.gm-geo-why { margin: 0; padding: 0; font-size: 11.5px; line-height: 1.5; color: var(--hr-fg-2); }
+.gm-geo-links { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.gm-geo-notes { padding: 12px 15px 13px; }
+.gm-geo-notes > b {
+  display: block; font: 800 9.5px/1 var(--hr-sans); letter-spacing: var(--hr-tracking-caps);
+  text-transform: uppercase; color: var(--hr-fg-3);
+}
+.gm-geo-notes ul { margin: 8px 0 0; padding: 0 0 0 18px; }
+.gm-geo-notes li { font-size: 12px; line-height: 1.55; color: var(--hr-fg-1); }
+.gm-geo-notes li + li { margin-top: 6px; }
+.gm-geo-notes p { margin: 7px 0 0; padding: 0; font-size: 12px; line-height: 1.55; color: var(--hr-fg-2); }
+.gm-geo-fine { margin: 0; padding: 10px 15px 12px; font-size: 10.5px; line-height: 1.5; color: var(--hr-fg-3); }
+@media (max-width: 640px) {
+  .gm-geo-row { grid-template-columns: 34px minmax(0, 1fr); }
+  .gm-geo-links { grid-column: 1 / -1; justify-content: flex-start; }
+  .gm-geo-links .gm-go-link { justify-content: space-between; flex: 1 1 auto; }
+  .gm-geo-hint { flex: 1 1 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gm-geo-res, .gm-geo-row { animation: none; }
+  .gm-geo-sel, .gm-geo-hint, .gm-geo-chip, button.gm-geo-name { transition: none; }
+  .gm-geo-hint:hover, .gm-geo-chip:hover { transform: none; }
+}
+
 /* --- The two rules. They sit above the links on purpose: no anchor in this section is
        reachable without scrolling past them. One alert surface, hairline between rules,
        instead of a stack of alert boxes. --- */
@@ -5614,6 +5757,130 @@ body.trade-sheet-open { overflow: hidden; }
 .trade-history-badge.is-cancelled { color: var(--hr-alert);    background: var(--hr-alert-15);     border-color: rgba(255,91,149,.4); }
 .trade-history-badge.is-expired   { color: var(--hr-fg-2);     background: rgba(255,255,255,.05);  border-color: var(--hr-line); }
 
+/* Sales price chart — the same matched set the list below shows, plotted over time. Frosted
+   card, mint dots for individual sales, a lavender trend line through them, and the headline
+   numbers in a stat rail above so the finding survives even if Chart.js never loads. */
+.trade-chart-card {
+  position: relative; margin: 4px 0 18px; padding: 16px 18px 14px;
+  border-radius: var(--hr-radius-lg); border: 1px solid var(--hr-line); overflow: hidden;
+  background:
+    radial-gradient(420px 200px at 4% 0%, rgba(81,255,165,.09), transparent 68%),
+    radial-gradient(380px 220px at 96% 100%, rgba(133,97,255,.10), transparent 70%),
+    linear-gradient(180deg, rgba(40,39,45,.62), rgba(20,19,23,.80));
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--hr-shadow-2), inset 0 1px 0 rgba(255,255,255,.06);
+  animation: trade-chart-in .45s cubic-bezier(.2,.7,.2,1) both;
+}
+@keyframes trade-chart-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.trade-chart-head { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.trade-chart-titles { flex: 1 1 240px; min-width: 0; }
+.trade-chart-eyebrow {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--hr-sans); font-weight: 900; font-size: 10.5px;
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase; color: var(--hr-primary);
+}
+.trade-chart-lead { margin: 5px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--hr-fg-2); }
+.trade-chart-actions { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
+.trade-chart-toggle {
+  font-family: var(--hr-sans); font-weight: 800; font-size: 11px; color: var(--hr-fg-2);
+  background: rgba(255,255,255,.04); border: 1px solid var(--hr-line);
+  border-radius: var(--hr-radius-pill); padding: 6px 12px; cursor: pointer;
+  transition: border-color .2s, color .2s, background .2s;
+}
+.trade-chart-toggle:hover { border-color: var(--hr-line-strong); color: var(--hr-fg-0); }
+.trade-chart-toggle:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; }
+.trade-chart-toggle[aria-pressed="true"] { color: var(--hr-primary); border-color: rgba(81,255,165,.4); background: rgba(81,255,165,.10); }
+.trade-chart-toggle.is-reset { color: var(--hr-secondary); border-color: rgba(133,97,255,.4); background: rgba(133,97,255,.10); }
+
+/* Stat rail: six figures about the matched set, average given the accent because it's the
+   one anyone quotes. Scrolls sideways on a phone rather than wrapping into a block. */
+.trade-chart-stats {
+  display: flex; gap: 10px; margin: 14px 0 12px; padding-bottom: 2px;
+  overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--hr-tuna) transparent;
+}
+.trade-chart-stat {
+  flex: 1 1 0; min-width: 96px; display: flex; flex-direction: column; gap: 3px;
+  padding: 9px 12px; border-radius: var(--hr-radius-md);
+  background: rgba(255,255,255,.04); border: 1px solid var(--hr-line);
+}
+.trade-chart-stat.is-key { border-color: rgba(81,255,165,.32); background: rgba(81,255,165,.07); }
+.trade-chart-stat-k {
+  font-family: var(--hr-sans); font-weight: 800; font-size: 9.5px;
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase; color: var(--hr-fg-3);
+  white-space: nowrap;
+}
+.trade-chart-stat-v {
+  font-family: var(--hr-sans); font-weight: 900; font-size: 14px; color: var(--hr-fg-0);
+  white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.trade-chart-stat.is-key .trade-chart-stat-v { color: var(--hr-primary); }
+/* Which period the rail above is describing. Only shows while the chart is zoomed into
+   one — when it's the whole run, the note under the chart already says so. */
+.trade-chart-window {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin: 0 0 12px;
+  font-family: var(--hr-sans); font-weight: 800; font-size: 11.5px; color: var(--hr-secondary);
+}
+.trade-chart-window-all {
+  font: inherit; color: var(--hr-fg-3); background: none; border: 0; padding: 0;
+  text-decoration: underline; cursor: pointer;
+}
+.trade-chart-window-all:hover { color: var(--hr-fg-0); }
+.trade-chart-window-all:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; border-radius: 4px; }
+/* Waiting on the figures for a freshly-zoomed period — dim them rather than blanking the
+   rail, so the tiles don't jump. */
+.trade-chart-stats.is-stale { opacity: .45; transition: opacity .15s ease; }
+.trade-chart-box { position: relative; height: 280px; }
+.trade-chart-box canvas { width: 100% !important; height: 100% !important; }
+.trade-chart-note { margin: 8px 0 0; font-size: 11px; color: var(--hr-fg-3); line-height: 1.5; }
+@media (max-width: 640px) {
+  .trade-chart-card { padding: 14px 13px 12px; }
+  .trade-chart-box { height: 210px; }
+  .trade-chart-stat { min-width: 88px; padding: 8px 10px; }
+  .trade-chart-stat-v { font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) { .trade-chart-card { animation: none; } }
+
+/* A feed reloading under a changed filter dims in place. The rows are still the last true
+   answer, so tearing them down (and collapsing the page height under the scroll position)
+   is worse than fading them for the length of the request. */
+.trade-grid.is-busy, .trade-sales.is-busy, #trade-chart-slot.is-busy {
+  opacity: .45; transition: opacity .2s ease; pointer-events: none;
+}
+
+/* Trait search inside the filter sidebar: one box over all 466 values, and its results
+   list, which stands in for the per-slot dropdowns while a query is typed. */
+.trade-flt-search.is-mini { flex: 1 1 auto; min-width: 0; margin-bottom: 10px; }
+.trade-flt-search.is-mini input { padding: 8px 30px 8px 34px; font-size: 12.5px; }
+.trade-flt-search.is-mini .trade-flt-sico { left: 12px; width: 14px; height: 14px; }
+.trade-flt-sclear {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  width: 20px; height: 20px; display: grid; place-items: center; padding: 0;
+  font-size: 15px; line-height: 1; color: var(--hr-fg-3);
+  background: none; border: 0; border-radius: 50%; cursor: pointer;
+  transition: color .15s, background .15s;
+}
+.trade-flt-sclear:hover { color: var(--hr-fg-0); background: rgba(255,255,255,.08); }
+.trade-flt-sclear:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 1px; }
+.trade-flt-hits {
+  display: flex; flex-direction: column; gap: 1px; max-height: 340px; overflow-y: auto;
+  padding: 4px; border-radius: var(--hr-radius-md);
+  background: rgba(0,0,0,.25); border: 1px solid var(--hr-line);
+  scrollbar-width: thin; scrollbar-color: var(--hr-tuna) transparent;
+}
+/* A result has to say which slot it came from — "Bat Nose" and "Bat Shades" are different
+   drawers, and picking the wrong one is a filter that quietly matches nothing. */
+.trade-flt-hit .trade-flt-optv { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.trade-flt-hit-v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trade-flt-hit-type {
+  font-size: 9.5px; font-weight: 800; letter-spacing: var(--hr-tracking-caps);
+  text-transform: uppercase; color: var(--hr-fg-3);
+}
+.trade-flt-mark { background: none; color: var(--hr-primary); font-weight: 900; }
+.trade-flt-hits-more, .trade-flt-nohits {
+  margin: 6px 4px 4px; font-size: 11.5px; color: var(--hr-fg-3); line-height: 1.5;
+}
+.trade-flt-nohits { margin: 0; padding: 10px 2px; }
+
 /* Sales history — collection-wide COMPLETED sales, a scannable list of comparables for
    price discovery. Shares the Browse filter sidebar (.trade-side); each row is a glass card:
    art · details (name/type, traits, buyer+seller, date, links) · the price actually paid. */
@@ -5664,6 +5931,20 @@ body.trade-sheet-open { overflow: hidden; }
 .trade-sale-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .trade-sale-status.is-listed { color: var(--hr-primary); background: rgba(81,255,165,.12); border-color: rgba(81,255,165,.4); }
 .trade-sale-status.is-unlisted { color: var(--hr-fg-3); background: rgba(255,255,255,.05); border-color: var(--hr-line); }
+/* Pre-migration sale: this one happened on Immutable X, before the July 2025 move, so its
+   record lives on immutascan rather than the zkEVM explorer. Lavender keeps it distinct
+   from the mint "for sale" pill next to it. */
+.trade-sale-era {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .02em;
+  padding: 3px 9px; border-radius: var(--hr-radius-pill);
+  color: var(--hr-secondary); background: rgba(133,97,255,.12); border: 1px solid rgba(133,97,255,.4);
+  cursor: help;
+}
+/* Cards replacing cards fade; cards arriving make an entrance (see trade-sale-in above). */
+.trade-sale-card.is-swap { animation: trade-sale-swap .22s ease both; }
+@keyframes trade-sale-swap { from { opacity: .3; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .trade-sale-card.is-swap { animation: none; } }
 .trade-sale-traits { display: flex; flex-wrap: wrap; gap: 5px; }
 .trade-sale-trait { font-size: 10.5px; font-weight: 700; color: var(--hr-fg-1); background: rgba(255,255,255,.06); border: 1px solid var(--hr-line); border-radius: var(--hr-radius-pill); padding: 2px 8px; }
 .trade-sale-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 14px; font-size: 11.5px; }
@@ -5672,7 +5953,10 @@ body.trade-sheet-open { overflow: hidden; }
 .trade-sale-party code { color: var(--hr-fg-1); font-size: 11px; }
 .trade-sale-when { color: var(--hr-fg-2); font-weight: 600; margin-left: auto; }
 .trade-sale-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
-.trade-sale-link { color: var(--hr-secondary); font-weight: 700; font-size: 11.5px; text-decoration: none; }
+/* inline-flex so the little external-link arrow sits beside its label instead of wrapping
+   under it — which it did as soon as a label got longer than "Asset". */
+.trade-sale-link { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+  color: var(--hr-secondary); font-weight: 700; font-size: 11.5px; text-decoration: none; }
 .trade-sale-link:hover { text-decoration: underline; }
 /* Primary "View in marketplace" (a button) — mint pill so it reads as the main action. */
 .trade-sale-link.is-view {

@@ -45,6 +45,8 @@ const PATHS = {
 
   // Market states: nothing found, nothing owned, nothing listed, nothing sold.
   search:  '<circle cx="10.8" cy="10.8" r="6.8"/><path d="M15.8 15.8 21 21"/>',
+  // Price over time: the axes plus the line that runs across them.
+  chart:   '<path d="M4 4v15.4a.6.6 0 0 0 .6.6H20"/><path d="m7 15.5 3.6-4.4 3 2.4 4.6-6"/>',
   wallet:  '<path d="M3.5 7.6A2.1 2.1 0 0 1 5.6 5.5h11.9a2 2 0 0 1 2 2v1.6"/><path d="M3.5 7.6v9.3a2.1 2.1 0 0 0 2.1 2.1h13.4a1.5 1.5 0 0 0 1.5-1.5v-6.4a1.5 1.5 0 0 0-1.5-1.5H5.6"/><path d="M16.6 13.2h.01"/>',
   receipt: '<path d="M5.5 3.5h13v17l-2.2-1.5-2.2 1.5-2.1-1.5-2.2 1.5-2.1-1.5-2.2 1.5Z"/><path d="M9 8.5h6"/><path d="M9 12.5h6"/>',
   box:     '<path d="M3.5 7.8 12 3.4l8.5 4.4v8.4L12 20.6l-8.5-4.4Z"/><path d="M3.7 7.9 12 12.2l8.3-4.3"/><path d="M12 12.2v8.4"/>',

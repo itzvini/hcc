@@ -7,6 +7,10 @@
 // that reads state, and lives in core/state.js and core/chain.js.
 
 export const CREATURE_CONTRACT = '0xCf44b1cBC959295bbBb49935B1b339cC0AA77cdA';
+// Where Creatures lived before the July 2025 move off StarkEx. Nothing trades there any
+// more; the address is here so a pre-migration sale can link to its record on immutascan,
+// which is the only archive of the Immutable X years still standing.
+export const IMX_STARKEX_CREATURE = '0xb0e827c9ab5e68d243f707f832b756981987f704';
 export const ZK_CHAIN_ID_HEX   = '0x343b'; // Immutable zkEVM mainnet (13371)
 export const ZK_NETWORK = {
   chainId: ZK_CHAIN_ID_HEX,

@@ -85,6 +85,8 @@ const PROSE = [
   // no client rects, so the collapsed region <details> would come back half-linked.
   '#panel-guides p.gm-paid-lead', '#panel-guides p.gm-paid-note',
   '#panel-guides .gm-pick-p', '#panel-guides .gm-opt-what', '#panel-guides .gm-rule-t p',
+  // The country picker's answer, rendered by region-pick.js, which calls the linker itself.
+  '#panel-guides .gm-geo-verdict p', '#panel-guides .gm-geo-notes li',
   // Security, filtered to chain hygiene by SAFETY_ALLOWS above
   '#panel-guides .scam-block p', '#panel-guides .scam-block li',
   '#panel-guides .scam-flow-t p', '#panel-guides .scam-rule-t p',

@@ -63,6 +63,7 @@ const { linkGlossaryTerms } = lazy('./glossary-link.js');
 const { initCouncilBoard, rerenderCouncilBoard } = lazy('./council.js');
 const { initPerks, rerenderPerks } = lazy('./perks.js');
 const { initSafety, rerenderSafety } = lazy('./safety.js');
+const { initRegionPick, rerenderRegionPick } = lazy('./region-pick.js');
 const { rerenderProfile } = lazy('./profile.js');
 
 // Language switcher — re-render dynamic views after language change
@@ -87,6 +88,7 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
     rerenderCouncilBoard();
     rerenderPerks();
     rerenderSafety();
+    rerenderRegionPick();
     rerenderProfile();
   }));
   btn.addEventListener('click', () => setDrawer(false));
@@ -470,6 +472,11 @@ initPerks();
 // reveal tooltips are filled once translations resolve and on each language switch.
 initSafety();
 
+// "Where you live changes the answer" (Guides › Marketplace › Funding and Cash out): the
+// country picker fills its selects and renders the saved pick now; country names and the
+// answer are redrawn once translations resolve and on each language switch.
+initRegionPick();
+
 // Clean tab URLs — every tab (and sub-tab) is a real path the server also serves:
 // /council, /polls, /roadmap/gen2, … Tab clicks push the path; legacy #tab links
 // and in-page anchors (#terms, #council) still work and get normalized to paths.
@@ -643,6 +650,7 @@ initI18n().then(() => {
   rerenderCouncilBoard();
   rerenderPerks();
   rerenderSafety();
+  rerenderRegionPick();
   rerenderProfile();
 });
 

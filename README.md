@@ -700,6 +700,123 @@ The **Market** tab shows floor prices and weekly sale-price history for Creature
 All data is fetched server-side and cached for 30 minutes (`/api/market`), so no
 database is needed — history is recomputed from on-chain/marketplace sales each refresh.
 
+### Sales history, and the Immutable X years
+
+The marketplace's **Sales History** tab is a separate feed: every completed sale, filtered by
+the same faceted search as Browse, with a price chart over the matched set (each dot is one
+sale, the line is a bucketed average). Both ride `/api/market/{creatures,land}/sales`; the
+chart is sent with page 0 only, since it describes the whole match rather than the page.
+
+Zoom the chart into a period and the six figures above it (sales, average, median, low, high,
+volume) answer for **that period**. Where the scatter is the whole matched set the browser
+works them out on the spot; past a few hundred sales the scatter is an even sample — which can
+say what things went for but not how many or how much — so the same endpoint answers exactly,
+via `&from=<ms>&to=<ms>` (a ~500-byte stats-only reply off the already-memoized view). The card
+list below is deliberately left alone: a zoom is a question about the numbers, not the sort.
+
+Creatures traded on **Immutable X (StarkEx) from 2021 until the July 2025 move to zkEVM**, and
+that's about 95% of the collection's sale history. `api.x.immutable.com` was switched off with
+the rollup, so those years come from **immutascan.io's archived index** (`lib/imx-archive.js`,
+the same public GraphQL endpoint its own site reads). No key of ours, no config: the sweep runs
+once in the background at boot (~70 paged calls, under a minute, ~13.2k trades) and is held for
+the life of the process, because StarkEx is sunset and the archive can never grow.
+
+- Token ids survived the migration 1:1, so an archived sale joins the Creature catalogue by the
+  same id — same name, art, traits and rarity rank as a zkEVM one.
+- Each archived trade carries the **ETH/USD rate at the moment it happened**, which is what
+  values a 2022 sale in 2022 dollars. (Our own daily table only reaches back a year.)
+- Roughly 0.6% of them settled in IMX or mainnet USDC. Their ETH-equivalent would need a rate
+  for a date we have none for, so they're dropped rather than quoted wrong.
+- If the archive is unreachable the tab is exactly the live zkEVM feed — it only ever extends
+  the history backwards.
+
+## Where you live changes the answer (the country picker)
+
+Both money guides — **Guides › Marketplace › Funding** and **› Cash out** — end with a
+country picker. Pick a country (and a state in the US) and the block rewrites itself: which
+of the options above actually work there, over which bank rail, which local exchange to use
+instead, and the notes that change the decision. The two blocks share one pick, so choosing
+Brazil on Cash out already applies on Funding.
+
+Nothing detects location. The site has no geo lookup and its CSP allows no third-party call
+that could do one; the pick is the member's own and lives in `localStorage`. The only nudge
+is a button offering the region the browser already declares.
+
+The data sits in two files, kept apart on purpose:
+
+- **`js/region-data.js` is generated. Never hand-edit it.** It carries MetaMask's per-country
+  and per-US-state buy/sell flags with the payout rails for each, Binance's signup coverage,
+  and Transak's coverage for the card on our own Add funds page.
+- **`js/region-curated.js` is maintained by hand**, for what nobody publishes. Kraken's
+  prohibited-regions list and the nine currencies it pays out, the markets Binance announced
+  it was leaving, Coinbase per country, the local exchanges, and every country note. Each
+  block names the page it was read from and the date.
+
+Each provider gives up a different amount, and the copy is careful to claim only what its
+source supports:
+
+| Provider | What its own systems give us | What they don't |
+|---|---|---|
+| MetaMask | buy/sell per country and US state, payout rails for each | nothing important |
+| Binance | the signup country list | any bank rail, and its market exits |
+| Transak | currency and payment methods per territory | a real country list |
+| Coinbase | nothing any more | everything |
+| MoonPay | a second, independent off-ramp view, cross-check only | it isn't an option on the page |
+
+Binance's list is evidence about a dropdown, not about service, and it lags reality by
+years. Every country below is still in that dropdown today:
+
+| Country | What's actually true | Where it lives |
+|---|---|---|
+| Canada, Netherlands | announced exits, accounts moved to withdrawals only, 2023 | `BINANCE.left` |
+| the 30 EEA countries | service suspended 1 July 2026, no MiCA licence | `BINANCE.mica` |
+| Russia | announced a full exit in 2023 and sold the business, but some accounts still work | `BINANCE.exiting` |
+| United Kingdom | no new customers since 16 October 2023 | `BINANCE.frozen` |
+| Philippines | site and app blocked by the SEC and NTC since 2024 | `BINANCE.blocked` |
+
+That is why the generic row never says "opens accounts here", only that the signup list
+still includes the country. **Treat a fresh build's Binance flag as a starting point, not
+an answer**, and check the news for any market before trusting it. The four maps say what
+kind of gap each one is: `left` is gone, `mica` is a suspension with withdrawals still
+open, `exiting` is announced but not complete, `blocked` is the country's own regulator
+rather than Binance.
+
+Refresh the generated half with:
+
+```bash
+npm i -D playwright                        # once; Transak's edge blocks a plain fetch
+node scripts/build-region-data.mjs         # writes js/region-data.js
+node scripts/build-region-data.mjs --check # fetch and report, write nothing
+```
+
+It takes a few minutes: MetaMask is asked for the payout rails of all 219 sell-capable
+countries plus every US state, gently, because it rate-limits. A run that loses a region to
+a 429 keeps the previous answer for it, so running it twice fills the gaps. Read the header
+comment before changing it — it records which of MetaMask's three ramp hosts is the one with
+real flags, why Transak's `/countries` is not its coverage, why Binance's signup list is only
+half an answer, and why Coinbase is not in there at all.
+
+**MoonPay is a check, not a fifth option.** Its country API is public and keyless and gives
+`isSellAllowed` per country plus per US state and per Canadian province, and MoonPay is one
+of the payment companies behind MetaMask Sell. It is deliberately kept off the page: the
+four options were each vetted and written up, and members here distrust MoonPay by name.
+What it earns its place for is catching a coverage claim that has gone stale. The build
+prints two buckets: countries where both refuse (a corroborated dead end, currently 30) and
+countries MetaMask refuses but MoonPay allows (a route the page would be silent about,
+currently none). If that second bucket ever fills, somebody should look.
+
+If you ever go back at Coinbase: `api.coinbase.com/v2/countries` 404s now, and
+`help.coinbase.com` sits behind a Cloudflare bot check that turns away curl, WebFetch and
+headless Chromium alike. One article came through on a patient retry loop; the
+supported-countries and per-region funding articles did not.
+
+**The honesty rules this block exists to keep.** Every row has four states, and "Unchecked"
+is a real one: it says we could not confirm the country and points at the company's own
+signup screen. Never turn an unconfirmed row into a "works" to make the table look complete,
+and never let a missing country read as "not available there". Countries under comprehensive
+sanctions are listed in the picker on purpose — a member in Iran is a large share of this
+club, and "none of these serve you" in one tap beats a country missing from the dropdown.
+
 ## Gas assist (we pay the member's gas)
 
 **Ships dark. It does nothing until `GAS_FAUCET_ENABLED=1` and a funded key are set, and it

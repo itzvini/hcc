@@ -10,7 +10,7 @@ const esc = s => String(s).replace(/[&<>"']/g, c =>
 // change one and change the other. Read at chart-build time, so a rotate or a resize
 // picks up the new value on the next render().
 const isNarrow = () => window.matchMedia('(max-width: 1150px)').matches;
-const RANGE_DAYS = { '1m': 30, '3m': 90, '6m': 180, '1y': 365, 'all': Infinity };
+const RANGE_DAYS = { '1m': 30, '3m': 90, '6m': 180, '1y': 365, '2y': 730, 'all': Infinity };
 const DAY = 86400000;
 const SUM_METRICS = new Set(['count', 'volume']); // totalled per interval, not averaged
 
@@ -18,6 +18,7 @@ let lastData = null;
 let currency = 'usd';      // 'eth' or any fiat code in fxRates ('usd','eur',… )
 let metric   = 'low';      // 'low' | 'high' | 'floor' — which series to plot
 let interval = 'daily';    // 'daily' | 'weekly' | 'biweekly' | 'monthly' — bucket size, averaged
+let yScale   = 'linear';   // 'linear' | 'log' — how the value axis is spaced
 let range    = 'all';      // key of RANGE_DAYS, or 'custom' when a From/To window is set
 let customFrom = null;     // 'YYYY-MM-DD' lower bound when range === 'custom'
 let customTo   = null;     // 'YYYY-MM-DD' upper bound when range === 'custom'
@@ -52,12 +53,51 @@ function fmtAxis(v)  {
   return currency === 'eth' ? `${v} Ξ` : fmtMoney(v);
 }
 
-function fmtDate(iso) {
-  // Parse as a LOCAL calendar date, not UTC. `new Date('2026-06-06')` is UTC
-  // midnight, which renders a day earlier in timezones behind UTC (e.g. Brazil),
-  // shifting every label back one day. Buckets are UTC days, so show them verbatim.
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+// Parse as a LOCAL calendar date, not UTC. `new Date('2026-06-06')` is UTC midnight, which
+// renders a day earlier in timezones behind UTC (e.g. Brazil), shifting every label back one
+// day. Buckets are UTC days, so show them verbatim.
+const localDate = iso => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d); };
+
+// Axis label. Over a span of years "29 Nov" says nothing — there are five of them — so the
+// day gives way to the year, and the tooltip carries the exact date.
+// Which rung of its decade a value sits on: 300 -> 3, 0.05 -> 5. The nudge before the floor
+// is because log10(100) can land a hair under 2, which would read 100 as the 9.99 of the
+// decade below and drop the roundest number on the axis.
+function decadeRung(value) {
+  const decade = Math.floor(Math.log10(value) + 1e-9);
+  return Math.round((value / 10 ** decade) * 1e6) / 1e6;
+}
+
+/**
+ * Replace a log axis's ticks with the conventional 1-2-5 ladder.
+ *
+ * Chart.js offers a tick at every 1 to 9 of every decade and then thins them by count, which
+ * lands on an axis reading 70, 100, 300, 700 — numbers nobody picks. This keeps only the
+ * rungs a reader expects, thinned by how many decades are on screen, and every one that
+ * survives gets a label.
+ */
+function logTicks(axis) {
+  const values = axis.ticks.map(t => t.value).filter(v => v > 0);
+  if (values.length < 2) return;
+  const decades = Math.floor(Math.log10(Math.max(...values)) + 1e-9)
+    - Math.floor(Math.log10(Math.min(...values)) + 1e-9) + 1;
+  const rungs = decades <= 2 ? [1, 2, 5] : decades <= 4 ? [1, 5] : [1];
+  const kept = values.filter(v => rungs.includes(decadeRung(v)));
+  if (kept.length >= 2) axis.ticks = kept.map(value => ({ value }));
+}
+
+function fmtDate(iso, longSpan) {
+  return localDate(iso).toLocaleDateString(undefined, longSpan
+    ? { month: 'short', year: 'numeric' }
+    : { month: 'short', day: 'numeric' });
+}
+
+// Tooltip date: always the full one, minus the day for monthly buckets — the point is the
+// month, and "1 Nov 2021" reads like a single day's trading.
+function fmtDateFull(iso) {
+  return localDate(iso).toLocaleDateString(undefined, interval === 'monthly'
+    ? { month: 'long', year: 'numeric' }
+    : { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 // Convert an (ETH, USD) pair into the active currency. ETH is native; USD is
@@ -129,7 +169,10 @@ function sliceRange(dates) {
   return dates.filter(d => new Date(d).getTime() >= cutoff);
 }
 
+// The Creature line carries a soft fill down to the axis. A log axis has no zero to fill
+// down to, so the area is dropped there rather than left to stretch off the bottom.
 function lineDataset(label, data, color, fillBg, showPoints) {
+  if (yScale === 'log') fillBg = null;
   return {
     label,
     data,
@@ -153,10 +196,16 @@ function renderChart() {
   const lBuckets = bucketSeries((((lastData.land || {}).history) || []).filter(Boolean));
 
   const dates = sliceRange([...new Set([...cBuckets.keys(), ...lBuckets.keys()])].sort());
-  const labels = dates.map(fmtDate);
+  // Past a year on screen the year matters more than the day of the month.
+  const longSpan = dates.length > 1
+    && localDate(dates[dates.length - 1]) - localDate(dates[0]) > 400 * DAY;
+  const labels = dates.map(d => fmtDate(d, longSpan));
   const showPoints = dates.length > 0 && dates.length <= 60;
-  const cData = dates.map(d => (cBuckets.has(d) ? cBuckets.get(d) : null));
-  const lData = dates.map(d => (lBuckets.has(d) ? lBuckets.get(d) : null));
+  // A log axis cannot place zero or a negative, and nothing here should ever be one — but a
+  // single bad point would take the whole chart down, so they are left as gaps.
+  const plottable = v => (v == null || (yScale === 'log' && !(v > 0)) ? null : v);
+  const cData = dates.map(d => plottable(cBuckets.has(d) ? cBuckets.get(d) : null));
+  const lData = dates.map(d => plottable(lBuckets.has(d) ? lBuckets.get(d) : null));
   plotDates = dates; plotC = cData; plotL = lData;
 
   const datasets = [];
@@ -185,6 +234,10 @@ function renderChart() {
         },
         tooltip: {
           callbacks: {
+            title(items) {
+              const iso = plotDates[items[0]?.dataIndex];
+              return iso ? fmtDateFull(iso) : '';
+            },
             label(ctx) {
               if (ctx.parsed.y == null) return null;
               return `  ${ctx.dataset.label}: ${fmtMetric(ctx.parsed.y)}`;
@@ -223,9 +276,22 @@ function renderChart() {
           },
         },
         y: {
+          // Five years of prices span two orders of magnitude — a mint-week floor dwarfs
+          // everything after it on a linear axis, and a log one puts a move of the same size
+          // in the same space wherever it happens.
+          type: yScale === 'log' ? 'logarithmic' : 'linear',
           grid: { color: 'rgba(255,255,255,0.08)' },
           border: { display: false },
-          ticks: { font: { family: FONT, size: 10, weight: '700' }, color: '#7D7C88', maxTicksLimit: 6, precision: metric === 'count' ? 0 : undefined, callback: fmtAxis },
+          afterBuildTicks: yScale === 'log' ? logTicks : undefined,
+          ticks: {
+            font: { family: FONT, size: 10, weight: '700' },
+            color: '#7D7C88',
+            // The log ladder is already short and every rung of it earns its place, so it is
+            // allowed a couple more than the linear axis before Chart.js starts skipping.
+            maxTicksLimit: yScale === 'log' ? 8 : 6,
+            precision: metric === 'count' ? 0 : undefined,
+            callback: fmtAxis,
+          },
         },
       },
     },
@@ -393,6 +459,9 @@ function wireControls() {
 
   document.querySelectorAll('#market-interval [data-interval]').forEach(btn =>
     btn.addEventListener('click', () => { interval = btn.dataset.interval; setActive('#market-interval', btn); renderChart(); }));
+
+  document.querySelectorAll('#market-scale [data-scale]').forEach(btn =>
+    btn.addEventListener('click', () => { yScale = btn.dataset.scale; setActive('#market-scale', btn); renderChart(); }));
 
   // Presets clear any custom window and reset the From/To pickers.
   document.querySelectorAll('#market-range [data-range]').forEach(btn =>

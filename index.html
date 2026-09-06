@@ -1775,7 +1775,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
           <h5 class="gm-paid-sub" data-i18n="gm.get.opts.h">The two, side by side</h5>
           <div class="gm-opts is-two" role="list" aria-label="Ways to get ETH into your wallet" data-i18n-aria="a11y.get.opts">
 
-            <details class="gm-opt is-default" role="listitem">
+            <details class="gm-opt is-default" role="listitem" data-opt="tx">
               <summary class="gm-opt-sum">
                 <span class="gm-opt-hd">
                 <span class="gm-opt-ico"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/><path d="M3 10h18"/><path d="M6.5 14.8h3.6"/></svg></span>
@@ -1805,7 +1805,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
               </div>
             </details>
 
-            <details class="gm-opt" role="listitem">
+            <details class="gm-opt" role="listitem" data-opt="cex">
               <summary class="gm-opt-sum">
                 <span class="gm-opt-hd">
                 <span class="gm-opt-ico"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m3 9.5 9-5.5 9 5.5"/><path d="M5.5 10.5v8"/><path d="M10 10.5v8"/><path d="M14 10.5v8"/><path d="M18.5 10.5v8"/><path d="M2.8 20.8h18.4"/></svg></span>
@@ -1838,6 +1838,38 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
               </div>
             </details>
 
+          </div>
+
+          <h5 class="gm-paid-sub" data-i18n="gm.paid.region.h">Where you live changes the answer</h5>
+          <!-- Country picker and the answer it computes (js/region-pick.js). A static shell:
+               the selects fill from js/region-data.js (GENERATED from each provider's own
+               coverage API by scripts/build-region-data.mjs) and js/region-curated.js (the
+               hand-checked venues and notes). Nothing detects location: the pick is the
+               member's own, kept in localStorage only, and both guide sections share it. -->
+          <div class="gm-geo" data-geo="funding">
+            <div class="gm-geo-bar" data-geo-bar hidden>
+              <div class="gm-geo-field">
+                <label class="gm-geo-lbl" for="gm-geo-funding-country" data-i18n="gm.geo.country">Your country</label>
+                <select class="gm-geo-sel" id="gm-geo-funding-country" data-geo-country></select>
+              </div>
+              <div class="gm-geo-field" data-geo-statewrap hidden>
+                <label class="gm-geo-lbl" for="gm-geo-funding-state" data-i18n="gm.geo.state">Your state</label>
+                <select class="gm-geo-sel" id="gm-geo-funding-state" data-geo-state></select>
+              </div>
+              <button class="gm-geo-hint" type="button" data-geo-hint hidden></button>
+            </div>
+            <p class="gm-paid-note" data-i18n="gm.geo.p">We don't guess where you are and we don't track you, so pick your own. Your pick stays on this device and nowhere else.</p>
+            <div class="gm-geo-out" data-geo-out aria-live="polite">
+              <!-- The static answer, replaced by js/region-pick.js the moment it loads. The
+                   site's rule is that nothing it shows may depend on JS arriving, and this
+                   block is now the only place the region facts live, so they ship in the
+                   markup: the four that change the most decisions, and the one instruction
+                   that is always current whatever we know. -->
+              <div class="gm-geo-empty">
+                <p data-i18n="gm.geo.nojs">Coverage really does differ by country, and the surest answer is the one you get first-hand: MetaMask's sell page tells you whether yours is covered on its very first screen, before you connect a wallet or hand over anything.</p>
+                <p data-i18n="gm.geo.nojs2">The four that catch most people: MetaMask won't sell in New York, Louisiana, American Samoa, Guam, the Northern Mariana Islands, the US Minor Outlying Islands, or anywhere in Canada. Kraken doesn't serve Maine, New York, Japan, Russia, Iraq or Belarus. Binance hasn't taken a new UK customer since October 2023. Sanctions keep all four out of Iran, Cuba, North Korea and Syria.</p>
+              </div>
+            </div>
           </div>
 
         </section>
@@ -2047,7 +2079,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
           <h5 class="gm-paid-sub" data-i18n="gm.paid.opts.h">The four, side by side</h5>
           <div class="gm-opts" role="list" aria-label="Ways to turn your ETH into money" data-i18n-aria="a11y.paid.opts">
 
-            <details class="gm-opt is-default" role="listitem">
+            <details class="gm-opt is-default" role="listitem" data-opt="mm">
               <summary class="gm-opt-sum">
                 <span class="gm-opt-hd">
                 <span class="gm-opt-ico"><img src="/img/brands/metamask.svg" alt="" width="26" height="26"></span>
@@ -2078,7 +2110,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
               </div>
             </details>
 
-            <details class="gm-opt" role="listitem">
+            <details class="gm-opt" role="listitem" data-opt="cb">
               <summary class="gm-opt-sum">
                 <span class="gm-opt-hd">
                 <span class="gm-opt-ico"><img src="/img/brands/coinbase.svg" alt="" width="26" height="26"></span>
@@ -2108,7 +2140,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
               </div>
             </details>
 
-            <details class="gm-opt" role="listitem">
+            <details class="gm-opt" role="listitem" data-opt="kr">
               <summary class="gm-opt-sum">
                 <span class="gm-opt-hd">
                 <span class="gm-opt-ico"><img src="/img/brands/kraken.svg" alt="" width="26" height="26"></span>
@@ -2138,7 +2170,7 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
               </div>
             </details>
 
-            <details class="gm-opt" role="listitem">
+            <details class="gm-opt" role="listitem" data-opt="bn">
               <summary class="gm-opt-sum">
                 <span class="gm-opt-hd">
                 <span class="gm-opt-ico is-diamond"><img src="/img/brands/binance.svg" alt="" width="26" height="26"></span>
@@ -2198,15 +2230,36 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
         </div>
 
           <h5 class="gm-paid-sub" data-i18n="gm.paid.region.h">Where you live changes the answer</h5>
-          <p class="gm-paid-note" data-i18n="gm.paid.region.p">We don't guess where you are and we don't track you, so pick your own. These are the cases where the answer actually changes.</p>
-          <div class="gm-region">
-            <details class="gm-region-i"><summary><span data-i18n="gm.paid.region.br.t">Brazil</span></summary><p data-i18n="gm.paid.region.br.p">All four work. MetaMask Sell offers Pix and card, Coinbase takes Pix, and Kraken takes Pix both ways at 0.50% with a 50 real minimum. Don't assume Pix beats card on price: on the same sale in the same minute the two landed within a real of each other, so compare the offers instead of picking on habit. Brazil also came in at the expensive end for MetaMask Sell, around 7%.</p></details>
-            <details class="gm-region-i"><summary><span data-i18n="gm.paid.region.tr.t">Turkey</span></summary><p data-i18n="gm.paid.region.tr.p">Binance TR at binance.tr is the one with a lira rail, and it's a separate signup from binance.com with its own ID check. Coinbase and Kraken hold no lira at all. MetaMask Sell does cover Turkey, but through a single payment company and paying out to a card rather than a bank account. We saw a live price for it. We haven't taken a Turkish payout ourselves, so read the quote and its terms before you commit.</p></details>
-            <details class="gm-region-i"><summary><span data-i18n="gm.paid.region.us.t">United States</span></summary><p data-i18n="gm.paid.region.us.p">MetaMask Sell works everywhere except New York, Louisiana, American Samoa, Guam, the Northern Mariana Islands and the US Minor Outlying Islands. That's MetaMask's own block rather than the payment company's, and those places can still buy. binance.com isn't an option at all, and Binance.US is a separate company that skips sixteen states. Kraken doesn't serve Maine or New York. Coinbase covers the most ground, New York included.</p></details>
-            <details class="gm-region-i"><summary><span data-i18n="gm.paid.region.uk.t">United Kingdom</span></summary><p data-i18n="gm.paid.region.uk.p">Coinbase and Kraken both pay out over Faster Payments, often within minutes. Binance hasn't taken a new UK customer since October 2023, so it's only on the table if you already have an account there.</p></details>
-            <details class="gm-region-i"><summary><span data-i18n="gm.paid.region.other.t">Anywhere else</span></summary><p data-i18n="gm.paid.region.other.p">MetaMask's sell page tells you whether your country is covered on its very first screen, before you connect a wallet or hand over anything. That's the fastest honest answer and it's always current. Its own help pages still say only the US, UK and parts of Europe are covered. That's out of date: we checked, and 219 countries can sell, Brazil and Turkey among them.</p></details>
+          <!-- Country picker and the answer it computes (js/region-pick.js). A static shell:
+               the selects fill from js/region-data.js (GENERATED from each provider's own
+               coverage API by scripts/build-region-data.mjs) and js/region-curated.js (the
+               hand-checked venues and notes). Nothing detects location: the pick is the
+               member's own, kept in localStorage only, and both guide sections share it. -->
+          <div class="gm-geo" data-geo="cashout">
+            <div class="gm-geo-bar" data-geo-bar hidden>
+              <div class="gm-geo-field">
+                <label class="gm-geo-lbl" for="gm-geo-cashout-country" data-i18n="gm.geo.country">Your country</label>
+                <select class="gm-geo-sel" id="gm-geo-cashout-country" data-geo-country></select>
+              </div>
+              <div class="gm-geo-field" data-geo-statewrap hidden>
+                <label class="gm-geo-lbl" for="gm-geo-cashout-state" data-i18n="gm.geo.state">Your state</label>
+                <select class="gm-geo-sel" id="gm-geo-cashout-state" data-geo-state></select>
+              </div>
+              <button class="gm-geo-hint" type="button" data-geo-hint hidden></button>
+            </div>
+            <p class="gm-paid-note" data-i18n="gm.geo.p">We don't guess where you are and we don't track you, so pick your own. Your pick stays on this device and nowhere else.</p>
+            <div class="gm-geo-out" data-geo-out aria-live="polite">
+              <!-- The static answer, replaced by js/region-pick.js the moment it loads. The
+                   site's rule is that nothing it shows may depend on JS arriving, and this
+                   block is now the only place the region facts live, so they ship in the
+                   markup: the four that change the most decisions, and the one instruction
+                   that is always current whatever we know. -->
+              <div class="gm-geo-empty">
+                <p data-i18n="gm.geo.nojs">Coverage really does differ by country, and the surest answer is the one you get first-hand: MetaMask's sell page tells you whether yours is covered on its very first screen, before you connect a wallet or hand over anything.</p>
+                <p data-i18n="gm.geo.nojs2">The four that catch most people: MetaMask won't sell in New York, Louisiana, American Samoa, Guam, the Northern Mariana Islands, the US Minor Outlying Islands, or anywhere in Canada. Kraken doesn't serve Maine, New York, Japan, Russia, Iraq or Belarus. Binance hasn't taken a new UK customer since October 2023. Sanctions keep all four out of Iran, Cuba, North Korea and Syria.</p>
+              </div>
+            </div>
           </div>
-
 
           <p class="gm-paid-fine" data-i18n="gm.paid.fine">We're not affiliated with any of these and nobody pays us to list them. There are no referral codes in these links, and the names and logos belong to their owners, shown here to identify each service and nothing more. Prices, fees and country coverage were checked on 29 August 2026 and they move, so trust what the site in front of you says today over what this page says.</p>
         </section>
@@ -3277,11 +3330,16 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
               <button type="button" class="seg-btn" data-interval="biweekly" data-i18n="market.interval.biweekly">Bi-weekly</button>
               <button type="button" class="seg-btn" data-interval="monthly" data-i18n="market.interval.monthly">Monthly</button>
             </div>
+            <div class="seg" id="market-scale" role="group" aria-label="Value scale" data-i18n-aria="a11y.market.scale">
+              <button type="button" class="seg-btn is-active" data-scale="linear" data-i18n="market.scale.linear">Linear</button>
+              <button type="button" class="seg-btn" data-scale="log" data-i18n="market.scale.log">Log</button>
+            </div>
             <div class="seg" id="market-range" role="group" aria-label="Time range" data-i18n-aria="a11y.market.range">
               <button type="button" class="seg-btn" data-range="1m" data-i18n="market.range.1m">1M</button>
               <button type="button" class="seg-btn" data-range="3m" data-i18n="market.range.3m">3M</button>
               <button type="button" class="seg-btn" data-range="6m" data-i18n="market.range.6m">6M</button>
               <button type="button" class="seg-btn" data-range="1y" data-i18n="market.range.1y">1Y</button>
+              <button type="button" class="seg-btn" data-range="2y" data-i18n="market.range.2y">2Y</button>
               <button type="button" class="seg-btn is-active" data-range="all" data-i18n="market.range.all">All</button>
             </div>
             <div class="seg market-dates" id="market-dates" role="group" aria-label="Custom timeframe" data-i18n-aria="a11y.market.custom">
