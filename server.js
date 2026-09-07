@@ -3257,6 +3257,389 @@ function buildSalesView(feed, f, sortKey, meta, rate) {
   };
 }
 
+
+// ============================ What should I charge? ======================================
+/* Sales history answers this, but only for someone who already knows how to read it. This
+   turns it into three numbers per asset: one to sell this week, one that's simply fair, and
+   one worth waiting for.
+ *
+ * MEASURED over the whole feed, 2021 to now (the workings, so the constants below aren't
+ * folklore):
+ *   - Tier is the one big lever. A Legendary Creature (76 of 11,111) sold at 6.8x the
+ *     market's median sale; a premium LAND plot (571 of 3,140) at 3.1x a normal one over
+ *     the last year, widening from 2.3x all-time.
+ *   - Statistical rarity RANK barely matters next to it, and only near the very top —
+ *     within Epic, ranks 251-1000 fetch 1.05-1.36x and everything past ~2,000 fetches 1.00x.
+ *   - The ordinary case is tight: 75% of Epic sales land within 15% of the median. Which is
+ *     also the honest limit of this thing — backtested over 893 recent sales, knowing the
+ *     market's level alone misses by 15% at the median, and no amount of extra machinery
+ *     beat that for a typical asset. The machinery is for the rare ones, where being wrong
+ *     costs the most.
+ *
+ * SHAPE. The model is built once per feed snapshot and every asset is then a handful of map
+ * lookups, so pricing a wallet of a hundred assets is one request and no extra scanning.
+ */
+const GUIDE_YEARS            = 3;
+const GUIDE_MIN_TIER_SALES   = 4;       // a tier this scarce sells in ones and twos a year
+const GUIDE_MIN_TRAIT_SALES  = 4;       // a trait may speak from few, and the count is shown
+/* Evidence, not anecdote. A multiple measured from four sales is pulled most of the way back
+   toward the market; one measured from sixty is left almost alone. n/(n+k) with k=4: four
+   sales carry half their claim, twenty carry 83% of it. Without this a trait that happened to
+   change hands twice in a hot week would price every asset carrying it. */
+const GUIDE_SHRINK_K         = 4;
+const shrinkMult = (mult, n) => 1 + (mult - 1) * (n / (n + GUIDE_SHRINK_K));
+/* Which tier the floor rule protects: the scarcest one, as long as it really is scarce.
+   Legendary is 0.7% of Creatures and premium is 18% of LAND; Epic at 99% and normal at 82%
+   are the crowd, and the crowd is what the floor rule measures AGAINST. */
+const GUIDE_TOP_TIER_SHARE   = 0.33;
+const GUIDE_TOP_TIER_FLOOR_X = 3;       // a top-tier asset is never quoted under 3x the floor
+const GUIDE_WEEK_MS          = 7 * 86400000;
+const GUIDE_SMOOTH_WEEKS     = 6;       // the market's level at a moment: +/- 6 weeks around it
+const GUIDE_ANCHOR_MIN       = 30;      // widen the trailing window until it holds this many
+const GUIDE_ANCHOR_DAYS      = [60, 90, 120, 180, 270, 365];
+const GUIDE_MAX_TOKENS       = 120;     // one request per wallet, not one per asset
+const GUIDE_STALE_LISTING_D  = 60;      // listed longer than this without selling: the market has seen it
+const GUIDE_BEAR_TILT        = 0.88;    // and passed. Ask less.
+const GUIDE_BULL_TILT        = 1.12;    // nobody is selling one: ask more.
+
+// The metadata attribute that carries the tier, on either collection.
+const GUIDE_TIER_ATTRS = new Set(['Rarity', 'Tier']);
+
+const sortedNums = arr => arr.slice().sort((a, b) => a - b);
+function pctile(sorted, p) {
+  if (!sorted.length) return null;
+  const i = (sorted.length - 1) * p;
+  const lo = Math.floor(i), hi = Math.ceil(i);
+  return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
+}
+
+/**
+ * The market's level through time, as a week -> median-sale curve. A calendar month is too
+ * coarse and too fragile (a quiet month can rest on five sales), so each week is the median
+ * of everything within six weeks either side. This is what lets a 2022 sale and a 2026 sale
+ * be compared: both become a multiple of what the market was doing around them.
+ */
+function buildLevelCurve(rows) {
+  const byWeek = new Map();
+  for (const r of rows) {
+    const w = Math.floor(r.ts / GUIDE_WEEK_MS);
+    if (!byWeek.has(w)) byWeek.set(w, []);
+    byWeek.get(w).push(r.eth);
+  }
+  const weeks = [...byWeek.keys()].sort((a, b) => a - b);
+  const level = new Map();
+  for (const w of weeks) {
+    const near = [];
+    for (let d = -GUIDE_SMOOTH_WEEKS; d <= GUIDE_SMOOTH_WEEKS; d++) {
+      const bucket = byWeek.get(w + d);
+      if (bucket) near.push(...bucket);
+    }
+    if (near.length >= 5) level.set(w, pctile(sortedNums(near), .5));
+  }
+  // Weeks too quiet to speak for themselves borrow the nearest week that could.
+  const known = [...level.keys()].sort((a, b) => a - b);
+  return { at(ts) {
+    const w = Math.floor(ts / GUIDE_WEEK_MS);
+    if (level.has(w)) return level.get(w);
+    if (!known.length) return null;
+    let best = known[0];
+    for (const k of known) if (Math.abs(k - w) < Math.abs(best - w)) best = k;
+    return level.get(best);
+  } };
+}
+
+/**
+ * Everything the guide needs about a collection, worked out once. `sales` are the shaped
+ * rows the history already builds; `lookup` and `tierOf` say which asset each one was.
+ */
+function buildPriceModel({ sales, lookup, tierOf, listings, population, now = Date.now() }) {
+  const rows = [];
+  for (const s of sales) {
+    const eth = s.priceEth ?? null;
+    const ts = Date.parse(s.at) || 0;
+    if (!(eth > 0) || !ts) continue;
+    rows.push({ id: String(s.tokenId), ts, eth });
+  }
+  if (rows.length < GUIDE_ANCHOR_MIN) return null;
+  rows.sort((a, b) => a.ts - b.ts);
+  const curve = buildLevelCurve(rows);
+
+  // The market NOW: a trailing window widened until it holds enough sales to mean something.
+  let anchor = null, anchorSales = 0, anchorDays = 0;
+  for (const days of GUIDE_ANCHOR_DAYS) {
+    const a = sortedNums(rows.filter(r => r.ts >= now - days * 86400000).map(r => r.eth));
+    if (a.length >= GUIDE_ANCHOR_MIN || days === GUIDE_ANCHOR_DAYS[GUIDE_ANCHOR_DAYS.length - 1]) {
+      anchor = pctile(a, .5); anchorSales = a.length; anchorDays = days;
+      if (a.length >= GUIDE_ANCHOR_MIN) break;
+    }
+  }
+  if (!(anchor > 0)) return null;
+
+  // Comparables: the recent years, each sale as a multiple of the level around it.
+  const since = now - GUIDE_YEARS * 365 * 86400000;
+  const byTier = new Map();        // tier -> multiples
+  const byTrait = new Map();       // "Type:Value" -> multiples
+  const soldRecent = new Map();    // "Type:Value" -> sales in the last 12 months
+  const year = now - 365 * 86400000;
+  let comps = 0, windowFrom = Infinity;
+  for (const r of rows) {
+    if (r.ts < since) continue;
+    const meta = lookup(r.id);
+    if (!meta) continue;
+    const lvl = curve.at(r.ts);
+    if (!(lvl > 0)) continue;
+    const m = r.eth / lvl;
+    comps++; windowFrom = Math.min(windowFrom, r.ts);
+    const tier = tierOf(meta);
+    if (tier) { if (!byTier.has(tier)) byTier.set(tier, []); byTier.get(tier).push(m); }
+    for (const [type, value] of Object.entries(meta.traits || {})) {
+      if (GUIDE_TIER_ATTRS.has(type)) continue; // that attribute IS the tier; scoring it twice
+      const k = `${type}:${value}`;             // would let a Legendary claim its own rarity as a trait
+      if (!byTrait.has(k)) byTrait.set(k, []);
+      byTrait.get(k).push(m);
+      if (r.ts >= year) soldRecent.set(k, (soldRecent.get(k) || 0) + 1);
+    }
+  }
+  if (!comps) return null;
+
+  // What's on the shelf right now, and how long it has been sitting there. This is the only
+  // way to tell "rare and wanted" from "rare and repeatedly refused".
+  const listedByTrait = new Map();
+  const tierFloor = new Map();
+  let floor = null;
+  for (const it of listings || []) {
+    const price = it.totalEth ?? it.priceEth ?? null;
+    if (!(price > 0)) continue;
+    floor = floor == null ? price : Math.min(floor, price);
+    const meta = lookup(String(it.tokenId)) || it;
+    const tier = tierOf(meta);
+    if (tier) tierFloor.set(tier, Math.min(tierFloor.get(tier) ?? Infinity, price));
+    const age = it.listedAt ? Math.max(0, (now - it.listedAt) / 86400000) : null;
+    for (const [type, value] of Object.entries(meta.traits || {})) {
+      if (GUIDE_TIER_ATTRS.has(type)) continue;
+      const k = `${type}:${value}`;
+      if (!listedByTrait.has(k)) listedByTrait.set(k, { n: 0, ages: [] });
+      const e = listedByTrait.get(k);
+      e.n++; if (age != null) e.ages.push(age);
+    }
+  }
+
+  const stat = (arr, min) => {
+    if (arr.length < min) return null;
+    const a = sortedNums(arr);
+    return { n: a.length, lo: pctile(a, .25), mid: pctile(a, .5), hi: pctile(a, .8) };
+  };
+  const tiers = new Map();
+  for (const [k, v] of byTier) { const st = stat(v, GUIDE_MIN_TIER_SALES); if (st) tiers.set(k, st); }
+  // A tier too scarce to have sold four times still gets its spread from the crowd, so its
+  // quick/patient band isn't derived from two data points.
+  const traits = new Map();
+  for (const [k, v] of byTrait) { const st = stat(v, GUIDE_MIN_TRAIT_SALES); if (st) traits.set(k, st); }
+  const allMult = [];
+  for (const v of byTier.values()) allMult.push(...v);
+  const spread = stat(allMult.length ? allMult : [1], 1) || { lo: .9, mid: 1, hi: 1.2 };
+
+  let topTier = null;
+  if (population && population.size > 1) {
+    const supply = [...population.values()].reduce((a, b) => a + b, 0);
+    const scarcest = [...population].sort((a, b) => a[1] - b[1])[0];
+    if (scarcest && supply > 0 && scarcest[1] / supply <= GUIDE_TOP_TIER_SHARE) topTier = scarcest[0];
+  }
+
+  return {
+    anchor, anchorSales, anchorDays, floor, comps,
+    windowFrom: Number.isFinite(windowFrom) ? windowFrom : null, windowTo: now,
+    tiers, traits, tierFloor, listedByTrait, soldRecent, spread,
+    /* The tier the floor rule guards. Taken from how many EXIST, never from how they have
+       sold: the scarce tier is scarce in the sales feed too (ten Legendary sales in three
+       years), so picking by observed multiple handed the title to whichever tier had enough
+       sales to measure — which is the common one, every time. */
+    topTier,
+    population: population || null,
+    builtAt: now,
+  };
+}
+
+/**
+ * One asset's three numbers.
+ *
+ * The asset's own multiple is the BIGGEST claim it can make, not a blend: a Creature with
+ * twelve ordinary traits and one that collectors want is priced on the one they want. Taking
+ * the maximum rather than the product also stops a Legendary being counted twice, once for
+ * its tier and again for the rare trait that put it in that tier.
+ */
+function priceGuideFor(model, meta, tierOf) {
+  if (!model || !meta) return null;
+  const tier = tierOf(meta);
+  const tierStat = tier ? model.tiers.get(tier) : null;
+  let mult = tierStat ? shrinkMult(tierStat.mid, tierStat.n) : 1;
+  let from = tierStat ? { kind: 'tier', label: tier, n: tierStat.n } : { kind: 'market', n: model.comps };
+
+  // The trait that carries this asset, if any of them beats its tier. The BIGGEST claim it
+  // can make, never a blend: a Creature with twelve ordinary traits and one that collectors
+  // want is priced on the one they want.
+  let best = null;
+  for (const [type, value] of Object.entries(meta.traits || {})) {
+    if (GUIDE_TIER_ATTRS.has(type)) continue;
+    const st = model.traits.get(`${type}:${value}`);
+    if (!st) continue;
+    const m = shrinkMult(st.mid, st.n);
+    if (m <= mult) continue;
+    if (!best || m > best.m) best = { type, value, st, m };
+  }
+  if (best) {
+    mult = best.m;
+    from = { kind: 'trait', label: `${best.type}: ${best.value}`, n: best.st.n, type: best.type, value: best.value };
+  }
+
+  // How the market has been treating that trait lately: listed and ignored, or never offered?
+  let liquidity = { state: 'normal', listed: 0, sold12m: 0, ageDays: null };
+  const key = best ? `${best.type}:${best.value}` : null;
+  if (key) {
+    const shelf = model.listedByTrait.get(key) || { n: 0, ages: [] };
+    const sold = model.soldRecent.get(key) || 0;
+    const ages = sortedNums(shelf.ages);
+    const ageDays = ages.length ? Math.round(pctile(ages, .5)) : null;
+    liquidity = { state: 'normal', listed: shelf.n, sold12m: sold, ageDays };
+    if (shelf.n >= 2 && sold === 0 && ageDays != null && ageDays >= GUIDE_STALE_LISTING_D) {
+      liquidity.state = 'slow';  mult *= GUIDE_BEAR_TILT;   // offered, seen, refused
+    } else if (shelf.n === 0 && sold <= 2) {
+      liquidity.state = 'scarce'; mult *= GUIDE_BULL_TILT;  // none for sale at any price
+    }
+  }
+
+  const spread = tierStat || model.spread;
+  const loR = spread.mid > 0 ? spread.lo / spread.mid : .9;
+  const hiR = spread.mid > 0 ? spread.hi / spread.mid : 1.2;
+  let fair = model.anchor * mult;
+
+  /* The floor rule. A top-tier asset is never quoted under three times the collection's
+     cheapest listing, whatever the comparables say. Legendaries and premium plots sell in
+     ones and twos a year, so a thin patch of history can drag their median toward the crowd,
+     and the one number a seller must not be given is a fire-sale price for a scarce thing.
+     Measured, they clear far above this: 6.8x the market for a Legendary, 3.1x for a premium
+     plot. The rule is a floor under the estimate, not the estimate. */
+  const topTier = tier && tier === model.topTier;
+  let floored = false;
+  if (topTier && model.floor > 0 && fair < model.floor * GUIDE_TOP_TIER_FLOOR_X) {
+    fair = model.floor * GUIDE_TOP_TIER_FLOOR_X;
+    floored = true;
+  }
+
+  // You cannot sell quickly above the cheapest thing a buyer could have INSTEAD OF THIS ONE.
+  // For an ordinary asset that is the collection floor; for a rare one it is the cheapest of
+  // its own tier, and if none is listed there is nothing to undercut — the collection floor
+  // would just push a scarce asset onto the cheap shelf with the commodity.
+  const rivalFloor = tier ? (model.tierFloor.get(tier) ?? (topTier ? null : model.floor)) : model.floor;
+  let quick = fair * loR;
+  if (rivalFloor > 0) quick = Math.min(quick, rivalFloor * 0.98);
+  if (topTier && model.floor > 0) quick = Math.max(quick, model.floor * GUIDE_TOP_TIER_FLOOR_X * loR);
+  const patient = fair * hiR;
+
+  const r = v => (v > 0 ? Math.round(v * 1e6) / 1e6 : null);
+  return {
+    quick: r(quick), fair: r(fair), patient: r(patient),
+    basis: {
+      from, mult: Math.round(mult * 100) / 100, liquidity, floored,
+      tier: tier || null, topTier,
+      anchor: r(model.anchor), anchorSales: model.anchorSales, anchorDays: model.anchorDays,
+      floor: r(model.floor), tierFloor: r(rivalFloor),
+      comps: model.comps, windowFrom: model.windowFrom, windowTo: model.windowTo,
+    },
+  };
+}
+
+/* One model per collection, rebuilt only when its inputs move. Keyed on the same stamps the
+   sales view uses, so a page view never re-derives three years of comparables. */
+const priceModels = { creatures: { key: '', model: null }, land: { key: '', model: null } };
+function cachedPriceModel(kind, key, build) {
+  const slot = priceModels[kind];
+  if (slot.key !== key || !slot.model) {
+    const t0 = Date.now();
+    slot.model = build();
+    slot.key = key;
+    if (slot.model) console.log(`Price model (${kind}): ${slot.model.comps} comparables, anchor ${slot.model.anchor.toFixed(4)} ETH from ${slot.model.anchorSales} sales in ${slot.model.anchorDays}d, built in ${Date.now() - t0}ms.`);
+  }
+  return slot.model;
+}
+
+// How many of each tier exist. The floor rule needs to know which tier is the scarce one,
+// and the only honest source for that is the collection itself, not the sales feed.
+function tierPopulation(items, tierOf) {
+  const pop = new Map();
+  for (const it of items || []) {
+    const t = tierOf(it);
+    if (t) pop.set(t, (pop.get(t) || 0) + 1);
+  }
+  return pop;
+}
+
+const creatureTierOf = meta => meta?.rarity || meta?.traits?.Rarity || null;
+const landTierOf = meta => {
+  const t = meta?.tier || meta?.traits?.Tier || null;
+  return t ? String(t) : null;
+};
+
+async function getCreaturePriceGuide(tokens) {
+  const [feed, fx, listIdx] = await Promise.all([getCreatureSalesWithArchive(), getMarketplaceFx(), getBrowseIndex().catch(() => null)]);
+  const coll = getCollectionIndex();
+  if (!coll) return { indexing: true, guides: {} };
+  const model = cachedPriceModel('creatures',
+    `${creatureSalesFeed.at}:${collectionIndex.at}:${feed.length}:${browseIndex.at}`,
+    () => buildPriceModel({
+      sales: feed,
+      lookup: id => coll.byId.get(String(id)) || null,
+      tierOf: creatureTierOf,
+      listings: listIdx?.items || [],
+      population: tierPopulation(coll.items, creatureTierOf),
+    }));
+  return shapeGuides(model, tokens, id => coll.byId.get(String(id)) || null, creatureTierOf, fx.ethUsd);
+}
+
+async function getLandPriceGuide(tokens) {
+  const [feed, fx, listings] = await Promise.all([getLandSalesFeed(), getMarketplaceFx(), landListingsByToken().catch(() => new Map())]);
+  const index = slimeIndex.getSlimeIndex();
+  if (!index) return { indexing: true, guides: {} };
+  const asListings = [...listings.values()].map(l => ({
+    tokenId: l.tokenId, totalEth: l.priceEth ?? l.priceAmt ?? null, listedAt: l.listedAt || 0,
+  }));
+  const model = cachedPriceModel('land',
+    `${landSalesFeed.at}:${index.builtAt}:${feed.length}:${asListings.length}`,
+    () => buildPriceModel({
+      sales: feed,
+      lookup: id => index.byToken.get(String(id)) || null,
+      tierOf: landTierOf,
+      listings: asListings,
+      population: tierPopulation(index.items, landTierOf),
+    }));
+  return shapeGuides(model, tokens, id => index.byToken.get(String(id)) || null, landTierOf, fx.ethUsd);
+}
+
+// Price the tokens asked for, in one pass. Unknown ids come back absent rather than guessed at.
+function shapeGuides(model, tokens, lookup, tierOf, ethUsd) {
+  const guides = {};
+  if (!model) return { guides, unavailable: true };
+  for (const id of tokens) {
+    const meta = lookup(id);
+    const g = priceGuideFor(model, meta, tierOf);
+    if (!g) continue;
+    const usd = v => (ethUsd && v > 0 ? Math.round(v * ethUsd * 100) / 100 : null);
+    guides[id] = { ...g, usd: { quick: usd(g.quick), fair: usd(g.fair), patient: usd(g.patient) } };
+  }
+  return { guides, ethUsd: ethUsd ?? null, builtAt: model.builtAt };
+}
+
+function parseGuideTokens(searchParams) {
+  const out = [];
+  for (const raw of searchParams.getAll('token').slice(0, GUIDE_MAX_TOKENS)) {
+    for (const part of String(raw).split(',')) {
+      const id = part.trim();
+      if (/^\d{1,80}$/.test(id) && out.length < GUIDE_MAX_TOKENS) out.push(id);
+    }
+  }
+  return [...new Set(out)];
+}
+
 async function getCreatureSalesHistory(searchParams) {
   const f = parseBrowseQuery(searchParams);
   const sortKey = parseSalesSort(searchParams);
@@ -3891,6 +4274,19 @@ async function handleMarketplaceApi(request, response, url) {
   if (pathname === '/api/market/creatures/traits') {
     const data = await getCreatureTraits();
     sendJson(response, 200, data, { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=600' }, { request });
+    return;
+  }
+
+  // "What should I charge?" for one asset or a hundred, in a single request. Read-only:
+  // public sale history and the public order book, nothing about who is asking.
+  if (pathname === '/api/market/creatures/price-guide') {
+    try {
+      sendJson(response, 200, await getCreaturePriceGuide(parseGuideTokens(url.searchParams)),
+        { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' }, { request });
+    } catch (err) {
+      console.error('Creature price guide failed:', err.message);
+      sendJson(response, 503, { error: 'unavailable', guides: {} }, { 'Cache-Control': 'no-store' });
+    }
     return;
   }
 
@@ -4984,6 +5380,18 @@ async function handleMarketplaceApi(request, response, url) {
   }
   // Recent completed LAND sales (OpenSea), filtered like the LAND Browse. Needs the OpenSea
   // key; without it (or on an upstream hiccup) the client shows a graceful "unavailable".
+  if (pathname === '/api/market/land/price-guide') {
+    if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured', guides: {} }); return; }
+    try {
+      sendJson(response, 200, await getLandPriceGuide(parseGuideTokens(url.searchParams)),
+        { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' }, { request });
+    } catch (err) {
+      console.error('LAND price guide failed:', err.message);
+      sendJson(response, 503, { error: 'unavailable', guides: {} }, { 'Cache-Control': 'no-store' });
+    }
+    return;
+  }
+
   if (pathname === '/api/market/land/sales') {
     if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
     try {
@@ -5127,6 +5535,9 @@ async function handleMarketplaceApi(request, response, url) {
     if (!HEX_ADDRESS.test(maker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
     if (!/^\d{1,80}$/.test(tokenId)) { sendJson(response, 400, { error: 'bad_token' }); return; }
     if (!cur) { sendJson(response, 400, { error: 'bad_currency' }); return; }
+    // Known currency, but not one OpenSea settles a LISTING in (USDC). Say so here rather than
+    // letting the seller sign an order OpenSea then rejects — see LAND_LISTING_CURRENCIES.
+    if (!landMarket.listingCurrency(cur.code)) { sendJson(response, 400, { error: 'currency_unsupported' }); return; }
     if (units == null || BigInt(units) <= 0n) { sendJson(response, 400, { error: 'bad_price' }); return; }
 
     try {

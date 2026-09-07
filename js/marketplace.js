@@ -1156,6 +1156,10 @@ function rankChip(rank) {
 // currency tag (LAND parcels, older cached rows).
 const CUR_SYM = { eth: 'ETH', usdc: 'USDC' };
 const LISTING_CURRENCIES = ['eth', 'usdc']; // seller's choice of listing denomination
+// LAND is the exception: OpenSea settles an Ethereum listing in ETH/WETH only and rejects a
+// USDC one at create time, AFTER the seller has signed. So don't offer the choice there.
+// Offers are unaffected — OpenSea settles those in ERC-20s, USDC included.
+const sellCurrencies = () => (coll === 'land' ? ['eth'] : LISTING_CURRENCIES);
 function fmtListingAmt(it) {
   const cur = it.currency || 'eth';
   const amt = it.totalAmt ?? it.priceAmt ?? it.totalEth ?? it.priceEth;
@@ -3773,7 +3777,7 @@ function offerServerError(code) {
     rate_limited: 'trade.err.rate', own_listing: 'trade.err.ownOffer',
     not_found: 'trade.err.offerGone', not_active: 'trade.err.offerGone',
   };
-  return t(KEY[code] || 'trade.err.unavailable');
+  return t(KEY[code] || 'trade.err.offerUnavailable');
 }
 // Accept-side mapping: here 'insufficient' means the BIDDER's offer is no longer
 // funded — very different from the make-offer context.
@@ -3853,7 +3857,7 @@ async function handleMakeOffer(tokenId, priceRaw, ctx) {
         signature = await signTypedData(action.typedData);
       }
     }
-    if (!signature) return setOffer('error', { msg: t('trade.err.unavailable') });
+    if (!signature) return setOffer('error', { msg: t('trade.err.offerUnavailable') });
 
     setOffer('create');
     const createRes = await fetch('/api/market/creatures/offer/create', {
@@ -6641,12 +6645,14 @@ function sellSideHtml() {
 }
 
 // Segmented "settle in ETH ⟷ USDC" picker. USDC is dollar-pegged, so sellers who want to dodge
-// the swings price directly in dollars — on Creatures (Immutable orderbook, zkEVM USDC) and
-// LAND (OpenSea Seaport, mainnet USDC) alike.
+// the swings price directly in dollars. Creatures only (Immutable orderbook, zkEVM USDC):
+// see sellCurrencies() for why LAND listings stay ETH-only.
 function sellCurrencyPickerHtml() {
+  const curs = sellCurrencies();
+  if (curs.length < 2) return ''; // a one-option picker is a dead control, not a choice
   return `<div class="trade-field"><span>${esc(t('trade.sell.currency'))} ${tipHtml('trade.sell.currency.tip')}</span>
     <div class="seg trade-cur-seg" role="tablist" aria-label="${esc(t('trade.sell.currency'))}">
-      ${LISTING_CURRENCIES.map(c => `<button type="button" role="tab" class="seg-btn ${sellCurrency === c ? 'is-active' : ''}"
+      ${curs.map(c => `<button type="button" role="tab" class="seg-btn ${sellCurrency === c ? 'is-active' : ''}"
         aria-selected="${sellCurrency === c}" data-act="sell-cur" data-cur="${c}">${esc(CUR_SYM[c])}</button>`).join('')}
     </div></div>`;
 }
@@ -7377,8 +7383,12 @@ function sellServerError(code) {
     bad_token: 'trade.err.badId', rate_limited: 'trade.err.rate',
     not_owner: 'trade.err.notOwner', not_found: 'trade.err.notOwner',
     disabled: 'trade.err.sellDisabled', blocked_account: 'trade.err.osBlocked',
+    currency_unsupported: 'trade.err.curUnsupported',
   };
-  return t(KEY[code] || 'trade.err.unavailable');
+  // Fall back to the SELL wording, not the buy one: a failed listing telling the seller
+  // "buying isn't available" sent people hunting the wrong problem. skey() picks the LAND
+  // variant where there is one.
+  return t(skey(KEY[code] || 'trade.err.sellUnavailable'));
 }
 
 // Resolve the typed price into the {currency, price} the sell endpoints expect. USDC is
@@ -7431,7 +7441,7 @@ async function handleSell(form) {
         signature = await signTypedData(action.typedData);
       }
     }
-    if (!signature) return setSell('error', { msg: t('trade.err.unavailable') });
+    if (!signature) return setSell('error', { msg: t(skey('trade.err.sellUnavailable')) });
 
     setSell('create');
     const createRes = await fetch('/api/market/creatures/sell/create', {
@@ -7486,7 +7496,7 @@ async function handleSellLand(form) {
         signature = await signTypedData(action.typedData);
       }
     }
-    if (!signature) return setSell('error', { msg: t('trade.err.unavailable') });
+    if (!signature) return setSell('error', { msg: t(skey('trade.err.sellUnavailable')) });
 
     setSell('create');
     const createRes = await fetch('/api/market/land/sell/create', {
@@ -7541,7 +7551,7 @@ async function listOne(tokenId, currency, price, durationDays) {
       signature = await signTypedData(action.typedData);
     }
   }
-  if (!signature) throw new Error(t('trade.err.unavailable'));
+  if (!signature) throw new Error(t(skey('trade.err.sellUnavailable')));
   const createRes = await fetch(isLand ? '/api/market/land/sell/create' : '/api/market/creatures/sell/create', {
     method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify(isLand ? { orderParameters: data.orderParameters, signature } : { orderComponents: data.orderComponents, orderHash: data.orderHash, signature }),
@@ -8096,10 +8106,12 @@ function onClick(e) {
     case 'mass-clear':
       clearSelection();
       return tradeTab === 'transfer' ? patchTransferSide() : patchSellSide();
-    case 'sell-cur':
-      if (sellCurrency === target.dataset.cur) return;
-      sellCurrency = target.dataset.cur === 'usdc' ? 'usdc' : 'eth';
+    case 'sell-cur': {
+      const next = target.dataset.cur === 'usdc' ? 'usdc' : 'eth';
+      if (sellCurrency === next || !sellCurrencies().includes(next)) return;
+      sellCurrency = next;
       return patchSellSide(); // re-render the price row (unit picker vs fixed USDC)
+    }
     case 'offer-cur': {
       const next = target.dataset.cur === 'usdc' ? 'usdc' : 'eth';
       if (offerCurrency === next) return;
@@ -8448,7 +8460,7 @@ function onInput(e) {
 function resetSellerState() {
   owned = null; mine = null; sellSel = null; sellState = null; cancelBusy = null;
   sellSet.clear(); transferSet.clear(); sellPrices.clear(); massState = null; // drop any selection/batch
-  sellCurrency = 'eth'; // LAND has no USDC path yet; also a clean default per collection
+  sellCurrency = 'eth'; // the only currency LAND can list in, and a clean default per collection
   histItems = null; historyError = false; // per-collection; reload on demand
   myOffers = null; offerState = null; offerCtx = null; acceptState = null; acceptBusyId = null;
   landMyOffers = null; landOfferState = null; landAcceptState = null; landAcceptBusy = false; setUnwrapState(null);
