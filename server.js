@@ -3311,22 +3311,23 @@ const GUIDE_MIN_TRAIT_SALES  = 3;       // and the count is always shown next to
    cheaper), and telling someone their 8-of-11,111 head accessory is worth the collection
    median costs them real money, where quoting it high only costs them time. */
 const GUIDE_MIN_TRAIT_HIST   = 2;
-/* A trait may only DRIVE a price if few enough exist to be worth chasing. Measured across
-   all 471 trait values, grouped by how many carry them:
-     1-15 exist  -> median 2.05x the market, 83% of them above 1.15x
-     16-40       -> 1.14x, 47% above
-     41-100      -> 1.04x, 6% above
-     101-300     -> 1.00x, 1% above
-     301+        -> 1.00x, NONE above
-   Past a hundred or so there is simply nothing there, so "Body: Beige" — a skin colour on
-   1,467 of 11,111 Creatures — can never be the reason for a price. Expressed as a share so
-   it holds for LAND's 3,140 parcels as well. */
-const GUIDE_TRAIT_RARE_SHARE = 0.01;
-const GUIDE_TRAIT_RARE_MIN   = 60;      // floor for a small collection
-/* And it must beat the market by enough to be worth saying. Without this, any trait sitting
+/* A trait must beat the market by enough to be worth saying. Without this, any trait sitting
    a thousandth above the tier baseline won the "biggest claim" contest and got printed as
    the reason: "priced on its Body: Beige, which has sold 394 times at about 1x the market"
-   is true, useless, and reads as though the guide has no idea what it is looking at. */
+   is true, useless, and reads as though the guide has no idea what it is looking at.
+   This one gate does the whole job, and scarcity is a prior rather than a rule. That took two
+   tries to learn. Scarcity looks decisive in cross-section — of the 471 trait values, those
+   with 1-15 holders run at a median 2.05x the market and 83% clear 1.15x, while past 300
+   holders the median is 1.00x and NONE clear it — so a hard ban above ~1% of supply looked
+   free. It was not: holders reported that "Demon Cat Buddy" (123 exist, the black one)
+   stopped being recognised, and they were right. Trained on everything up to two years ago
+   and tested on the 1,391 sales since, letting common traits in on this gate alone changed
+   117 of those sales and cut their median miss from 35.4% to 26.4%, and improved the whole
+   test set's p75 from 31.7% to 28.8%. Banning them beat nothing, and a 1.4x-plus-8-sales
+   compromise touched 2 sales. Shrinkage is what makes it safe: a claim from three sales is
+   pulled most of the way back to the market, so a common trait can only hold a big multiple
+   by being traded often at it. In practice exactly four values over 111 holders clear the
+   gate at all, and "Body: Beige" is not among them — at 1.00x it never could be. */
 const GUIDE_TRAIT_MIN_X      = 1.15;
 /* Evidence, not anecdote. A multiple measured from four sales is pulled most of the way back
    toward the market; one measured from sixty is left almost alone. n/(n+k) with k=4: four
@@ -3573,8 +3574,6 @@ function buildPriceModel({ sales, lookup, tierOf, listings, items, rate, now = D
     windowFrom: Number.isFinite(windowFrom) ? windowFrom : null, windowTo: now,
     tiers, traits, tierFloor, listedByTrait, listedByTier, spread,
     population, traitPop, supply: (items || []).length,
-    // How few must carry a trait before it may set a price. See GUIDE_TRAIT_RARE_SHARE.
-    rareAt: Math.max(GUIDE_TRAIT_RARE_MIN, Math.round(((items || []).length || 0) * GUIDE_TRAIT_RARE_SHARE)),
     /* The tier the floor rule guards. Taken from how many EXIST, never from how they have
        sold: the scarce tier is scarce in the sales feed too (ten Legendary sales in three
        years), so picking by observed multiple handed the title to whichever tier had enough
@@ -3619,11 +3618,10 @@ function priceGuideFor(model, meta, tierOf) {
   for (const [type, value] of Object.entries(meta.traits || {})) {
     if (GUIDE_TIER_ATTRS.has(type)) continue;
     const k = `${type}:${value}`;
-    const exists = model.traitPop.get(k);
-    if (exists != null && exists > model.rareAt) continue;
     const st = model.traits.get(k);
     if (!st) continue;
     const m = shrinkMult(st.mid, st.n);
+    // Big enough to be worth saying, and bigger than what the tier already said.
     if (m < GUIDE_TRAIT_MIN_X || m <= mult) continue;
     if (!best || m > best.m) best = { type, value, st, m };
   }

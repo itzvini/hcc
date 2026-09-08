@@ -6802,8 +6802,14 @@ function guideEvidenceHtml(c) {
   if (c.sold12m != null) {
     let v = guideFill('trade.guide.evPace', { n: esc(c.sold12m.toLocaleString()) });
     if (c.exists) v += ' ' + guideFill('trade.guide.evPaceOf', { exists: esc(c.exists.toLocaleString()) });
-    if (c.everyDays) v += ' ' + guideFill('trade.guide.evPaceEvery', { days: esc(c.everyDays.toLocaleString()) });
-    rows.push([t('trade.guide.evPaceK'), v]);
+    /* Only claim a pace when something actually sold in the year the row is about. The figure
+       is measured over the trait's whole span, so beside "0 sold in the last year" it
+       promised a sale every three weeks in a trait that has not traded since. */
+    if (c.everyDays && c.sold12m) {
+      v += ', ' + (c.everyDays === 1 ? esc(t('trade.guide.evPaceDay'))
+        : guideFill('trade.guide.evPaceEvery', { days: esc(c.everyDays.toLocaleString()) }));
+    }
+    rows.push([t('trade.guide.evPaceK'), v + '.']);
   }
   rows.push([t('trade.guide.evShelf'), c.listed
     ? guideFill('trade.guide.evShelfV', {
