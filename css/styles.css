@@ -5986,6 +5986,9 @@ body.trade-sheet-open { overflow: hidden; }
   padding-top: 2px;
 }
 .trade-guide-ev-v { font-size: 11.5px; line-height: 1.5; color: var(--hr-fg-1); }
+/* The reader's own money, beside every ETH figure in the workings. A shade smaller and
+   dimmer so the sentence still reads as ETH, and never broken across a line. */
+.trade-guide-fx { font-size: 10.5px; color: var(--hr-fg-3); white-space: nowrap; }
 .trade-guide-method { margin: 8px 0 0; font-size: 10.5px; line-height: 1.5; color: var(--hr-fg-3); }
 .trade-guide-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .trade-guide-tile {

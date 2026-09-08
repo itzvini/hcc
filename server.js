@@ -3417,16 +3417,19 @@ function buildPriceModel({ sales, lookup, tierOf, listings, items, rate, now = D
   for (const s of sales) {
     const ts = Date.parse(s.at) || 0;
     if (!ts) continue;
-    /* A dollar-settled sale is still a sale. The raw feed leaves `priceEth` null on those
+    /* The rate that applied the day this sale settled: each archived trade carries its own,
+       and the rest come from the daily table. It does two jobs here. */
+    const r0 = s.usdRate ?? (rate ? rate(ts) : null);
+    /* One: a dollar-settled sale is still a sale. The raw feed leaves `priceEth` null on those
        (only the shaped history fills it in), so reading it straight off dropped every USDC
-       trade — twelve of the live Creature feed's 646, and silently. Valued at the rate that
-       applied when it settled, the same as the sales history does it: each archived trade
-       carries its own, and the rest come from the daily table. */
-    const eth = s.priceEth ?? (s.currency === 'usdc' && s.priceAmt > 0
-      ? (() => { const r = s.usdRate ?? (rate ? rate(ts) : null); return r > 0 ? s.priceAmt / r : null; })()
-      : null);
+       trade — twelve of the live Creature feed's 646, and silently. */
+    const eth = s.priceEth ?? (s.currency === 'usdc' && s.priceAmt > 0 && r0 > 0 ? s.priceAmt / r0 : null);
     if (!(eth > 0)) continue;
-    rows.push({ id: String(s.tokenId), ts, eth });
+    /* Two: what it cost in dollars ON THE DAY. The estimate is in today's money, but the last
+       sale is a plain fact, and a seller reading in dollars should see the ones that really
+       changed hands rather than the same ETH restated at this morning's rate. */
+    const usd = s.priceUsd ?? (r0 > 0 ? eth * r0 : null);
+    rows.push({ id: String(s.tokenId), ts, eth, usd: usd > 0 ? usd : null });
   }
   if (rows.length < GUIDE_ANCHOR_MIN) return null;
   rows.sort((a, b) => a.ts - b.ts);
@@ -3448,8 +3451,8 @@ function buildPriceModel({ sales, lookup, tierOf, listings, items, rate, now = D
      multiple is what the estimate is built from; the date and the price are what let the
      panel show its working — how many of these have really changed hands, how recently, and
      for what. A number a seller can't interrogate is a number they can only take on faith. */
-  const byTier = new Map();        // tier -> [{m, ts, eth}], post-launch only
-  const byTrait = new Map();       // "Type:Value" -> [{m, ts, eth}], post-launch only
+  const byTier = new Map();        // tier -> [{m, ts, eth, usd}], post-launch only
+  const byTrait = new Map();       // "Type:Value" -> [{m, ts, eth, usd}], post-launch only
   const byTraitAll = new Map();    // the same, over the whole history, for the thin ones
   const year = now - 365 * 86400000;
   // The launch year is skipped as comparables but kept in the level curve above: that curve
@@ -3465,14 +3468,14 @@ function buildPriceModel({ sales, lookup, tierOf, listings, items, rate, now = D
         if (GUIDE_TIER_ATTRS.has(type)) continue;
         const k = `${type}:${value}`;
         if (!byTraitAll.has(k)) byTraitAll.set(k, []);
-        byTraitAll.get(k).push({ m: r.eth / lvl0, ts: r.ts, eth: r.eth });
+        byTraitAll.get(k).push({ m: r.eth / lvl0, ts: r.ts, eth: r.eth, usd: r.usd });
       }
     }
     if (r.ts < since) continue;
     if (!meta) continue;
     const lvl = curve.at(r.ts);
     if (!(lvl > 0)) continue;
-    const e = { m: r.eth / lvl, ts: r.ts, eth: r.eth };
+    const e = { m: r.eth / lvl, ts: r.ts, eth: r.eth, usd: r.usd };
     comps++; windowFrom = Math.min(windowFrom, r.ts);
     const tier = tierOf(meta);
     if (tier) { if (!byTier.has(tier)) byTier.set(tier, []); byTier.get(tier).push(e); }
@@ -3539,7 +3542,7 @@ function buildPriceModel({ sales, lookup, tierOf, listings, items, rate, now = D
       // 0.0001 ETH, and quoting that as "what these sold for" describes a typo rather than
       // a market. The panel says "most sold between", and means it.
       p10: pctile(a, .1), p90: pctile(a, .9),
-      sold12m, firstTs: first.ts, lastTs: last.ts, lastEth: last.eth,
+      sold12m, firstTs: first.ts, lastTs: last.ts, lastEth: last.eth, lastUsd: last.usd ?? null,
     };
   };
   const tiers = new Map();
@@ -3687,6 +3690,7 @@ function priceGuideFor(model, meta, tierOf) {
   const patient = fair * hiR;
 
   const r = v => (v > 0 ? Math.round(v * 1e6) / 1e6 : null);
+  const cents = v => (v > 0 ? Math.round(v * 100) / 100 : null);
   const day = 86400000;
   /* The comparables, restated as prices rather than multiples. Their own sale prices were
      paid at whatever the market was doing that month, sometimes years ago, so quoting them
@@ -3700,7 +3704,7 @@ function priceGuideFor(model, meta, tierOf) {
     // market has generally learned to pay MORE for a chase trait since, not less.
     historic: stat.historic === true,
     fromTs: stat.firstTs, toTs: stat.lastTs,
-    lastTs: stat.lastTs, lastEth: r(stat.lastEth),
+    lastTs: stat.lastTs, lastEth: r(stat.lastEth), lastUsd: cents(stat.lastUsd),
     low: r(model.anchor * stat.p10), typical: r(model.anchor * stat.mid), high: r(model.anchor * stat.p90),
     // Roughly how often one of these changes hands, over the span they actually cover.
     everyDays: stat.n > 1 && stat.lastTs > stat.firstTs
@@ -3710,7 +3714,7 @@ function priceGuideFor(model, meta, tierOf) {
   } : {
     kind: 'market', label: null, n: model.comps, exists: model.supply || null,
     sold12m: null, fromTs: model.windowFrom, toTs: model.windowTo,
-    lastTs: null, lastEth: null, low: null, typical: r(model.anchor), high: null,
+    lastTs: null, lastEth: null, lastUsd: null, low: null, typical: r(model.anchor), high: null,
     everyDays: null, listed: shelf.n, listedAgeDays: ageDays, listedOldestDays: oldestDays,
     shelfFloor: r(shelf.floor),
   };

@@ -6665,6 +6665,10 @@ async function loadPriceGuide(tokenIds) {
     if (!res.ok) throw new Error('http ' + res.status);
     const data = await res.json();
     if (rid !== guideReq && coll !== guideCollAt(rid)) return;
+    /* Only Browse and Sales set the ETH/USD rate, so someone who opens /trade/sell straight
+       from a link has no rate and the workings below the estimates lose their dollars. This
+       reply carries the same rate from the same place, so take it when nothing else has. */
+    if (ethUsd == null && data.ethUsd != null) setEthUsd(data.ethUsd);
     for (const id of want) guideCache.set(id, data.guides?.[id] || null);
   } catch (err) {
     console.error('Price guide failed:', err);
@@ -6686,8 +6690,10 @@ function guideTileHtml(kind, eth, usd, cls) {
   if (isUsdc ? usd == null : !(eth > 0)) return '';
   // A USDC listing IS priced in dollars, so that's the headline. An ETH listing leads with
   // ETH and carries the reader's own currency underneath — blank when they read in ETH.
-  const main = isUsdc ? `$${Math.round(usd).toLocaleString()}` : `${guideNum(eth)} ETH`;
-  const fiat = isUsdc ? '' : fmtSaleFiat(usd);
+  const main = isUsdc
+    ? (guideFiat(usd, true) || `$${Math.round(usd).toLocaleString()}`)
+    : `${guideNum(eth)} ETH`;
+  const fiat = isUsdc ? '' : guideFiat(usd);
   const sub = fiat ? `<span class="trade-guide-sub">${esc(fiat)}</span>` : '';
   const fill = isUsdc ? String(Math.round(usd * 100) / 100) : String(eth);
   return `<div class="trade-guide-tile ${cls}">
@@ -6708,7 +6714,61 @@ function guideAgo(ts) {
   return t('trade.guide.agoYears').replace('{n}', (d / 365).toFixed(d < 730 ? 1 : 0));
 }
 
+/* --- The workings, in the seller's own money ---
+   Every figure here is an ETH amount, because that is what a listing settles in. But a
+   seller pricing in dollars cannot check a claim stated only in ETH, so each amount carries
+   the currency they are actually thinking in: whatever they are typing prices in, else
+   whatever they read the rest of the marketplace in, else dollars when the listing itself
+   settles in dollars. Nothing at all when they asked for ETH and only ETH. */
+function guideRefUnit() {
+  if (sellCurrency === 'usdc') return 'usd';    // this listing IS priced in dollars
+  if (sellUnit !== 'eth') return sellUnit;      // they are typing their price in this one
+  return currency === 'eth' ? null : currency;  // else the marketplace-wide display currency
+}
+
+/**
+ * One amount in the seller's own money. Takes DOLLARS, the one currency every figure here
+ * can be stated in: the estimates carry today's rate from the server, and a past sale
+ * carries the rate that applied the day it settled. `exact` drops the "about" sign, for a
+ * dollar-settled listing price, which is not a conversion of anything.
+ */
+function guideFiat(usd, exact = false) {
+  const unit = guideRefUnit();
+  if (!unit || !(usd > 0)) return '';
+  const fx = unit === 'usd' ? 1 : fxRates[unit];
+  if (fx == null) return '';
+  const val = usd * fx;
+  const dp = val < 100 ? 2 : 0;  // cheap plots and trait floors live in the cents
+  let money;
+  try {
+    money = new Intl.NumberFormat(undefined, { style: 'currency', currency: unit.toUpperCase(), maximumFractionDigits: dp }).format(val);
+  } catch {
+    money = `${val.toLocaleString(undefined, { maximumFractionDigits: dp })} ${unit.toUpperCase()}`;
+  }
+  return exact ? money : `≈ ${money}`;
+}
+const guideUsdNow = eth => (ethUsd != null && eth > 0 ? eth * ethUsd : null);
+
 const guideMoney = eth => `${guideNum(eth)} ETH`;
+/**
+ * An ETH figure with the seller's own money beside it. Pass `usd` for an amount that is a
+ * historical fact rather than a restatement: a past sale's dollars are the ones it was
+ * really paid in, not what that ETH would fetch this morning.
+ */
+function guideMoneyHtml(eth, usd) {
+  const main = esc(guideMoney(eth));
+  const fx = guideFiat(usd === undefined ? guideUsdNow(eth) : usd);
+  return fx ? `${main} <span class="trade-guide-fx">(${esc(fx)})</span>` : main;
+}
+
+/* Fills a line of copy whose slots carry markup of their own. Escaping the template first is
+   safe (a placeholder holds no HTML), so every slot can bring its own currency span without
+   the sentence around it having to be trusted. */
+function guideFill(key, slots) {
+  let out = esc(t(key));
+  for (const [k, v] of Object.entries(slots)) out = out.split(`{${k}}`).join(v);
+  return out;
+}
 
 /** Which sales this estimate rests on, said as a count of the RIGHT sales, not the feed. */
 function guideBasisLine(c) {
@@ -6728,28 +6788,33 @@ function guideBasisLine(c) {
 function guideEvidenceHtml(c) {
   const rows = [];
   if (c.low != null && c.high != null) {
-    rows.push([t('trade.guide.evSold'), t('trade.guide.evSoldV')
-      .replace('{low}', guideMoney(c.low)).replace('{typical}', guideMoney(c.typical))
-      .replace('{high}', guideMoney(c.high))]);
+    rows.push([t('trade.guide.evSold'), guideFill('trade.guide.evSoldV', {
+      low: guideMoneyHtml(c.low), typical: guideMoneyHtml(c.typical), high: guideMoneyHtml(c.high),
+    })]);
   }
   if (c.lastTs) {
-    rows.push([t('trade.guide.evLast'), t('trade.guide.evLastV')
-      .replace('{price}', guideMoney(c.lastEth)).replace('{ago}', guideAgo(c.lastTs))]);
+    // The one figure here that is not restated at today's market, so it wears the dollars it
+    // was actually paid in. No rate for that day, no dollars: better silent than invented.
+    rows.push([t('trade.guide.evLast'), guideFill('trade.guide.evLastV', {
+      price: guideMoneyHtml(c.lastEth, c.lastUsd ?? null), ago: esc(guideAgo(c.lastTs)),
+    })]);
   }
   if (c.sold12m != null) {
-    let v = t('trade.guide.evPace').replace('{n}', c.sold12m.toLocaleString());
-    if (c.exists) v += ' ' + t('trade.guide.evPaceOf').replace('{exists}', c.exists.toLocaleString());
-    if (c.everyDays) v += ' ' + t('trade.guide.evPaceEvery').replace('{days}', c.everyDays.toLocaleString());
+    let v = guideFill('trade.guide.evPace', { n: esc(c.sold12m.toLocaleString()) });
+    if (c.exists) v += ' ' + guideFill('trade.guide.evPaceOf', { exists: esc(c.exists.toLocaleString()) });
+    if (c.everyDays) v += ' ' + guideFill('trade.guide.evPaceEvery', { days: esc(c.everyDays.toLocaleString()) });
     rows.push([t('trade.guide.evPaceK'), v]);
   }
   rows.push([t('trade.guide.evShelf'), c.listed
-    ? t('trade.guide.evShelfV').replace('{n}', c.listed.toLocaleString())
-        .replace('{price}', c.shelfFloor ? guideMoney(c.shelfFloor) : '?')
-        .replace('{days}', c.listedOldestDays ?? 0)
-    : t('trade.guide.evShelfNone')]);
+    ? guideFill('trade.guide.evShelfV', {
+        n: esc(c.listed.toLocaleString()),
+        price: c.shelfFloor ? guideMoneyHtml(c.shelfFloor) : '?',
+        days: esc(c.listedOldestDays ?? 0),
+      })
+    : esc(t('trade.guide.evShelfNone'))]);
   return rows.map(([k, v]) => `<div class="trade-guide-ev">
     <span class="trade-guide-ev-k">${esc(k)}</span>
-    <span class="trade-guide-ev-v">${esc(v)}</span></div>`).join('');
+    <span class="trade-guide-ev-v">${v}</span></div>`).join('');
 }
 
 /** How the three numbers were arrived at, in a sentence. */
@@ -6757,25 +6822,27 @@ function guideWhyHtml(b) {
   const bits = [];
   const c = b.comparables;
   if (b.from.kind === 'trait') {
-    bits.push(t('trade.guide.whyTrait').replace('{trait}', b.from.label).replace('{x}', b.mult));
+    bits.push(guideFill('trade.guide.whyTrait', { trait: esc(b.from.label), x: esc(b.mult) }));
   } else if (b.from.kind === 'tier') {
-    bits.push(t('trade.guide.whyTier').replace('{tier}', b.from.label).replace('{x}', b.mult));
+    bits.push(guideFill('trade.guide.whyTier', { tier: esc(b.from.label), x: esc(b.mult) }));
   } else {
-    bits.push(t('trade.guide.whyMarket'));
+    bits.push(esc(t('trade.guide.whyMarket')));
   }
   if (b.liquidity.state === 'slow') {
-    bits.push(t('trade.guide.whySlow').replace('{listed}', b.liquidity.listed)
-      .replace('{days}', b.liquidity.oldestDays ?? b.liquidity.ageDays ?? 0));
+    bits.push(guideFill('trade.guide.whySlow', {
+      listed: esc(b.liquidity.listed),
+      days: esc(b.liquidity.oldestDays ?? b.liquidity.ageDays ?? 0),
+    }));
   } else if (b.liquidity.state === 'scarce') {
-    bits.push(t('trade.guide.whyScarce').replace('{sold}', b.liquidity.sold12m));
+    bits.push(guideFill('trade.guide.whyScarce', { sold: esc(b.liquidity.sold12m) }));
   }
-  if (b.floored) bits.push(t('trade.guide.whyFloor'));
+  if (b.floored) bits.push(esc(t('trade.guide.whyFloor')));
   if (b.rivalFloor) {
-    bits.push(t(b.rivalKind === 'trait' ? 'trade.guide.whyShelfTrait' : 'trade.guide.whyShelf')
-      .replace('{price}', guideMoney(b.rivalFloor)));
+    bits.push(guideFill(b.rivalKind === 'trait' ? 'trade.guide.whyShelfTrait' : 'trade.guide.whyShelf',
+      { price: guideMoneyHtml(b.rivalFloor) }));
   }
-  if (c.n < 10) bits.push(t('trade.guide.whyThin').replace('{n}', c.n));
-  return bits.map(x => esc(x)).join(' ');
+  if (c.n < 10) bits.push(guideFill('trade.guide.whyThin', { n: esc(c.n) }));
+  return bits.join(' ');
 }
 
 function priceGuideHtml() {
@@ -6802,10 +6869,11 @@ function priceGuideHtml() {
       <summary>${esc(t('trade.guide.more'))}</summary>
       <div class="trade-guide-evs">${guideEvidenceHtml(c)}</div>
       <p class="trade-guide-why">${guideWhyHtml(b)}</p>
-      <p class="trade-guide-method">${esc(t('trade.guide.method')
-        .replace('{anchor}', guideMoney(b.anchor))
-        .replace('{n}', b.anchorSales.toLocaleString())
-        .replace('{days}', b.anchorDays))}</p>
+      <p class="trade-guide-method">${guideFill('trade.guide.method', {
+        anchor: guideMoneyHtml(b.anchor),
+        n: esc(b.anchorSales.toLocaleString()),
+        days: esc(b.anchorDays),
+      })}</p>
     </details>
     <p class="trade-guide-caveat">${esc(t(coll === 'land' ? 'trade.guide.caveatLand' : 'trade.guide.caveat'))}</p>
   </div>`;
@@ -6813,7 +6881,12 @@ function priceGuideHtml() {
 
 function patchPriceGuide() {
   const el = root()?.querySelector('#trade-guide');
-  if (el) el.outerHTML = priceGuideHtml();
+  if (!el) return;
+  // Someone who opened the workings and then switched currency wants to read the same rows
+  // in the new one, not hunt for the toggle again.
+  const wasOpen = !!el.querySelector('.trade-guide-more[open]');
+  el.outerHTML = priceGuideHtml();
+  if (wasOpen) root()?.querySelector('#trade-guide .trade-guide-more')?.setAttribute('open', '');
 }
 
 // Every asset on the Sell picker, so one request covers whatever gets picked next.
@@ -8566,6 +8639,7 @@ function onChange(e) {
     if (convEl) convEl.textContent = sellConvHtml(input?.value || '');
     const net = root()?.querySelector('#trade-sell-net'); // LAND only
     if (net) net.innerHTML = landSellNetHtml(sellEthFromInput(input?.value || ''));
+    patchPriceGuide(); // its workings quote money, in whichever unit they are typing in
     return;
   }
   // Make-offer unit selector (token offer in the modal, or the collection-bid strip). Same
@@ -8595,6 +8669,7 @@ function onChange(e) {
   patchGrid();
   patchSalesGrid();  // re-render sale prices in the newly picked currency (no-op off the Sales tab)
   patchSalesChart(); // and the axis, stats and tooltips that quote them
+  patchPriceGuide(); // and the price guide's estimates and workings (no-op off Sell)
   if (modalToken) patchModal();
 }
 function onInput(e) {
