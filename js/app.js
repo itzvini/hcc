@@ -507,7 +507,7 @@ const CODEX_KINDS = new Set(['release', 'item', 'trait', 'creature', 'term']);
 // Every /trade/<x> the marketplace paints as a view of its own. Read by route() and by the
 // in-page link handler; a link to anything else under /trade falls through to the browser,
 // which is the right answer for a bad address.
-const TRADE_VIEWS = new Set(['buy', 'sell', 'transfer', 'sales', 'history']);
+const TRADE_VIEWS = new Set(['buy', 'sell', 'transfer', 'sales', 'dashboard']);
 
 function urlFor(name, sub) {
   return name === 'club' && !sub ? '/' : `/${name}${sub ? `/${sub}` : ''}`;
@@ -551,6 +551,12 @@ function route(pathname) {
   if (tab === 'trade' && sub === 'buy') {
     sub = null;
     history.replaceState(null, '', '/trade' + location.search);
+  }
+  // My History grew into the dashboard — the timeline is still there, below the offers
+  // standing on your Creatures. Old links and bookmarks land on it under its new address.
+  if (tab === 'trade' && sub === 'history') {
+    sub = 'dashboard';
+    history.replaceState(null, '', '/trade/dashboard' + location.search);
   }
   // Every marketplace view is an address: /trade/sell, /trade/sales, /trade/history and the
   // rest. Routed here rather than through the generic sub-tab lookup below, because they are

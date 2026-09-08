@@ -62,6 +62,12 @@ const PATHS = {
   // Stand-ins for artwork that failed to load: a Creature, a parcel of LAND.
   paw:     '<ellipse cx="12" cy="15.4" rx="4.3" ry="3.6"/><circle cx="6.1" cy="11.3" r="2.1"/><circle cx="17.9" cy="11.3" r="2.1"/><circle cx="9.3" cy="7.1" r="2.1"/><circle cx="14.7" cy="7.1" r="2.1"/>',
   map:     '<path d="m3.4 6.6 5.6-2.2v13l-5.6 2.2Z"/><path d="M9 4.4l6 2.2v13l-6-2.2Z"/><path d="m15 6.6 5.6-2.2v13L15 19.6Z"/>',
+
+  // The dashboard's vocabulary: a member behind an offer, a bid on any one of a set, and
+  // an offer standing on nothing yet.
+  user:    '<circle cx="12" cy="8.2" r="3.9"/><path d="M4.8 20.2a7.2 7.2 0 0 1 14.4 0"/>',
+  layers:  '<path d="m12 3.2 8.2 4.3-8.2 4.3-8.2-4.3Z"/><path d="m4.4 12 7.6 4 7.6-4"/><path d="m4.4 16.4 7.6 4 7.6-4"/>',
+  tag:     '<path d="M11.3 3.5H20v8.7l-8.6 8.6a1.6 1.6 0 0 1-2.3 0l-6.4-6.4a1.6 1.6 0 0 1 0-2.3Z"/><path d="M16.2 7.8h.01"/>',
 };
 
 /**

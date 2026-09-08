@@ -14,6 +14,7 @@ const auth = require('./lib/auth');
 const { recoverPersonalSignAddress } = require('./lib/eth-verify');
 const ethRpcLib = require('./lib/eth-rpc'); // ordered mainnet RPC failover (LAND side only)
 const mktOrderbook = require('./lib/marketplace-orderbook');
+const imxGate = require('./lib/imx-gate.js');
 const squidBridge = require('./lib/squid-bridge');
 const layerswapBridge = require('./lib/layerswap-bridge');
 const gasFaucet = require('./lib/gas-faucet');
@@ -682,22 +683,41 @@ const marketCache = { data: null, fetchedAt: 0, inFlight: null };
 const round4 = n => Math.round(n * 1e4) / 1e4;
 
 // Fetch an Immutable endpoint with retries on transient 5xx / 429 / network errors —
-// the orderbook occasionally returns 500s that succeed on a quick retry, and bursts
-// (boot builds several indexes at once) can trip the rate limit. Other 4xx (a
-// malformed request on our side) fails fast.
-async function imxFetch(url) {
+// the orderbook occasionally returns 500s that succeed on a quick retry.
+//
+// Every attempt goes through the gate (lib/imx-gate.js), which paces the whole process
+// against Immutable's per-IP rate limit. Retrying used to be the only defence here, and it
+// is the wrong one: by the time a 429 comes back the budget is already spent, and three
+// callers retrying in step just refill the window they are waiting on. Queueing in front
+// of the request is what actually keeps us under the limit; the retries below now only
+// have to cover genuine upstream flakiness.
+//
+// `opts.lane: 'background'` marks work no member is waiting on, so it yields to work they
+// are. `opts.shareKey` collapses identical concurrent reads into one call.
+// Other 4xx (a malformed request on our side) fails fast.
+async function imxFetch(url, opts = {}) {
+  const once = () => imxGate.run(async () => {
+    const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    // Immutable reports our remaining budget on every answer, success or not. Hand it to
+    // the gate so the whole process backs off together instead of each caller finding the
+    // closed window by itself.
+    imxGate.noteHeaders(res.headers);
+    if (res.ok) return res.json();
+    const err = new Error(`Immutable API ${res.status} for ${url}`);
+    err.rateLimited = res.status === 429;
+    err.httpStatus = res.status;
+    if (err.rateLimited) imxGate.noteRateLimited(res.headers?.get?.('retry-after'));
+    throw err;
+  }, opts);
+
   let lastErr;
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt) await new Promise(r => setTimeout(r, (lastErr?.rateLimited ? 1200 : 500) * attempt));
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
-      if (res.ok) return res.json();
-      const err = new Error(`Immutable API ${res.status} for ${url}`);
-      err.rateLimited = res.status === 429;
-      if (res.status < 500 && !err.rateLimited) throw err; // our fault — retrying won't help
-      lastErr = err;
+      return await (opts.shareKey && !attempt ? imxGate.runShared(opts.shareKey, once, opts) : once());
     } catch (err) {
-      if (err.message?.startsWith('Immutable API 4') && !err.rateLimited) throw err;
+      // Our fault, and retrying won't help.
+      if (err.httpStatus && err.httpStatus < 500 && !err.rateLimited) throw err;
       lastErr = err;
     }
   }
@@ -1576,25 +1596,54 @@ async function fetchCreatureListingsPage(cursor) {
 const SEAPORT_ZK    = '0x6c12ad6f0bd274191075eb2e78d7da5ba6453424'; // Immutable Seaport (the bid's ERC-20 spender)
 const SEL_ALLOWANCE = '0xdd62ed3e'; // allowance(address,address)
 
-async function offerIsFunded(o) {
-  try {
-    // The bidder must hold + have approved enough of the OFFER currency (ETH or USDC).
-    const token = (zkCurrency(o.currency)?.address) || IMX_ETH_TOKEN;
-    const owner = padUint(BigInt(o.from));
-    const [balRaw, alwRaw] = await Promise.all([
-      ethCall(ZK_RPC_URL, token, SEL_BALANCE_OF + owner),
-      ethCall(ZK_RPC_URL, token, SEL_ALLOWANCE + owner + padUint(BigInt(SEAPORT_ZK))),
-    ]);
-    const need = BigInt(o.grossWei || '0');
-    return BigInt(balRaw || '0x0') >= need && BigInt(alwRaw || '0x0') >= need;
-  } catch (err) {
-    console.error('Offer funding check failed:', err.message);
-    return true; // fail-open: an RPC hiccup must not blank the offers UI
-  }
+// What one bidder holds and has approved, in one currency. Read once and compared against
+// every bid they have out — balance and allowance belong to the WALLET, not to the offer.
+// That distinction is the whole cost saving here: the club's book is a few hundred bids from
+// eight bidders, so per-offer reads asked the chain the same question eighty times over, and
+// the zkEVM RPC answered the surplus with a 429 (which fails open, quietly marking an
+// unfunded bid as fillable — the exact thing this check exists to prevent).
+async function bidderFunds(from, currency) {
+  const token = (zkCurrency(currency)?.address) || IMX_ETH_TOKEN;
+  const owner = padUint(BigInt(from));
+  const [balRaw, alwRaw] = await Promise.all([
+    ethCall(ZK_RPC_URL, token, SEL_BALANCE_OF + owner),
+    ethCall(ZK_RPC_URL, token, SEL_ALLOWANCE + owner + padUint(BigInt(SEAPORT_ZK))),
+  ]);
+  return { balance: BigInt(balRaw || '0x0'), allowance: BigInt(alwRaw || '0x0') };
 }
+
+// Flag each offer with whether the bidder can actually pay it right now. One read per
+// distinct (bidder, currency) in the batch, run a few at a time rather than all at once:
+// this is a different service from Immutable with its own limit, and a book-wide sweep
+// used to put a hundred reads on the wire in one go.
+const FUNDS_CONCURRENCY = 4;
+
 async function annotateOffersFunded(offers) {
-  const flags = await Promise.all((offers || []).map(offerIsFunded));
-  return (offers || []).map((o, i) => ({ ...o, funded: flags[i] }));
+  const list = offers || [];
+  if (!list.length) return [];
+  const keyOf = o => `${String(o.from || '').toLowerCase()}|${o.currency || 'eth'}`;
+  const wanted = [...new Set(list.map(keyOf))];
+  const funds = new Map();
+
+  for (let i = 0; i < wanted.length; i += FUNDS_CONCURRENCY) {
+    await Promise.all(wanted.slice(i, i + FUNDS_CONCURRENCY).map(async key => {
+      const [from, currency] = key.split('|');
+      try {
+        funds.set(key, await bidderFunds(from, currency));
+      } catch (err) {
+        // Fail open, per wallet: an RPC hiccup must not blank the offers UI. Left absent
+        // so the check below treats it as "unknown", not "broke".
+        console.error(`Offer funding check failed for ${from.slice(0, 8)}… (${currency}):`, err.message);
+      }
+    }));
+  }
+
+  return list.map(o => {
+    const f = funds.get(keyOf(o));
+    if (!f) return { ...o, funded: true }; // unknown — see above
+    const need = BigInt(o.grossWei || '0');
+    return { ...o, funded: f.balance >= need && f.allowance >= need };
+  });
 }
 // Browse/accept surfaces: hide unfunded entirely (they cannot be filled right now).
 async function fundedOffersOnly(offers) {
@@ -1637,6 +1686,105 @@ async function zkOffersAllCurrencies(fn, base, ethUsd) {
   const merged = enrichZkOffers(ok.flatMap(r => r.offers), ethUsd);
   merged.sort((a, b) => (b.priceEth ?? 0) - (a.priceEth ?? 0)); // best offer first (ETH-equivalent)
   return { offers: merged, ok: ok.map(r => r.key), failed: failed.map(r => r.key) };
+}
+
+// --- Who is behind an offer -------------------------------------------------------------
+// A bid is an address, and an address tells a seller nothing. Members asked to be able to
+// see who is bidding so they can talk before they trade. The answer is the consent we
+// already have: a holder who switched on a public profile has published the wallet↔name
+// link themselves (that's what /profile/{slug} and the asset card's "who holds this" block
+// already show), so an offer from that wallet may carry the same name. Nobody else is
+// named — an offer from a member with no public profile stays an address, and no new fact
+// about anyone reaches the client.
+//
+// Ambiguity resolves the same conservative way as /api/profile/by-wallet: the
+// signature-verified owner wins; a lone Highrise-link shows flagged unverified; two or
+// more competing unverified claims name nobody rather than name the wrong member.
+function pickWalletClaim(claims) {
+  const verified = (claims || []).find(c => c.verified) || null;
+  const unverified = (claims || []).filter(c => !c.verified);
+  return verified || (unverified.length === 1 ? unverified[0] : null);
+}
+
+// Attach `bidder` to each offer: { slug, name, avatar, verified } or null. One batched
+// database read for the whole book. Best-effort — the profile layer being down must never
+// blank an offers response, so a failure just leaves every row anonymous.
+async function attachBidders(offers) {
+  const list = offers || [];
+  if (!list.length) return list;
+  try {
+    const byWallet = await db.getProfilesForWallets(list.map(o => o.from));
+    return list.map(o => {
+      const pick = pickWalletClaim(byWallet.get(String(o.from || '').toLowerCase()));
+      return { ...o, bidder: pick ? { slug: pick.slug, name: pick.name, avatar: pick.avatar, verified: !!pick.verified } : null };
+    });
+  } catch (err) {
+    console.error('Bidder identity lookup failed:', err.message);
+    return list.map(o => ({ ...o, bidder: null }));
+  }
+}
+
+// --- The active Creature bid book, swept and shared ---------------------------------------
+// "What has been offered on the things I own" needs the book indexed BY TOKEN, for tokens
+// chosen by the caller. Asking upstream per owned Creature would be one request each — a
+// holder with 60 Creatures would spend 120 calls (two currencies) against Immutable's 5/s
+// per-IP cap, on every dashboard load.
+//
+// So sweep the whole book instead. It is a few hundred orders (two pages a currency), the
+// same read answers every holder, and one cached copy serves them all. The TTL is short:
+// this drives an accept button, and a filled or cancelled bid must stop being offered.
+const BID_INDEX_TTL_MS = 45 * 1000;
+let bidIndex = null;         // { at, byToken: Map, collection: [], failed: [], truncated }
+let bidIndexInflight = null; // collapses a burst of dashboard loads into one sweep
+
+// The sweep runs in the gate's background lane, so its handful of paged reads always yield
+// to whatever a member is waiting on. That is what lets both halves go out together again:
+// the gate paces them against Immutable's per-IP limit, which is the job this function used
+// to be doing by hand — badly, because hand-pacing one caller does nothing about the six
+// other reads the same page load fires.
+async function sweepBidIndex() {
+  const fx = await getMarketplaceFx();
+  const base = { nftContract: CREATURE_CONTRACT, lane: 'background' };
+  const [token, coll] = await Promise.all([
+    zkOffersAllCurrencies(mktOrderbook.listAllBids, base, fx.ethUsd),
+    zkOffersAllCurrencies(mktOrderbook.listCollectionOffers, base, fx.ethUsd),
+  ]);
+  const byToken = new Map();
+  for (const o of token.offers) {
+    if (o.tokenId == null) continue;
+    const k = String(o.tokenId);
+    if (!byToken.has(k)) byToken.set(k, []);
+    byToken.get(k).push(o);
+  }
+  return {
+    at: Date.now(),
+    byToken,
+    collection: coll.offers,
+    // A currency that failed is a slice of the book we cannot see, and silence there reads
+    // as "nobody bid on yours" — so each half reports its own gaps rather than one shared
+    // flag standing for both.
+    tokenFailed: token.failed,
+    collFailed: coll.failed,
+    failed: [...new Set([...token.failed, ...coll.failed])],
+  };
+}
+
+async function getBidIndex() {
+  if (bidIndex && Date.now() - bidIndex.at < BID_INDEX_TTL_MS) return bidIndex;
+  if (bidIndexInflight) return bidIndexInflight;
+  bidIndexInflight = (async () => {
+    try {
+      const fresh = await sweepBidIndex();
+      // Keep the sweep only when the per-token book — the expensive half, and the one the
+      // dashboard counts — came back whole. A hole there would be served to everyone who
+      // asked for the next 45 seconds, so it is returned but not stored and the next
+      // request tries again. A missing collection bid is one row and doesn't earn a re-sweep
+      // of four pages, so it rides along in the cache.
+      if (!fresh.tokenFailed.length) bidIndex = fresh;
+      return fresh;
+    } finally { bidIndexInflight = null; }
+  })();
+  return bidIndexInflight;
 }
 
 // --- Transfer recipient safety checks ---
@@ -4755,7 +4903,9 @@ async function handleMarketplaceApi(request, response, url) {
     if (!failed.length) {
       const funded = await fundedOffersOnly(offers);
       lastKnown.record(KEY, funded); // snapshot only ever written on the happy path
-      sendJson(response, 200, { offers: funded, health: creatureOffersHealth([]) }, { 'Cache-Control': 'public, max-age=15' });
+      // no-store once names ride along: this response now varies with who has a public
+      // profile, and a shared cache would serve one member's view to everyone.
+      sendJson(response, 200, { offers: await attachBidders(funded), health: creatureOffersHealth([]) }, { 'Cache-Control': 'no-store' });
       return;
     }
     // Everything failed → serve the remembered book if it is recent enough, clearly marked
@@ -4772,7 +4922,7 @@ async function handleMarketplaceApi(request, response, url) {
     }
     // One currency answered: the book is real but incomplete. Say so.
     sendJson(response, 200, {
-      offers: await fundedOffersOnly(offers), partial: true, unavailableCurrencies: failed,
+      offers: await attachBidders(await fundedOffersOnly(offers)), partial: true, unavailableCurrencies: failed,
       health: creatureOffersHealth(failed, Date.now()),
     }, { 'Cache-Control': 'no-store' });
     return;
@@ -4792,10 +4942,10 @@ async function handleMarketplaceApi(request, response, url) {
       return;
     }
     sendJson(response, 200, {
-      offers: await fundedOffersOnly(offers),
+      offers: await attachBidders(await fundedOffersOnly(offers)),
       ...(failed.length ? { partial: true, unavailableCurrencies: failed } : {}),
       health: creatureOffersHealth(failed, Date.now()),
-    }, { 'Cache-Control': failed.length ? 'no-store' : 'public, max-age=15' });
+    }, { 'Cache-Control': 'no-store' }); // names ride along — never a shared cache
     return;
   }
   const offersMineMatch = pathname.match(/^\/api\/market\/creatures\/offers\/mine\/(0x[0-9a-f]{40})$/);
@@ -4819,6 +4969,92 @@ async function handleMarketplaceApi(request, response, url) {
       offers: annotated.map(({ grossWei, ...rest }) => rest),
       ...(failed.length ? { partial: true, unavailableCurrencies: failed } : {}),
       health: creatureOffersHealth(failed, Date.now()),
+    }, { 'Cache-Control': 'no-store' });
+    return;
+  }
+
+  // Offers RECEIVED — what has been bid on the Creatures this wallet holds. The dashboard's
+  // headline, and the thing holders asked for: until now you learned about a bid by opening
+  // each Creature one at a time.
+  //
+  // Three reads, all shared or already cached: the wallet's Creatures, its active listings,
+  // and the swept bid book. Each owned token collects the specific bids naming it; the top
+  // collection bid rides alongside as an offer that applies to every Creature you own.
+  // Wallet-keyed, so never shared-cache it.
+  const offersRecvMatch = pathname.match(/^\/api\/market\/creatures\/offers\/received\/(0x[0-9a-f]{40})$/);
+  if (offersRecvMatch) {
+    if (!mktOrderbook.available()) {
+      sendJson(response, 503, { error: 'upstream_down', offers: null, health: creatureOffersHealth(['eth', 'usdc']) }, { 'Cache-Control': 'no-store' });
+      return;
+    }
+    const rWait = rateLimited(`mktrecv:${ip}`, 30, 60 * 1000);
+    if (rWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(rWait) }); return; }
+    const wallet = offersRecvMatch[1];
+
+    let owned, listings, index;
+    try {
+      [owned, listings, index] = await Promise.all([
+        getOwnedCreatures(wallet),
+        getMyListings(wallet).catch(() => ({ items: [] })), // decoration, not the answer
+        getBidIndex(),
+      ]);
+    } catch (err) {
+      console.error('Offers received failed:', err.message);
+      sendJson(response, 503, { error: 'upstream_down', offers: null, health: creatureOffersHealth(['eth', 'usdc']) }, { 'Cache-Control': 'no-store' });
+      return;
+    }
+    // Every currency of the per-token book failed: we do not know it. Say so rather than
+    // report no offers — "nobody wants your Creatures" is the one wrong answer here.
+    if (index.tokenFailed.length >= Object.keys(ZK_CURRENCIES).length) {
+      sendJson(response, 503, { error: 'upstream_down', offers: null, health: creatureOffersHealth(index.tokenFailed) }, { 'Cache-Control': 'no-store' });
+      return;
+    }
+
+    const listedBy = new Map((listings.items || []).map(l => [String(l.tokenId), l]));
+    const ownedById = new Map((owned.items || []).map(o => [String(o.tokenId), o]));
+    const rows = [];
+    for (const [tokenId, item] of ownedById) {
+      for (const o of (index.byToken.get(tokenId) || [])) rows.push({ ...o, tokenId, item, listing: listedBy.get(tokenId) || null });
+    }
+    // Funding is checked once per row, but only for what we are about to show: an unfunded
+    // bid cannot be filled, and offering an Accept button that always reverts is worse than
+    // showing nothing. Bounded so a whale's dashboard can't fan out into hundreds of reads.
+    const RECEIVED_MAX = 60;
+    rows.sort((a, b) => (b.priceEth ?? 0) - (a.priceEth ?? 0));
+    const funded = (await annotateOffersFunded(rows.slice(0, RECEIVED_MAX)))
+      .filter(o => o.funded)
+      .map(({ grossWei, funded: _f, item, listing, ...rest }) => ({
+        ...rest,
+        name: item.name,
+        image: item.image,
+        // What you are currently asking for it, when it's listed — the number that decides
+        // whether a bid is worth taking.
+        listedAmt: listing ? listing.priceAmt : null,
+        listedCurrency: listing ? listing.currency : null,
+        listedEth: listing ? listing.priceEth : null,
+      }));
+
+    const topCollection = index.collection.length
+      ? (await annotateOffersFunded([index.collection[0]]))
+        .filter(o => o.funded)
+        .map(({ grossWei, funded: _f, ...rest }) => rest)[0] || null
+      : null;
+
+    const [withBidders, collWithBidder] = await Promise.all([
+      attachBidders(funded),
+      attachBidders(topCollection ? [topCollection] : []),
+    ]);
+    sendJson(response, 200, {
+      offers: withBidders,
+      collectionOffer: collWithBidder[0] || null,
+      ownedCount: ownedById.size,
+      listedCount: listedBy.size,
+      truncated: rows.length > RECEIVED_MAX,
+      // `partial` governs whether the page may state a count, so it tracks the per-token
+      // book only. A missing collection bid costs one extra row, not the number.
+      ...(index.tokenFailed.length ? { partial: true, unavailableCurrencies: index.tokenFailed } : {}),
+      ...(index.collFailed.length ? { collectionPartial: true } : {}),
+      health: creatureOffersHealth(index.failed, index.at),
     }, { 'Cache-Control': 'no-store' });
     return;
   }
@@ -8488,6 +8724,9 @@ const CARD_ALIAS = new Map([
   ['/holders', '/market/holders'],
   ['/guides/scams', '/guides/safety'],
   ['/collections/term', '/collections/glossary'],
+  // My History grew into the dashboard: the timeline is still there, under the offers
+  // waiting on your Creatures. Old links keep working and unfurl as what they now open.
+  ['/trade/history', '/trade/dashboard'],
 ]);
 
 // Legacy paths the client rewrites in the address bar as soon as it loads. The card
@@ -8499,6 +8738,7 @@ const CANONICAL_ALIAS = new Map([
   // Buy is the marketplace's front door: /trade/buy is the same page under a name people
   // guess. It has no card of its own, so it unfurls as /trade and points there.
   ['/trade/buy', '/trade'],
+  ['/trade/history', '/trade/dashboard'],
 ]);
 
 // path -> card. `tk` and `dk` name an en.json key, read at request time so the card
@@ -8675,10 +8915,10 @@ const SECTION_CARDS = {
     ttpl: "Marketplace: {k}",
     d: "What Creatures and LAND have actually sold for, back to the Immutable X years, with a price chart over whatever you filter to. Search a trait and see what it really goes for.",
   },
-  "/trade/history": {
-    tk: "trade.tab.myhistory",
+  "/trade/dashboard": {
+    tk: "trade.tab.dashboard",
     ttpl: "Marketplace: {k}",
-    d: "Everything your wallet has done here: what you bought and sold, what you sent and received, and every listing you have open, cancelled or seen expire.",
+    d: "Every offer standing on the Creatures you hold, who made it and what you'd clear, next to your open listings, the bids you have out, and everything your wallet has done here.",
   },
   "/trade/add-funds": {
     tk: "trade.topup.view.h",

@@ -28,7 +28,7 @@ export function setColl(v) { coll = v; }
 // The two funds views own a URL, and their tab value IS their URL slug ('/trade/cash-out'),
 // so there is no name-to-slug table anywhere to drift out of step.
 export const TRADE_VIEWS = new Set([
-  'buy', 'sell', 'transfer', 'sales', 'history', 'profile', 'add-funds', 'cash-out',
+  'buy', 'sell', 'transfer', 'sales', 'dashboard', 'profile', 'add-funds', 'cash-out',
 ]);
 export let tradeTab = 'buy';
 /**

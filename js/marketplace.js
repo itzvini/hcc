@@ -384,18 +384,44 @@ let tokenOffers = null;    // null = loading/not loaded OR the read failed (see 
 let tokenOffersError = false;  // true = we couldn't read this token's book — not "no offers"
 let collOffers = null;
 let collOffersError = false; // true = last load failed → empty strip means "couldn't load", not "none"
+// In-flight guards. `=== null` means "never loaded", which stays true for as long as a
+// request is in the air — so every repaint during that window used to start ANOTHER
+// identical request. A page load repaints several times (listings land, offers land,
+// holdings land), so one wanted read became three or four, and against Immutable's
+// per-IP rate limit the surplus is what came back 503. The `…Again` flag keeps a refresh
+// that arrives mid-flight honest: it re-runs once at the end rather than being dropped,
+// so a read asked for after a trade still sees the trade.
+let collOffersLoading = false;
+let collOffersAgain = false;
 let collOffersRetryTimer = null; // pending auto-retry after a failed load (self-heals the strip)
 let collOffersRetryAttempt = 0;  // backoff step for the auto-retry
 // LAND standing offers (OpenSea collection bids, WETH) — separate from the Creature set.
 let landCollOffers = null;
 let landCollOffersError = false;
+let landCollOffersLoading = false;
+let landCollOffersAgain = false;
 let landCollOffersRetryTimer = null;
 let landCollOffersRetryAttempt = 0;
 let landMyOffers = null;   // the connected wallet's own active LAND offers (for cancel)
 let landMyOffersError = false; // true = the read failed; null above means "unknown", not "none"
+let landMyOffersLoading = false;
+let landMyOffersAgain = false;
 let myOffers = null;
 let myOffersError = false;     // ditto for Creatures. render() checks it so a failed load
                                // isn't retried on every repaint.
+let myOffersLoading = false;
+let myOffersAgain = false;
+// Offers RECEIVED — bids standing on Creatures the connected wallet holds. The dashboard's
+// headline. null = not loaded or the read failed (recvError says which); never [] on failure,
+// because "no offers" is exactly the wrong thing to tell a holder who has some.
+let recvOffers = null;
+let recvMeta = null;       // { collectionOffer, ownedCount, listedCount, truncated }
+let recvError = false;
+let recvLoading = false;
+// Which of the loaded offers were new WHEN THEY ARRIVED. Held apart from the seen-list so
+// marking them seen doesn't rub the "New" chips off the screen the reader is still looking
+// at: the chips last the visit, the storage write happens once, and they are gone next time.
+let recvNewIds = new Set();
 let offerState = null;     // staged make-offer: prepare|approve|approveWait|sign|create|done|error
 let offerCtx = null;       // where the make-offer flow is running: 'modal' | 'browse'
 let landOfferState = null; // staged LAND make-offer (separate: mainnet + WETH wrap/approve)
@@ -1313,7 +1339,7 @@ function listingForToken(tokenId) {
 // What's a path and what's a query is the split between "which screen" and "what it's showing
 // right now": the tab is the path, the collection and the open token are parameters, because
 // they mean the same thing on every tab.
-const TRADE_TAB_PATHS = new Set(['buy', 'sell', 'transfer', 'sales', 'history']);
+const TRADE_TAB_PATHS = new Set(['buy', 'sell', 'transfer', 'sales', 'dashboard']);
 
 /** The path for a view. Buy is the marketplace's front door, so it answers at bare /trade. */
 function tradePath(tab = tradeTab) {
@@ -3198,7 +3224,11 @@ async function handleBuy(listingId) {
 
 // --- Offers (bids + collection "floor" offers) ---
 
-async function loadCollOffers() {
+async function loadCollOffers({ force = false } = {}) {
+  // Already asking: a repaint is satisfied by the answer on its way; only a caller that
+  // needs data newer than right now (force) earns a second read after this one lands.
+  if (collOffersLoading) { if (force) collOffersAgain = true; return; }
+  collOffersLoading = true;
   clearTimeout(collOffersRetryTimer); collOffersRetryTimer = null; // supersede any pending auto-retry
   const reqColl = 'creatures'; // captured at send time — see applyHealth
   try {
@@ -3220,9 +3250,12 @@ async function loadCollOffers() {
     collOffersError = true;
     if (collOffers == null) collOffers = [];
     scheduleCollOffersRetry(); // self-heal without the user tapping Refresh
+  } finally {
+    collOffersLoading = false;
   }
   patchCollStrip();
   patchSellView();
+  if (collOffersAgain) { collOffersAgain = false; loadCollOffers({ force: true }); }
 }
 
 // Auto-recover a failed offers load: re-fetch on a capped backoff (4s → 8s → 16s →
@@ -3240,7 +3273,9 @@ function scheduleCollOffersRetry() {
 }
 
 // LAND standing offers (read-only for now) — same shape + self-healing as the Creature set.
-async function loadLandCollOffers() {
+async function loadLandCollOffers({ force = false } = {}) {
+  if (landCollOffersLoading) { if (force) landCollOffersAgain = true; return; }
+  landCollOffersLoading = true;
   clearTimeout(landCollOffersRetryTimer); landCollOffersRetryTimer = null;
   try {
     const res = await fetch('/api/market/land/offers/collection', { headers: { Accept: 'application/json' } });
@@ -3257,9 +3292,12 @@ async function loadLandCollOffers() {
     landCollOffersError = true;
     if (landCollOffers == null) landCollOffers = [];
     scheduleLandCollOffersRetry();
+  } finally {
+    landCollOffersLoading = false;
   }
   patchLandOfferStrip();
   patchSellView(); // the LAND instant-sell card on the Sell tab reads these too
+  if (landCollOffersAgain) { landCollOffersAgain = false; loadLandCollOffers({ force: true }); }
 }
 function scheduleLandCollOffersRetry() {
   if (landCollOffersRetryTimer) return;
@@ -3274,8 +3312,10 @@ function scheduleLandCollOffersRetry() {
 // An empty list here reads as "you have nothing standing", which invites someone to bid
 // again on top of a bid they already have out. `myOffersError` exists so render() can tell
 // "never loaded" from "tried and failed" and doesn't re-fire the load forever.
-async function loadMyOffers() {
+async function loadMyOffers({ force = false } = {}) {
   if (!account) { myOffers = null; myOffersError = false; return; }
+  if (myOffersLoading) { if (force) myOffersAgain = true; return; }
+  myOffersLoading = true;
   const reqAccount = account, reqColl = 'creatures'; // captured at send time
   try {
     const res = await fetch(`/api/market/creatures/offers/mine/${reqAccount}`, { headers: { Accept: 'application/json' } });
@@ -3288,11 +3328,16 @@ async function loadMyOffers() {
   } catch (err) {
     console.error('Load my offers failed:', err.message);
     if (reqAccount === account) { myOffers = null; myOffersError = true; }
+  } finally {
+    myOffersLoading = false;
   }
   patchCollStrip();
+  if (myOffersAgain) { myOffersAgain = false; loadMyOffers({ force: true }); }
 }
-async function loadLandMyOffers() {
+async function loadLandMyOffers({ force = false } = {}) {
   if (!account) { landMyOffers = null; landMyOffersError = false; return; }
+  if (landMyOffersLoading) { if (force) landMyOffersAgain = true; return; }
+  landMyOffersLoading = true;
   const reqAccount = account, reqColl = 'land';
   try {
     const res = await fetch(`/api/market/land/offers/mine/${reqAccount}`, { headers: { Accept: 'application/json' } });
@@ -3305,10 +3350,16 @@ async function loadLandMyOffers() {
   } catch (err) {
     console.error('Load LAND my offers failed:', err.message);
     if (reqAccount === account) { landMyOffers = null; landMyOffersError = true; }
+  } finally {
+    landMyOffersLoading = false;
   }
   patchLandOfferStrip();
+  if (landMyOffersAgain) { landMyOffersAgain = false; loadLandMyOffers({ force: true }); }
 }
+let tokenOffersLoadingFor = null; // which token's book is currently in the air
 async function loadTokenOffers(tokenId) {
+  if (String(tokenOffersLoadingFor) === String(tokenId)) return; // already asking
+  tokenOffersLoadingFor = tokenId;
   tokenOffers = null;
   tokenOffersError = false;
   try {
@@ -3321,6 +3372,8 @@ async function loadTokenOffers(tokenId) {
     console.error('Load token offers failed:', err.message);
     // Unknown, not empty: a seller reads this book to decide whether to accept.
     if (String(modalToken) === String(tokenId)) { tokenOffers = null; tokenOffersError = true; patchModal(); }
+  } finally {
+    if (String(tokenOffersLoadingFor) === String(tokenId)) tokenOffersLoadingFor = null;
   }
 }
 
@@ -3369,16 +3422,27 @@ function acceptStatusHtml() {
   return `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t(STEP[acceptState.phase]))}</span></div>`;
 }
 
+// Every offer on screen, wherever it is being shown: the browse strip, the token modal, the
+// Sell tab's instant-sell card, your own outstanding bids, and the dashboard. Accepting reads
+// the row back out of here, so a surface that renders offers without being listed here would
+// show an Accept button that reports the offer as already gone.
+function offerById(offerId) {
+  return [...(collOffers || []), ...(tokenOffers || []), ...(myOffers || []), ...(sellPickOffers || []),
+    ...(recvOffers || []), ...(recvMeta?.collectionOffer ? [recvMeta.collectionOffer] : [])]
+    .find(o => o.offerId === offerId);
+}
+
 // Sale confirmation gate. Instant-sell takes the BEST STANDING offer at click time, and
 // those move — so before any wallet popup we show the exact, current payout and make the
 // user confirm. (A holder once expected a price they'd seen earlier and was surprised by
 // the lower live one; this removes that surprise — the sale is final and can't be undone.)
 function askAccept(offerId, tokenId) {
   if (acceptBusyId) return;
-  const offer = [...(collOffers || []), ...(tokenOffers || []), ...(myOffers || []), ...(sellPickOffers || [])].find(o => o.offerId === offerId);
+  const offer = offerById(offerId);
   if (!offer) { // it was taken/cancelled between render and click — refresh instead of confirming a ghost
-    loadCollOffers();
+    loadCollOffers({ force: true });
     if (modalToken) loadTokenOffers(modalToken);
+    if (tradeTab === 'dashboard') loadOffersReceived();
     return;
   }
   pendingAccept = { kind: 'creature', offerId, tokenId: tokenId ?? null, netEth: offer.netEth };
@@ -3589,7 +3653,7 @@ function modalOffersHtml(meta) {
             <li${i === 0 ? ' class="is-top"' : ''}>
               <div class="trade-offer-main">
                 <span class="trade-offer-price ${o.currency === 'usdc' ? 'is-usdc' : ''}">${esc(fmtOfferLine(o))}</span>
-                <span class="trade-offer-meta">${esc(t('trade.offers.net').replace('{x}', fmtOfferNetLine(o)))} · ${esc(t('trade.offers.from'))} <code>${esc(shortWallet(o.from))}</code></span>
+                <span class="trade-offer-meta">${esc(t('trade.offers.net').replace('{x}', fmtOfferNetLine(o)))} · ${esc(t('trade.offers.from'))} ${bidderHtml(o)}</span>
               </div>
               ${isOwner ? `<button class="trade-offer-accept" data-act="accept-offer" data-offer="${esc(o.offerId)}" type="button" ${acceptBusyId ? 'disabled' : ''}>${esc(acceptBusyId === o.offerId ? t('trade.accept.busy') : t('trade.offers.accept'))}</button>` : ''}
             </li>`).join('')}</ul>`
@@ -3807,7 +3871,7 @@ function acceptServerError(code) {
 }
 
 function setOffer(phase, extra) { offerState = { phase, ...extra }; patchModal(); patchCollStrip(); }
-function setAccept(phase, extra) { acceptState = { phase, ...extra }; patchModal(); patchSellView(); }
+function setAccept(phase, extra) { acceptState = { phase, ...extra }; patchModal(); patchSellView(); patchDashboardView(); }
 
 // Place an offer: prepare → (one-time ERC20 approval) → sign typed data → create.
 async function handleMakeOffer(tokenId, priceRaw, ctx) {
@@ -3884,8 +3948,8 @@ async function handleMakeOffer(tokenId, priceRaw, ctx) {
     }
 
     setOffer('done');
-    loadMyOffers();
-    if (tokenId != null) loadTokenOffers(tokenId); else loadCollOffers();
+    loadMyOffers({ force: true });
+    if (tokenId != null) loadTokenOffers(tokenId); else loadCollOffers({ force: true });
   } catch (err) {
     console.error('Make offer failed:', err);
     setOffer('error', { msg: friendlyError(err) });
@@ -3976,7 +4040,7 @@ async function handleMakeLandOffer(priceRaw) {
 async function handleAcceptOffer(offerId, tokenId) {
   if (acceptBusyId) return;
   acceptBusyId = offerId;
-  const offer = [...(collOffers || []), ...(tokenOffers || []), ...(myOffers || []), ...(sellPickOffers || [])].find(o => o.offerId === offerId);
+  const offer = offerById(offerId);
   // Collection bids need to know WHICH Creature is being sold into them, and
   // multi-unit bids (buy N creatures) are filled one at a time.
   const fillToken = tokenId ?? (offer?.collection ? sellSel : null);
@@ -4012,8 +4076,9 @@ async function handleAcceptOffer(offerId, tokenId) {
         setAccept('error', { msg: acceptServerError(data.error) });
         // A stale (unfunded/filled/cancelled/changed) offer should vanish from the UI promptly.
         if (['insufficient', 'not_found', 'not_active', 'taker_float'].includes(data.error)) {
-          loadCollOffers();
+          loadCollOffers({ force: true });
           if (modalToken) loadTokenOffers(modalToken);
+          if (tradeTab === 'dashboard') loadOffersReceived();
         }
         return;
       }
@@ -4030,8 +4095,9 @@ async function handleAcceptOffer(offerId, tokenId) {
           sellSel = null;
           if (fillToken != null) dropPendingOwned(fillToken); // fresh buy sold straight into a bid — don't resurrect it
           refreshAfterTx(); // sold a Creature into a bid — refresh holdings/balance, retry as Immutable indexes
-          loadCollOffers();
+          loadCollOffers({ force: true });
           if (modalToken) loadTokenOffers(modalToken);
+          if (tradeTab === 'dashboard') loadOffersReceived(); // that Creature is sold — drop its other bids
           return;
         }
       }
@@ -4045,7 +4111,7 @@ async function handleAcceptOffer(offerId, tokenId) {
     setAccept('error', { msg: friendlyError(err) });
   } finally {
     acceptBusyId = null;
-    patchModal(); patchSellView(); patchCollStrip();
+    patchModal(); patchSellView(); patchCollStrip(); patchDashboardView();
   }
 }
 
@@ -4067,7 +4133,7 @@ async function handleCancelOffer(offerId) {
     });
     if (!subRes.ok) throw Object.assign(new Error('submit'), { friendly: offerServerError((await subRes.json().catch(() => ({}))).error) });
     myOffers = (myOffers || []).filter(o => o.offerId !== offerId);
-    loadCollOffers();
+    loadCollOffers({ force: true });
   } catch (err) {
     console.error('Cancel offer failed:', err);
     setPendingFlash(err.friendly || friendlyError(err));
@@ -5864,7 +5930,7 @@ async function loadHistory() {
   if (!account || historyLoading) return;
   const startColl = coll;
   historyLoading = true;
-  patchHistoryView();
+  patchDashboardView();
   try {
     const r = await fetch(`${COLLECTIONS[startColl].api}/history/${account}`, { headers: { Accept: 'application/json' } })
       .then(res => res.ok ? res.json() : null).catch(() => null);
@@ -5873,13 +5939,10 @@ async function loadHistory() {
     histItems = r && Array.isArray(r.items) ? r.items : (histItems || []);
   } finally {
     historyLoading = false;
-    patchHistoryView();
+    patchDashboardView();
   }
 }
 
-function maybeLoadHistory() {
-  if (account && histItems === null && !historyLoading) loadHistory();
-}
 
 // "Jun 12, 2026" in the user's locale — when the listing reached its terminal state.
 function fmtHistoryDate(iso) {
@@ -5940,27 +6003,367 @@ function historyCardHtml(h, i = 0) {
     </li>`;
 }
 
-function historyViewHtml() {
-  // Read-only by address, so the wallet need not be on zkEVM — only connected.
-  if (!eth() || !account) return walletGateHtml();
-  const head = `<div class="trade-history-head">
-      <h4 class="trade-form-h">${esc(t('trade.history.h'))}</h4>
-      <button class="apply-btn-ghost trade-refresh" data-act="history-refresh" type="button" ${historyLoading ? 'disabled' : ''}>${esc(t('trade.refresh'))}</button>
-    </div>`;
-  if (histItems === null) {
-    return `<div class="trade-history">${head}
-      <div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.history.loading'))}</div></div>`;
-  }
-  const body = histItems.length
-    ? `<ol class="trade-timeline">${histItems.map((h, i) => historyCardHtml(h, i)).join('')}</ol>`
-    : `<p class="trade-form-p">${esc(t(historyError ? 'trade.history.error' : 'trade.history.none'))}</p>`;
-  return `<div class="trade-history">${head}${body}</div>`;
+/* --- The dashboard --------------------------------------------------------------------
+   A holder asked for this on Discord: "any way we could get an in-game message when we get
+   a new offer on our listings? Or even a dashboard on the website would be nice — to see
+   recent offers on our listings." Until now a standing bid was only visible by opening each
+   Creature one at a time, so offers sat unanswered for days.
+
+   So: one page for everything about your own wallet. Offers waiting on your Creatures first,
+   because that is money someone is holding out to you; then what you have listed, then the
+   bids you have out, then the history timeline this view grew out of.
+
+   Every offer names its bidder when that member has switched on a public profile — the same
+   consent, and the same name, that /profile/{slug} already shows — so you can go and talk to
+   them before you sell. */
+
+// Which offers this wallet has already looked at, so the tab can say how many are new.
+// Per wallet, in this browser only: nothing about who saw what belongs on our side, and the
+// answer is only ever used to draw a number.
+const SEEN_OFFERS_KEY = w => `hcc.trade.seenOffers.${String(w || '').toLowerCase()}`;
+const SEEN_OFFERS_MAX = 300; // a standing book is a few hundred; trimmed oldest-first
+
+function readSeenOffers(wallet) {
+  try { return new Set(JSON.parse(localStorage.getItem(SEEN_OFFERS_KEY(wallet)) || '[]')); }
+  catch { return new Set(); } // private windows and blocked storage both land here
+}
+function writeSeenOffers(wallet, set) {
+  try { localStorage.setItem(SEEN_OFFERS_KEY(wallet), JSON.stringify([...set].slice(-SEEN_OFFERS_MAX))); }
+  catch { /* the badge is a convenience — never let storage break the view */ }
 }
 
-function patchHistoryView() {
+/** Offers on your Creatures you haven't seen yet. 0 when there is nothing to say. */
+function unseenOfferCount() {
+  if (!account || !recvOffers?.length || recvMeta?.partial) return 0;
+  const seen = readSeenOffers(account);
+  return recvOffers.filter(o => !seen.has(o.offerId)).length;
+}
+
+/** Was this offer new when this page loaded? Drives the "New" chip for the whole visit. */
+function isNewOffer(offerId) { return recvNewIds.has(offerId); }
+
+/** Called when the dashboard is on screen: everything shown has now been seen. */
+function markOffersSeen() {
+  if (!account || !recvOffers?.length) return;
+  const seen = readSeenOffers(account);
+  const before = seen.size;
+  for (const o of recvOffers) seen.add(o.offerId);
+  if (seen.size !== before) { writeSeenOffers(account, seen); paintOfferBadges(); }
+}
+
+// The badge lives in two places: the marketplace's own tab strip, and the site nav, so an
+// offer is visible from anywhere on the site rather than only once you've gone looking.
+function paintOfferBadges() {
+  const n = unseenOfferCount();
+  const label = t('trade.dash.badge.aria').replace('{n}', String(n));
+  const navLink = document.getElementById('tab-trade');
+  const targets = [root()?.querySelector('[data-act="trade-tab"][data-tab="dashboard"]'),
+    navLink, navLink?.closest('.nav-group')?.querySelector('.nav-trigger')];
+  for (const el of targets) {
+    if (!el) continue;
+    let dot = el.querySelector('.trade-dash-badge');
+    if (!n) { dot?.remove(); continue; }
+    if (!dot) {
+      dot = document.createElement('span');
+      dot.className = 'trade-dash-badge';
+      el.appendChild(dot);
+    }
+    dot.textContent = n > 9 ? '9+' : String(n);
+    dot.title = label;
+    dot.setAttribute('aria-label', label);
+  }
+}
+
+// Load the offers standing on this wallet's Creatures. Creatures-only: LAND has no per-token
+// bids on OpenSea, only one collection-wide offer, which the LAND view already shows.
+// A partial book earns one more go. The server sweeps the whole bid book behind a short
+// shared cache, and the read that comes back incomplete is nearly always the one that
+// arrived while that sweep was still running, alongside everything else the marketplace
+// asks for on open. By the time this retry lands the sweep has finished and the answer is
+// whole — which matters because a partial book is a page that can't state a number.
+const RECV_RETRY_MS = 2500;
+
+async function loadOffersReceived(retryOnPartial = true) {
+  if (!account || recvLoading) return;
+  recvLoading = true;
+  const reqAccount = account;
+  patchDashboardView();
+  try {
+    const res = await fetch(`/api/market/creatures/offers/received/${reqAccount}`, { headers: { Accept: 'application/json' } });
+    const data = await res.json().catch(() => ({}));
+    if (reqAccount !== account) return; // wallet switched mid-flight
+    if (!res.ok || data.offers == null) throw new Error(`offers/received HTTP ${res.status}`);
+    const seen = readSeenOffers(reqAccount);
+    recvNewIds = new Set(data.offers.filter(o => !seen.has(o.offerId)).map(o => o.offerId));
+    recvOffers = data.offers;
+    recvMeta = { collectionOffer: data.collectionOffer || null, ownedCount: data.ownedCount || 0,
+      listedCount: data.listedCount || 0, truncated: !!data.truncated, partial: !!data.partial };
+    recvError = false;
+    if (data.partial && retryOnPartial) {
+      setTimeout(() => {
+        if (account === reqAccount && recvMeta?.partial && !recvLoading) loadOffersReceived(false);
+      }, RECV_RETRY_MS);
+    }
+  } catch (err) {
+    console.error('Offers received failed:', err);
+    // null, never []: an empty list from a failed read reads as "nobody wants your Creatures".
+    if (reqAccount === account) { recvOffers = null; recvMeta = null; recvError = true; }
+  } finally {
+    if (reqAccount === account) recvLoading = false;
+    patchDashboardView();
+    paintOfferBadges();
+  }
+}
+
+const BADGE_LOAD_DELAY_MS = 2500; // after the page's own loads have settled
+let badgeLoadTimer = null;
+
+function queueOfferBadgeLoad() {
+  if (badgeLoadTimer || !account || coll !== 'creatures') return;
+  if (recvOffers !== null || recvError || recvLoading) return;
+  badgeLoadTimer = setTimeout(() => {
+    badgeLoadTimer = null;
+    // Re-check: the tab may have been opened (which loads it properly) or the wallet
+    // changed while we waited.
+    if (account && coll === 'creatures' && recvOffers === null && !recvError && !recvLoading) loadOffersReceived();
+  }, BADGE_LOAD_DELAY_MS);
+}
+
+function maybeLoadDashboard() {
+  if (!account) return;
+  if (recvOffers === null && !recvError && !recvLoading) loadOffersReceived();
+  if (histItems === null && !historyLoading) loadHistory();
+  if (mine === null && !sellerLoading && onZk()) loadSellerData();
+}
+
+// "in 3 days" / "in 5 hours" / "under an hour" — how long a bid has left to run. A bid is a
+// signed promise with an end date on it, and a seller deciding whether to take one is
+// entitled to know they have an afternoon rather than a week.
+function fmtOfferExpiry(iso) {
+  if (!iso) return '';
+  const ms = Date.parse(iso) - Date.now();
+  if (!Number.isFinite(ms) || ms <= 0) return t('trade.dash.expiring');
+  const days = Math.floor(ms / 86400000);
+  if (days >= 1) return t('trade.dash.expires').replace('{x}', t(days === 1 ? 'trade.dash.day' : 'trade.dash.days').replace('{n}', String(days)));
+  const hours = Math.floor(ms / 3600000);
+  if (hours >= 1) return t('trade.dash.expires').replace('{x}', t(hours === 1 ? 'trade.dash.hour' : 'trade.dash.hours').replace('{n}', String(hours)));
+  return t('trade.dash.expiring');
+}
+
+// Who made this offer. A member with a public profile is named and linked, so you can see
+// what they hold and reach them in Highrise under that same name. Everyone else stays the
+// address they signed with — no profile, no name, and nothing new published about anyone.
+//
+// The unverified case is spelled out rather than hidden: that profile has a Highrise link to
+// this wallet but never signed for it, which is exactly the shape a rental (or an
+// impersonation) takes, and a seller about to negotiate should know which one they have.
+function bidderHtml(o) {
+  const b = o.bidder;
+  if (!b) {
+    return `<span class="trade-dash-who is-anon" title="${esc(t('trade.dash.who.anonTip'))}">
+      <span class="trade-dash-avatar is-blank" aria-hidden="true">${ico('wallet', 13)}</span>
+      <code>${esc(shortWallet(o.from))}</code></span>`;
+  }
+  const av = b.avatar
+    ? `<img class="trade-dash-avatar" src="${esc(b.avatar)}" alt="" loading="lazy" width="22" height="22" />`
+    : `<span class="trade-dash-avatar is-blank" aria-hidden="true">${ico('user', 13)}</span>`;
+  const flag = b.verified ? '' :
+    `<span class="trade-dash-unver" title="${esc(t('trade.dash.who.unverifiedTip'))}" aria-label="${esc(t('trade.dash.who.unverifiedTip'))}">${ico('alert', 12)}</span>`;
+  return `<a class="trade-dash-who" href="/profile/${esc(b.slug)}" data-act="dash-profile" data-slug="${esc(b.slug)}"
+    title="${esc(t('trade.dash.who.tip').replace('{name}', b.name))}">${av}<span class="trade-dash-name">${esc(b.name)}</span>${flag}</a>`;
+}
+
+// One offer waiting on a Creature you hold: what it's for, what you'd clear, who made it,
+// and the button that takes it.
+function receivedCardHtml(o, i = 0, isNew = false) {
+  const art = o.image
+    ? `<img src="${esc(o.image)}" alt="" loading="lazy" />`
+    : `<div class="trade-tile-noimg" aria-hidden="true">${ico('paw', 26)}</div>`;
+  // Against your own ask, when you have one out. A bid over the asking price is the row
+  // that most deserves to be noticed, so it gets said plainly instead of left to arithmetic.
+  let vs = '';
+  if (o.listedEth != null && o.priceEth != null && o.listedEth > 0) {
+    const pct = Math.round(((o.priceEth - o.listedEth) / o.listedEth) * 100);
+    const over = pct >= 0;
+    vs = `<span class="trade-dash-vs ${over ? 'is-over' : 'is-under'}">${esc(
+      t(over ? 'trade.dash.vs.over' : 'trade.dash.vs.under').replace('{n}', String(Math.abs(pct))))}</span>`;
+  }
+  const expiry = fmtOfferExpiry(o.expiresAt);
+  const delay = Math.min(i * 45, 450);
+  return `
+    <li class="trade-dash-card ${isNew ? 'is-new' : ''}" style="animation-delay:${delay}ms">
+      <button class="trade-dash-art" type="button" data-act="dash-open" data-token="${esc(o.tokenId)}"
+        aria-label="${esc(t('trade.dash.openAria').replace('{name}', o.name || ''))}">${art}</button>
+      <div class="trade-dash-body">
+        <div class="trade-dash-top">
+          <span class="trade-dash-item">${esc(o.name)}</span>
+          ${isNew ? `<span class="trade-dash-newchip">${esc(t('trade.dash.new'))}</span>` : ''}
+        </div>
+        <span class="trade-dash-price ${o.currency === 'usdc' ? 'is-usdc' : ''}">${esc(fmtOfferLine(o))}</span>
+        <span class="trade-dash-net">${esc(t('trade.offers.net').replace('{x}', fmtOfferNetLine(o)))}</span>
+        ${vs}
+        <div class="trade-dash-meta">
+          <span class="trade-dash-fromlbl">${esc(t('trade.offers.from'))}</span>${bidderHtml(o)}
+          ${expiry ? `<span class="trade-dash-exp">${esc(expiry)}</span>` : ''}
+          ${o.listedAmt == null ? `<span class="trade-dash-unlisted">${esc(t('trade.dash.notListed'))}</span>` : ''}
+        </div>
+      </div>
+      <button class="trade-offer-accept trade-dash-accept" type="button" data-act="accept-offer"
+        data-offer="${esc(o.offerId)}" data-token="${esc(o.tokenId)}" ${acceptBusyId ? 'disabled' : ''}
+        >${esc(acceptBusyId === o.offerId ? t('trade.accept.busy') : t('trade.offers.accept'))}</button>
+    </li>`;
+}
+
+// A headline number with its label. Values are small integers read straight from the book,
+// so they are stated rather than animated up — a count-up on "2 offers" is noise.
+function dashStatHtml(value, labelKey, accent = '') {
+  return `<div class="trade-dash-stat" ${accent ? `style="--accent:${accent}"` : ''}>
+    <span class="trade-dash-statn">${esc(String(value))}</span>
+    <span class="trade-dash-statl">${esc(t(labelKey))}</span>
+  </div>`;
+}
+
+function dashStatsHtml() {
+  // The count when we read the whole book; "22+" when we read most of it; an em dash when we
+  // read none. The offers are held in two currencies and each is fetched separately, so a
+  // gap usually costs a slice rather than everything — and "22+" over a list of 22 is both
+  // true and useful, where a bare dash above a full list just looks broken. What must never
+  // appear is a plain 0 standing in for "we couldn't look".
+  const partial = !!recvMeta?.partial;
+  const n = recvOffers === null ? '—'
+    : partial ? (recvOffers.length ? `${recvOffers.length}+` : '—')
+    : recvOffers.length;
+  // The best offer is a superlative, so it needs the whole book to be true. Held back
+  // whenever part of it is missing, however many rows we did read.
+  const best = partial ? null : recvOffers?.[0];
+  return `<div class="trade-dash-stats">
+    ${dashStatHtml(n, 'trade.dash.stat.offers', 'var(--hr-primary)')}
+    ${dashStatHtml(recvMeta?.ownedCount ?? 0, 'trade.dash.stat.held')}
+    ${dashStatHtml(recvMeta?.listedCount ?? 0, 'trade.dash.stat.listed', 'var(--hr-secondary)')}
+    ${best ? `<div class="trade-dash-stat is-wide" style="--accent:var(--hr-accent)">
+      <span class="trade-dash-statn is-amt ${best.currency === 'usdc' ? 'is-usdc' : ''}">${esc(fmtOfferLine(best))}</span>
+      <span class="trade-dash-statl">${esc(t('trade.dash.stat.best'))}</span>
+    </div>` : ''}
+  </div>`;
+}
+
+// The offers block. Loading, a failed read and a genuinely empty book must all look
+// different: the middle one is the whole reason recvError exists.
+function dashOffersHtml() {
+  if (recvOffers === null) {
+    return recvError
+      ? `<p class="trade-dash-err">${esc(t('trade.health.offersUnknown'))}</p>`
+      : `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.offers.loading'))}</div>`;
+  }
+  const anyOffer = recvMeta?.collectionOffer;
+  // The standing collection bid is an offer on every Creature you own, so it belongs here —
+  // but it is not tied to one of them, and taking it means choosing which to sell. That
+  // choice lives on the Sell tab, so this row points there rather than growing a picker.
+  const collRow = anyOffer ? `
+    <li class="trade-dash-card is-collection">
+      <span class="trade-dash-art is-any" aria-hidden="true">${ico('layers', 22)}</span>
+      <div class="trade-dash-body">
+        <div class="trade-dash-top"><span class="trade-dash-item">${esc(t('trade.dash.anyCreature'))}</span></div>
+        <span class="trade-dash-price ${anyOffer.currency === 'usdc' ? 'is-usdc' : ''}">${esc(fmtOfferLine(anyOffer))}</span>
+        <span class="trade-dash-net">${esc(t('trade.offers.net').replace('{x}', fmtOfferNetLine(anyOffer)))}</span>
+        <div class="trade-dash-meta">
+          <span class="trade-dash-fromlbl">${esc(t('trade.offers.from'))}</span>${bidderHtml(anyOffer)}
+        </div>
+      </div>
+      <button class="apply-btn-ghost trade-dash-accept" type="button" data-act="dash-sell">${esc(t('trade.dash.pickOne'))}</button>
+    </li>` : '';
+
+  if (!recvOffers.length) {
+    const head = collRow ? `<ul class="trade-dash-list">${collRow}</ul>` : '';
+    // Empty because nobody has bid, or empty because we could not see the whole book? Those
+    // are different answers and only one of them is "no offers".
+    if (recvMeta?.partial) {
+      return `${head}<div class="trade-dash-empty">
+        <span class="trade-dash-emptyico" aria-hidden="true">${ico('alert', 30)}</span>
+        <p>${esc(t('trade.dash.partial'))}</p>
+        <button class="apply-btn-ghost" type="button" data-act="dash-refresh">${esc(t('trade.refresh'))}</button>
+      </div>`;
+    }
+    return `${head}
+      <div class="trade-dash-empty">
+        <span class="trade-dash-emptyico" aria-hidden="true">${ico('tag', 30)}</span>
+        <p>${esc(t('trade.dash.none'))}</p>
+        <p class="trade-dash-emptysub">${esc(t('trade.dash.noneSub'))}</p>
+        <button class="apply-btn-ghost" type="button" data-act="dash-sell">${esc(t('trade.dash.goSell'))}</button>
+      </div>`;
+  }
+  return `
+    <ul class="trade-dash-list">
+      ${collRow}
+      ${recvOffers.map((o, i) => receivedCardHtml(o, i + (collRow ? 1 : 0), isNewOffer(o.offerId))).join('')}
+    </ul>
+    ${recvMeta?.truncated ? `<p class="trade-dash-note">${esc(t('trade.dash.truncated'))}</p>` : ''}
+    ${recvMeta?.partial ? `<p class="trade-dash-note">${esc(t('trade.dash.partial'))} <button type="button" class="trade-flt-clearall" data-act="dash-refresh">${esc(t('trade.refresh'))}</button></p>` : ''}`;
+}
+
+// The bids you have out on other people's Creatures — moved here from the chip row buried
+// under the Buy tab's offer strip, which is not where anyone thinks to look for them.
+function dashMyOffersHtml() {
+  if (!myOffers?.length) return '';
+  return `
+    <section class="trade-dash-sec">
+      <h4 class="trade-dash-h">${esc(t('trade.dash.mine.h'))}</h4>
+      <ul class="trade-dash-mine">
+        ${myOffers.map(o => `
+          <li class="trade-dash-mineitem ${o.funded === false ? 'is-unfunded' : ''}">
+            ${o.funded === false ? `<span class="trade-myoffer-warn" title="${esc(t('trade.coll.unfunded'))}" aria-label="${esc(t('trade.coll.unfunded'))}">${ico('alert', 13)}</span>` : ''}
+            <span class="trade-dash-mineon">${esc(o.collection ? t('trade.coll.chipAny') : `#…${String(o.tokenId).slice(-4)}`)}</span>
+            <span class="trade-dash-price ${o.currency === 'usdc' ? 'is-usdc' : ''}">${esc(fmtOfferLine(o))}</span>
+            <button class="trade-dash-cancel" data-act="cancel-offer" data-offer="${esc(o.offerId)}" type="button"
+              ${acceptBusyId ? 'disabled' : ''}>${esc(t('trade.coll.cancel'))}</button>
+          </li>`).join('')}
+      </ul>
+    </section>`;
+}
+
+function dashboardViewHtml() {
+  // Read-only by address, so the wallet need only be connected. The offers block is
+  // Creatures-only (zkEVM bids); LAND has no per-token book to read.
+  if (!eth() || !account) return walletGateHtml();
+  const busy = recvLoading || historyLoading;
+  const head = `
+    <div class="trade-dash-head">
+      <div>
+        <h3 class="trade-dash-title">${esc(t('trade.dash.h'))}</h3>
+        <p class="trade-dash-lead">${esc(t('trade.dash.lead'))}</p>
+      </div>
+      <button class="apply-btn-ghost trade-refresh" data-act="dash-refresh" type="button" ${busy ? 'disabled' : ''}>${esc(t('trade.refresh'))}</button>
+    </div>`;
+  const timeline = histItems === null
+    ? `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.history.loading'))}</div>`
+    : histItems.length
+      ? `<ol class="trade-timeline">${histItems.map((h, i) => historyCardHtml(h, i)).join('')}</ol>`
+      : `<p class="trade-form-p">${esc(t(historyError ? 'trade.history.error' : 'trade.history.none'))}</p>`;
+  return `
+    <div class="trade-dash">
+      ${head}
+      ${dashStatsHtml()}
+      ${acceptStatusHtml()}
+      <section class="trade-dash-sec is-lead">
+        <h4 class="trade-dash-h">${esc(t('trade.dash.offers.h'))} ${tipHtml('trade.dash.offers.tip')}</h4>
+        ${dashOffersHtml()}
+      </section>
+      ${myListingsHtml()}
+      ${dashMyOffersHtml()}
+      <section class="trade-dash-sec">
+        <h4 class="trade-dash-h">${esc(t('trade.history.h'))}</h4>
+        ${timeline}
+      </section>
+    </div>`;
+}
+
+function patchDashboardView() {
   const view = root()?.querySelector('#trade-view');
-  if (!view || tradeTab !== 'history') return;
-  view.innerHTML = historyViewHtml();
+  if (!view || tradeTab !== 'dashboard') return;
+  view.innerHTML = dashboardViewHtml();
+  applyTradingPause();
+  // Seen AFTER the paint, so the "New" chips in this render are the ones you just looked at.
+  requestAnimationFrame(() => markOffersSeen());
 }
 
 // Select-all / clear bar above a multi-select picker. "Select all" acts on the CURRENTLY
@@ -6019,10 +6422,10 @@ function maybeLoadSeller() {
 
 // Segmented Buy / Sell / Transfer control (reuses the Market panel's .seg pattern).
 function tradeTabsHtml() {
-  // Both collections have a History tab: Creatures via Immutable's activities + orders APIs,
-  // LAND via OpenSea's account events feed.
+  // Both collections have a dashboard: the history timeline inside it comes from Immutable's
+  // activities + orders APIs for Creatures, and OpenSea's account events feed for LAND.
   const TABS = [['buy', 'trade.tab.buy'], ['sell', 'trade.tab.sell'], ['transfer', 'trade.tab.transfer'],
-    ['sales', 'trade.tab.sales'], ['history', 'trade.tab.myhistory']];
+    ['sales', 'trade.tab.sales'], ['dashboard', 'trade.tab.dashboard']];
   return `<div class="seg trade-tabs" role="tablist" aria-label="${esc(t('trade.tabs.aria'))}">
     ${TABS.map(([id, key]) => `
       <button type="button" role="tab" class="seg-btn ${tradeTab === id ? 'is-active' : ''}"
@@ -6447,7 +6850,7 @@ const TRADE_VIEW_TITLE = {
   sell:       () => `${t('nav.marketplace')}: ${t('trade.tab.sell')}`,
   transfer:   () => `${t('nav.marketplace')}: ${t('trade.tab.transfer')}`,
   sales:      () => `${t('nav.marketplace')}: ${t('trade.tab.sales')}`,
-  history:    () => `${t('nav.marketplace')}: ${t('trade.tab.myhistory')}`,
+  dashboard:  () => `${t('nav.marketplace')}: ${t('trade.tab.dashboard')}`,
   'add-funds': () => t('trade.topup.view.h'),
   'cash-out':  () => t('trade.cashout.view.h'),
 };
@@ -6539,7 +6942,7 @@ export function openTradeTab(tab, opts = {}) {
   if (!loadedOnce || !root()) return; // the panel paints itself on boot with this tab already set
   if (!already || opts.force) render();
   if (tab === 'sell' || tab === 'transfer') maybeLoadSeller();
-  if (tab === 'history') maybeLoadHistory();
+  if (tab === 'dashboard') maybeLoadDashboard();
 }
 
 export function openFundsView(which, opts = {}) {
@@ -7511,7 +7914,7 @@ function queueTransferCheck(raw) {
 function viewHtml() {
   if (tradeTab === 'sell')     return `<section class="trade-actions" id="trade-view">${sellViewHtml()}</section>`;
   if (tradeTab === 'transfer') return `<section class="trade-actions" id="trade-view">${transferViewHtml()}</section>`;
-  if (tradeTab === 'history') return `<section class="trade-actions" id="trade-view">${historyViewHtml()}</section>`;
+  if (tradeTab === 'dashboard') return `<section class="trade-actions" id="trade-view">${dashboardViewHtml()}</section>`;
   if (tradeTab === 'sales') return `<div id="trade-view">${salesHtml()}</div>`;
   if (tradeTab === 'profile') return `<section class="trade-profile-view" id="trade-view">${profileViewHtml()}</section>`;
   // The two money views. A wallet is the whole point of them, so an unconnected visitor gets
@@ -8225,11 +8628,17 @@ function render() {
     maybeLoadSeller();
     // `=== null` means "never loaded". The error flag stops a failed load from re-firing
     // on every repaint, which would hammer an already-struggling upstream.
-    if (coll === 'creatures' && myOffers === null && !myOffersError) loadMyOffers();
-    else if (coll === 'land' && landMyOffers === null && !landMyOffersError) loadLandMyOffers();
+    // `=== null` stays true for as long as the request is in the air, so the loading flag
+    // has to be part of the test — without it every repaint during the wait started another.
+    if (coll === 'creatures' && myOffers === null && !myOffersError && !myOffersLoading) loadMyOffers();
+    else if (coll === 'land' && landMyOffers === null && !landMyOffersError && !landMyOffersLoading) loadLandMyOffers();
   }
-  // History is read-only by address — load it even when the wallet isn't on the right chain.
-  if (account && tradeTab === 'history') maybeLoadHistory();
+  // The dashboard is read-only by address — load it even when the wallet isn't on the
+  // right chain. The offers book is fetched whether or not the tab is open, because the
+  // unread badge on the nav is the point: an offer should find you, not wait to be found.
+  if (account && tradeTab === 'dashboard') maybeLoadDashboard();
+  else queueOfferBadgeLoad();
+  paintOfferBadges();
   // Sales History is public — no wallet needed. Load it the first time the tab is shown.
   // The canvas above was just replaced wholesale, so any chart still bound to the old one
   // is holding a detached node and its resize listener — drop it and draw on the new one.
@@ -8407,15 +8816,23 @@ function onClick(e) {
     case 'hp-wallets':     hpWalletsOpen = !hpWalletsOpen; hpLinkError = null; return patchProfileCard();
     case 'hp-enable':      return setHolderProfile(true);
     case 'hp-disable':     return setHolderProfile(false);
+    case 'dash-profile':   return openProfileView(target.dataset.slug);
     case 'hp-link':        return linkConnectedWallet();
     case 'hp-unlink':      return unlinkProfileWallet(target.dataset.wallet);
     case 'cancel-listing': return handleCancelListing(target.dataset.listing);
-    case 'history-refresh':
-      if (historyLoading) return;
+    case 'dash-refresh': {
+      if (recvLoading && historyLoading) return;
+      recvOffers = null; recvMeta = null; recvError = false;
       histItems = null; historyError = false;
-      patchHistoryView();
+      patchDashboardView();
+      loadOffersReceived();
       return loadHistory();
-    case 'accept-offer':   return askAccept(target.dataset.offer);
+    }
+    // Open the Creature an offer is on, so you can read its traits and rank before deciding.
+    case 'dash-open':      return openModal(target.dataset.token);
+    // A collection bid is an offer on any one of yours, so taking it starts with picking which.
+    case 'dash-sell':      return openTradeTab('sell');
+    case 'accept-offer':   return askAccept(target.dataset.offer, target.dataset.token || undefined);
     case 'instant-sell':   return askAccept(target.dataset.offer, sellSel);
     case 'land-instant-sell': return askAcceptLand(target.dataset.offer, target.dataset.protocol, target.dataset.token);
     case 'accept-confirm': {
@@ -8500,7 +8917,7 @@ function onClick(e) {
     case 'switch':     return switchNetwork(target);
     case 'loadmore':   return loadListings(false);
     case 'retry':      return loadListings(true);
-    case 'refresh':    loadListings(true); if (coll === 'creatures') loadCollOffers(); else if (coll === 'land') loadLandCollOffers(); return;
+    case 'refresh':    loadListings(true); if (coll === 'creatures') loadCollOffers({ force: true }); else if (coll === 'land') loadLandCollOffers({ force: true }); return;
     case 'sales-loadmore': return loadSales(false);
     case 'sales-retry':    salesItems = null; salesError = false; return loadSales(true);
     case 'sales-refresh':  salesItems = null; salesError = false; return loadSales(true);
@@ -8748,6 +9165,11 @@ function resetSellerState() {
   sellCurrency = 'eth'; // the only currency LAND can list in, and a clean default per collection
   offerCurrency = 'eth'; // ditto for offers, so a USDC pick on Creatures can't leak onto LAND
   histItems = null; historyError = false; // per-collection; reload on demand
+  // Offers received are keyed to the wallet that holds the Creatures, so a wallet switch
+  // must drop them: showing the previous account's offers with THIS account's Accept button
+  // is a trade nobody can make.
+  recvOffers = null; recvMeta = null; recvError = false; recvNewIds = new Set();
+  clearTimeout(badgeLoadTimer); badgeLoadTimer = null;
   myOffers = null; offerState = null; offerCtx = null; acceptState = null; acceptBusyId = null;
   landMyOffers = null; landOfferState = null; landAcceptState = null; landAcceptBusy = false; setUnwrapState(null);
   sellPickOffers = null;
@@ -9034,7 +9456,7 @@ export async function loadMarketplace() {
   // Landing straight on Sell or Transfer (a restored view does that) needs the inventory,
   // which only the tab click used to trigger.
   if (tradeTab === 'sell' || tradeTab === 'transfer') maybeLoadSeller();
-  if (tradeTab === 'history') maybeLoadHistory();
+  if (tradeTab === 'dashboard') maybeLoadDashboard();
   if (deepToken) openDeepLink(deepToken);
 }
 

@@ -27,6 +27,10 @@
   --hr-destructive:    #EC3326;
 
   /* Tertiary */
+  /* Banana under the name the rest of the sheet reaches for. It was used in four places
+     before it existed, so those rules quietly did nothing — a warning glyph and the
+     "minted" timeline dot both fell back to plain text colour. */
+  --hr-accent:         #FFF95F;
   --hr-banana:         #FFF95F;
   --hr-banana-25:      rgba(255,249,95,0.25);
   --hr-blueberry:      #0DA6FC;
@@ -5855,6 +5859,193 @@ body.trade-sheet-open { overflow: hidden; }
 .trade-history-badge.is-sent     { color: var(--hr-fg-1);      background: rgba(255,255,255,.06); border-color: var(--hr-line); }
 .trade-history-badge.is-cancelled { color: var(--hr-alert);    background: var(--hr-alert-15);     border-color: rgba(255,91,149,.4); }
 .trade-history-badge.is-expired   { color: var(--hr-fg-2);     background: rgba(255,255,255,.05);  border-color: var(--hr-line); }
+
+/* ---------- The dashboard (/trade/dashboard) ----------
+   Everything about your own wallet on one page, led by the offers standing on your
+   Creatures. Frosted cards over a mint/lavender aurora, an accent rail per card so a bid
+   over your asking price reads at a glance, and a staggered reveal down the list. Every
+   animation here is switched off under prefers-reduced-motion at the bottom of the block. */
+.trade-dash { display: flex; flex-direction: column; gap: 22px; }
+
+.trade-dash-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.trade-dash-title { margin: 0; font-size: 20px; font-weight: 900; color: var(--hr-fg-0); letter-spacing: -.01em; }
+.trade-dash-lead { margin: 4px 0 0; font-size: 13px; font-weight: 600; color: var(--hr-fg-2); max-width: 52ch; }
+
+/* Headline numbers. The rail of small frosted tiles the Council stats use, with --accent
+   picking each tile's glow so the counts read as different things at a glance. */
+.trade-dash-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px; }
+.trade-dash-stat {
+  --accent: var(--hr-fg-2);
+  position: relative; overflow: hidden;
+  padding: 14px 16px; border-radius: var(--hr-radius-lg);
+  border: 1px solid var(--hr-line); background: linear-gradient(180deg, rgba(40,39,45,.55), rgba(20,19,23,.72));
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+  animation: dashRise .45s ease both;
+}
+.trade-dash-stat::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(160px 90px at 100% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%);
+}
+.trade-dash-stat.is-wide { grid-column: span 2; }
+.trade-dash-statn { display: block; font-size: 26px; font-weight: 900; line-height: 1.05; color: var(--accent); }
+.trade-dash-statn.is-amt { font-size: 17px; color: var(--hr-fg-0); }
+.trade-dash-statn.is-amt.is-usdc { color: var(--hr-blueberry); }
+.trade-dash-statl { display: block; margin-top: 4px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--hr-fg-3); }
+
+.trade-dash-sec { display: flex; flex-direction: column; gap: 10px; }
+.trade-dash-h { margin: 0; font-size: 14px; font-weight: 800; color: var(--hr-fg-0); display: flex; align-items: center; gap: 6px; }
+.trade-dash-err { margin: 0; font-size: 13px; font-weight: 600; color: var(--hr-fg-2); }
+.trade-dash-note { margin: 2px 0 0; font-size: 11.5px; font-weight: 600; color: var(--hr-fg-3); }
+
+/* One offer waiting on a Creature you hold. */
+.trade-dash-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.trade-dash-card {
+  --accent: var(--hr-primary);
+  position: relative; overflow: hidden;
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 14px; border-radius: var(--hr-radius-lg);
+  border: 1px solid var(--hr-line);
+  background: linear-gradient(180deg, rgba(40,39,45,.58), rgba(20,19,23,.74));
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+  animation: dashRise .45s ease both;
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.trade-dash-card:hover { transform: translateY(-2px); border-color: var(--hr-line-strong); box-shadow: 0 10px 28px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06); }
+/* The accent rail: the one mark that says which card this is without reading it. */
+.trade-dash-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); opacity: .85; }
+.trade-dash-card::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(300px 120px at 0% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 72%);
+}
+.trade-dash-card.is-new { --accent: var(--hr-accent); }
+.trade-dash-card.is-collection { --accent: var(--hr-secondary); }
+
+.trade-dash-art {
+  flex: 0 0 auto; width: 56px; height: 56px; padding: 0;
+  border-radius: var(--hr-radius-md); overflow: hidden;
+  border: 1px solid var(--hr-line); background: var(--hr-bg-3);
+  display: grid; place-items: center; cursor: pointer;
+  transition: transform .18s ease, border-color .18s ease;
+}
+.trade-dash-art:hover { transform: scale(1.05); border-color: var(--accent); }
+.trade-dash-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.trade-dash-art.is-any { cursor: default; color: var(--hr-secondary); }
+.trade-dash-art.is-any:hover { transform: none; border-color: var(--hr-line); }
+
+.trade-dash-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.trade-dash-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.trade-dash-item { font-size: 13.5px; font-weight: 800; color: var(--hr-fg-0); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trade-dash-newchip {
+  flex: 0 0 auto; padding: 2px 8px; border-radius: var(--hr-radius-pill);
+  font-size: 10px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--hr-on-primary); background: var(--hr-accent);
+  animation: dashShimmer 2.4s ease-in-out infinite;
+}
+.trade-dash-price { font-size: 15px; font-weight: 900; color: var(--hr-fg-0); }
+.trade-dash-price.is-usdc { color: var(--hr-blueberry); }
+.trade-dash-net { font-size: 11.5px; font-weight: 600; color: var(--hr-fg-2); }
+.trade-dash-vs { margin-left: 6px; font-size: 11.5px; font-weight: 800; }
+.trade-dash-vs.is-over { color: var(--hr-primary); }
+.trade-dash-vs.is-under { color: var(--hr-fg-3); }
+
+.trade-dash-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 5px; }
+.trade-dash-fromlbl { font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--hr-fg-3); }
+.trade-dash-exp, .trade-dash-unlisted { font-size: 11px; font-weight: 700; color: var(--hr-fg-3); }
+.trade-dash-unlisted {
+  padding: 2px 8px; border-radius: var(--hr-radius-pill);
+  border: 1px solid var(--hr-line); background: rgba(255,255,255,.04);
+}
+
+/* Who made the offer. A named member is a link to their profile; everyone else is the
+   wallet they signed with. */
+.trade-dash-who {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 10px 2px 3px; border-radius: var(--hr-radius-pill);
+  border: 1px solid var(--hr-line); background: rgba(255,255,255,.05);
+  color: var(--hr-fg-0); font-size: 12px; font-weight: 700; text-decoration: none;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+a.trade-dash-who:hover { border-color: var(--hr-primary); background: rgba(81,255,165,.10); transform: translateY(-1px); }
+.trade-dash-who.is-anon { color: var(--hr-fg-2); font-weight: 600; }
+.trade-dash-who.is-anon code { font-size: 11px; color: var(--hr-fg-2); }
+.trade-dash-avatar { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex: 0 0 auto; display: block; }
+.trade-dash-avatar.is-blank { display: grid; place-items: center; background: var(--hr-bg-4); color: var(--hr-fg-3); }
+.trade-dash-name { max-width: 18ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trade-dash-unver { display: inline-flex; color: var(--hr-accent); }
+
+.trade-dash-accept { flex: 0 0 auto; align-self: center; }
+
+/* Nothing standing. Not a failure, so it gets a way forward rather than an apology. */
+.trade-dash-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 28px 20px; border-radius: var(--hr-radius-lg);
+  border: 1px dashed var(--hr-line-strong); background: rgba(255,255,255,.02);
+  text-align: center;
+}
+.trade-dash-empty p { margin: 0; font-size: 13.5px; font-weight: 700; color: var(--hr-fg-1); }
+.trade-dash-emptyico { color: var(--hr-fg-3); }
+.trade-dash-emptysub { font-size: 12px !important; font-weight: 600 !important; color: var(--hr-fg-3) !important; max-width: 44ch; }
+
+/* The bids you have out, brought up from the chip row under the Buy tab. */
+.trade-dash-mine { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.trade-dash-mineitem {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 9px 14px; border-radius: var(--hr-radius-md);
+  border: 1px solid var(--hr-line); background: rgba(255,255,255,.03);
+}
+.trade-dash-mineitem.is-unfunded { border-color: rgba(255,249,95,.4); background: rgba(255,249,95,.06); }
+.trade-dash-mineon { font-size: 12px; font-weight: 800; color: var(--hr-fg-1); }
+.trade-dash-mineitem .trade-dash-price { font-size: 13px; }
+.trade-dash-cancel {
+  margin-left: auto; padding: 5px 12px; border-radius: var(--hr-radius-pill);
+  border: 1px solid var(--hr-line-strong); background: transparent;
+  color: var(--hr-fg-2); font-size: 11.5px; font-weight: 800; cursor: pointer;
+  transition: color .18s ease, border-color .18s ease;
+}
+.trade-dash-cancel:hover:not(:disabled) { color: var(--hr-alert); border-color: var(--hr-alert); }
+.trade-dash-cancel:disabled { opacity: .5; cursor: default; }
+
+/* The unread count, on the marketplace tab and on the nav that reaches it. */
+.trade-dash-badge {
+  display: inline-grid; place-items: center; margin-left: 6px;
+  min-width: 17px; height: 17px; padding: 0 5px; border-radius: var(--hr-radius-pill);
+  background: var(--hr-primary); color: var(--hr-on-primary);
+  font-size: 10px; font-weight: 900; line-height: 1; vertical-align: middle;
+  box-shadow: 0 0 0 3px rgba(81,255,165,.18);
+  animation: dashPulse 2.6s ease-in-out infinite;
+}
+
+/* The same bidder chip rides the token modal's offer rows, which are a tighter line: shrink
+   it to fit, and let that line wrap now that it can carry a name rather than a short hash. */
+.trade-offer-meta { white-space: normal; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.trade-offer-meta .trade-dash-who { padding: 1px 8px 1px 2px; font-size: 11px; }
+.trade-offer-meta .trade-dash-avatar { width: 17px; height: 17px; }
+.trade-offer-meta .trade-dash-name { max-width: 14ch; }
+
+@keyframes dashRise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes dashShimmer { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+@keyframes dashPulse { 0%, 100% { box-shadow: 0 0 0 3px rgba(81,255,165,.18); } 50% { box-shadow: 0 0 0 6px rgba(81,255,165,.06); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .trade-dash-stat, .trade-dash-card { animation: none; }
+  .trade-dash-newchip, .trade-dash-badge { animation: none; }
+  .trade-dash-card, .trade-dash-art, .trade-dash-who, .trade-dash-cancel { transition: none; }
+  .trade-dash-card:hover, .trade-dash-art:hover, a.trade-dash-who:hover { transform: none; }
+}
+
+@media (max-width: 640px) {
+  .trade-dash-card { flex-wrap: wrap; gap: 10px; padding: 12px; }
+  .trade-dash-art { width: 48px; height: 48px; }
+  .trade-dash-body { flex: 1 1 60%; }
+  /* The button drops to its own full-width row rather than shrinking to a tap target
+     nobody can hit while holding a phone one-handed. */
+  .trade-dash-accept { flex: 1 0 100%; width: 100%; }
+  .trade-dash-stat.is-wide { grid-column: span 2; }
+  .trade-dash-stats { grid-template-columns: repeat(2, 1fr); }
+  .trade-dash-head { flex-direction: column; align-items: stretch; }
+}
 
 /* Sales price chart — the same matched set the list below shows, plotted over time. Frosted
    card, mint dots for individual sales, a lavender trend line through them, and the headline
