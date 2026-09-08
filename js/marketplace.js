@@ -5944,6 +5944,26 @@ async function loadHistory() {
 }
 
 
+/**
+ * What a past trade was worth, in the money it settled in and in the reader's currency AT
+ * THE TIME — "0.1266 ETH (≈ US$ 313)" where the 313 is July's dollars, not today's.
+ *
+ * This line used to run through fmtEthFiat, which converts at the LIVE rate: the dollar
+ * figure beside a months-old sale drifted every time ETH moved and never matched what the
+ * trade was actually worth. The server now values each entry on its own day
+ * (valueAtItsOwnDay) and this renders that, the same way the sales list already does.
+ *
+ * No rate for that day means no dollar figure — the native amount stands alone rather than
+ * carrying a number we'd be guessing at.
+ */
+function fmtHistoryPrice(h) {
+  const native = h.currency
+    ? fmtListingAmt({ currency: h.currency, totalAmt: h.priceAmt ?? h.priceEth, totalEth: h.priceEth })
+    : fmtEth(h.priceEth);
+  const fiat = fmtSaleFiat(h.priceUsd);
+  return fiat ? `${native} (${fiat})` : native;
+}
+
 // "Jun 12, 2026" in the user's locale — when the listing reached its terminal state.
 function fmtHistoryDate(iso) {
   if (!iso) return '';
@@ -5974,8 +5994,9 @@ function historyCardHtml(h, i = 0) {
   // Secondary line: the trade price when there is one (bought/sold/listings), otherwise the
   // counterparty for a plain transfer ("from 0x12…34" / "to 0x12…34").
   let sub = '';
-  if (h.priceEth != null) {
-    sub = `<span class="trade-mine-price">${esc(fmtEthFiat(h.priceEth))}</span>`;
+  const amt = h.priceAmt ?? h.priceEth;
+  if (amt != null) {
+    sub = `<span class="trade-mine-price ${h.currency === 'usdc' ? 'is-usdc' : ''}">${esc(fmtHistoryPrice(h))}</span>`;
   } else if (h.with) {
     const lbl = t(h.kind === 'sent' ? 'trade.history.to' : 'trade.history.from');
     sub = `<span class="trade-history-with">${esc(lbl)} <code>${esc(shortWallet(h.with))}</code></span>`;

@@ -4791,7 +4791,7 @@ footer { margin-top: 28px; }
 /* USDC prices read in a calm dollar-green so they're distinct from ETH's mint at a glance. */
 .trade-tile-price.is-usdc, .trade-modal-price-eth.is-usdc, .trade-mass-unit.is-usdc,
 .trade-offer-price.is-usdc, .trade-sale-eth.is-usdc, .trade-myoffer-chip .is-usdc,
-.trade-colloffer-price.is-usdc { color: var(--hr-online); }
+.trade-colloffer-price.is-usdc, .trade-mine-price.is-usdc { color: var(--hr-online); }
 /* Compact ETH|USDC toggle inside the inline offer forms — smaller than the sell picker. */
 .trade-offer-cur { margin: 0 6px 0 0; padding: 3px; gap: 3px; }
 .trade-offer-cur .seg-btn { min-width: 52px; min-height: 30px; font-size: 12px; font-weight: 800; }

@@ -1960,6 +1960,32 @@ async function getMyListings(address) {
 const ACTIVITY_PAGES_MAX = 2; // newest ~200 activities — far more than the rendered cap
 const HISTORY_ITEMS_MAX = 80;
 
+/**
+ * Put a dollar figure on a past trade using the rate that applied ON THE DAY IT HAPPENED,
+ * not today's.
+ *
+ * This is the rule the sales feed, the price chart and the price guide already follow, and
+ * the activity timeline was the one place still valuing history at the live rate: a
+ * Creature sold for 0.1266 ETH in July showed today's dollars beside it, so the number
+ * moved every time ETH did and never matched what the trade was actually worth.
+ *
+ * `priceEth` stays the cross-currency comparable and `priceUsd` is what gets displayed.
+ * When we have no rate for that day, priceUsd is left null and the client shows the native
+ * amount alone — an honest silence rather than a confident wrong figure.
+ */
+function valueAtItsOwnDay(entry, daily) {
+  if (entry.priceAmt == null) { entry.priceEth = null; entry.priceUsd = null; return; }
+  const ts = Date.parse(entry.at) || 0;
+  const rate = (daily && ts ? daily.at(ts) : null) || null;
+  if (entry.currency === 'usdc') {
+    entry.priceUsd = entry.priceAmt;                                   // a dollar was a dollar
+    entry.priceEth = rate ? round4(entry.priceAmt / rate) : null;
+  } else {
+    entry.priceEth = entry.priceAmt;
+    entry.priceUsd = rate ? Math.round(entry.priceAmt * rate) : null;
+  }
+}
+
 async function getMyListingHistory(address) {
   const addr = address.toLowerCase();
 
@@ -1997,10 +2023,14 @@ async function getMyListingHistory(address) {
       const tokenId = asset?.token_id;
       if (!tokenId) continue;
       const isBuyer = (d.to || '').toLowerCase() === addr;
-      const payToken = (d.payment?.token?.contract_address || '').toLowerCase();
-      const priceWei = d.payment?.price_including_fees; // headline all-in trade price
-      const priceEth = payToken === IMX_ETH_TOKEN && priceWei ? round4(Number(BigInt(priceWei)) / 1e18) : null;
-      entries.push({ kind: isBuyer ? 'bought' : 'sold', tokenId, priceEth, at, tx,
+      // Value the trade in the currency it actually settled in. This used to recognise ETH
+      // and nothing else, so a USDC sale arrived with no price at all and the timeline
+      // showed a bare "sold" with the amount missing beside it.
+      const payCur = zkCurrencyByAddr(d.payment?.token?.contract_address);
+      const priceUnits = d.payment?.price_including_fees; // headline all-in trade price
+      const priceAmt = payCur && priceUnits ? unitsToAmount(priceUnits, payCur.decimals) : null;
+      entries.push({ kind: isBuyer ? 'bought' : 'sold', tokenId, at, tx,
+        currency: payCur?.key || null, priceAmt,
         with: ((isBuyer ? d.from : d.to) || '').toLowerCase() || null });
     } else if (a.type === 'transfer') {
       if (tx && saleTxs.has(tx)) continue; // NFT leg of a sale — already shown as bought/sold
@@ -2038,9 +2068,12 @@ async function getMyListingHistory(address) {
     const tokenId = o.sell?.[0]?.token_id;
     const amount = o.buy?.[0]?.amount;
     if (!tokenId || !amount) continue;
+    // Per-currency decimals, not a blanket 1e18: a USDC listing carries 6, and dividing
+    // its amount by 1e18 reported every one of them as ~0 ETH.
+    const listCur = zkCurrencyByAddr(o.buy?.[0]?.contract_address) || ZK_CURRENCIES.eth;
     entries.push({
       kind: LISTING_KIND[status], tokenId,
-      priceEth: round4(Number(BigInt(amount)) / 1e18),
+      currency: listCur.key, priceAmt: unitsToAmount(amount, listCur.decimals),
       at: o.updated_at || o.created_at || null, tx: null, with: null,
     });
   }
@@ -2050,11 +2083,15 @@ async function getMyListingHistory(address) {
     .filter(e => e.at)
     .sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0))
     .slice(0, HISTORY_ITEMS_MAX);
-  const metaById = await fetchCreatureMetaBatch([...new Set(items.map(i => String(i.tokenId)))]);
+  const [metaById, daily] = await Promise.all([
+    fetchCreatureMetaBatch([...new Set(items.map(i => String(i.tokenId)))]),
+    getEthUsdDaily().catch(() => null),
+  ]);
   for (const it of items) {
     const meta = metaById.get(String(it.tokenId)) || {};
     it.name = meta.name || `Highrise Creature #${it.tokenId}`;
     it.image = meta.image || null;
+    valueAtItsOwnDay(it, daily);
   }
   return { items };
 }
@@ -6077,7 +6114,19 @@ async function handleMarketplaceApi(request, response, url) {
     const hWait = rateLimited(`mkthist:${ip}`, 15, 60 * 1000);
     if (hWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(hWait) }); return; }
     try {
-      sendJson(response, 200, await landMarket.myHistory(landHistoryMatch[1]), { 'Cache-Control': 'no-store' });
+      // Same rule as the Creature timeline: a past trade wears the dollars of its own day.
+      // LAND settles in native ETH, so priceEth arrives already correct and only the fiat
+      // side needs the historical rate.
+      const [hist, daily] = await Promise.all([
+        landMarket.myHistory(landHistoryMatch[1]),
+        getEthUsdDaily().catch(() => null),
+      ]);
+      for (const it of (hist.items || [])) {
+        it.currency = it.priceEth != null ? 'eth' : null;
+        it.priceAmt = it.priceEth;
+        valueAtItsOwnDay(it, daily);
+      }
+      sendJson(response, 200, hist, { 'Cache-Control': 'no-store' });
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }
