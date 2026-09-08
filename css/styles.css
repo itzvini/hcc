@@ -6120,10 +6120,12 @@ a.trade-dash-who:hover { border-color: var(--hr-primary); background: rgba(81,25
   background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.02));
 }
 .trade-guide:empty { display: none; }
-.trade-guide.is-loading {
+.trade-guide.is-loading, .trade-guide.is-cold {
   display: flex; align-items: center; gap: 8px;
   font-size: 12px; color: var(--hr-fg-3);
 }
+/* Said once the retries are spent. Plain text, no spinner: nothing is turning any more. */
+.trade-guide.is-cold { line-height: 1.5; }
 .trade-guide-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
 .trade-guide-eyebrow {
   display: inline-flex; align-items: center; gap: 5px;

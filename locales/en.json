@@ -566,6 +566,7 @@
   "trade.guide.agoMonths": "{n} months ago",
   "trade.guide.agoYears": "{n} years ago",
   "trade.guide.loading": "Working out what this one is worth...",
+  "trade.guide.cold": "No estimate just now. The sales figures behind it are still loading, so try again in a minute.",
   "trade.guide.quick": "Sell it this week",
   "trade.guide.fair": "Fair price",
   "trade.guide.patient": "Worth waiting for",

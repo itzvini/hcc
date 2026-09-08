@@ -3979,6 +3979,15 @@ async function getLandPriceGuide(tokens) {
   return shapeGuides(model, tokens, id => index.byToken.get(String(id)) || null, landTierOf, fx.ethUsd);
 }
 
+/* A minute of caching is right for an estimate, and wrong for "ask me again": with
+   stale-while-revalidate on top, one not-ready answer could be served for six minutes after
+   the model came up, keeping the panel blank long past the outage that caused it. */
+function guideCacheHeader(guide) {
+  return guide && (guide.indexing || guide.unavailable)
+    ? 'no-store'
+    : 'public, max-age=60, stale-while-revalidate=300';
+}
+
 // Price the tokens asked for, in one pass. Unknown ids come back absent rather than guessed at.
 function shapeGuides(model, tokens, lookup, tierOf, ethUsd) {
   const guides = {};
@@ -4645,8 +4654,8 @@ async function handleMarketplaceApi(request, response, url) {
   // public sale history and the public order book, nothing about who is asking.
   if (pathname === '/api/market/creatures/price-guide') {
     try {
-      sendJson(response, 200, await getCreaturePriceGuide(parseGuideTokens(url.searchParams)),
-        { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' }, { request });
+      const guide = await getCreaturePriceGuide(parseGuideTokens(url.searchParams));
+      sendJson(response, 200, guide, { 'Cache-Control': guideCacheHeader(guide) }, { request });
     } catch (err) {
       console.error('Creature price guide failed:', err.message);
       sendJson(response, 503, { error: 'unavailable', guides: {} }, { 'Cache-Control': 'no-store' });
@@ -5835,8 +5844,8 @@ async function handleMarketplaceApi(request, response, url) {
   if (pathname === '/api/market/land/price-guide') {
     if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured', guides: {} }); return; }
     try {
-      sendJson(response, 200, await getLandPriceGuide(parseGuideTokens(url.searchParams)),
-        { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' }, { request });
+      const guide = await getLandPriceGuide(parseGuideTokens(url.searchParams));
+      sendJson(response, 200, guide, { 'Cache-Control': guideCacheHeader(guide) }, { request });
     } catch (err) {
       console.error('LAND price guide failed:', err.message);
       sendJson(response, 503, { error: 'unavailable', guides: {} }, { 'Cache-Control': 'no-store' });

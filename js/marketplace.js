@@ -456,7 +456,15 @@ let transferSet = new Set();
 // "What should I charge?" — three suggestions per asset, worked out by the server from the
 // sale history. Cached per token because a member picking through a wallet comes back to the
 // same ones, and the answer only moves when the market does.
-let guideCache = new Map();  // tokenId -> guide | 'busy' | null (null = asked, nothing to say)
+let guideCache = new Map();  // tokenId -> guide | 'busy' | 'cold' | null (null = nothing to say)
+/* The endpoint has two "ask me again" answers: `indexing` while the collection index rebuilds
+   after a restart (a minute or so), and `unavailable` when the sales feed came back too short
+   to model at all, which happens under Immutable's rate limit. Both must be retried rather
+   than remembered. */
+const GUIDE_RETRY_MS = 4000;
+const GUIDE_MAX_TRIES = 4;
+let guideTries = 0;
+let guideRetryTimer = 0;
 let guideReq = 0;
 
 let sellPrices = new Map();  // tokenId -> typed price string (in sellUnit); shared by the single
@@ -7078,8 +7086,11 @@ function sellViewHtml() {
  * one request at a time.
  */
 async function loadPriceGuide(tokenIds) {
-  const want = [...new Set(tokenIds.map(String))].filter(id => id && !guideCache.has(id));
+  const want = [...new Set(tokenIds.map(String))]
+    .filter(id => id && (!guideCache.has(id) || guideCache.get(id) === 'cold'));
   if (!want.length) return;
+  // A pick after the model was cold deserves a fresh ladder, not the exhausted one.
+  if (want.some(id => guideCache.get(id) === 'cold')) guideTries = 0;
   for (const id of want) guideCache.set(id, 'busy');
   const rid = ++guideReq;
   const api = `/api/market/${coll === 'land' ? 'land' : 'creatures'}/price-guide`;
@@ -7093,6 +7104,25 @@ async function loadPriceGuide(tokenIds) {
        from a link has no rate and the workings below the estimates lose their dollars. This
        reply carries the same rate from the same place, so take it when nothing else has. */
     if (ethUsd == null && data.ethUsd != null) setEthUsd(data.ethUsd);
+    /* "Not ready" is not "nothing to say", and the difference was invisible: a null cached
+       here leaves an EMPTY guide box, which is display:none, and nothing ever asks again — so
+       one unlucky moment (a deploy, a rate-limited upstream) silently cost the seller the
+       whole panel for the rest of their session. Keep the spinner and try again instead. */
+    if (data.indexing || data.unavailable) {
+      for (const id of want) guideCache.delete(id);
+      if (guideTries < GUIDE_MAX_TRIES) {
+        guideTries++;
+        clearTimeout(guideRetryTimer);
+        guideRetryTimer = setTimeout(() => loadPriceGuide(want), GUIDE_RETRY_MS);
+      } else {
+        // Out of tries: say so plainly instead of vanishing. An empty panel is invisible, and
+        // a seller cannot tell "nothing about this one moves the price" from "this is broken".
+        for (const id of want) guideCache.set(id, 'cold');
+      }
+      patchPriceGuide();
+      return;
+    }
+    guideTries = 0;
     for (const id of want) guideCache.set(id, data.guides?.[id] || null);
   } catch (err) {
     console.error('Price guide failed:', err);
@@ -7104,7 +7134,10 @@ async function loadPriceGuide(tokenIds) {
 // Creature comparables.
 let guideColl = null;
 function guideCollAt() { return guideColl; }
-function resetPriceGuide() { guideCache = new Map(); guideReq++; guideColl = coll; }
+function resetPriceGuide() {
+  guideCache = new Map(); guideReq++; guideColl = coll;
+  guideTries = 0; clearTimeout(guideRetryTimer);
+}
 
 const guideNum = v => (v == null ? null : v < 0.01 ? v.toFixed(5) : v < 1 ? v.toFixed(4) : v.toFixed(3));
 
@@ -7281,6 +7314,7 @@ function priceGuideHtml() {
   if (g === 'busy' || g === undefined) {
     return `<div class="trade-guide is-loading" id="trade-guide"><span class="trade-mini-spin" aria-hidden="true"></span>${esc(t('trade.guide.loading'))}</div>`;
   }
+  if (g === 'cold') return `<div class="trade-guide is-cold" id="trade-guide">${esc(t('trade.guide.cold'))}</div>`;
   if (!g) return `<div class="trade-guide" id="trade-guide"></div>`;
   const b = g.basis, c = b.comparables;
   const thin = c.n < 10 ? ' is-thin' : '';
