@@ -5656,7 +5656,9 @@ body.trade-sheet-open { overflow: hidden; }
 
 /* Collection switcher (Creatures ⟷ LAND) — sits above the action tabs */
 .trade-coll-switch { display: flex; width: fit-content; gap: 4px; padding: 4px; margin: 0; }
-.trade-coll-switch .seg-btn { min-width: 110px; min-height: 36px; font-size: 13px; font-weight: 800; }
+/* No `min-width`: a fixed width made the active pill's mint fill hang well past a short
+   label ("LAND") while hugging a long one ("Creatures"). Let each pill size to its text. */
+.trade-coll-switch .seg-btn { min-height: 36px; padding: 0 16px; font-size: 13px; font-weight: 800; }
 
 /* LAND tiles show slime pets — contain-fit with breathing room, soft brand tint */
 .trade-tile-img.is-pet {
@@ -9310,7 +9312,8 @@ span.hp-statchip-ico { font-size: 17px; line-height: 22px; text-align: center; c
 .hp-warn-link:hover { text-decoration: underline; }
 
 /* --- Collection-switcher brand icons (Creatures = HCC glyph, LAND = Highrise emoji) --- */
-.trade-coll-switch .seg-btn { display: inline-flex; align-items: center; gap: 6px; }
+/* `min-width` on these pills leaves slack, so centre the icon + label inside it. */
+.trade-coll-switch .seg-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .trade-coll-ico { width: 16px; height: 16px; object-fit: contain; border-radius: 3px; flex: none; }
 /* Wallet-bar balance pips (Creatures / LAND counts) — brand marks, not emoji. */
 .trade-bal-ico { width: 14px; height: 14px; object-fit: contain; border-radius: 3px; vertical-align: -2px; }

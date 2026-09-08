@@ -191,14 +191,15 @@ document.addEventListener('click', e => {
 // it; when the sentinel scrolls out of view the bar is stuck and gains its backdrop
 // (.is-stuck in CSS). At rest the bar is transparent — no floating strip mid-page.
 const pageTabs = document.querySelector('.page-tabs');
+let navSentinel = null;
 if (pageTabs && 'IntersectionObserver' in window) {
-  const sentinel = document.createElement('div');
-  sentinel.setAttribute('aria-hidden', 'true');
-  sentinel.style.cssText = 'position:relative;height:1px;margin-top:-1px;visibility:hidden';
-  pageTabs.parentNode.insertBefore(sentinel, pageTabs);
+  navSentinel = document.createElement('div');
+  navSentinel.setAttribute('aria-hidden', 'true');
+  navSentinel.style.cssText = 'position:relative;height:1px;margin-top:-1px;visibility:hidden';
+  pageTabs.parentNode.insertBefore(navSentinel, pageTabs);
   new IntersectionObserver(entries => {
     pageTabs.classList.toggle('is-stuck', !entries[0].isIntersecting);
-  }).observe(sentinel);
+  }).observe(navSentinel);
 }
 
 function selectTab(name, updateUrl = true) {
@@ -270,7 +271,43 @@ function selectTab(name, updateUrl = true) {
   if (panel) linkGlossaryTerms(panel);
 }
 
-tabButtons.forEach(btn => btn.addEventListener('click', () => selectTab(btn.dataset.tab)));
+// Where the nav bar starts in the document, i.e. the scroll offset at which the sticky
+// bar comes to rest against the top of the viewport. Measured off the 1px sentinel above
+// it, which stays in normal flow — the bar's own box is no use once it's pinned, since a
+// stuck element always reports itself at the viewport top.
+function navBarOffset() {
+  if (!pageTabs) return 0;
+  // On the mobile layout the bar is `position: fixed` and body carries padding for it,
+  // so the top of the document already has the bar in place with content under it.
+  if (getComputedStyle(pageTabs).position !== 'sticky') return 0;
+  const anchor = navSentinel || pageTabs;
+  return Math.max(0, Math.round(anchor.getBoundingClientRect().bottom + window.scrollY));
+}
+
+// Every page switch starts at the top of the page you asked for. Nothing was resetting
+// the scroll on a nav click, so leaving a long page kept its offset and dropped you into
+// the middle of the next one.
+//
+// "Top" means the nav bar parked against the viewport top with the page's own content
+// directly beneath it, not the very top of the document: the hero masthead above the nav
+// is site chrome and ate the whole first screen, so every page opened on a slime parade
+// with its real content below the fold. The Club is the exception — it's home, and the
+// masthead is how home opens.
+//
+// The jump is instant rather than smooth: html{scroll-behavior:smooth} would otherwise
+// slide thousands of pixels through content that has already been swapped out, which
+// reads as a smear. A page switch should feel like a page load.
+// (The marketplace's own scroll restore runs a frame later, so a sign-in return still
+// lands where it left off.)
+function scrollPageTop() {
+  const top = document.body.dataset.tab === 'club' ? 0 : navBarOffset();
+  window.scrollTo({ top, behavior: 'instant' });
+}
+
+tabButtons.forEach(btn => btn.addEventListener('click', () => {
+  selectTab(btn.dataset.tab);
+  scrollPageTop();
+}));
 
 // Holders now lives as the "Holders" sub-tab of the Data (market) page. Load its
 // charts the first time that sub-tab is shown — the canvases must be visible to size.
@@ -295,11 +332,6 @@ function ensureGlossary() {
 }
 document.querySelector('#panel-collections [data-subtab="glossary"]')?.addEventListener('click', ensureGlossary);
 
-// The brand mark opens The Club and returns to the top, like clicking a site logo
-document.querySelector('.nav-logo')?.addEventListener('click', () => {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-});
-
 // Landing hub cards and footer links — jump to a tab and return to the top.
 // The footer uses real <a href="/roadmap"> so the links are crawlable and open in a
 // new tab on ctrl/middle-click; a plain click switches tab in place instead.
@@ -310,7 +342,7 @@ document.querySelectorAll('[data-goto]').forEach(el => {
       e.preventDefault();
     }
     selectTab(el.dataset.goto);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollPageTop();
   });
 });
 
@@ -656,7 +688,7 @@ document.addEventListener('click', event => {
   if (document.body.classList.contains('trade-modal-open')) closeTradeModal();
   history.pushState(null, '', link.getAttribute('href'));
   route(location.pathname);
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  scrollPageTop();
 });
 
 // The header search, wired now so it answers "/" and Ctrl/Cmd-K on a cold page. Its
@@ -668,7 +700,7 @@ function gotoSearchResult(href) {
   if (document.body.classList.contains('trade-modal-open')) closeTradeModal();
   if (href !== location.pathname + location.search) history.pushState(null, '', href);
   route(href.split('?')[0]);
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  scrollPageTop();
 }
 initSearchPalette(gotoSearchResult);
 
@@ -679,7 +711,7 @@ window.addEventListener('hashchange', () => {
   if (ROUTE_TABS.includes(name)) {
     history.replaceState(null, '', urlFor(name) + location.search);
     route(location.pathname);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollPageTop();
   }
 });
 
