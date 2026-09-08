@@ -427,6 +427,12 @@ let historyError = false;
 // step after any selection change. See toggleSellPick / massSelectAll.
 let sellSet = new Set();
 let transferSet = new Set();
+// "What should I charge?" — three suggestions per asset, worked out by the server from the
+// sale history. Cached per token because a member picking through a wallet comes back to the
+// same ones, and the answer only moves when the market does.
+let guideCache = new Map();  // tokenId -> guide | 'busy' | null (null = asked, nothing to say)
+let guideReq = 0;
+
 let sellPrices = new Map();  // tokenId -> typed price string (in sellUnit); shared by the single
                              // form and the per-item mass-list rows, so prices survive re-renders
 let massState = null;        // batch run: { kind:'sell'|'transfer', total, done, failed:[], phase, msg }
@@ -703,8 +709,10 @@ function offerPricePayload(raw) {
 }
 // Compact "OFFER IN ETH | USDC" segmented picker for the offer forms (shares offerCurrency).
 function offerCurrencyPickerHtml() {
+  const curs = offerCurrencies();
+  if (curs.length < 2) return ''; // a one-option picker is a dead control, not a choice
   return `<div class="seg trade-cur-seg trade-offer-cur" role="tablist" aria-label="${esc(t('trade.sell.currency'))}">
-    ${LISTING_CURRENCIES.map(c => `<button type="button" role="tab" class="seg-btn ${offerCurrency === c ? 'is-active' : ''}"
+    ${curs.map(c => `<button type="button" role="tab" class="seg-btn ${offerCurrency === c ? 'is-active' : ''}"
       aria-selected="${offerCurrency === c}" data-act="offer-cur" data-cur="${c}">${esc(CUR_SYM[c])}</button>`).join('')}
   </div>`;
 }
@@ -1160,6 +1168,10 @@ const LISTING_CURRENCIES = ['eth', 'usdc']; // seller's choice of listing denomi
 // USDC one at create time, AFTER the seller has signed. So don't offer the choice there.
 // Offers are unaffected — OpenSea settles those in ERC-20s, USDC included.
 const sellCurrencies = () => (coll === 'land' ? ['eth'] : LISTING_CURRENCIES);
+// Offers are the same story: OpenSea refuses a USDC offer on Ethereum too ("not supported for
+// offers on this chain"), and on that path the bidder has already paid mainnet gas for the
+// conduit approval before the create fails. Creature offers (Immutable zkEVM) are unaffected.
+const offerCurrencies = () => (coll === 'land' ? ['eth'] : LISTING_CURRENCIES);
 function fmtListingAmt(it) {
   const cur = it.currency || 'eth';
   const amt = it.totalAmt ?? it.priceAmt ?? it.totalEth ?? it.priceEth;
@@ -3776,6 +3788,7 @@ function offerServerError(code) {
     insufficient: 'trade.err.offerFunds', bad_price: 'trade.err.badPrice',
     rate_limited: 'trade.err.rate', own_listing: 'trade.err.ownOffer',
     not_found: 'trade.err.offerGone', not_active: 'trade.err.offerGone',
+    currency_unsupported: 'trade.err.curUnsupported',
   };
   return t(KEY[code] || 'trade.err.offerUnavailable');
 }
@@ -6635,6 +6648,116 @@ function sellViewHtml() {
 // single-listing form (price + List for sale + instant-sell into an offer); 2+ switches to
 // the mass-list panel (per-item prices + apply-to-all + a batch List button). One shared
 // container so a pick just re-renders this side, never the picker (its scroll survives).
+/**
+ * Ask for a price guide, for one asset or for a whole picker's worth in a single call. The
+ * server prices a hundred in a few milliseconds, so there is no reason to trickle them out
+ * one request at a time.
+ */
+async function loadPriceGuide(tokenIds) {
+  const want = [...new Set(tokenIds.map(String))].filter(id => id && !guideCache.has(id));
+  if (!want.length) return;
+  for (const id of want) guideCache.set(id, 'busy');
+  const rid = ++guideReq;
+  const api = `/api/market/${coll === 'land' ? 'land' : 'creatures'}/price-guide`;
+  const qs = want.slice(0, 100).map(id => `token=${encodeURIComponent(id)}`).join('&');
+  try {
+    const res = await fetch(`${api}?${qs}`, { headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error('http ' + res.status);
+    const data = await res.json();
+    if (rid !== guideReq && coll !== guideCollAt(rid)) return;
+    for (const id of want) guideCache.set(id, data.guides?.[id] || null);
+  } catch (err) {
+    console.error('Price guide failed:', err);
+    for (const id of want) guideCache.delete(id); // let a later pick try again
+  }
+  patchPriceGuide();
+}
+// The cache belongs to one collection; switching wipes it rather than pricing LAND off
+// Creature comparables.
+let guideColl = null;
+function guideCollAt() { return guideColl; }
+function resetPriceGuide() { guideCache = new Map(); guideReq++; guideColl = coll; }
+
+const guideNum = v => (v == null ? null : v < 0.01 ? v.toFixed(5) : v < 1 ? v.toFixed(4) : v.toFixed(3));
+
+/** One suggestion tile: what it's for, the number, and a button that types it for you. */
+function guideTileHtml(kind, eth, usd, cls) {
+  const isUsdc = sellCurrency === 'usdc';
+  if (isUsdc ? usd == null : !(eth > 0)) return '';
+  // A USDC listing IS priced in dollars, so that's the headline. An ETH listing leads with
+  // ETH and carries the reader's own currency underneath — blank when they read in ETH.
+  const main = isUsdc ? `$${Math.round(usd).toLocaleString()}` : `${guideNum(eth)} ETH`;
+  const fiat = isUsdc ? '' : fmtSaleFiat(usd);
+  const sub = fiat ? `<span class="trade-guide-sub">${esc(fiat)}</span>` : '';
+  const fill = isUsdc ? String(Math.round(usd * 100) / 100) : String(eth);
+  return `<div class="trade-guide-tile ${cls}">
+    <span class="trade-guide-k">${esc(t(`trade.guide.${kind}`))}</span>
+    <span class="trade-guide-v">${esc(main)}</span>
+    ${sub}
+    <button type="button" class="trade-guide-use" data-act="guide-use" data-v="${esc(fill)}">${esc(t('trade.guide.use'))}</button>
+  </div>`;
+}
+
+/** The sentence under the tiles: what this price is built on, in plain terms. */
+function guideWhyHtml(b) {
+  const bits = [];
+  if (b.from.kind === 'trait') {
+    bits.push(t('trade.guide.whyTrait').replace('{trait}', b.from.label)
+      .replace('{n}', b.from.n.toLocaleString()).replace('{x}', b.mult));
+  } else if (b.from.kind === 'tier') {
+    bits.push(t('trade.guide.whyTier').replace('{tier}', b.from.label)
+      .replace('{n}', b.from.n.toLocaleString()).replace('{x}', b.mult));
+  } else {
+    bits.push(t('trade.guide.whyMarket').replace('{n}', b.from.n.toLocaleString()));
+  }
+  if (b.liquidity.state === 'slow') {
+    bits.push(t('trade.guide.whySlow').replace('{listed}', b.liquidity.listed)
+      .replace('{days}', b.liquidity.ageDays ?? 0));
+  } else if (b.liquidity.state === 'scarce') {
+    bits.push(t('trade.guide.whyScarce').replace('{sold}', b.liquidity.sold12m));
+  }
+  if (b.floored) bits.push(t('trade.guide.whyFloor'));
+  if (b.rivalFloor) {
+    bits.push(t(b.rivalKind === 'trait' ? 'trade.guide.whyShelfTrait' : 'trade.guide.whyShelf')
+      .replace('{price}', `${guideNum(b.rivalFloor)} ETH`));
+  }
+  return bits.map(x => esc(x)).join(' ');
+}
+
+function priceGuideHtml() {
+  if (sellSel == null) return '';
+  const g = guideCache.get(String(sellSel));
+  if (g === 'busy' || g === undefined) {
+    return `<div class="trade-guide is-loading" id="trade-guide"><span class="trade-mini-spin" aria-hidden="true"></span>${esc(t('trade.guide.loading'))}</div>`;
+  }
+  if (!g) return `<div class="trade-guide" id="trade-guide"></div>`;
+  const b = g.basis;
+  return `<div class="trade-guide" id="trade-guide">
+    <div class="trade-guide-head">
+      <span class="trade-guide-eyebrow">${ico('chart', 12)}${esc(t('trade.guide.h'))}</span>
+      <span class="trade-guide-note">${esc(t('trade.guide.basis').replace('{n}', b.comps.toLocaleString()))}</span>
+    </div>
+    <div class="trade-guide-tiles">
+      ${guideTileHtml('quick', g.quick, g.usd.quick, 'is-quick')}
+      ${guideTileHtml('fair', g.fair, g.usd.fair, 'is-fair')}
+      ${guideTileHtml('patient', g.patient, g.usd.patient, 'is-patient')}
+    </div>
+    <p class="trade-guide-why">${guideWhyHtml(b)}</p>
+    <p class="trade-guide-caveat">${esc(t('trade.guide.caveat'))}</p>
+  </div>`;
+}
+
+function patchPriceGuide() {
+  const el = root()?.querySelector('#trade-guide');
+  if (el) el.outerHTML = priceGuideHtml();
+}
+
+// Every asset on the Sell picker, so one request covers whatever gets picked next.
+function pickerTokenIds() {
+  return [...(root()?.querySelectorAll('#trade-pick-wrap .trade-pick-tile') || [])]
+    .map(el => el.dataset.token).filter(Boolean).slice(0, 100);
+}
+
 function sellSideHtml() {
   if (sellSet.size >= 2) return sellMassHtml();
   // After a batch finishes and every item cleared, keep the "Listed X of N" summary visible
@@ -6675,8 +6798,9 @@ function sellSingleHtml() {
             : `<select id="trade-sell-unit" class="seg-select trade-price-unit" aria-label="${esc(t('trade.sell.unitAria'))}" ${sellFiatReady() ? '' : 'disabled'}>${sellUnitOptions()}</select>`}
         </div>
         <span class="trade-price-conv" id="trade-price-conv">${esc(isUsdc ? '' : sellConvHtml(price))}</span></label>
+      ${priceGuideHtml()}
       ${isLand ? landSellDurationHtml() : ''}
-      ${isLand ? `<div class="trade-sell-net" id="trade-sell-net">${landSellNetHtml(price)}</div>` : ''}
+      ${isLand ? `<div class="trade-sell-net" id="trade-sell-net">${landSellNetHtml(sellEthFromInput(price))}</div>` : ''}
       <button class="trade-send" id="trade-sell-submit" type="submit" ${sellBusy || !sellSel ? 'disabled' : ''}>
         ${esc(t('trade.sell.btn'))} <span aria-hidden="true">→</span></button>
       <div id="trade-sell-status" role="status" aria-live="polite">${sellStatusHtml()}</div>
@@ -6819,13 +6943,13 @@ function landSellDurationHtml() {
 
 // Live "you'll receive" estimate under the LAND price field — the 6% (1% OpenSea + 5%
 // royalty) is shown up front; the exact split is in the order the wallet shows on sign.
-// Currency-aware: an ETH listing nets ETH, a USDC listing nets USDC (both minus 6%).
-function landSellNetHtml(priceStr) {
-  const p = parseFloat(String(priceStr).replace(',', '.'));
+// Takes an amount ALREADY IN ETH (LAND lists in ETH only), so every caller must convert a
+// price typed in a fiat unit first — the first render used to hand it the raw "290" from a
+// BRL box and print "272.6 ETH". fmtEth supplies the "ETH" suffix; don't add a second one.
+function landSellNetHtml(ethAmount) {
+  const p = parseFloat(String(ethAmount).replace(',', '.'));
   if (!(p > 0)) return `<span class="trade-sell-net-hint">${esc(t('trade.sell.feeNote'))}</span>`;
-  const net = sellCurrency === 'usdc'
-    ? `${(p * 0.94).toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC`
-    : `${fmtEth(p * 0.94)} ETH`;
+  const net = fmtEth(p * 0.94);
   return `<span class="trade-sell-net-hint">${t('trade.sell.netNote').replace('{net}', `<b>${esc(net)}</b>`).replace('{fee}', '6')}</span>`;
 }
 
@@ -8060,6 +8184,7 @@ function onClick(e) {
       const reenterFunds = onFundsView() ? tradeTab : null;
       if (reenterFunds && !leaveFundsState()) return; // mid-signature — the switch waits
       setColl(target.dataset.coll);
+      resetPriceGuide(); // LAND must never be priced off Creature comparables
       syncTradeUrl(); // ?coll=land belongs in the address: the LAND market is a linkable thing
       if (reenterFunds === 'cash-out') enterCashOut({ step: 'intent' });
       else if (reenterFunds === 'add-funds') enterAddFunds({ step: 'intent' });
@@ -8089,6 +8214,9 @@ function onClick(e) {
       toggleSellPick(target.dataset.token); // multi-select: toggle membership
       sellState = null;
       sellPickOffers = null;
+      // The whole picker in one call: the server prices a hundred assets in a few
+      // milliseconds, so fetching them one pick at a time would only add round trips.
+      loadPriceGuide(pickerTokenIds());
       // Instant-sell-into-offers is a single-item action, Creatures-only.
       if (sellSel != null && coll === 'creatures') fetchSellPickOffers(sellSel);
       // Targeted patch (NOT a full re-render) so the picker's scroll position survives —
@@ -8114,7 +8242,7 @@ function onClick(e) {
     }
     case 'offer-cur': {
       const next = target.dataset.cur === 'usdc' ? 'usdc' : 'eth';
-      if (offerCurrency === next) return;
+      if (offerCurrency === next || !offerCurrencies().includes(next)) return;
       offerCurrency = next;
       // Re-render whichever offer surface is showing (modal token-offer, Creature strip, LAND strip).
       if (modalToken) patchModal();
@@ -8271,6 +8399,18 @@ function onClick(e) {
       // Cycle the pin: whichever mode is showing, the tap asks for the other one.
       salesScale = salesScaleMode() === 'log' ? 'linear' : 'log';
       return patchSalesChart();
+    case 'guide-use': {
+      const v = target.dataset.v;
+      if (v == null || sellSel == null) return;
+      // The suggestion is in the listing currency's own unit, so put the field in that unit
+      // rather than converting a round number into pounds and back into something odd.
+      if (sellCurrency !== 'usdc' && sellUnit !== 'eth') sellUnit = 'eth';
+      sellPrices.set(String(sellSel), v);
+      patchSellSide();
+      const inp = root()?.querySelector('#trade-sell-price');
+      if (inp) { inp.value = v; inp.focus(); }
+      return;
+    }
     case 'chart-range':
       return applyChartRange(Number(target.dataset.d) || 0);
     case 'flt-drawer':
@@ -8461,6 +8601,7 @@ function resetSellerState() {
   owned = null; mine = null; sellSel = null; sellState = null; cancelBusy = null;
   sellSet.clear(); transferSet.clear(); sellPrices.clear(); massState = null; // drop any selection/batch
   sellCurrency = 'eth'; // the only currency LAND can list in, and a clean default per collection
+  offerCurrency = 'eth'; // ditto for offers, so a USDC pick on Creatures can't leak onto LAND
   histItems = null; historyError = false; // per-collection; reload on demand
   myOffers = null; offerState = null; offerCtx = null; acceptState = null; acceptBusyId = null;
   landMyOffers = null; landOfferState = null; landAcceptState = null; landAcceptBusy = false; setUnwrapState(null);

@@ -5912,6 +5912,64 @@ body.trade-sheet-open { overflow: hidden; }
   display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin: 0 0 12px;
   font-family: var(--hr-sans); font-weight: 800; font-size: 11.5px; color: var(--hr-secondary);
 }
+/* The price guide, under the price field on Sell. Three suggestions and the reasoning
+   behind them: a seller who can see WHY a number was picked can argue with it, which is the
+   whole point of showing the working. Mint for fair (the recommendation), lavender for the
+   patient one, plain for the quick one so nothing shouts "undersell". */
+.trade-guide {
+  margin: -2px 0 14px; padding: 12px 13px 11px;
+  border-radius: var(--hr-radius-md); border: 1px solid var(--hr-line);
+  background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.02));
+}
+.trade-guide:empty { display: none; }
+.trade-guide.is-loading {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--hr-fg-3);
+}
+.trade-guide-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.trade-guide-eyebrow {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--hr-sans); font-weight: 900; font-size: 10px;
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase; color: var(--hr-primary);
+}
+.trade-guide-note { font-size: 11px; color: var(--hr-fg-3); }
+.trade-guide-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.trade-guide-tile {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  padding: 9px 10px 8px; border-radius: var(--hr-radius-sm);
+  background: rgba(255,255,255,.04); border: 1px solid var(--hr-line);
+}
+.trade-guide-tile.is-fair { border-color: rgba(81,255,165,.34); background: rgba(81,255,165,.08); }
+.trade-guide-tile.is-patient { border-color: rgba(133,97,255,.32); background: rgba(133,97,255,.07); }
+.trade-guide-k {
+  font-family: var(--hr-sans); font-weight: 800; font-size: 9px;
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase; color: var(--hr-fg-3);
+}
+.trade-guide-v {
+  font-family: var(--hr-sans); font-weight: 900; font-size: 13.5px; color: var(--hr-fg-0);
+  font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.trade-guide-tile.is-fair .trade-guide-v { color: var(--hr-primary); }
+.trade-guide-tile.is-patient .trade-guide-v { color: var(--hr-secondary); }
+.trade-guide-sub { font-size: 10.5px; color: var(--hr-fg-3); white-space: nowrap; }
+.trade-guide-use {
+  margin-top: 6px; align-self: flex-start;
+  font-family: var(--hr-sans); font-weight: 800; font-size: 10.5px; color: var(--hr-fg-2);
+  background: rgba(255,255,255,.06); border: 1px solid var(--hr-line);
+  border-radius: var(--hr-radius-pill); padding: 3px 10px; cursor: pointer;
+  transition: color .2s, border-color .2s, background .2s;
+}
+.trade-guide-use:hover { color: var(--hr-fg-0); border-color: var(--hr-line-strong); background: rgba(255,255,255,.1); }
+.trade-guide-use:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; }
+.trade-guide-why { margin: 10px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--hr-fg-2); }
+.trade-guide-caveat { margin: 5px 0 0; font-size: 10.5px; line-height: 1.5; color: var(--hr-fg-3); }
+@media (max-width: 520px) {
+  .trade-guide-tiles { grid-template-columns: 1fr; }
+  .trade-guide-tile { flex-direction: row; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+  .trade-guide-use { margin-top: 0; margin-left: auto; }
+}
+@media (prefers-reduced-motion: reduce) { .trade-guide-use { transition: none; } }
+
 /* Quick jumps down the timeline, sitting on the axis they move. Lavender, not mint, because
    these drive the same thing the trend line and the period line above them do; the scale
    toggle is a different kind of switch and keeps the primary colour. Scrolls sideways on a

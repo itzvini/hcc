@@ -3418,9 +3418,14 @@ function buildPriceModel({ sales, lookup, tierOf, listings, population, now = Da
     for (const [type, value] of Object.entries(meta.traits || {})) {
       if (GUIDE_TIER_ATTRS.has(type)) continue;
       const k = `${type}:${value}`;
-      if (!listedByTrait.has(k)) listedByTrait.set(k, { n: 0, ages: [] });
+      if (!listedByTrait.has(k)) listedByTrait.set(k, { n: 0, ages: [], floor: null });
       const e = listedByTrait.get(k);
-      e.n++; if (age != null) e.ages.push(age);
+      e.n++;
+      if (age != null) e.ages.push(age);
+      // The cheapest one of these on the shelf right now. When an asset's worth comes from a
+      // trait, THIS is what a buyer would take instead of it — not the cheapest Creature in
+      // the collection, which shares none of what they came for.
+      e.floor = e.floor == null ? price : Math.min(e.floor, price);
     }
   }
 
@@ -3530,9 +3535,20 @@ function priceGuideFor(model, meta, tierOf) {
   // For an ordinary asset that is the collection floor; for a rare one it is the cheapest of
   // its own tier, and if none is listed there is nothing to undercut — the collection floor
   // would just push a scarce asset onto the cheap shelf with the commodity.
-  const rivalFloor = tier ? (model.tierFloor.get(tier) ?? (topTier ? null : model.floor)) : model.floor;
+  // Whose price does this one have to beat? The nearest shelf, in this order: others with
+  // the same trait if that trait is what makes it worth something, then its own tier, then
+  // the collection — but never the collection for a top-tier asset, which would file a
+  // scarce thing next to the commodity.
+  const traitShelf = key ? model.listedByTrait.get(key) : null;
+  const rivalFloor = (from.kind === 'trait' && traitShelf?.floor > 0) ? traitShelf.floor
+    : tier ? (model.tierFloor.get(tier) ?? (topTier ? null : model.floor))
+    : model.floor;
   let quick = fair * loR;
-  if (rivalFloor > 0) quick = Math.min(quick, rivalFloor * 0.98);
+  // Only say "undercuts the shelf" when it actually had to. Most of the time the comparable
+  // sales already point below the cheapest listing, and claiming otherwise reads as a fact
+  // the numbers don't support.
+  const undercut = rivalFloor > 0 && quick > rivalFloor * 0.98;
+  if (undercut) quick = rivalFloor * 0.98;
   if (topTier && model.floor > 0) quick = Math.max(quick, model.floor * GUIDE_TOP_TIER_FLOOR_X * loR);
   const patient = fair * hiR;
 
@@ -3543,7 +3559,9 @@ function priceGuideFor(model, meta, tierOf) {
       from, mult: Math.round(mult * 100) / 100, liquidity, floored,
       tier: tier || null, topTier,
       anchor: r(model.anchor), anchorSales: model.anchorSales, anchorDays: model.anchorDays,
-      floor: r(model.floor), tierFloor: r(rivalFloor),
+      floor: r(model.floor), rivalFloor: undercut ? r(rivalFloor) : null,
+      rivalKind: (from.kind === 'trait' && traitShelf?.floor > 0) ? 'trait'
+        : (tier && model.tierFloor.get(tier)) ? 'tier' : 'collection',
       comps: model.comps, windowFrom: model.windowFrom, windowTo: model.windowTo,
     },
   };
@@ -5596,6 +5614,10 @@ async function handleMarketplaceApi(request, response, url) {
     const units = cur ? amountToUnits(body.price ?? body.priceEth, cur.decimals) : null;
     if (!HEX_ADDRESS.test(maker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
     if (!cur) { sendJson(response, 400, { error: 'bad_currency' }); return; }
+    // Known currency, but not one OpenSea settles an Ethereum OFFER in (USDC). Refuse it here:
+    // past this point the bidder pays mainnet gas for a conduit approval and signs, and only
+    // then does OpenSea reject the order. See LAND_LISTING_CURRENCIES in lib/land-market.js.
+    if (!landMarket.offerCreateCurrency(cur.code)) { sendJson(response, 400, { error: 'currency_unsupported' }); return; }
     if (units == null || BigInt(units) <= 0n) { sendJson(response, 400, { error: 'bad_price' }); return; }
 
     try {
