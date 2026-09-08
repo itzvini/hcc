@@ -4899,6 +4899,13 @@ footer { margin-top: 28px; }
   box-shadow: 0 0 16px rgba(255,249,95,.35);
   animation: trade-beta-glow 3.2s ease-in-out infinite;
 }
+/* Small enough to sit in a panel's own header rather than a page heading, and no glow —
+   next to a price the reader is about to act on, a pulsing badge competes with the numbers.
+   Same colours, so it still reads as the site's beta mark. */
+.trade-beta-chip.is-mini {
+  font-size: 8.5px; padding: 3px 7px; box-shadow: none; animation: none;
+  align-self: center;
+}
 @keyframes trade-beta-glow {
   0%,100% { box-shadow: 0 0 12px rgba(255,249,95,.3); }
   50%     { box-shadow: 0 0 26px rgba(255,153,0,.5); }
@@ -5926,13 +5933,60 @@ body.trade-sheet-open { overflow: hidden; }
   display: flex; align-items: center; gap: 8px;
   font-size: 12px; color: var(--hr-fg-3);
 }
-.trade-guide-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.trade-guide-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
 .trade-guide-eyebrow {
   display: inline-flex; align-items: center; gap: 5px;
   font-family: var(--hr-sans); font-weight: 900; font-size: 10px;
   letter-spacing: var(--hr-tracking-caps); text-transform: uppercase; color: var(--hr-primary);
 }
-.trade-guide-note { font-size: 11px; color: var(--hr-fg-3); }
+/* Which sales the estimate rests on. Says the count of the RIGHT sales — the ones sharing
+   this asset's trait or tier — because the size of the whole feed tells a seller nothing
+   about whether to trust the number in front of them. */
+.trade-guide-note { margin: 0 0 10px; font-size: 11.5px; line-height: 1.5; color: var(--hr-fg-2); }
+/* Fewer than ten comparables: the panel says so in words and shows it in the border, so a
+   thin estimate never looks as solid as a well-evidenced one. */
+.trade-guide.is-thin { border-color: rgba(255,249,95,.34); }
+.trade-guide.is-thin .trade-guide-note { color: var(--hr-banana); }
+
+/* The workings, folded away. Open it and every claim behind the numbers is checkable.
+   The site's FAQ chrome lands on every <details> — a bordered card, 22px of padding on its
+   paragraphs, and a big mint "+" that turns into a "x". Right for a page of questions, wrong
+   for a small disclosure inside a panel that already has a border of its own. */
+.trade-guide-more {
+  margin-top: 11px; border: 0; border-radius: 0; box-shadow: none;
+  overflow: visible; background: none; transition: none;
+}
+.trade-guide-more > summary::after { content: none; }
+/* Padding only. Resetting the size here too would outrank .trade-guide-why's own rule,
+   which is a plainer selector, and blow the text back up to the FAQ's 14px. */
+.trade-guide-more p { padding: 0; }
+.trade-guide-more > summary {
+  cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--hr-sans); font-weight: 800; font-size: 11px; color: var(--hr-fg-3);
+  padding: 2px 0;
+}
+.trade-guide-more > summary::-webkit-details-marker { display: none; }
+.trade-guide-more > summary::before {
+  content: ''; width: 0; height: 0; flex: 0 0 auto;
+  border-left: 4px solid currentColor; border-top: 3.5px solid transparent; border-bottom: 3.5px solid transparent;
+  transition: transform .18s ease;
+}
+.trade-guide-more[open] > summary::before { transform: rotate(90deg); }
+.trade-guide-more > summary:hover { color: var(--hr-fg-0); }
+.trade-guide-more > summary:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; border-radius: 4px; }
+.trade-guide-evs {
+  display: grid; grid-template-columns: auto 1fr; gap: 4px 12px;
+  margin: 9px 0 0; padding: 9px 11px;
+  border-radius: var(--hr-radius-sm); background: rgba(0,0,0,.22); border: 1px solid var(--hr-line);
+}
+.trade-guide-ev { display: contents; }
+.trade-guide-ev-k {
+  font-family: var(--hr-sans); font-weight: 800; font-size: 9.5px; white-space: nowrap;
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase; color: var(--hr-fg-3);
+  padding-top: 2px;
+}
+.trade-guide-ev-v { font-size: 11.5px; line-height: 1.5; color: var(--hr-fg-1); }
+.trade-guide-method { margin: 8px 0 0; font-size: 10.5px; line-height: 1.5; color: var(--hr-fg-3); }
 .trade-guide-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .trade-guide-tile {
   display: flex; flex-direction: column; gap: 2px; min-width: 0;
@@ -5965,10 +6019,14 @@ body.trade-sheet-open { overflow: hidden; }
 .trade-guide-caveat { margin: 5px 0 0; font-size: 10.5px; line-height: 1.5; color: var(--hr-fg-3); }
 @media (max-width: 520px) {
   .trade-guide-tiles { grid-template-columns: 1fr; }
+  .trade-guide-evs { grid-template-columns: 1fr; gap: 1px 0; }
+  .trade-guide-ev-k { padding-top: 7px; }
   .trade-guide-tile { flex-direction: row; align-items: baseline; flex-wrap: wrap; gap: 8px; }
   .trade-guide-use { margin-top: 0; margin-left: auto; }
 }
-@media (prefers-reduced-motion: reduce) { .trade-guide-use { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .trade-guide-use, .trade-guide-more > summary::before { transition: none; }
+}
 
 /* Quick jumps down the timeline, sitting on the axis they move. Lavender, not mint, because
    these drive the same thing the trend line and the period line above them do; the scale

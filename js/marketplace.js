@@ -6698,29 +6698,83 @@ function guideTileHtml(kind, eth, usd, cls) {
   </div>`;
 }
 
-/** The sentence under the tiles: what this price is built on, in plain terms. */
+/** "3 days ago", "5 months ago" — a date means less here than a distance. */
+function guideAgo(ts) {
+  if (!ts) return '';
+  const d = Math.max(0, Math.round((Date.now() - ts) / 86400000));
+  if (d <= 1) return t('trade.guide.agoToday');
+  if (d < 31) return t('trade.guide.agoDays').replace('{n}', d);
+  if (d < 365) return t('trade.guide.agoMonths').replace('{n}', Math.round(d / 30));
+  return t('trade.guide.agoYears').replace('{n}', (d / 365).toFixed(d < 730 ? 1 : 0));
+}
+
+const guideMoney = eth => `${guideNum(eth)} ETH`;
+
+/** Which sales this estimate rests on, said as a count of the RIGHT sales, not the feed. */
+function guideBasisLine(c) {
+  if (c.kind === 'trait') {
+    return t('trade.guide.basisTrait').replace('{n}', c.n.toLocaleString()).replace('{trait}', c.label);
+  }
+  if (c.kind === 'tier') {
+    return t('trade.guide.basisTier').replace('{n}', c.n.toLocaleString()).replace('{tier}', c.label);
+  }
+  return t('trade.guide.basisMarket').replace('{n}', c.n.toLocaleString());
+}
+
+/* The workings. Three short rows a seller can check against their own sense of the market:
+   what comparable assets actually fetched, how often one changes hands, and what is sitting
+   unsold right now. Someone who can see the evidence can decide how much to trust the number,
+   which is the whole point of showing it. */
+function guideEvidenceHtml(c) {
+  const rows = [];
+  if (c.low != null && c.high != null) {
+    rows.push([t('trade.guide.evSold'), t('trade.guide.evSoldV')
+      .replace('{low}', guideMoney(c.low)).replace('{typical}', guideMoney(c.typical))
+      .replace('{high}', guideMoney(c.high))]);
+  }
+  if (c.lastTs) {
+    rows.push([t('trade.guide.evLast'), t('trade.guide.evLastV')
+      .replace('{price}', guideMoney(c.lastEth)).replace('{ago}', guideAgo(c.lastTs))]);
+  }
+  if (c.sold12m != null) {
+    let v = t('trade.guide.evPace').replace('{n}', c.sold12m.toLocaleString());
+    if (c.exists) v += ' ' + t('trade.guide.evPaceOf').replace('{exists}', c.exists.toLocaleString());
+    if (c.everyDays) v += ' ' + t('trade.guide.evPaceEvery').replace('{days}', c.everyDays.toLocaleString());
+    rows.push([t('trade.guide.evPaceK'), v]);
+  }
+  rows.push([t('trade.guide.evShelf'), c.listed
+    ? t('trade.guide.evShelfV').replace('{n}', c.listed.toLocaleString())
+        .replace('{price}', c.shelfFloor ? guideMoney(c.shelfFloor) : '?')
+        .replace('{days}', c.listedOldestDays ?? 0)
+    : t('trade.guide.evShelfNone')]);
+  return rows.map(([k, v]) => `<div class="trade-guide-ev">
+    <span class="trade-guide-ev-k">${esc(k)}</span>
+    <span class="trade-guide-ev-v">${esc(v)}</span></div>`).join('');
+}
+
+/** How the three numbers were arrived at, in a sentence. */
 function guideWhyHtml(b) {
   const bits = [];
+  const c = b.comparables;
   if (b.from.kind === 'trait') {
-    bits.push(t('trade.guide.whyTrait').replace('{trait}', b.from.label)
-      .replace('{n}', b.from.n.toLocaleString()).replace('{x}', b.mult));
+    bits.push(t('trade.guide.whyTrait').replace('{trait}', b.from.label).replace('{x}', b.mult));
   } else if (b.from.kind === 'tier') {
-    bits.push(t('trade.guide.whyTier').replace('{tier}', b.from.label)
-      .replace('{n}', b.from.n.toLocaleString()).replace('{x}', b.mult));
+    bits.push(t('trade.guide.whyTier').replace('{tier}', b.from.label).replace('{x}', b.mult));
   } else {
-    bits.push(t('trade.guide.whyMarket').replace('{n}', b.from.n.toLocaleString()));
+    bits.push(t('trade.guide.whyMarket'));
   }
   if (b.liquidity.state === 'slow') {
     bits.push(t('trade.guide.whySlow').replace('{listed}', b.liquidity.listed)
-      .replace('{days}', b.liquidity.ageDays ?? 0));
+      .replace('{days}', b.liquidity.oldestDays ?? b.liquidity.ageDays ?? 0));
   } else if (b.liquidity.state === 'scarce') {
     bits.push(t('trade.guide.whyScarce').replace('{sold}', b.liquidity.sold12m));
   }
   if (b.floored) bits.push(t('trade.guide.whyFloor'));
   if (b.rivalFloor) {
     bits.push(t(b.rivalKind === 'trait' ? 'trade.guide.whyShelfTrait' : 'trade.guide.whyShelf')
-      .replace('{price}', `${guideNum(b.rivalFloor)} ETH`));
+      .replace('{price}', guideMoney(b.rivalFloor)));
   }
+  if (c.n < 10) bits.push(t('trade.guide.whyThin').replace('{n}', c.n));
   return bits.map(x => esc(x)).join(' ');
 }
 
@@ -6731,19 +6785,29 @@ function priceGuideHtml() {
     return `<div class="trade-guide is-loading" id="trade-guide"><span class="trade-mini-spin" aria-hidden="true"></span>${esc(t('trade.guide.loading'))}</div>`;
   }
   if (!g) return `<div class="trade-guide" id="trade-guide"></div>`;
-  const b = g.basis;
-  return `<div class="trade-guide" id="trade-guide">
+  const b = g.basis, c = b.comparables;
+  const thin = c.n < 10 ? ' is-thin' : '';
+  return `<div class="trade-guide${thin}" id="trade-guide">
     <div class="trade-guide-head">
       <span class="trade-guide-eyebrow">${ico('chart', 12)}${esc(t('trade.guide.h'))}</span>
-      <span class="trade-guide-note">${esc(t('trade.guide.basis').replace('{n}', b.comps.toLocaleString()))}</span>
+      <span class="trade-beta-chip is-mini">${esc(t('trade.guide.beta'))}</span>
     </div>
+    <p class="trade-guide-note">${esc(guideBasisLine(c))}</p>
     <div class="trade-guide-tiles">
       ${guideTileHtml('quick', g.quick, g.usd.quick, 'is-quick')}
       ${guideTileHtml('fair', g.fair, g.usd.fair, 'is-fair')}
       ${guideTileHtml('patient', g.patient, g.usd.patient, 'is-patient')}
     </div>
-    <p class="trade-guide-why">${guideWhyHtml(b)}</p>
-    <p class="trade-guide-caveat">${esc(t('trade.guide.caveat'))}</p>
+    <details class="trade-guide-more">
+      <summary>${esc(t('trade.guide.more'))}</summary>
+      <div class="trade-guide-evs">${guideEvidenceHtml(c)}</div>
+      <p class="trade-guide-why">${guideWhyHtml(b)}</p>
+      <p class="trade-guide-method">${esc(t('trade.guide.method')
+        .replace('{anchor}', guideMoney(b.anchor))
+        .replace('{n}', b.anchorSales.toLocaleString())
+        .replace('{days}', b.anchorDays))}</p>
+    </details>
+    <p class="trade-guide-caveat">${esc(t(coll === 'land' ? 'trade.guide.caveatLand' : 'trade.guide.caveat'))}</p>
   </div>`;
 }
 
