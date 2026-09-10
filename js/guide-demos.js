@@ -1509,6 +1509,163 @@ function makeIngameSpec(coll) {
   };
 }
 
+// =====================================================================================
+// SETUP ON A PHONE — the MetaMask app's own browser
+// =====================================================================================
+// A phone browser has no extension to inject a wallet, so the connect demo can't happen
+// there. This one shows the way in: a phone drawn on the stage, running MetaMask, then our
+// site inside it. Drawn, not photographed, on purpose: an app screenshot speaks one
+// language and rots with every MetaMask release, where this follows the site's own
+// translations and the fixture data of every other demo. Tab names follow MetaMask's own
+// strings (its browser lives under Explore; checked against metamask-mobile, Sept 2026).
+
+const PH_URL = 'hcc.highrise.game';
+// The screen the phone shows after step b has played, b = -1 being the untouched start.
+const PH_SCREENS = ['home', 'explore', 'typed', 'site', 'market', 'done'];
+
+const PH_ICON = {
+  home:     `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v10h13V10"/></svg>`,
+  explore:  `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>`,
+  trade:    `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16m0 0-3-3m3 3 3-3M17 20V4m0 0-3 3m3-3 3 3"/></svg>`,
+  activity: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>`,
+};
+
+const phBarOff = () => `<span class="gdemo-ph-bar-msg">${t('trade.bar.connectPrompt')}</span>
+  <button class="gdemo-ph-connect" type="button" tabindex="-1" data-gd="phconnect"><img src="/img/brands/metamask.svg" alt="" />${t('trade.connect.btn')}</button>`;
+const phBarOn = () => `<span class="gdemo-ph-on"><img src="/img/brands/metamask.svg" alt="" /><code>${DEMO_ADDR}</code><em>${t('trade.net.ok.short')}</em></span>`;
+const phDoneHtml = () => `<div class="gdemo-ph-done">${ico('check', 12)}<span>${t('gm.demo.ph.done')}</span></div>`;
+
+const PHONE_SETUP = {
+  title: 'gm.demo.title.setupPhone',
+  steps: [
+    { label: 'gm.demo.beat.explore', cap: 'gm.demo.phone.cap.explore' },
+    { label: 'gm.demo.beat.type',    cap: 'gm.demo.phone.cap.type' },
+    { label: 'gm.demo.beat.pick',    cap: 'gm.demo.phone.cap.pick' },
+    { label: 'gm.demo.beat.market',  cap: 'gm.demo.phone.cap.market' },
+    { label: 'gm.demo.beat.connect', cap: 'gm.demo.phone.cap.connect' },
+  ],
+  stageHtml() {
+    const tab = (key, gd, on) => `<span class="gdemo-ph-tab${on ? ' is-on' : ''}"${gd ? ` data-gd="${gd}"` : ''}><i aria-hidden="true">${PH_ICON[key]}</i>${t(`gm.demo.ph.${key}`)}</span>`;
+    const sug = (txt, url) => `<div class="gdemo-ph-sug${url ? ' is-url" data-gd="phurl' : ''}">${ico(url ? 'external' : 'search', 13)}<span>${txt}</span></div>`;
+    const pill = (key, gd) => `<span class="gdemo-ph-pill"${gd ? ` data-gd="${gd}"` : ''}>${t(key)}</span>`;
+    const tiles = FIX_CREATURES.slice(0, 2).map((f, i) =>
+      `<div class="gdemo-ph-tile">${artImg(f, 'creature', i, 'gdemo-ph-tile-img')}<span>${f.name}</span><b>${f.eth}</b></div>`).join('');
+    return `<div class="gdemo-ph-glow" aria-hidden="true"></div>
+      <div class="gdemo-ph" data-gd="phone" data-scr="home">
+        <div class="gdemo-ph-status"><span>9:41</span><span class="gdemo-ph-notch"></span><span class="gdemo-ph-sig"><i></i><i></i><i></i></span></div>
+        <div class="gdemo-ph-body">
+          <div class="gdemo-ph-scr is-home">
+            <div class="gdemo-ph-mmhead"><img src="/img/brands/metamask.svg" alt="" /><span>${t('gm.demo.ph.account')} ▾</span></div>
+            <div class="gdemo-ph-balance"><small>${t('gm.demo.ph.balance')}</small><b>$212.40</b></div>
+            <div class="gdemo-ph-quick"><i></i><i></i><i></i><i></i></div>
+            <div class="gdemo-ph-rows">
+              <div class="gdemo-ph-row"><img src="/img/brands/eth.png" alt="" /><span>ETH</span><b>0.084</b></div>
+              <div class="gdemo-ph-row"><img src="/img/brands/imx.png" alt="" /><span>IMX</span><b>12.4</b></div>
+            </div>
+          </div>
+          <div class="gdemo-ph-scr is-explore">
+            <div class="gdemo-ph-search" data-gd="phsearch">${ico('search', 13)}<input type="text" readonly tabindex="-1" placeholder="${t('gm.demo.ph.search')}" data-gd="phinput" /></div>
+            <div class="gdemo-ph-sugs">${sug(t('gm.demo.ph.sug1'))}${sug(t('gm.demo.ph.sug2'))}${sug(t('gm.demo.ph.sug3'))}${sug(PH_URL, true)}</div>
+            <div class="gdemo-ph-trend"><small>${t('gm.demo.ph.trending')}</small>
+              <div class="gdemo-ph-trendrow"><i></i><i></i><i></i></div><div class="gdemo-ph-trendrow"><i></i><i></i><i></i></div></div>
+          </div>
+          <div class="gdemo-ph-scr is-site">
+            <div class="gdemo-ph-url">${ico('lock', 10)}<span>${PH_URL}<em data-gd="phpath"></em></span></div>
+            <div class="gdemo-ph-site">
+              <div class="gdemo-ph-sitehead"><img src="/img/brands/icon_hcc.png" alt="" /><span>Highrise Creature Club</span></div>
+              <div class="gdemo-ph-sitenav" data-gd="phnav">${pill('nav.club')}${pill('nav.market')}${pill('nav.marketplace', 'phmarket')}${pill('nav.guides')}</div>
+              <div class="gdemo-ph-view is-club">
+                <div class="gdemo-ph-hero"><b>Highrise Creature Club</b><span>${t('gm.demo.ph.heroSub')}</span></div>
+                <div class="gdemo-ph-blobs">${creatureSvg('#51FFA5', 0)}${creatureSvg('#8561FF', 1)}${creatureSvg('#FFF95F', 2)}</div>
+              </div>
+              <div class="gdemo-ph-view is-market">
+                <div class="gdemo-ph-bar" data-gd="phbar">${phBarOff()}</div>
+                <div data-gd="phdone"></div>
+                <div class="gdemo-ph-tiles">${tiles}</div>
+              </div>
+            </div>
+          </div>
+          <div class="gdemo-ph-sheet">
+            <span class="gdemo-ph-grab"></span>
+            <img class="gdemo-ph-sheet-fox" src="/img/brands/metamask.svg" alt="" />
+            <b>${t('gm.demo.ph.sheetH')}</b>
+            <span class="gdemo-ph-sheet-site">${PH_URL}</span>
+            <p>${t('gm.demo.ph.sheetP')}</p>
+            <div class="gdemo-ph-sheet-btns"><span>${t('gm.demo.ph.cancel')}</span><span class="is-go" data-gd="phapprove">${t('gm.demo.ph.connect')}</span></div>
+          </div>
+        </div>
+        <div class="gdemo-ph-tabs">${tab('home', null, true)}${tab('explore', 'phexplore')}${tab('trade')}${tab('activity')}</div>
+        <div class="gdemo-ph-tools">${ico('chevronLeft', 14)}${ico('chevronRight', 14)}${ico('search', 14)}<span class="gdemo-ph-tabsq">1</span><span class="gdemo-ph-dots">···</span></div>
+        <div class="gdemo-ph-homebar"></div>
+      </div>`;
+  },
+  // The clean screen after step b, and so the base step b+1 taps on. No transient state
+  // lives here (the sheet opens and closes inside step 5's own choreo), so a loop reset
+  // never leaves one behind.
+  endState(ctx, b) {
+    const { stage } = ctx;
+    const q = gd => stage.querySelector(`[data-gd="${gd}"]`);
+    q('phone').dataset.scr = PH_SCREENS[b + 1] || 'home';
+    q('phinput').value = b >= 1 ? PH_URL : '';
+    q('phsearch').classList.toggle('is-focus', b === 1);
+    q('phpath').textContent = b >= 3 ? '/trade' : '';
+    stage.querySelectorAll('[data-gd="phnav"] .gdemo-ph-pill')
+      .forEach((p, i) => p.classList.toggle('is-on', i === (b >= 3 ? 2 : 0)));
+    q('phbar').innerHTML = b >= 4 ? phBarOn() : phBarOff();
+    q('phdone').innerHTML = b >= 4 ? phDoneHtml() : '';
+  },
+  async choreo(ctx, b) {
+    const { stage, go, click, sleep, ok, say, type } = ctx;
+    const q = gd => stage.querySelector(`[data-gd="${gd}"]`);
+    const tap = async gd => {
+      const el = q(gd);
+      await sleep(300); if (!ok()) return false;
+      await go(el); if (!ok()) return false;
+      await click(el); if (!ok()) return false;
+      return true;
+    };
+    if (b === 0) {
+      // MetaMask home: tap Explore in the bottom bar. The browser it opens is step 2's screen.
+      await say('gm.demo.n.phExplore');
+      if (!await tap('phexplore')) return;
+      await sleep(400);
+    } else if (b === 1) {
+      // Explore: tap the search bar and type the address. The list that drops down as you
+      // type belongs to this screen; picking from it is step 3.
+      await say('gm.demo.n.phType');
+      if (!await tap('phsearch')) return;
+      q('phsearch').classList.add('is-focus');
+      await type(q('phinput'), PH_URL, 90); if (!ok()) return;
+      await sleep(350); if (!ok()) return;
+      q('phone').dataset.scr = 'typed';
+      await sleep(600);
+    } else if (b === 2) {
+      // The list: tap the address row, the one with the arrow.
+      await say('gm.demo.n.phPick');
+      if (!await tap('phurl')) return;
+      await sleep(400);
+    } else if (b === 3) {
+      // Our site, inside MetaMask: tap Marketplace.
+      await say('gm.demo.n.phMarket');
+      if (!await tap('phmarket')) return;
+      await sleep(400);
+    } else if (b === 4) {
+      // The marketplace: tap Connect MetaMask, approve in the app's sheet, and the bar comes
+      // online. Two taps in one step because the sheet is the app answering the first tap,
+      // not a screen of its own.
+      await say('gm.demo.n.phConnect');
+      if (!await tap('phconnect')) return;
+      q('phone').dataset.scr = 'sheet';
+      await sleep(750); if (!ok()) return;
+      if (!await tap('phapprove')) return;
+      q('phone').dataset.scr = 'done';
+      q('phbar').innerHTML = phBarOn();
+      q('phdone').innerHTML = pop(phDoneHtml());
+      await sleep(900);
+    }
+  },
+};
+
 const DEMOS = {
   'trading-creatures': TRADING_CREATURES,
   'trading-land': TRADING_LAND,
@@ -1520,6 +1677,7 @@ const DEMOS = {
   'moving-land': makeMovingSpec('land'),
   'setup-creatures': makeSetupSpec('creatures'),
   'setup-land': makeSetupSpec('land'),
+  'setup-phone': PHONE_SETUP,
   'ingame-creatures': makeIngameSpec('creatures'),
   'ingame-land': makeIngameSpec('land'),
 };
@@ -1979,7 +2137,11 @@ export function initGuideDemos() {
     // own "Watch again" control; then hide the original footer button it proxies. (Two
     // demos per card share one footer, so each just proxies the same wired button.)
     const card = mount.closest('.wt-panel');
-    const nextBtn = card && card.querySelector('.gm-cardfoot [data-wt-cta], .gm-cardfoot [data-goto]');
+    // data-gd-next="off": a demo that isn't the card's main act (the phone prelude on Setup)
+    // gets no "up next" of its own — jumping to Funding from there would skip the connect
+    // demo it leads into.
+    const nextBtn = card && mount.dataset.gdNext !== 'off'
+      && card.querySelector('.gm-cardfoot [data-wt-cta], .gm-cardfoot [data-goto]');
     const opts = { nextBtn };
     instances.push(spec.scenarios ? createScenarioDemo(mount, spec, opts) : createDemo(mount, spec, mount, opts));
     if (nextBtn) {

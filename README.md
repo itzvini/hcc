@@ -811,6 +811,36 @@ the life of the process, because StarkEx is sunset and the archive can never gro
 - If the archive is unreachable the tab is exactly the live zkEVM feed — it only ever extends
   the history backwards.
 
+## Trading from a phone (the MetaMask in-app browser)
+
+There is no MetaMask extension for phones. In Safari or Chrome on a phone nothing injects
+`window.ethereum`, so the marketplace's Connect button has nothing to talk to. The way in is
+the MetaMask app's own browser: **Explore** tab, type `hcc.highrise.game` in the search bar, tap
+the row that shows the address itself (the one with the ↗ arrow; the rows above it are web
+searches), open the Marketplace, connect. The club kept answering this in Discord tap by tap,
+so it now lives in three places:
+
+- **Guides › Marketplace › Setup** opens with an "On a phone?" block: a phone-shaped demo
+  (`setup-phone` in `js/guide-demos.js`) that plays the five taps, the taps written out, and a
+  one-tap deep link. It is folded by default so the connect demo still fits the first viewport
+  on a computer; `app.js` opens it on a touch screen with no wallet injected.
+  **hcc.highrise.game/guides/marketplace/phone** is the address to share. It has its own card
+  in `SECTION_CARDS` (so it unfurls and is searchable) and lands on Setup with the block open.
+- **The deep link.** `https://link.metamask.io/dapp/<host><path>` opens that page inside the
+  MetaMask app's browser, or the store if the app isn't installed. The guide's button and the
+  marketplace both build it from `location.host` at runtime, so a preview build opens itself.
+  `metamask.app.link/dapp/…` is the older host and still answers; `link.metamask.io` is the one
+  MetaMask's docs give today. Nothing here uses MetaMask Connect or WalletConnect: the site
+  keeps talking to `window.ethereum` only, and inside the app's browser that is injected.
+- **The marketplace's no-wallet state.** On a coarse-pointer screen the wallet bar, the
+  Sell/Transfer gate and the buy button say "Open in MetaMask" (the deep link) with a "How it
+  works" link to the guide, instead of "Get MetaMask", which sent phone users in a circle. On a
+  computer the install link is unchanged.
+
+The phone in the demo is drawn, not a screenshot: MetaMask's screens change with every release
+and a screenshot speaks one language. Its tab names follow MetaMask's own strings (the browser
+sits under Explore; checked against `metamask-mobile`'s `bottom_nav` strings, September 2026).
+
 ## Where you live changes the answer (the country picker)
 
 Both money guides — **Guides › Marketplace › Funding** and **› Cash out** — end with a

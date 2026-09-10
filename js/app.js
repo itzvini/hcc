@@ -465,6 +465,39 @@ function initStepper(nav) {
 
 document.querySelectorAll('.wt-nav').forEach(initStepper);
 
+// The Setup step's "On a phone?" block, opened and brought into view. Called for the
+// /guides/marketplace/phone address: the one the club pastes at a member stuck on a phone.
+// The scroll waits a frame so it lands after the navigation's own jump to the top of the
+// page rather than under it.
+function openPhoneGuide() {
+  const box = document.getElementById('gm-phone');
+  if (!box) return;
+  box.open = true;
+  // Land the block under the nav, then land again as the page settles: the step panel
+  // rises into place over .45s, translations arrive and re-flow the text above it, and the
+  // hero's pets swap for inline SVGs. Each one moves the block after a scroll taken too
+  // early. The reader's own scroll ends the re-landing: the page never moves under them.
+  let theirs = false;
+  const stop = () => { theirs = true; };
+  ['wheel', 'touchstart', 'keydown'].forEach(ev => addEventListener(ev, stop, { once: true, passive: true }));
+  const land = () => { if (!theirs) box.scrollIntoView({ behavior: 'instant', block: 'start' }); };
+  requestAnimationFrame(land);
+  [520, 1300, 2600].forEach(ms => setTimeout(land, ms));
+}
+
+// Its deep link opens THIS host inside the MetaMask app's browser
+// (link.metamask.io/dapp/<host><path>), so a preview build opens itself, not production.
+// And a touch screen with no wallet injected is exactly the reader the block is for: a
+// phone in Safari or Chrome. Open it for them. Inside the MetaMask app window.ethereum
+// exists, so there it stays folded away.
+document.querySelectorAll('a[data-mm-deeplink]').forEach(a => {
+  a.href = `https://link.metamask.io/dapp/${location.host}${a.dataset.mmDeeplink}`;
+});
+{
+  const box = document.getElementById('gm-phone');
+  if (box && !window.ethereum && window.matchMedia('(pointer: coarse)').matches) box.open = true;
+}
+
 // Glossary links for prose that lives inside a collapsed <details> (the guide's option
 // accordions, the region notes): the decorator skips anything with no client rects, so
 // those bodies are invisible to it until they open. 'toggle' doesn't bubble — capture it.
@@ -646,6 +679,9 @@ function route(pathname) {
   if (tab === 'guides' && sub && segs[2] && stepperRouters[sub]) {
     stepperRouters[sub](segs[2]);
   }
+  // /guides/marketplace/phone: the Setup step with its "On a phone?" block open and in view.
+  // The stepper above already landed on step 1, because "phone" names no step of its own.
+  if (tab === 'guides' && sub === 'marketplace' && segs[2] === 'phone') openPhoneGuide();
 }
 
 // Back/forward navigation
@@ -660,7 +696,7 @@ window.addEventListener('popstate', () => route(location.pathname));
 const MARKET_SUBS = new Set([...TRADE_VIEWS, 'add-funds', 'cash-out']);
 document.addEventListener('click', event => {
   const link = event.target.closest && event.target.closest(
-    'a[href^="/collections/"], a[href^="/trade/"], a[href^="/announcements"]');
+    'a[href^="/collections/"], a[href^="/trade/"], a[href^="/announcements"], a[href^="/guides/"]');
   if (!link) return;
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
   // Already handled: the search boxes cancel the click and route it themselves, because a
@@ -672,6 +708,10 @@ document.addEventListener('click', event => {
     // Nothing to check: the tab handles its own addresses, including the feed itself.
   } else if (segs[0] === 'trade') {
     if (!MARKET_SUBS.has(segs[1])) return;
+  } else if (segs[0] === 'guides') {
+    // The marketplace's no-wallet notice links at the phone guide from inside the Trade
+    // panel; painting it in place spares the reload and the white flash on the way.
+    if (segs[1] && !document.querySelector(`#panel-guides [data-subpanel="${segs[1]}"]`)) return;
   } else {
     // Any Collections address, not just the entity kinds. The glossary breadcrumb on every
     // term page points at /collections/glossary, and while that fell through to the browser

@@ -1722,6 +1722,43 @@ body { margin: 0; opacity: 0; background: #141317; color: #CCCADC; animation: bo
           </div>
         </div>
         <p class="guide-intro" data-i18n="gm.setup.p">Open the Trade tab and connect your wallet. A quick safety check appears first, then your balances show in the bar up top.</p>
+        <!-- On a phone? In Safari or Chrome on a phone the Connect button below has nothing to
+             talk to: there's no extension to inject a wallet. The way in is the MetaMask app's
+             own browser, and this block shows those taps one at a time, ahead of the connect
+             demo. Collapsed by default so the demo still fits the first viewport on a
+             computer; app.js opens it on a touch screen with no wallet injected, and for the
+             shareable /guides/marketplace/phone address. The taps are the same for Creatures
+             and LAND, so it sits OUTSIDE the collection toggle and carries no data-mkt. -->
+        <details class="gm-phone" id="gm-phone">
+          <summary class="gm-phone-sum">
+            <span class="gm-phone-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.6"/><path d="M10.5 5.5h3"/><circle cx="12" cy="17.6" r=".9" fill="currentColor" stroke="none"/></svg></span>
+            <span class="gm-phone-txt">
+              <span class="gm-phone-eye" data-i18n="gm.phone.eye">On a phone?</span>
+              <b class="gm-phone-h" data-i18n="gm.phone.h">Open this site inside the MetaMask app</b>
+              <span class="gm-phone-sub" data-i18n="gm.phone.sub">Safari and Chrome can't reach your wallet. MetaMask's own browser can, and the whole marketplace works there.</span>
+            </span>
+            <span class="gm-phone-cta" aria-hidden="true"><span class="gm-phone-cta-show" data-i18n="gm.phone.show">Show me how</span><span class="gm-phone-cta-hide" data-i18n="gm.phone.hide">Hide</span></span>
+          </summary>
+          <div class="gm-phone-body">
+            <p class="gm-phone-lead" data-i18n="gm.phone.lead">There's no MetaMask extension for phones, so in a normal phone browser the Connect button has nothing to talk to. Open the site from inside the MetaMask app instead. It takes five taps, shown below one at a time, and from then on every step of this tour works the same as on a computer.</p>
+            <div class="gdemo" data-gdemo="setup-phone" data-gd-next="off"></div>
+            <div class="gm-phone-grid">
+              <ol class="gm-phone-steps">
+                <li data-i18n="gm.phone.s1">Open the MetaMask app and tap Explore in the bar at the bottom.</li>
+                <li data-i18n="gm.phone.s2">Tap the search bar at the top and type hcc.highrise.game.</li>
+                <li data-i18n="gm.phone.s3">Tap the row that shows the address itself, marked with an &#8599; arrow. The rows above it are web searches. It's often the fourth row, so go by the arrow, not the position.</li>
+                <li data-i18n="gm.phone.s4">Our site opens inside MetaMask. Tap Marketplace in the menu.</li>
+                <li data-i18n="gm.phone.s5">Tap Connect MetaMask and approve in the sheet that slides up. You're in.</li>
+              </ol>
+              <div class="gm-phone-side">
+                <a class="gm-phone-open" href="https://link.metamask.io/dapp/hcc.highrise.game/trade" data-mm-deeplink="/trade"><img src="/img/brands/metamask.svg" alt="" width="22" height="22"><span data-i18n="gm.phone.open">Open the marketplace in MetaMask</span></a>
+                <p class="gm-phone-side-p" data-i18n="gm.phone.open.note">One tap does steps 1 to 4 for you: it opens the MetaMask app with our marketplace already loaded. No app on this phone yet? It sends you to the store instead.</p>
+                <p class="gm-phone-side-p is-desk" data-i18n="gm.phone.desk">Reading this on a computer? Send hcc.highrise.game/guides/marketplace/phone to your phone and open it there. On the phone, a one-tap button sits here.</p>
+              </div>
+            </div>
+            <p class="guide-note" data-i18n="gm.phone.note.install">No MetaMask on your phone yet? Get it from the App Store or Google Play, open it and choose to import an existing wallet. Type your Secret Recovery Phrase into the app itself and nowhere else. No website, DM or support agent ever needs those words.</p>
+          </div>
+        </details>
         <div class="wt-mkt-toggle">
           <div class="seg" role="tablist" data-mkt-toggle aria-label="Choose a collection" data-i18n-aria="a11y.collection.choose">
             <button class="seg-btn is-active" id="gm-setup-cr" type="button" role="tab" aria-selected="true" aria-controls="gm-setup-cr-p" data-mkt-btn="creatures" data-i18n="trade.coll.creatures">Creatures</button>

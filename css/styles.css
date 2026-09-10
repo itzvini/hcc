@@ -3070,6 +3070,7 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
 .gm-card .guide-head,
 .gm-card .guide-intro,
 .gm-card .wt-mkt-where { display: none; }
+.gm-card .gm-phone      { order: 0; margin: 0 0 12px; }  /* the "On a phone?" prelude, above the toggle */
 .gm-card .wt-mkt-toggle { order: 1; margin: 0 0 9px; }
 .gm-card .wt-mkt        { order: 2; }
 .gm-card .gm-calm       { order: 3; margin: 14px 0 0; }
@@ -3208,6 +3209,120 @@ details.rm-phase[open] > .rm-grid { animation: rm-fade .3s ease; }
 .gm-calm-card b { display: block; font-family: var(--hr-sans); font-weight: 800; font-size: 13.5px; color: var(--hr-fg-0); margin-bottom: 4px; }
 .gm-calm-card p { margin: 0; font-size: 12px; line-height: 1.55; color: var(--hr-fg-2); }
 @media (max-width: 700px) { .gm-calm { grid-template-columns: 1fr; } }
+
+/* ---------- SETUP, "ON A PHONE?" (#gm-phone) ----------
+   A phone browser has no extension to inject a wallet, so the connect demo can't happen
+   there; the way in is the MetaMask app's own browser. This block sits above the collection
+   toggle on the Setup step, folded to one strip so the connect demo still fits the first
+   viewport on a computer. Open, it holds a phone-shaped demo, the five taps written out and
+   the one-tap deep link (touch screens only: on a computer it can only reach a store page).
+   Lavender, like the other "another route" surfaces on this tour; mint stays on the action. */
+.gm-phone {
+  --accent: var(--hr-secondary);
+  position: relative; overflow: hidden; margin: 0; padding: 0;
+  border-radius: var(--hr-radius-lg);
+  background: linear-gradient(160deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
+  border: 1px solid var(--hr-line);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  scroll-margin-top: var(--nav-clear);
+  transition: border-color .2s, box-shadow .2s;
+}
+.gm-phone::before {
+  content: ''; position: absolute; inset: -60% auto auto -6%; width: 260px; height: 200px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 22%, transparent), transparent 70%);
+  pointer-events: none;
+}
+.gm-phone[open] {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 12px 34px -20px var(--accent);
+}
+.gm-phone > summary.gm-phone-sum {
+  position: relative; display: flex; align-items: center; gap: 14px;
+  padding: 12px 16px 12px 14px; cursor: pointer; list-style: none;
+  font: inherit; color: inherit; transition: background .15s;
+}
+.gm-phone > summary.gm-phone-sum:hover { background: rgba(255,255,255,.03); }
+.gm-phone > summary.gm-phone-sum::after { display: none; }   /* the show/hide pill replaces the global + marker */
+.gm-phone > summary.gm-phone-sum:focus-visible:not(.is-pointer) { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--hr-radius-lg); }
+.gm-phone > summary.gm-phone-sum.is-pointer { outline: none; }
+.gm-phone-ico {
+  flex: 0 0 auto; width: 42px; height: 42px; display: grid; place-items: center;
+  border-radius: 13px; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent), 0 0 22px -6px var(--accent);
+}
+.gm-phone-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.gm-phone-eye { font: 800 10px/1 var(--hr-sans); letter-spacing: var(--hr-tracking-caps); text-transform: uppercase; color: var(--accent); }
+.gm-phone-h { font: 800 14.5px/1.2 var(--hr-sans); color: var(--hr-fg-0); }
+.gm-phone-sub { font: 600 12px/1.45 var(--hr-sans); color: var(--hr-fg-2); }
+.gm-phone-cta {
+  flex: 0 0 auto; font: 800 11.5px/1 var(--hr-sans); padding: 9px 14px;
+  border-radius: var(--hr-radius-pill); color: #fff; background: var(--accent);
+  box-shadow: var(--hr-shadow-btn); white-space: nowrap;
+  transition: transform .15s cubic-bezier(.2,0,0,1), background .15s, color .15s, box-shadow .15s;
+}
+.gm-phone > summary:hover .gm-phone-cta { transform: translateY(-1px); }
+.gm-phone-cta-hide, .gm-phone[open] .gm-phone-cta-show { display: none; }
+.gm-phone[open] .gm-phone-cta-hide { display: inline; }
+.gm-phone[open] .gm-phone-cta { background: transparent; color: var(--hr-fg-1); box-shadow: inset 0 0 0 1px var(--hr-line-strong); }
+.gm-phone-body {
+  display: flex; flex-direction: column; gap: 12px;
+  margin: 0 15px 15px; padding-top: 12px; border-top: 1px solid var(--hr-line);
+}
+.gm-phone[open] .gm-phone-body { animation: gm-body-in .28s cubic-bezier(.16,.84,.3,1) backwards; }
+.gm-phone p { padding: 0; margin: 0; }          /* the FAQ's `details p` padding doesn't apply here */
+.gm-phone-lead { font-size: 13px; line-height: 1.6; color: var(--hr-fg-1); }
+.gm-phone .gdemo { margin: 0; }
+.gm-phone-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 300px); gap: 14px; align-items: start; }
+.gm-phone-steps { list-style: none; counter-reset: phs; margin: 0; padding: 0; display: grid; gap: 6px; }
+.gm-phone-steps li {
+  position: relative; counter-increment: phs; padding: 9px 12px 9px 42px;
+  border-radius: var(--hr-radius-md); background: rgba(255,255,255,.03); border: 1px solid var(--hr-line);
+  font-size: 12.5px; line-height: 1.5; color: var(--hr-fg-1);
+}
+.gm-phone-steps li::before {
+  content: counter(phs); position: absolute; left: 10px; top: 9px; width: 22px; height: 22px;
+  display: grid; place-items: center; border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent);
+  font: 900 11px/1 var(--hr-sans);
+}
+.gm-phone-side {
+  display: flex; flex-direction: column; gap: 9px; padding: 12px;
+  border-radius: var(--hr-radius-md); background: rgba(255,255,255,.02); border: 1px solid var(--hr-line);
+}
+.gm-phone-open {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  min-height: 44px; padding: 10px 16px; border-radius: var(--hr-radius-pill);
+  background: var(--hr-primary); color: var(--hr-on-primary); text-decoration: none;
+  font: 800 13px/1.2 var(--hr-sans); box-shadow: var(--hr-shadow-btn);
+  transition: transform .15s cubic-bezier(.2,0,0,1), background .15s;
+}
+.gm-phone-open:hover { background: var(--hr-primary-press); transform: translateY(-1px); }
+.gm-phone-open:active { transform: scale(.98); }
+.gm-phone-open:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 3px; }
+.gm-phone-open img { width: 22px; height: 22px; display: block; }
+.gm-phone-side-p { font-size: 12px; line-height: 1.5; color: var(--hr-fg-2); }
+.gm-phone-side-p.is-desk { display: none; }
+/* The deep link can only open the app on the device it's tapped on. On a computer it would
+   land on a store page, so there the hint takes its place. */
+@media (hover: hover) and (pointer: fine) {
+  .gm-phone-open, .gm-phone-side-p:not(.is-desk) { display: none; }
+  .gm-phone-side-p.is-desk { display: block; }
+}
+.gm-phone .guide-note { margin: 0; }
+@media (max-width: 760px) {
+  .gm-phone-grid { grid-template-columns: 1fr; }
+  .gm-phone > summary.gm-phone-sum { gap: 10px; padding: 11px 12px; }
+  .gm-phone-ico { width: 36px; height: 36px; border-radius: 11px; }
+  .gm-phone-h { font-size: 13.5px; }
+  .gm-phone-sub { display: none; }
+  .gm-phone-cta { padding: 8px 11px; font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gm-phone, .gm-phone-cta, .gm-phone-open, .gm-phone > summary.gm-phone-sum { transition: none; }
+  .gm-phone[open] .gm-phone-body { animation: none; }
+}
 
 /* ---------- CASH OUT, LEG 2: "Where to sell your ETH" (#gm-paid) ----------
    The step-6 card ends with the ETH sitting on Ethereum, which is where the site's job
@@ -4031,6 +4146,194 @@ button.gm-geo-name:focus-visible { outline: 2px solid var(--hr-primary); outline
 @keyframes gdemo-ring {
   0%   { opacity: 1; transform: scale(.4); }
   100% { opacity: 0; transform: scale(1.25); }
+}
+
+/* --- The phone stage (setup-phone): MetaMask on a drawn phone, then our site inside it.
+   Screens are stacked and picked by data-scr on the phone; the connect sheet slides up over
+   them. Only opacity and transform move. The bottom bar is MetaMask's tabs while you're in
+   the app and the browser's toolbar once a site is open, as on the real thing. --- */
+.gdemo-ph-glow {
+  position: absolute; left: 50%; top: 50%; width: 460px; height: 340px; margin: -170px 0 0 -230px;
+  background: radial-gradient(ellipse at center, rgba(133,97,255,.22), transparent 62%);
+  pointer-events: none;
+}
+.gdemo-ph {
+  position: absolute; top: 14px; bottom: 14px; left: 50%; width: 214px; margin-left: -107px;
+  display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 30px; background: #16171b; color: var(--hr-fg-0);
+  box-shadow: 0 0 0 2px #33353d, 0 0 0 5px #08080b, 0 24px 60px -16px rgba(0,0,0,.85), 0 0 46px rgba(81,255,165,.12);
+  font-family: var(--hr-sans); text-align: left;
+}
+.gdemo-ph-status {
+  flex: none; display: flex; align-items: center; justify-content: space-between;
+  height: 30px; padding: 0 20px; font: 800 10px/1 var(--hr-sans); color: var(--hr-fg-1);
+}
+.gdemo-ph-notch { width: 62px; height: 16px; border-radius: 9px; background: #08080b; }
+.gdemo-ph-sig { display: flex; gap: 2px; align-items: flex-end; }
+.gdemo-ph-sig i { width: 3px; background: var(--hr-fg-1); border-radius: 1px; }
+.gdemo-ph-sig i:nth-child(1) { height: 5px; }
+.gdemo-ph-sig i:nth-child(2) { height: 7px; }
+.gdemo-ph-sig i:nth-child(3) { height: 9px; }
+.gdemo-ph-body { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.gdemo-ph-scr { position: absolute; inset: 0; padding: 8px 12px; opacity: 0; transition: opacity .3s; }
+.gdemo-ph[data-scr="home"] .gdemo-ph-scr.is-home,
+.gdemo-ph[data-scr="explore"] .gdemo-ph-scr.is-explore,
+.gdemo-ph[data-scr="typed"] .gdemo-ph-scr.is-explore,
+.gdemo-ph[data-scr="site"] .gdemo-ph-scr.is-site,
+.gdemo-ph[data-scr="market"] .gdemo-ph-scr.is-site,
+.gdemo-ph[data-scr="sheet"] .gdemo-ph-scr.is-site,
+.gdemo-ph[data-scr="done"] .gdemo-ph-scr.is-site { opacity: 1; }
+/* MetaMask home */
+.gdemo-ph-mmhead { display: flex; align-items: center; gap: 7px; padding: 4px 2px 12px; font: 800 11px/1 var(--hr-sans); color: var(--hr-fg-1); }
+.gdemo-ph-mmhead img { width: 18px; height: 18px; display: block; }
+.gdemo-ph-balance { padding: 2px 2px 14px; }
+.gdemo-ph-balance small { display: block; margin-bottom: 6px; font: 700 9.5px/1 var(--hr-sans); color: var(--hr-fg-3); }
+.gdemo-ph-balance b { font: 900 24px/1 var(--hr-sans); color: var(--hr-fg-0); letter-spacing: -.01em; }
+.gdemo-ph-quick { display: flex; justify-content: space-between; padding: 0 6px 16px; }
+.gdemo-ph-quick i { width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,.07); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+.gdemo-ph-rows { display: grid; gap: 5px; }
+.gdemo-ph-row { display: flex; align-items: center; gap: 8px; padding: 8px 9px; border-radius: 10px; background: rgba(255,255,255,.04); font: 700 10.5px/1 var(--hr-sans); color: var(--hr-fg-1); }
+.gdemo-ph-row img { width: 18px; height: 18px; border-radius: 50%; display: block; }
+.gdemo-ph-row b { margin-left: auto; color: var(--hr-fg-0); }
+/* Explore: the search bar, the list that drops down as you type, trending tiles */
+.gdemo-ph-search {
+  display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 10px;
+  border-radius: 10px; background: rgba(255,255,255,.07); color: var(--hr-fg-3);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); transition: box-shadow .2s;
+}
+.gdemo-ph-search.is-focus { box-shadow: inset 0 0 0 1.5px var(--hr-fg-1); }
+.gdemo-ph-search.is-press { background: rgba(255,255,255,.1); }
+.gdemo-ph-search input {
+  flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; padding: 0;
+  font: 700 10.5px/1 var(--hr-sans); color: var(--hr-fg-0); pointer-events: none;
+}
+.gdemo-ph-search input::placeholder { color: var(--hr-fg-3); }
+.gdemo-ph-sugs { display: none; margin-top: 6px; border-radius: 10px; overflow: hidden; background: rgba(255,255,255,.03); box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+.gdemo-ph[data-scr="typed"] .gdemo-ph-sugs { display: block; }
+.gdemo-ph[data-scr="typed"] .gdemo-ph-trend { display: none; }
+.gdemo-ph-sug { display: flex; align-items: center; gap: 8px; padding: 9px 10px; font: 700 10.5px/1.2 var(--hr-sans); color: var(--hr-fg-2); border-top: 1px solid rgba(255,255,255,.05); }
+.gdemo-ph-sug:first-child { border-top: 0; }
+.gdemo-ph-sug svg { flex: none; }
+.gdemo-ph-sug.is-url { color: var(--hr-fg-0); background: rgba(81,255,165,.07); }
+.gdemo-ph-sug.is-url svg { color: var(--hr-primary); }
+.gdemo-ph-sug.is-press { background: rgba(255,255,255,.12); }
+.gdemo-ph-trend { margin-top: 12px; }
+.gdemo-ph-trend small { display: block; margin-bottom: 8px; font: 800 9.5px/1 var(--hr-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--hr-fg-3); }
+.gdemo-ph-trendrow { display: flex; gap: 6px; margin-bottom: 6px; }
+.gdemo-ph-trendrow i { flex: 1; height: 44px; border-radius: 10px; background: rgba(255,255,255,.05); }
+/* A site inside MetaMask's browser: the address bar, then our own page */
+.gdemo-ph-scr.is-site { padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 6px; }
+.gdemo-ph-url {
+  flex: none; display: flex; align-items: center; justify-content: center; gap: 5px; height: 26px;
+  border-radius: 8px; background: rgba(255,255,255,.07); font: 700 10px/1 var(--hr-sans); color: var(--hr-fg-1);
+}
+.gdemo-ph-url em { font-style: normal; color: var(--hr-fg-3); }
+.gdemo-ph-site {
+  flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 8px;
+  padding: 8px; border-radius: 12px; background: var(--hr-bg-0); box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+}
+.gdemo-ph-sitehead { display: flex; align-items: center; gap: 6px; font: 900 10px/1 var(--hr-sans); color: var(--hr-fg-0); }
+.gdemo-ph-sitehead img { width: 16px; height: 16px; border-radius: 4px; display: block; }
+.gdemo-ph-sitenav { display: flex; gap: 4px; flex-wrap: wrap; }
+.gdemo-ph-pill {
+  font: 800 8.5px/1 var(--hr-sans); padding: 5px 8px; border-radius: var(--hr-radius-pill);
+  color: var(--hr-fg-2); background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.06);
+  transition: background .2s, color .2s, transform .15s;
+}
+.gdemo-ph-pill.is-on { background: var(--hr-primary); color: var(--hr-on-primary); border-color: transparent; }
+.gdemo-ph-pill.is-press { transform: scale(.94); }
+.gdemo-ph-view { display: none; flex: 1; min-height: 0; flex-direction: column; gap: 7px; }
+.gdemo-ph[data-scr="site"] .gdemo-ph-view.is-club { display: flex; }
+.gdemo-ph[data-scr="market"] .gdemo-ph-view.is-market,
+.gdemo-ph[data-scr="sheet"] .gdemo-ph-view.is-market,
+.gdemo-ph[data-scr="done"] .gdemo-ph-view.is-market { display: flex; }
+.gdemo-ph-hero { padding: 10px 6px 4px; }
+.gdemo-ph-hero b { display: block; font: 900 13px/1.15 var(--hr-sans); color: var(--hr-fg-0); text-shadow: 0 0 22px rgba(81,255,165,.35); }
+.gdemo-ph-hero span { display: block; margin-top: 5px; font: 700 9px/1.4 var(--hr-sans); color: var(--hr-fg-2); }
+.gdemo-ph-blobs { display: flex; gap: 6px; padding: 2px 4px; }
+.gdemo-ph-blobs .gdemo-art { width: 54px; height: 50px; background: transparent; }
+.gdemo-ph-bar {
+  display: flex; flex-direction: column; gap: 6px; padding: 8px;
+  border-radius: 10px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06);
+}
+.gdemo-ph-bar-msg { font: 700 9px/1.35 var(--hr-sans); color: var(--hr-fg-2); }
+.gdemo-ph-connect {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 28px;
+  border-radius: var(--hr-radius-pill); border: 0; background: var(--hr-primary); color: var(--hr-on-primary);
+  font: 800 9.5px/1 var(--hr-sans); pointer-events: none;
+}
+.gdemo-ph-connect img { width: 14px; height: 14px; display: block; }
+.gdemo-ph-connect.is-press { filter: brightness(.9); transform: translateY(1px); }
+.gdemo-ph-on { display: flex; align-items: center; gap: 6px; font: 700 9.5px/1 var(--hr-sans); color: var(--hr-fg-0); }
+.gdemo-ph-on img { width: 14px; height: 14px; display: block; }
+.gdemo-ph-on code { font: 600 9px/1 ui-monospace, Menlo, monospace; padding: 4px 6px; border-radius: var(--hr-radius-pill); background: rgba(255,255,255,.07); }
+.gdemo-ph-on em { margin-left: auto; font: 800 8px/1 var(--hr-sans); font-style: normal; padding: 4px 7px; border-radius: var(--hr-radius-pill); color: var(--hr-primary); background: rgba(81,255,165,.14); }
+.gdemo-ph-done {
+  display: flex; align-items: center; gap: 6px; padding: 7px 8px; border-radius: 9px;
+  font: 700 8.5px/1.35 var(--hr-sans); color: var(--hr-primary);
+  background: rgba(81,255,165,.08); border: 1px solid rgba(81,255,165,.22);
+}
+.gdemo-ph-done svg { flex: none; }
+.gdemo-ph-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.gdemo-ph-tile {
+  display: flex; flex-direction: column; gap: 3px; padding: 5px; border-radius: 9px;
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06);
+  font: 700 8px/1.2 var(--hr-sans); color: var(--hr-fg-2);
+}
+.gdemo-ph-tile b { color: var(--hr-fg-0); font-size: 8.5px; }
+.gdemo-ph-tile-img, .gdemo-ph-tile .gdemo-art { width: 100%; aspect-ratio: 1; height: auto; object-fit: cover; border-radius: 6px; background: var(--hr-bg-2); display: block; }
+/* MetaMask's connect sheet, sliding up over the site */
+.gdemo-ph-body::after {
+  content: ''; position: absolute; inset: 0; z-index: 2; background: rgba(0,0,0,.5);
+  opacity: 0; transition: opacity .3s; pointer-events: none;
+}
+.gdemo-ph[data-scr="sheet"] .gdemo-ph-body::after { opacity: 1; }
+.gdemo-ph-sheet {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; padding: 8px 14px 14px;
+  display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center;
+  border-radius: 18px 18px 0 0; background: #24262c; box-shadow: 0 -12px 40px rgba(0,0,0,.6);
+  transform: translateY(105%); transition: transform .38s cubic-bezier(.16,.84,.3,1);
+}
+.gdemo-ph[data-scr="sheet"] .gdemo-ph-sheet { transform: none; }
+.gdemo-ph-grab { width: 34px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.2); margin-bottom: 4px; }
+.gdemo-ph-sheet-fox { width: 30px; height: 30px; display: block; }
+.gdemo-ph-sheet b { font: 900 12px/1.2 var(--hr-sans); color: var(--hr-fg-0); }
+.gdemo-ph-sheet-site { font: 700 9.5px/1 var(--hr-sans); color: var(--hr-primary); padding: 4px 8px; border-radius: var(--hr-radius-pill); background: rgba(81,255,165,.1); }
+.gdemo-ph-sheet p { margin: 2px 0 6px; padding: 0; font: 600 9px/1.4 var(--hr-sans); color: var(--hr-fg-2); }
+.gdemo-ph-sheet-btns { display: flex; gap: 6px; width: 100%; }
+.gdemo-ph-sheet-btns span {
+  flex: 1; display: grid; place-items: center; height: 30px; border-radius: var(--hr-radius-pill);
+  font: 800 10px/1 var(--hr-sans); color: var(--hr-fg-1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.16);
+}
+.gdemo-ph-sheet-btns .is-go { color: #fff; background: var(--hr-secondary); box-shadow: none; }
+.gdemo-ph-sheet-btns .is-press { filter: brightness(.85); }
+/* Bottom bar: the app's tabs, or the browser's toolbar once a site is open */
+.gdemo-ph-tabs, .gdemo-ph-tools {
+  flex: none; display: flex; align-items: center; justify-content: space-around;
+  height: 50px; padding: 0 6px; border-top: 1px solid rgba(255,255,255,.07); background: #121317;
+}
+.gdemo-ph-tools { display: none; color: var(--hr-fg-2); }
+.gdemo-ph[data-scr="site"] .gdemo-ph-tabs, .gdemo-ph[data-scr="market"] .gdemo-ph-tabs,
+.gdemo-ph[data-scr="sheet"] .gdemo-ph-tabs, .gdemo-ph[data-scr="done"] .gdemo-ph-tabs { display: none; }
+.gdemo-ph[data-scr="site"] .gdemo-ph-tools, .gdemo-ph[data-scr="market"] .gdemo-ph-tools,
+.gdemo-ph[data-scr="sheet"] .gdemo-ph-tools, .gdemo-ph[data-scr="done"] .gdemo-ph-tools { display: flex; }
+.gdemo-ph-tab {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 44px; padding: 4px 2px;
+  border-radius: 10px; font: 700 8.5px/1 var(--hr-sans); color: var(--hr-fg-3); transition: color .2s, background .15s;
+}
+.gdemo-ph-tab i { display: grid; place-items: center; width: 20px; height: 20px; }
+.gdemo-ph-tab.is-on { color: var(--hr-fg-0); }
+/* Home lights up on the home screen; Explore takes over once its screen is up. */
+.gdemo-ph:not([data-scr="home"]) .gdemo-ph-tab.is-on { color: var(--hr-fg-3); }
+.gdemo-ph[data-scr="explore"] .gdemo-ph-tab[data-gd="phexplore"],
+.gdemo-ph[data-scr="typed"] .gdemo-ph-tab[data-gd="phexplore"] { color: var(--hr-fg-0); }
+.gdemo-ph-tab.is-press { background: rgba(255,255,255,.08); color: var(--hr-fg-0); }
+.gdemo-ph-tabsq { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 4px; box-shadow: inset 0 0 0 1.5px currentColor; font: 800 9px/1 var(--hr-sans); }
+.gdemo-ph-dots { font: 900 12px/1 var(--hr-sans); letter-spacing: -.05em; }
+.gdemo-ph-homebar { flex: none; height: 14px; display: grid; place-items: center; background: #121317; }
+.gdemo-ph-homebar::before { content: ''; width: 70px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.28); }
+@media (prefers-reduced-motion: reduce) {
+  .gdemo-ph-scr, .gdemo-ph-sheet, .gdemo-ph-body::after, .gdemo-ph-pill, .gdemo-ph-tab, .gdemo-ph-search { transition: none; }
 }
 
 /* Step rail — the accessible half of the demo (the stage is decorative). One step
@@ -4992,6 +5295,9 @@ footer { margin-top: 28px; }
 /* Wallet chip — compact, lives at the right edge of the command bar */
 .trade-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; min-width: 0; }
 .trade-bar-msg { font-size: 12.5px; color: var(--hr-fg-2); font-weight: 600; }
+.trade-bar-how { font: 700 12px/1 var(--hr-sans); color: var(--hr-fg-2); text-decoration: underline; text-underline-offset: 3px; }
+.trade-bar-how:hover { color: var(--hr-fg-0); }
+.trade-gate-how { margin: 12px 0 0; }
 .trade-bar.is-connected {
   padding: 6px 8px 6px 10px;
   border: 1px solid var(--hr-line); border-radius: var(--hr-radius-pill);
@@ -9555,6 +9861,9 @@ span.hp-statchip-ico { font-size: 17px; line-height: 22px; text-align: center; c
   body { padding-top: var(--hr-bar-total); }
   /* Tab switches and in-page jumps used to park headings under the bar. */
   html { scroll-padding-top: calc(var(--hr-bar-total) + 12px); }
+  /* The root padding above already clears the fixed bar, so the block's own nav clearance
+     would double up and land it a whole bar lower. */
+  .gm-phone { scroll-margin-top: 0; }
 
   .page-tabs {
     position: fixed; top: 0; left: 0; right: 0;

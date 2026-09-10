@@ -8936,6 +8936,14 @@ const SECTION_CARDS = {
     d: "Sold a Creature? Your ETH lands on Immutable zkEVM, and the Cash out button moves it to Ethereum, the network most exchanges accept. LAND pays in WETH, and one tap unwraps it.",
     img: "/assets/og-guides.png",
   },
+  // Not a step of its own: the Setup step with its "On a phone?" block open. It has a card
+  // because it is the address the club pastes at a member stuck on a phone, and a pasted
+  // address unfurls as whatever card it finds. The client opens the block for this path.
+  "/guides/marketplace/phone": {
+    t: "Marketplace tour: on your phone",
+    d: "Phone browsers can't reach your wallet, so open this site inside the MetaMask app instead: Explore, type hcc.highrise.game, tap the row with the arrow, open the Marketplace, connect. Five taps shown one at a time, plus a one-tap button that does them for you.",
+    img: "/assets/og-guides.png",
+  },
   "/market": {
     t: "Market prices and holders",
     d: "Two views of the market: floor prices with sale history for Creatures and LAND, and Holders for who owns what across every wallet.",

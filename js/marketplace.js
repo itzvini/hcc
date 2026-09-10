@@ -2993,6 +2993,24 @@ function handleGasBridgeNow() {
   return runBridge(gasState?.quote, { kind: 'gas', needWei, fromSym: gasState?.from === 'imx' ? 'IMX' : 'ETH', toSym: 'IMX' });
 }
 
+// No wallet injected. On a computer that means no extension: install one. On a touch screen
+// it almost never does: the member has the MetaMask app and opened this page in Safari or
+// Chrome, where no extension exists to inject anything, so "install MetaMask" sends them in a
+// circle (the club answered exactly this in Discord, tap by tap). Offer the app's own browser
+// instead: the deep link opens this very page inside it, and the guide shows the taps for
+// anyone who'd rather see them first.
+const onTouchScreen = () => window.matchMedia('(pointer: coarse)').matches;
+const mmDeepLink = () => `https://link.metamask.io/dapp/${location.host}${location.pathname}${location.search}`;
+// { msg, act, how }: the notice, the MetaMask-styled action, and (phones only) the guide link.
+function noWalletParts(style = '') {
+  const btn = (href, label, extra = '') => `<a class="trade-mm-btn is-sm" href="${esc(href)}"${extra}${style}>
+        <img class="trade-mm-logo" src="${METAMASK_IMG}" alt="" /><span>${esc(t(label))}</span></a>`;
+  return onTouchScreen()
+    ? { msg: t('trade.bar.phone'), act: btn(mmDeepLink(), 'trade.phone.open'),
+        how: `<a class="trade-bar-how" href="/guides/marketplace/phone">${esc(t('trade.phone.how'))}</a>` }
+    : { msg: t('trade.bar.install'), act: btn('https://metamask.io/download/', 'trade.install.btn', ' target="_blank" rel="noopener"'), how: '' };
+}
+
 function buyAreaHtml(it) {
   if (buyState?.phase === 'done') return buyStatusHtml();
   if (account && it.seller && it.seller.toLowerCase() === account) {
@@ -3001,7 +3019,9 @@ function buyAreaHtml(it) {
   const busyNow = buyState && BUY_BUSY_PHASES.has(buyState.phase);
   let btn;
   if (!eth()) {
-    btn = `<a class="trade-send trade-buy-btn" href="https://metamask.io/download/" target="_blank" rel="noopener">${esc(t('trade.install.btn'))}</a>`;
+    btn = onTouchScreen()
+      ? `<a class="trade-send trade-buy-btn" href="${esc(mmDeepLink())}">${esc(t('trade.phone.open'))}</a>`
+      : `<a class="trade-send trade-buy-btn" href="https://metamask.io/download/" target="_blank" rel="noopener">${esc(t('trade.install.btn'))}</a>`;
   } else if (!account) {
     btn = `<button class="trade-send trade-buy-btn" data-act="connect" type="button">${esc(t('trade.buy.connect'))}</button>`;
   } else if (!onRightChain()) {
@@ -4181,11 +4201,8 @@ function flashBanner() {
 // Compact wallet chip — lives inside the command bar, not a row of its own.
 function walletBarHtml() {
   if (!eth()) {
-    return `<div class="trade-bar">
-      <span class="trade-bar-msg">${esc(t('trade.bar.install'))}</span>
-      <a class="trade-mm-btn is-sm" href="https://metamask.io/download/" target="_blank" rel="noopener">
-        <img class="trade-mm-logo" src="${METAMASK_IMG}" alt="" /><span>${esc(t('trade.install.btn'))}</span></a>
-    </div>`;
+    const nw = noWalletParts();
+    return `<div class="trade-bar"><span class="trade-bar-msg">${esc(nw.msg)}</span>${nw.act}${nw.how}</div>`;
   }
   if (!account) {
     return `<div class="trade-bar">
@@ -6467,11 +6484,12 @@ function tradeTabsHtml() {
 // Wallet gate for the Sell / Transfer tabs (Buy browsing needs no wallet).
 function walletGateHtml() {
   if (!eth()) {
+    const nw = noWalletParts(' style="margin-top:16px"');
     return `<div class="apply-state-box">
       <div class="apply-state-ico is-brand" aria-hidden="true"><img src="${METAMASK_IMG}" alt="" width="46" height="46"></div>
-      <p>${esc(t('trade.bar.install'))}</p>
-      <a class="trade-mm-btn is-sm" href="https://metamask.io/download/" target="_blank" rel="noopener" style="margin-top:16px">
-        <img class="trade-mm-logo" src="${METAMASK_IMG}" alt="" /><span>${esc(t('trade.install.btn'))}</span></a>
+      <p>${esc(nw.msg)}</p>
+      ${nw.act}
+      ${nw.how ? `<p class="trade-gate-how">${nw.how}</p>` : ''}
     </div>`;
   }
   if (!account) {
