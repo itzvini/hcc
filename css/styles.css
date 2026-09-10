@@ -7065,15 +7065,17 @@ a.trade-buy-btn { display: inline-flex; }
 /* Heading + line stacked. is-done was missing here, so its two strings ran together on
    one line ("You're set for gasGo ahead and try again."). */
 .trade-gas-assist.is-busy div,
-.trade-gas-assist.is-done div,
-.trade-gas-assist.is-err div { display: flex; flex-direction: column; gap: 3px; }
+.trade-gas-assist.is-done div { display: flex; flex-direction: column; gap: 3px; }
+/* is-err is deliberately NOT in that list. Its only div is the icon+message row, and
+   stacking it put the warning triangle on a line of its own above the text. */
 .trade-gas-assist.is-done {
   display: flex; gap: 10px; align-items: center;
   border-color: rgba(81,255,165,.5);
 }
 .trade-gas-assist.is-done .trade-gas-assist-ic { background: var(--hr-primary); color: var(--hr-on-primary); }
+/* A column, because a passing failure gets a "Try again" button under the message. */
 .trade-gas-assist.is-err {
-  display: flex; gap: 10px; align-items: flex-start;
+  display: flex; flex-direction: column; gap: 12px; align-items: stretch;
   border-color: rgba(255,141,93,.4); background: rgba(255,141,93,.08);
 }
 .trade-gas-assist.is-err .trade-gas-assist-ic { background: rgba(255,141,93,.18); color: #FF8D5D; }

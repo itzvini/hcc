@@ -520,6 +520,8 @@
   "trade.gas.assist.err.assets": "These Creatures were used for a claim recently, so they're off limits for now.",
   "trade.gas.assist.err.blocked": "We can't send gas to this wallet.",
   "trade.gas.assist.err.generic": "We couldn't cover your gas just now. Here's how to top up yourself.",
+  "trade.gas.assist.err.retry": "That's on us, not you. Your claim is still unused, so give it another go in a moment.",
+  "trade.gas.assist.again": "Try again",
   "trade.gas.assist.signin.h": "We can cover your gas",
   "trade.gas.assist.signin.p": "Sign in and, if you hold a Creature, we'll pay the network fee for you.",
   "trade.gas.assist.signin.btn": "Sign in with Discord",

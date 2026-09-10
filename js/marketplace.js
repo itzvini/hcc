@@ -1951,8 +1951,18 @@ function gasAssistHtml(g) {
     </div>`;
   }
   if (g.assistPhase === 'error') {
+    // A passing failure gets the button back. Without it the card was a dead end for a
+    // member who was still perfectly eligible — the claim is only spent on a send that
+    // actually landed, so there is nothing to protect them from here. The funding options
+    // below stay on screen either way, in case retrying keeps failing.
+    const again = GAS_RETRY_REASONS.has(g.assistErr)
+      ? `<button class="trade-funds-btn is-assist" data-act="gas-assist" type="button">${esc(t('trade.gas.assist.again'))}</button>`
+      : '';
     return `<div class="trade-gas-assist is-err" role="status">
-      <span class="trade-gas-assist-ic" aria-hidden="true">${ico('alert', 17)}</span><span>${esc(assistErrText(g.assistErr))}</span>
+      <div class="trade-gas-assist-head">
+        <span class="trade-gas-assist-ic" aria-hidden="true">${ico('alert', 17)}</span><span>${esc(assistErrText(g.assistErr))}</span>
+      </div>
+      ${again}
     </div>`;
   }
 
@@ -2035,10 +2045,19 @@ function assistSigninWouldHelp(g, a) {
 // One claim per member, ever, checked against three identities. They all mean the same
 // thing to whoever is reading it, so they read the same.
 const GAS_USED_REASONS = new Set(['account_used', 'highrise_used', 'wallet_used']);
+
+// Our fault, and passing: the sanctions oracle unreachable, an RPC read that threw, the
+// float dry, a rate limit. The member still qualifies and their one claim is UNSPENT, so
+// the honest answer is "ask again", not "here's how to buy your own".
+// Telling them to top up themselves is the worst thing we can say to this member: the
+// whole feature exists so nobody spends ~$30 on an on-ramp to unlock $0.0006 of gas, and
+// for days that's exactly where a dead RPC node was sending them. See lib/sanctions.js.
+const GAS_RETRY_REASONS = new Set(['screen_unavailable', 'unavailable', 'send_failed', 'faucet_empty', 'rate_limited']);
 const assistErrKey = reason =>
   GAS_USED_REASONS.has(reason) ? 'trade.gas.assist.err.used'
   : reason === 'assets_used' ? 'trade.gas.assist.err.assets'
   : reason === 'blocked' ? 'trade.gas.assist.err.blocked'
+  : GAS_RETRY_REASONS.has(reason) ? 'trade.gas.assist.err.retry'
   : 'trade.gas.assist.err.generic';
 const assistErrText = reason => t(assistErrKey(reason));
 
