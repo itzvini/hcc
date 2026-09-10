@@ -575,6 +575,15 @@ function fmtCoinUnits(units, coin) {
 let sellState = null;      // {phase, msg?, hash?}: prepare|approve|approveWait|sign|create|done|error
 let cancelBusy = null;     // listingId currently being cancelled
 const SELL_BUSY_PHASES = new Set(['prepare', 'approve', 'approveWait', 'sign', 'create']);
+// The price editor that opens on a live listing. Which listing is open, what's typed in it
+// and how far the replacement has got all live here rather than in the DOM, so a background
+// refresh of "your listings" can repaint the strip without wiping a half-typed price.
+let editSel = null;        // listingId whose editor is open
+let editPrice = '';        // the price typed into it
+let editState = null;      // {phase, msg?}: cancel|list|done|error
+const EDIT_BUSY_PHASES = new Set(['cancel', 'list']);
+const L1_CANCEL_GAS = 55000n;  // one Seaport cancel, with headroom — for the LAND cost line
+let cancelGasWei = null;       // LAND only: last gas price read, so the cost line is current
 
 // A small, reusable copy-to-clipboard chip for long codes people need to lift out
 // whole — a Creature's owner wallet (so they can hunt down a lost creature), its full
@@ -4167,18 +4176,7 @@ async function handleCancelOffer(offerId) {
   if (acceptBusyId) return;
   acceptBusyId = offerId; patchCollStrip();
   try {
-    const prepRes = await fetch('/api/market/creatures/cancel/prepare', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ orderIds: [offerId], accountAddress: account }),
-    });
-    const prep = await prepRes.json().catch(() => ({}));
-    if (!prepRes.ok) throw Object.assign(new Error('prepare'), { friendly: offerServerError(prep.error) });
-    const signature = await signTypedData(prep.typedData);
-    const subRes = await fetch('/api/market/creatures/cancel', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ orderIds: [offerId], accountAddress: account, signature }),
-    });
-    if (!subRes.ok) throw Object.assign(new Error('submit'), { friendly: offerServerError((await subRes.json().catch(() => ({}))).error) });
+    await cancelCreatureOrders([offerId], offerServerError);
     myOffers = (myOffers || []).filter(o => o.offerId !== offerId);
     loadCollOffers({ force: true });
   } catch (err) {
@@ -5873,6 +5871,29 @@ function mergePendingOwned(items) {
   return extra.length ? [...extra, ...items] : items;
 }
 
+// A just-edited price, before the orderbook reports it. Same lag as pendingOwned above,
+// and without this the confirmation and the new price under it blink back to the old figure
+// the moment the first refresh lands. One entry: an edit is a single deliberate act.
+let pendingListing = null;
+const PENDING_LISTING_TTL_MS = 2 * 60 * 1000;
+function notePendingListing(row, replaced) {
+  pendingListing = { coll, account, at: Date.now(), row, replaced: replaced || null };
+}
+function dropPendingListing(listingId) {
+  if (pendingListing && pendingListing.row.listingId === listingId) pendingListing = null;
+}
+function mergePendingListing(items) {
+  const p = pendingListing;
+  if (!p) return items;
+  const indexed = items.some(i => i.listingId === p.row.listingId);
+  if (indexed || Date.now() - p.at > PENDING_LISTING_TTL_MS) { pendingListing = null; return items; }
+  if (p.coll !== coll || p.account !== account) return items;
+  // The order this one replaced can still sit in the feed for a few seconds. Drop that row,
+  // or the strip shows the old price beside the new one as though both were live. `replaced`
+  // is null after a free LAND cut, where the old listing genuinely IS still live.
+  return [p.row, ...items.filter(i => i.listingId !== p.replaced)];
+}
+
 async function loadSellerData() {
   if (!account || sellerLoading) return;
   if (coll === 'creatures' && !onZk()) return; // creature data needs the wallet usable on zkEVM
@@ -5885,14 +5906,14 @@ async function loadSellerData() {
         fetch(`/api/market/land/mine/${account}`).then(r => r.ok ? r.json() : { items: [] }),
       ]);
       owned = mergePendingOwned(o.items || []);
-      mine = m.items || [];
+      mine = mergePendingListing(m.items || []);
     } else {
       const [o, m] = await Promise.all([
         fetch(`/api/market/creatures/owned/${account}`).then(r => r.ok ? r.json() : { items: [] }),
         fetch(`/api/market/creatures/mine/${account}`).then(r => r.ok ? r.json() : { items: [] }),
       ]);
       owned = mergePendingOwned(o.items || []);
-      mine = m.items || [];
+      mine = mergePendingListing(m.items || []);
     }
   } catch (err) {
     console.error('Seller data failed:', err);
@@ -5940,26 +5961,193 @@ function sellStatusHtml() {
   return `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t(skey(STEP_KEY[sellState.phase])))}</span></div>`;
 }
 
+// One token can carry several active listings at once. OpenSea allows it, and a free LAND
+// price cut (see handleEditPrice) deliberately leaves the old one behind. Buyers are only
+// ever shown a token's cheapest listing, so that one is what the seller is really working
+// with; the dearer ones are already invisible and expire on their own. Group by token:
+// cheapest on the card, the rest folded underneath so they're never a surprise.
+const listingAmt = l => (l.priceAmt != null ? l.priceAmt : l.priceEth);
+function cheaperListing(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  // Same currency: the smaller amount wins. Across currencies (a token listed in both ETH
+  // and USDC, which is rare) prefer ETH, so this picks the same row the browse feed's own
+  // dedupe picks and the seller sees the price buyers see.
+  if (a.currency === b.currency) return listingAmt(b) < listingAmt(a) ? b : a;
+  return a.currency === 'eth' ? a : b;
+}
+function listingGroups() {
+  const groups = new Map();
+  for (const l of (mine || [])) {
+    const key = String(l.tokenId);
+    const g = groups.get(key);
+    if (!g) { groups.set(key, { live: l, older: [] }); continue; }
+    const live = cheaperListing(g.live, l);
+    g.older.push(live === g.live ? l : g.live);
+    g.live = live;
+  }
+  return [...groups.values()];
+}
+
 function myListingsHtml() {
   if (!mine || !mine.length) return '';
   return `
     <div class="trade-mine" id="trade-mine">
       <h4 class="trade-form-h">${esc(t('trade.mine.h'))}</h4>
       <div class="trade-mine-row">
-        ${mine.map(l => `
-          <div class="trade-mine-card">
-            ${coll === 'land' && petUrl(l)
-              ? `<img src="${esc(petUrl(l))}" ${l.image ? `data-fallback="${esc(l.image)}"` : ''} alt="" loading="lazy" />`
-              : (l.image ? `<img src="${esc(l.image)}" alt="" loading="lazy" />` : `<div class="trade-tile-noimg" aria-hidden="true">${ico('paw', 28)}</div>`)}
-            <div class="trade-mine-info">
-              <span class="trade-mine-name">${esc(l.name)}</span>
-              <span class="trade-mine-price">${esc(l.currency ? fmtListingLine(l) : fmtEthFiat(l.priceEth))}</span>
-            </div>
-            <button class="trade-mine-cancel" data-act="cancel-listing" data-listing="${esc(l.listingId)}" type="button"
-              ${cancelBusy ? 'disabled' : ''}>${esc(cancelBusy === l.listingId ? t('trade.mine.cancelling') : t('trade.mine.cancel'))}</button>
-          </div>`).join('')}
+        ${listingGroups().map(mineCardHtml).join('')}
       </div>
     </div>`;
+}
+
+function mineCardHtml({ live: l, older }) {
+  const editing = editSel === l.listingId;
+  return `
+    <div class="trade-mine-item ${editing ? 'is-editing' : ''}">
+      <div class="trade-mine-card">
+        ${coll === 'land' && petUrl(l)
+          ? `<img src="${esc(petUrl(l))}" ${l.image ? `data-fallback="${esc(l.image)}"` : ''} alt="" loading="lazy" />`
+          : (l.image ? `<img src="${esc(l.image)}" alt="" loading="lazy" />` : `<div class="trade-tile-noimg" aria-hidden="true">${ico('paw', 28)}</div>`)}
+        <div class="trade-mine-info">
+          <span class="trade-mine-name">${esc(l.name)}</span>
+          <span class="trade-mine-price">${esc(l.currency ? fmtListingLine(l) : fmtEthFiat(l.priceEth))}</span>
+        </div>
+        <div class="trade-mine-acts">
+          <button class="trade-mine-edit ${editing ? 'is-on' : ''}" data-act="edit-listing" data-listing="${esc(l.listingId)}"
+            type="button" aria-expanded="${editing}" ${cancelBusy ? 'disabled' : ''}>${esc(t('trade.mine.edit'))}</button>
+          <button class="trade-mine-cancel" data-act="cancel-listing" data-listing="${esc(l.listingId)}" type="button"
+            ${cancelBusy ? 'disabled' : ''}>${esc(cancelBusy === l.listingId ? t('trade.mine.cancelling') : t('trade.mine.cancel'))}</button>
+        </div>
+      </div>
+      ${editing ? mineEditHtml(l) : ''}
+      ${older.map(mineOlderHtml).join('')}
+    </div>`;
+}
+
+// A dearer listing a free price cut left standing. Buyers don't see it, but it is still
+// signed and still live, so say so plainly and offer the paid way to kill it early.
+function mineOlderHtml(o) {
+  const price = o.currency ? fmtListingAmt(o) : fmtEth(o.priceEth);
+  return `
+    <p class="trade-mine-older">
+      <span>${esc(t('trade.mine.older').replace('{price}', price))}</span>
+      <button class="trade-mine-older-x" data-act="cancel-listing" data-listing="${esc(o.listingId)}" type="button"
+        ${cancelBusy ? 'disabled' : ''}>${esc(cancelBusy === o.listingId ? t('trade.mine.cancelling') : t('trade.mine.olderCancel'))}</button>
+    </p>`;
+}
+
+// The editor itself: one box in the listing's own currency, and a line that says what the
+// change will cost BEFORE the wallet opens. A price is only ever a signed order, so an
+// edit replaces one — handleEditPrice explains which of those replacements cost anything.
+function mineEditHtml(l) {
+  const busy = editState && EDIT_BUSY_PHASES.has(editState.phase);
+  const cur = l.currency === 'usdc' ? 'usdc' : 'eth';
+  return `
+    <form class="trade-mine-form" id="trade-mine-edit" data-writes novalidate>
+      <label class="trade-field"><span>${esc(t('trade.mine.edit.h'))}</span>
+        <div class="trade-price-row">
+          <input id="trade-mine-price" type="text" inputmode="decimal" autocomplete="off"
+            value="${esc(editPrice)}" aria-label="${esc(t('trade.mine.edit.h'))}" />
+          <span class="trade-price-unit trade-cur-fixed">${esc(CUR_SYM[cur])}</span>
+        </div>
+        <span class="trade-price-conv" id="trade-mine-conv">${esc(cur === 'usdc' ? '' : unitConvHtml(editPrice, 'eth'))}</span></label>
+      ${coll === 'land' ? landSellDurationHtml('trade-mine-duration') : ''}
+      <p class="trade-mine-note" id="trade-mine-note">${mineEditNoteHtml(l)}</p>
+      <div class="trade-mine-form-btns">
+        <button class="trade-send trade-mine-save" type="submit" ${busy ? 'disabled' : ''}>
+          ${esc(t(busy ? 'trade.mine.edit.saving' : 'trade.mine.edit.save'))}</button>
+        <button class="trade-mine-close" type="button" data-act="edit-close">${esc(t('trade.mine.edit.close'))}</button>
+      </div>
+      <div id="trade-mine-status" role="status" aria-live="polite">${mineEditStatusHtml()}</div>
+    </form>`;
+}
+
+// LAND only: is the new price low enough to need no cancel? The cost line and the action
+// must never disagree about this — one saying "free" while the other charges for gas is the
+// exact surprise this whole feature exists to remove.
+function landCutOnly(l, pay) {
+  const now = listingAmt(l);
+  return coll === 'land' && pay.ok && now != null && pay.amount < now && (l.currency || 'eth') === pay.currency;
+}
+
+// Is this edit free? On Creatures, always. On LAND it depends on the order: one OpenSea's
+// SignedZone stands behind cancels for nothing in either direction (`freeCancel`, set from
+// the order's own zone in lib/land-market.js), and any other order is free only downwards,
+// where no cancel is needed at all.
+function editIsFree(l, pay) {
+  if (coll !== 'land') return true;
+  return !!l.freeCancel || landCutOnly(l, pay);
+}
+
+// What this edit costs, in advance. Creatures: nothing, ever. LAND: a cut is free, and a
+// rise pays for the cancel it needs, quoted at the live gas price rather than left as a
+// shrug — that charge arriving unannounced in MetaMask is what started this.
+function mineEditNoteHtml(l) {
+  if (coll !== 'land') return `<span class="trade-mine-note-free">${esc(t('trade.mine.edit.free'))}</span>`;
+  const pay = editPricePayload(editPrice, l.currency);
+  const now = listingAmt(l);
+  // No new price yet (the box opens on the current one): state the rule rather than quote a
+  // cost. Warning about gas for a change that isn't one is how a just-finished price cut
+  // ended up wearing a cost warning.
+  if (!pay.ok || now == null || Math.abs(pay.amount - now) < 1e-9) {
+    return `<span class="trade-mine-note-${l.freeCancel ? 'free' : 'hint'}">${esc(t(l.freeCancel ? 'trade.mine.edit.free' : 'trade.mine.edit.hint.land'))}</span>`;
+  }
+  if (l.freeCancel) {
+    return `<span class="trade-mine-note-free">${esc(t('trade.mine.edit.free'))}</span>`;
+  }
+  if (landCutOnly(l, pay)) {
+    return `<span class="trade-mine-note-free">${esc(t('trade.mine.edit.free.land'))}</span>`;
+  }
+  const cost = cancelGasWei == null ? '' : fmtFiat(Number(L1_CANCEL_GAS * cancelGasWei) / 1e18);
+  return `<span class="trade-mine-note-gas">${esc(cost
+    ? t('trade.mine.edit.gas.landCost').replace('{cost}', cost)
+    : t('trade.mine.edit.gas.land'))}</span>`;
+}
+
+function mineEditStatusHtml() {
+  if (!editState) return '';
+  if (editState.phase === 'error') {
+    return `<div class="trade-status is-error"><span aria-hidden="true">${ico('alert', 17)}</span><span>${esc(editState.msg)}</span></div>`;
+  }
+  if (editState.phase === 'done') {
+    return `<div class="trade-status is-ok"><span aria-hidden="true">${ico('check', 17)}</span><span>${esc(t('trade.mine.edit.done'))}</span></div>`;
+  }
+  const KEY = { cancel: 'trade.mine.edit.step.cancel', list: 'trade.mine.edit.step.list' };
+  return `<div class="trade-status is-info"><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t(KEY[editState.phase] || 'trade.mine.edit.step.list'))}</span></div>`;
+}
+
+// Repaint just the listings strip: opening an editor must not rebuild the sell form and
+// throw away a price already typed there. outerHTML, so the strip disappears with its
+// last listing; when there's no strip yet the whole view has to come back anyway.
+function patchMineStrip() {
+  if (tradeTab !== 'sell') return;
+  const el = root()?.querySelector('#trade-mine');
+  if (el) el.outerHTML = myListingsHtml();
+  else patchSellView();
+  applyTradingPause();
+}
+// The cost line, the fiat equivalence and the status, without touching the input the
+// seller is typing into.
+function patchMineNote() {
+  const l = (mine || []).find(x => x.listingId === editSel);
+  if (!l) return;
+  const note = root()?.querySelector('#trade-mine-note');
+  if (note) note.innerHTML = mineEditNoteHtml(l);
+  const conv = root()?.querySelector('#trade-mine-conv');
+  if (conv) conv.textContent = l.currency === 'usdc' ? '' : unitConvHtml(editPrice, 'eth');
+  const st = root()?.querySelector('#trade-mine-status');
+  if (st) st.innerHTML = mineEditStatusHtml();
+}
+function setEdit(phase, extra) {
+  editState = { phase, ...extra };
+  const st = root()?.querySelector('#trade-mine-status');
+  if (st) st.innerHTML = mineEditStatusHtml();
+  const btn = root()?.querySelector('#trade-mine-edit .trade-mine-save');
+  if (btn) {
+    const busy = EDIT_BUSY_PHASES.has(phase);
+    btn.disabled = busy;
+    btn.textContent = t(busy ? 'trade.mine.edit.saving' : 'trade.mine.edit.save');
+  }
 }
 
 // --- Listing history (Creatures-only) -------------------------------------------------
@@ -7572,9 +7760,9 @@ function patchMassStatus() {
 
 // LAND listing length (Seaport startTime→endTime). A short expiry means abandoned test
 // listings self-clear; the seller can still cancel early on-chain via "My listings".
-function landSellDurationHtml() {
+function landSellDurationHtml(id = 'trade-sell-duration') {
   return `<label class="trade-field"><span>${esc(t('trade.sell.duration'))}</span>
-    <select id="trade-sell-duration">
+    <select id="${esc(id)}">
       ${[1, 3, 7, 14, 30].map(d => `<option value="${d}" ${d === 7 ? 'selected' : ''}>${esc(t('trade.sell.days').replace('{n}', String(d)))}</option>`).join('')}
     </select></label>`;
 }
@@ -8144,6 +8332,8 @@ function sellServerError(code) {
     insufficient: 'trade.err.notOwner', bad_price: 'trade.err.badPrice',
     bad_token: 'trade.err.badId', rate_limited: 'trade.err.rate',
     not_owner: 'trade.err.notOwner', not_found: 'trade.err.notOwner',
+    // The order moved under us: filled, expired or already withdrawn.
+    not_active: 'trade.err.gone',
     disabled: 'trade.err.sellDisabled', blocked_account: 'trade.err.osBlocked',
     currency_unsupported: 'trade.err.curUnsupported',
   };
@@ -8320,6 +8510,7 @@ async function listOne(tokenId, currency, price, durationDays) {
   });
   const created = await createRes.json().catch(() => ({}));
   if (!createRes.ok) throw Object.assign(new Error(sellServerError(created.error)), { friendly: sellServerError(created.error) });
+  return created.listingId || created.orderHash || null; // the new order, for callers that track it
 }
 
 async function handleMassSell() {
@@ -8354,29 +8545,94 @@ async function handleMassSell() {
   patchSellSide(); // reflect the shrunken selection; the summary survives (massState persists)
 }
 
+// --- Cancelling an order (shared by the Cancel buttons and the price editor) ------------
+// Creatures cancel for nothing: the seller signs Immutable's cancellation payload and no
+// transaction is ever sent. Throws with `.friendly`; returns the orderbook's own verdict,
+// which can report an order as failed without failing the request.
+async function cancelCreatureOrders(orderIds, errFor = sellServerError) {
+  const prepRes = await fetch('/api/market/creatures/cancel/prepare', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ orderIds, accountAddress: account }),
+  });
+  const prep = await prepRes.json().catch(() => ({}));
+  if (!prepRes.ok) throw Object.assign(new Error('prepare'), { friendly: errFor(prep.error) });
+
+  const signature = await signTypedData(prep.typedData);
+
+  const subRes = await fetch('/api/market/creatures/cancel', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ orderIds, accountAddress: account, signature }),
+  });
+  const sub = await subRes.json().catch(() => ({}));
+  if (!subRes.ok) throw Object.assign(new Error('submit'), { friendly: errFor(sub.error) });
+  return sub;             // { cancelled, pending, failed }
+}
+
+// Withdrawing a LAND order has two routes and the ORDER picks which, not us. Behind
+// OpenSea's SignedZone (every LAND offer, and any listing that ever carries it) a signature
+// is binding, so the cancellation is free. Otherwise it takes an on-chain Seaport cancel and
+// its mainnet gas — the only thing that truly kills an open order, since an off-chain hide
+// would de-index it while the signature stayed fillable straight on Seaport.
+//
+// If the free route is refused for a signature reason, fall back to the paid one rather than
+// leave a member unable to withdraw. That is announced first: gas arriving unannounced is
+// the whole complaint this work came from. Works for a listing or an offer, same mechanism.
+// Throws `.friendly`.
+async function cancelLandOrder(orderHash, errFor = sellServerError, mode) {
+  const prep = await prepareLandCancel(orderHash, errFor, mode);
+
+  if (prep.mode === 'offchain' && prep.typedData) {
+    const signature = await signTypedData(prep.typedData);
+    const subRes = await fetch('/api/market/land/cancel', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ orderHash, accountAddress: account, signature, protocolAddress: prep.protocolAddress }),
+    });
+    if (subRes.ok) return;
+    const sub = await subRes.json().catch(() => ({}));
+    // Anything but a rejected signature is a real answer: the order is already gone, or
+    // OpenSea is down. Only "they wouldn't take this signature" is worth paying to get past.
+    if (sub.error !== 'bad_signature' && sub.error !== 'onchain_only') {
+      throw Object.assign(new Error('submit'), { friendly: errFor(sub.error) });
+    }
+    // Paint it now, not on the next repaint that happens to come along: patchSellView
+    // doesn't draw the flash banner, so without this render the member would meet the gas
+    // in MetaMask with no warning — the exact thing this feature exists to stop.
+    setPendingFlash(t('trade.err.cancelPaid'));
+    render();
+    return cancelLandOrder(orderHash, errFor, 'onchain');
+  }
+
+  await switchToChain('0x1');
+  for (const tx of (prep.transactions || [])) {
+    const hash = await eth().request({
+      method: 'eth_sendTransaction',
+      params: [{ from: account, to: tx.to, data: tx.data, value: tx.value && tx.value !== '0x0' ? tx.value : undefined }],
+    });
+    const receipt = await waitForReceipt(hash);
+    if (!receipt || receipt.status !== '0x1') throw Object.assign(new Error('tx'), { friendly: t('trade.err.txFailed') });
+  }
+}
+
+async function prepareLandCancel(orderHash, errFor, mode) {
+  const res = await fetch('/api/market/land/cancel/prepare', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ orderHash, accountAddress: account, ...(mode ? { mode } : {}) }),
+  });
+  const prep = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error('prepare'), { friendly: errFor(prep.error) });
+  return prep;
+}
+
 async function handleCancelListing(listingId) {
   if (cancelBusy) return;
   if (coll === 'land') return handleCancelLandListing(listingId);
   cancelBusy = listingId; patchSellView();
   try {
-    const prepRes = await fetch('/api/market/creatures/cancel/prepare', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ orderIds: [listingId], accountAddress: account }),
-    });
-    const prep = await prepRes.json().catch(() => ({}));
-    if (!prepRes.ok) throw Object.assign(new Error('prepare'), { friendly: sellServerError(prep.error) });
-
-    const signature = await signTypedData(prep.typedData);
-
-    const subRes = await fetch('/api/market/creatures/cancel', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ orderIds: [listingId], accountAddress: account, signature }),
-    });
-    const sub = await subRes.json().catch(() => ({}));
-    if (!subRes.ok) throw Object.assign(new Error('submit'), { friendly: sellServerError(sub.error) });
-
+    await cancelCreatureOrders([listingId]);
+    dropPendingListing(listingId);
     mine = (mine || []).filter(l => l.listingId !== listingId);
-    refreshAfterTx(); // listing gone + token sellable again — refresh + retry as the orderbook indexes
+    if (editSel === listingId) { editSel = null; editPrice = ''; editState = null; }
+    refreshAfterTx();      // listing gone + token sellable again — refresh + retry as the orderbook indexes
   } catch (err) {
     console.error('Cancel failed:', err);
     setPendingFlash(err.friendly || friendlyError(err));
@@ -8386,29 +8642,145 @@ async function handleCancelListing(listingId) {
   }
 }
 
-// Cancel a LAND listing on-chain (Seaport cancel). Costs a little mainnet gas, but it
-// truly invalidates the order — an off-chain hide would leave the signature fillable.
+// --- Changing a live listing's price ----------------------------------------------------
+// A price IS the signed order, so there is no such thing as editing one in place: an edit
+// replaces the order, and the only question is what the replacement costs.
+//   • Creatures: the old order dies with a signature, so an edit is always free. Two
+//     wallet prompts, no gas, and the seller never has to hunt the Creature down again.
+//   • LAND: killing an order costs mainnet gas. But a CHEAPER order needs no killing —
+//     buyers are only ever shown a token's lowest listing (listListings dedupes to it), so
+//     the dearer one is already invisible and expires on its own. A price cut therefore
+//     costs nothing, and only a rise pays for the cancel it genuinely needs.
+const editDuration = () => Number(root()?.querySelector('#trade-mine-duration')?.value) || 7;
+
+// Resolve the typed price into what the sell endpoints expect, in the LISTING's own
+// currency — not the sell form's picker. USDC is dollars; ETH is entered as ETH here (the
+// row is too tight for the unit selector), so it needs no rate to be valid.
+function editPricePayload(raw, currency) {
+  if (currency === 'usdc') {
+    const s = String(raw || '').trim().replace(',', '.');
+    if (!/^\d{1,9}(\.\d{1,6})?$/.test(s) || !(parseFloat(s) > 0)) return { ok: false, msg: t('trade.err.badPrice') };
+    return { ok: true, currency: 'usdc', price: s, amount: parseFloat(s) };
+  }
+  const conv = unitPriceToEth(raw, 'eth');
+  return conv.ok ? { ok: true, currency: 'eth', price: conv.eth, amount: parseFloat(conv.eth) } : conv;
+}
+
+function openPriceEditor(listingId) {
+  if (editSel === listingId) return closePriceEditor();  // the button toggles
+  const l = (mine || []).find(x => x.listingId === listingId);
+  if (!l) return patchSellView();                        // it sold or expired under us
+  editSel = listingId;
+  editState = null;
+  editPrice = String(listingAmt(l) ?? '');
+  patchMineStrip();
+  refreshCancelGas();
+  const input = root()?.querySelector('#trade-mine-price');
+  if (input) { input.focus(); input.select(); }
+}
+function closePriceEditor() {
+  editSel = null; editPrice = ''; editState = null;
+  patchMineStrip();
+}
+// What a LAND cancel costs at the current base fee, for the editor's cost line. Read once
+// per opening; the seller hub only shows on the collection's own chain, so this is always
+// Ethereum's gas price when it matters.
+let cancelGasAt = 0;
+function refreshCancelGas() {
+  if (coll !== 'land' || !account || !eth()) return;
+  if (Date.now() - cancelGasAt < 60000) return;  // "right now" only has to be a minute fresh
+  cancelGasAt = Date.now();
+  readGasPrice().then(wei => {
+    if (wei == null || coll !== 'land' || !editSel) return;
+    cancelGasWei = wei;
+    patchMineNote();
+  });
+}
+
+// The just-listed row, before any indexer has seen it: the old row with the new id and the
+// new money on it. fmtListingLine reads totalAmt/priceUsd/totalEth, so all three are set.
+function priceEdited(l, listingId, pay) {
+  const isEth = pay.currency === 'eth';
+  return {
+    ...l,
+    listingId,
+    currency: pay.currency,
+    priceAmt: pay.amount, totalAmt: pay.amount,
+    priceEth: isEth ? pay.amount : null,
+    totalEth: isEth ? pay.amount : null,
+    priceUsd: isEth ? (ethUsd != null ? pay.amount * ethUsd : null) : pay.amount,
+  };
+}
+
+async function handleEditPrice() {
+  if (editState && EDIT_BUSY_PHASES.has(editState.phase)) return;
+  const l = (mine || []).find(x => x.listingId === editSel);
+  if (!l) return closePriceEditor();
+  const pay = editPricePayload(editPrice, l.currency);
+  if (!pay.ok) return setEdit('error', { msg: pay.msg });
+  const now = listingAmt(l);
+  if (now != null && Math.abs(pay.amount - now) < 1e-9) return setEdit('error', { msg: t('trade.mine.edit.same') });
+
+  // A cut on LAND skips the cancel entirely (see the note above this function), on the same
+  // test the cost line showed the seller. But when the cancel is free there is nothing to
+  // dodge: cancel properly and leave no second order behind.
+  const skipCancel = landCutOnly(l, pay) && !l.freeCancel;
+  let cancelled = false;
+  try {
+    if (!skipCancel) {
+      setEdit('cancel');
+      if (coll === 'land') await cancelLandOrder(l.listingId);
+      else {
+        // The orderbook can refuse ONE order without failing the request, and reports it
+        // either as a bare id or as a {order, reason} row. Miss that and we would list a
+        // second, cheaper order while the old one is still fillable.
+        const res = await cancelCreatureOrders([l.listingId]);
+        const failed = (res.failed || []).map(f => String(f?.order ?? f?.order_id ?? f?.id ?? f).toLowerCase());
+        if (failed.includes(String(l.listingId).toLowerCase())) return setEdit('error', { msg: t('trade.mine.edit.err.cancel') });
+      }
+      cancelled = true;
+      mine = (mine || []).filter(x => x.listingId !== l.listingId);
+    }
+    setEdit('list');
+    const newId = await listOne(String(l.tokenId), pay.currency, pay.price, editDuration());
+    // Show the new price straight away and hold it there through the refreshes below: the
+    // orderbook takes a few seconds to report it, and the editor (with its confirmation)
+    // lives on the row. Only a cancel replaces a row; a free LAND cut leaves the old
+    // listing genuinely live, so it stays in the strip as the older row it now is.
+    const row = priceEdited(l, newId || l.listingId, pay);
+    notePendingListing(row, cancelled ? l.listingId : null);
+    mine = mergePendingListing((mine || []).filter(x => x.listingId !== row.listingId));
+    editSel = row.listingId;
+    editPrice = pay.price;  // the box now shows the price that is actually live
+    setEdit('done');
+    patchMineStrip();
+    refreshAfterTx();       // the real row, the browse grid and the picker, with retries
+  } catch (err) {
+    console.error('Edit price failed:', err);
+    // The old listing is gone and the new one never got signed: the item is off the market
+    // right now, which the seller has to be told outright rather than left to discover.
+    // Said in the banner, not in the editor — the editor is about to close with the row it
+    // was pointed at, and this is the one message that must not go with it.
+    if (cancelled) {
+      editSel = null; editPrice = ''; editState = null;
+      setPendingFlash(t('trade.mine.edit.err.unlisted'));
+      render();
+      refreshAfterTx();
+      return;
+    }
+    setEdit('error', { msg: err.gas ? t('trade.err.gas') : (err.friendly || friendlyError(err)) });
+  }
+}
+
+// Cancel a LAND listing on-chain. Costs a little mainnet gas, and says so in the editor
+// before the wallet opens (mineEditNoteHtml).
 async function handleCancelLandListing(orderHash) {
   cancelBusy = orderHash; patchSellView();
   try {
-    const prepRes = await fetch('/api/market/land/cancel/prepare', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ orderHash, accountAddress: account }),
-    });
-    const prep = await prepRes.json().catch(() => ({}));
-    if (!prepRes.ok) throw Object.assign(new Error('prepare'), { friendly: sellServerError(prep.error) });
-
-    await switchToChain('0x1');
-    for (const tx of (prep.transactions || [])) {
-      const hash = await eth().request({
-        method: 'eth_sendTransaction',
-        params: [{ from: account, to: tx.to, data: tx.data, value: tx.value && tx.value !== '0x0' ? tx.value : undefined }],
-      });
-      const receipt = await waitForReceipt(hash);
-      if (!receipt || receipt.status !== '0x1') throw Object.assign(new Error('tx'), { friendly: t('trade.err.txFailed') });
-    }
-
+    await cancelLandOrder(orderHash);
+    dropPendingListing(orderHash);
     mine = (mine || []).filter(l => l.listingId !== orderHash);
+    if (editSel === orderHash) { editSel = null; editPrice = ''; editState = null; }
     refreshAfterTx(); // listing gone + parcel sellable again — refresh + retry as OpenSea de-indexes
   } catch (err) {
     console.error('LAND cancel failed:', err);
@@ -8425,22 +8797,8 @@ async function handleCancelLandOffer(orderHash) {
   if (cancelBusy) return;
   cancelBusy = orderHash; patchLandOfferStrip();
   try {
-    const prepRes = await fetch('/api/market/land/cancel/prepare', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ orderHash, accountAddress: account }),
-    });
-    const prep = await prepRes.json().catch(() => ({}));
-    if (!prepRes.ok) {
-      const CK = { not_found: 'trade.err.offerGone', not_active: 'trade.err.offerGone', rate_limited: 'trade.err.rate' };
-      throw Object.assign(new Error('prepare'), { friendly: t(CK[prep.error] || 'trade.err.generic') });
-    }
-
-    await switchToChain('0x1');
-    for (const tx of (prep.transactions || [])) {
-      const hash = await eth().request({ method: 'eth_sendTransaction', params: [{ from: account, to: tx.to, data: tx.data, value: tx.value && tx.value !== '0x0' ? tx.value : undefined }] });
-      const receipt = await waitForReceipt(hash);
-      if (!receipt || receipt.status !== '0x1') throw Object.assign(new Error('tx'), { friendly: t('trade.err.txFailed') });
-    }
+    const CK = { not_found: 'trade.err.offerGone', not_active: 'trade.err.offerGone', rate_limited: 'trade.err.rate' };
+    await cancelLandOrder(orderHash, code => t(CK[code] || 'trade.err.generic'));
     landMyOffers = (landMyOffers || []).filter(o => o.offerId !== orderHash);
     loadLandCollOffers();
   } catch (err) {
@@ -8787,6 +9145,7 @@ async function copyValue(btn) {
 const WRITE_ACTS = new Set([
   'buy', 'cancel-listing', 'accept-offer', 'accept-confirm',
   'instant-sell', 'land-instant-sell', 'cancel-offer', 'cancel-land-offer',
+  'edit-listing',
 ]);
 
 function onClick(e) {
@@ -8912,6 +9271,8 @@ function onClick(e) {
     case 'hp-link':        return linkConnectedWallet();
     case 'hp-unlink':      return unlinkProfileWallet(target.dataset.wallet);
     case 'cancel-listing': return handleCancelListing(target.dataset.listing);
+    case 'edit-listing':   return openPriceEditor(target.dataset.listing);
+    case 'edit-close':     return closePriceEditor();
     case 'dash-refresh': {
       if (recvLoading && historyLoading) return;
       recvOffers = null; recvMeta = null; recvError = false;
@@ -9101,6 +9462,7 @@ function onSubmit(e) {
   if (e.target?.id === 'trade-transfer-form') { e.preventDefault(); (xferMode === 'coin' ? handleCoinSend : handleMassTransfer)(e.target); }
   if (e.target?.id === 'trade-sell-form')      { e.preventDefault(); handleSell(e.target); }
   if (e.target?.id === 'trade-mass-sell-form') { e.preventDefault(); handleMassSell(); }
+  if (e.target?.id === 'trade-mine-edit')      { e.preventDefault(); handleEditPrice(); }
   if (e.target?.id === 'trade-offer-form') {
     e.preventDefault();
     handleMakeOffer(e.target.dataset.token, e.target.querySelector('#trade-offer-price')?.value, 'modal');
@@ -9209,6 +9571,15 @@ function onInput(e) {
     if (net) net.innerHTML = landSellNetHtml(sellEthFromInput(e.target.value));
     return;
   }
+  // The price editor on a live listing: keep the typed value in state (a background
+  // refresh of the strip repaints this input) and refresh only the cost line beside it.
+  if (e.target?.id === 'trade-mine-price') {
+    editPrice = e.target.value;
+    if (editState && !EDIT_BUSY_PHASES.has(editState.phase)) editState = null; // a new price drops the last result
+    refreshCancelGas();  // no-op unless the quote has gone stale
+    patchMineNote();
+    return;
+  }
   // Per-item price on a mass-list row: store it and refresh only the running total + button
   // (never the inputs — focus/caret survive typing).
   if (e.target?.classList?.contains('trade-mass-price-in')) {
@@ -9253,6 +9624,7 @@ function onInput(e) {
 }
 function resetSellerState() {
   owned = null; mine = null; sellSel = null; sellState = null; cancelBusy = null;
+  editSel = null; editPrice = ''; editState = null; cancelGasWei = null; cancelGasAt = 0; pendingListing = null; // per-wallet
   sellSet.clear(); transferSet.clear(); sellPrices.clear(); massState = null; // drop any selection/batch
   sellCurrency = 'eth'; // the only currency LAND can list in, and a clean default per collection
   offerCurrency = 'eth'; // ditto for offers, so a USDC pick on Creatures can't leak onto LAND

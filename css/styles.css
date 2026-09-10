@@ -6122,6 +6122,79 @@ body.trade-sheet-open { overflow: hidden; }
 .trade-mine-cancel:hover { background: var(--hr-alert-15); }
 .trade-mine-cancel[disabled] { opacity: .55; cursor: not-allowed; }
 
+/* Each entry in the strip is a column: the card, the price editor it opens, and a note for
+   any dearer listing still standing under it. Cards keep their own height so opening one
+   editor doesn't stretch its neighbours. */
+.trade-mine-row { align-items: flex-start; }
+/* A fixed width, not a min: the editor below the card has no intrinsic width of its own,
+   so a content-sized item collapsed to the card's minimum and ellipsized the name to
+   "Highrise LAND ..." with the price wrapped under it. */
+.trade-mine-item { flex: 0 0 auto; width: 320px; display: flex; flex-direction: column; gap: 8px; }
+.trade-mine-item .trade-mine-card { width: 100%; min-width: 0; box-sizing: border-box; flex-wrap: wrap; row-gap: 10px; }
+.trade-mine-item .trade-mine-info { flex: 1 1 auto; }
+.trade-mine-item .trade-mine-price { white-space: nowrap; }
+.trade-mine-item.is-editing .trade-mine-card { border-color: var(--hr-primary-25); }
+/* The two actions take a row of their own. Beside the name they left it about 70px, which
+   ellipsized every listing to "Highrise LAND #..." — and the name is the point of the card. */
+.trade-mine-acts { flex: 0 0 100%; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.trade-mine-acts .trade-mine-cancel { margin-left: 0; }
+.trade-mine-edit {
+  flex: 0 0 auto; cursor: pointer;
+  padding: 7px 13px; border-radius: var(--hr-radius-pill);
+  font-family: var(--hr-sans); font-size: 12px; font-weight: 700;
+  background: transparent; color: var(--hr-primary); border: 1px solid var(--hr-primary-25);
+  transition: background .15s, border-color .15s;
+}
+.trade-mine-edit:hover { background: rgba(81,255,165,.12); }
+.trade-mine-edit.is-on { background: rgba(81,255,165,.12); border-color: var(--hr-primary); }
+.trade-mine-edit[disabled] { opacity: .55; cursor: not-allowed; }
+
+/* The editor itself: a frosted panel that drops out of the card it belongs to. */
+.trade-mine-form {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px; border-radius: var(--hr-radius-lg);
+  background: rgba(255,255,255,.04); border: 1px solid var(--hr-line);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 10px 24px rgba(0,0,0,.28);
+  animation: mineEditIn .22s cubic-bezier(.2,.7,.2,1) both;
+}
+.trade-mine-form .trade-field { margin-bottom: 0; }
+.trade-mine-form .trade-status { margin-top: 0; }
+.trade-mine-note { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--hr-fg-2); }
+.trade-mine-note-free { color: var(--hr-primary); font-weight: 700; }
+.trade-mine-note-gas { color: var(--hr-accent); }
+.trade-mine-note-hint { color: var(--hr-fg-3); }
+.trade-mine-form-btns { display: flex; align-items: center; gap: 8px; }
+.trade-mine-form-btns .trade-send { margin-top: 0; padding: 11px 18px; font-size: 13.5px; }
+.trade-mine-close {
+  flex: 0 0 auto; cursor: pointer;
+  padding: 11px 16px; border-radius: var(--hr-radius-pill);
+  font-family: var(--hr-sans); font-size: 12.5px; font-weight: 700;
+  background: transparent; color: var(--hr-fg-2); border: 1px solid var(--hr-line-strong);
+  transition: color .15s, background .15s;
+}
+.trade-mine-close:hover { color: var(--hr-fg-0); background: rgba(255,255,255,.05); }
+
+/* A dearer listing a free price cut left standing: buyers never see it, but it is live. */
+.trade-mine-older {
+  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+  margin: 0; padding: 0 4px; font-size: 11px; line-height: 1.45; color: var(--hr-fg-3);
+}
+.trade-mine-older-x {
+  cursor: pointer; padding: 0; border: 0; background: none;
+  font: inherit; font-weight: 700; color: var(--hr-alert);
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.trade-mine-older-x[disabled] { opacity: .55; cursor: not-allowed; text-decoration: none; }
+@keyframes mineEditIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .trade-mine-form { animation: none; } }
+@media (max-width: 560px) {
+  .trade-mine-item { width: min(86vw, 320px); }
+  .trade-mine-item .trade-mine-card { min-width: 0; }
+  .trade-mine-form-btns { flex-wrap: wrap; }
+  .trade-mine-form-btns .trade-send { flex: 1 1 140px; }
+}
+
 /* Activity history (Creatures-only "History" tab) — a read-only, newest-first VERTICAL
    TIMELINE of buys, sales, transfers and past listings. Shares the roadmap timeline's rail
    geometry (left rail + node per entry); each row reuses the .trade-mine card shell, with a

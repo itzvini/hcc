@@ -4825,7 +4825,7 @@ async function handleMarketplaceApi(request, response, url) {
   // Prepare a listing: NFT approval tx (first time only) + typed data to sign (gasless).
   if (pathname === '/api/market/creatures/sell/prepare' && request.method === 'POST') {
     if (!mktOrderbook.available()) { sendJson(response, 503, { error: 'unavailable' }); return; }
-    const sWait = rateLimited(`mktsell:${ip}`, 15, 60 * 1000);
+    const sWait = mktLimit(ip, 'prepare');
     if (sWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(sWait) }); return; }
 
     const body = await readJsonBody(request, 4 * 1024);
@@ -4856,7 +4856,7 @@ async function handleMarketplaceApi(request, response, url) {
   // signature against the order's offerer, so a forged body can't list anyone's NFT).
   if (pathname === '/api/market/creatures/sell/create' && request.method === 'POST') {
     if (!mktOrderbook.available()) { sendJson(response, 503, { error: 'unavailable' }); return; }
-    const cWait = rateLimited(`mktsell:${ip}`, 15, 60 * 1000);
+    const cWait = mktLimit(ip, 'write');
     if (cWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(cWait) }); return; }
 
     const body = await readJsonBody(request, 64 * 1024);
@@ -4895,7 +4895,7 @@ async function handleMarketplaceApi(request, response, url) {
   if ((pathname === '/api/market/creatures/cancel/prepare' || pathname === '/api/market/creatures/cancel')
       && request.method === 'POST') {
     if (!mktOrderbook.available()) { sendJson(response, 503, { error: 'unavailable' }); return; }
-    const kWait = rateLimited(`mktsell:${ip}`, 15, 60 * 1000);
+    const kWait = mktLimit(ip, pathname.endsWith('/prepare') ? 'prepare' : 'write');
     if (kWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(kWait) }); return; }
 
     const body = await readJsonBody(request, 16 * 1024);
@@ -5108,7 +5108,7 @@ async function handleMarketplaceApi(request, response, url) {
   // Prepare an offer: ERC20 approval tx (first time only) + typed data to sign (gasless).
   if (pathname === '/api/market/creatures/offer/prepare' && request.method === 'POST') {
     if (!mktOrderbook.available()) { sendJson(response, 503, { error: 'unavailable' }); return; }
-    const oWait = rateLimited(`mktsell:${ip}`, 15, 60 * 1000);
+    const oWait = mktLimit(ip, 'prepare');
     if (oWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(oWait) }); return; }
 
     const body = await readJsonBody(request, 4 * 1024);
@@ -5140,7 +5140,7 @@ async function handleMarketplaceApi(request, response, url) {
   // (fee items ride along in ETH).
   if (pathname === '/api/market/creatures/offer/create' && request.method === 'POST') {
     if (!mktOrderbook.available()) { sendJson(response, 503, { error: 'unavailable' }); return; }
-    const cWait = rateLimited(`mktsell:${ip}`, 15, 60 * 1000);
+    const cWait = mktLimit(ip, 'write');
     if (cWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(cWait) }); return; }
 
     const body = await readJsonBody(request, 64 * 1024);
@@ -5983,7 +5983,7 @@ async function handleMarketplaceApi(request, response, url) {
   if (pathname === '/api/market/land/sell/prepare' && request.method === 'POST') {
     if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
     if (!landMarket.sellEnabled()) { sendJson(response, 503, { error: 'disabled' }); return; }
-    const sWait = rateLimited(`mktsell:${ip}`, 15, 60 * 1000);
+    const sWait = mktLimit(ip, 'prepare');
     if (sWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(sWait) }); return; }
 
     const body = await readJsonBody(request, 4 * 1024);
@@ -6016,7 +6016,7 @@ async function handleMarketplaceApi(request, response, url) {
   if (pathname === '/api/market/land/sell/create' && request.method === 'POST') {
     if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
     if (!landMarket.sellEnabled()) { sendJson(response, 503, { error: 'disabled' }); return; }
-    const cWait = rateLimited(`mktsell:${ip}`, 15, 60 * 1000);
+    const cWait = mktLimit(ip, 'write');
     if (cWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(cWait) }); return; }
 
     const body = await readJsonBody(request, 32 * 1024);
@@ -6046,7 +6046,7 @@ async function handleMarketplaceApi(request, response, url) {
   if (pathname === '/api/market/land/offer/prepare' && request.method === 'POST') {
     if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
     if (!landMarket.offerEnabled()) { sendJson(response, 503, { error: 'disabled' }); return; }
-    const oWait = rateLimited(`mktsell:${ip}`, 15, 60 * 1000);
+    const oWait = mktLimit(ip, 'prepare');
     if (oWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(oWait) }); return; }
 
     const body = await readJsonBody(request, 4 * 1024);
@@ -6076,7 +6076,7 @@ async function handleMarketplaceApi(request, response, url) {
   if (pathname === '/api/market/land/offer/create' && request.method === 'POST') {
     if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
     if (!landMarket.offerEnabled()) { sendJson(response, 503, { error: 'disabled' }); return; }
-    const cWait = rateLimited(`mktsell:${ip}`, 15, 60 * 1000);
+    const cWait = mktLimit(ip, 'write');
     if (cWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(cWait) }); return; }
 
     const body = await readJsonBody(request, 32 * 1024);
@@ -6166,20 +6166,48 @@ async function handleMarketplaceApi(request, response, url) {
     return;
   }
 
-  // Prepare an on-chain Seaport cancel for one of the caller's own LAND listings. Only
-  // the order's offerer can produce a valid cancel — Seaport enforces it, and we re-check.
+  // Withdraw one of the caller's own LAND orders — a listing or an offer. Two routes to it,
+  // and the ORDER decides which: one behind OpenSea's SignedZone can be cancelled off-chain
+  // for nothing (typed data to sign, then the submit route below), anything else needs an
+  // on-chain Seaport cancel and its mainnet gas. Only the offerer can produce either, which
+  // Seaport and OpenSea both enforce and prepareCancel re-checks. `mode: 'onchain'` forces
+  // the paid route, which is how the client falls back if a free cancellation is refused.
   if (pathname === '/api/market/land/cancel/prepare' && request.method === 'POST') {
     if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
-    const kWait = rateLimited(`mktsell:${ip}`, 15, 60 * 1000);
+    const kWait = mktLimit(ip, 'prepare');
     if (kWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(kWait) }); return; }
 
     const body = await readJsonBody(request, 4 * 1024);
     const orderHash = String(body.orderHash || '').toLowerCase();
     const maker = String(body.accountAddress || '').toLowerCase();
+    const mode = body.mode === 'onchain' ? 'onchain' : undefined;
     if (!/^0x[0-9a-f]{64}$/.test(orderHash)) { sendJson(response, 400, { error: 'bad_listing' }); return; }
     if (!HEX_ADDRESS.test(maker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
     try {
-      sendJson(response, 200, await landMarket.prepareCancel({ orderHash, maker }));
+      sendJson(response, 200, await landMarket.prepareCancel({ orderHash, maker, mode }));
+    } catch (err) {
+      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    }
+    return;
+  }
+
+  // Submit a signed off-chain cancellation to OpenSea. No transaction and no gas: the
+  // signature is what makes it binding, and only the order's offerer can produce it.
+  if (pathname === '/api/market/land/cancel' && request.method === 'POST') {
+    if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
+    const kWait = mktLimit(ip, 'write');
+    if (kWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(kWait) }); return; }
+
+    const body = await readJsonBody(request, 4 * 1024);
+    const orderHash = String(body.orderHash || '').toLowerCase();
+    const maker = String(body.accountAddress || '').toLowerCase();
+    const signature = String(body.signature || '');
+    const protocolAddress = String(body.protocolAddress || '');
+    if (!/^0x[0-9a-f]{64}$/.test(orderHash)) { sendJson(response, 400, { error: 'bad_listing' }); return; }
+    if (!HEX_ADDRESS.test(maker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
+    if (!/^0x[0-9a-f]{60,2600}$/i.test(signature)) { sendJson(response, 400, { error: 'bad_signature' }); return; }
+    try {
+      sendJson(response, 200, await landMarket.submitOffchainCancel({ orderHash, maker, signature, protocolAddress }));
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }
@@ -6316,6 +6344,25 @@ function clientIp(request) {
 // Crude in-memory fixed-window rate limiter (resets on restart). Returns the
 // Retry-After seconds if the key is over `max` within `windowMs`, else 0.
 const rateBuckets = new Map();
+// Marketplace write limits, per IP. Two buckets rather than one, because the two halves
+// of every flow are not the same risk. A `prepare` is free to call and is what costs us
+// upstream quota (it reads the orderbook and builds an order), so it needs a real ceiling.
+// A `create`/submit always FOLLOWS a prepare that was already allowed and carries a
+// signature the member has just given by hand — refusing that wastes the signature, and on
+// LAND possibly the mainnet gas already spent on an approval. One shared bucket meant the
+// prepares could fill the window and then the submit for an order the member had already
+// signed came back 429.
+//
+// Sized for the largest sanctioned batch, not a single action: mass listing has no item cap
+// and spends two calls per item. It is human-paced though — every item needs its own wallet
+// click, seconds apart — so even a brisk run is around 20 items a minute, about 40 calls,
+// rather than 2N at once. 60 covers that with headroom. For scale, a price edit costs 4
+// calls and a single listing 2. The old shared ceiling was 15, which a mass list of eight
+// items already exceeded.
+const MKT_LIMIT_MAX = 60;
+const MKT_LIMIT_WINDOW_MS = 60 * 1000;
+const mktLimit = (ip, kind) => rateLimited(`mkt${kind}:${ip}`, MKT_LIMIT_MAX, MKT_LIMIT_WINDOW_MS);
+
 function rateLimited(key, max, windowMs) {
   const now = Date.now();
   let b = rateBuckets.get(key);
