@@ -1986,16 +1986,22 @@ function valueAtItsOwnDay(entry, daily) {
   }
 }
 
-async function getMyListingHistory(address) {
-  const addr = address.toLowerCase();
-
-  // 1) On-chain activity — one chronological (newest-first) feed, account-filtered.
-  // A marketplace sale emits BOTH a 'sale' and a paired 'transfer' (same tx hash); we keep
-  // the 'sale' (it carries price + direction) and drop that transfer leg, so the NFT-moving
-  // side of a trade isn't shown twice. Collect every sale's tx first, then categorize.
+/**
+ * One wallet's Creature activity on zkEVM, newest first — the account-filtered feed, paged.
+ *
+ * A marketplace sale emits BOTH a 'sale' and a paired 'transfer' on the same transaction
+ * hash; the sale is the one worth keeping (it carries price and direction), so every sale's
+ * hash comes back alongside the rows and the caller drops the matching transfer leg. That
+ * pairing is why the two are read together rather than asking for `activity_type=transfer`:
+ * a transfer-only feed cannot tell a gift from the delivery half of a trade.
+ *
+ * Never throws — `failed` says the read didn't happen, so a caller can degrade honestly
+ * instead of serving an empty history as though the wallet had none.
+ */
+async function fetchCreatureActivities(addr, maxPages = ACTIVITY_PAGES_MAX) {
   const acts = [];
   const saleTxs = new Set();
-  let activityFailed = false;
+  let failed = false;
   try {
     let cursor = null, pages = 0;
     do {
@@ -2010,8 +2016,16 @@ async function getMyListingHistory(address) {
         acts.push(a);
       }
       cursor = body.page?.next_cursor ?? null;
-    } while (cursor && ++pages < ACTIVITY_PAGES_MAX);
-  } catch (err) { activityFailed = true; console.error('Creature activity feed failed:', err.message); }
+    } while (cursor && ++pages < maxPages);
+  } catch (err) { failed = true; console.error('Creature activity feed failed:', err.message); }
+  return { acts, saleTxs, failed };
+}
+
+async function getMyListingHistory(address) {
+  const addr = address.toLowerCase();
+
+  // 1) On-chain activity — one chronological (newest-first) feed, account-filtered.
+  const { acts, saleTxs, failed: activityFailed } = await fetchCreatureActivities(addr);
 
   const entries = [];
   for (const a of acts) {
@@ -3208,13 +3222,109 @@ dbReady.then(() => getImxSales())
   })
   .catch(() => {});
 
+// --- The moves nobody paid for -----------------------------------------------------------
+// A sales history answers "what did this go for". Paste a wallet into it and the question
+// changes: what has this address actually done. Half that answer is trades, and the other
+// half never had a price — a gift, a wallet being consolidated, the mint the Creature came
+// into the world on. Those rows are fetched only when the query IS an address, because
+// collection-wide they are a feed of tens of thousands of priceless entries that nobody
+// would page through, and because every source below is account-scoped anyway.
+//
+// A transfer carries no price, so it never reaches the chart, the stat rail or the price
+// sorts. `salesPricePoints` already drops anything without a positive ETH figure, which is
+// what keeps an average honest once these rows join the list.
+
+const WALLET_ACTIVITY_PAGES_MAX = 6;   // ~600 zkEVM activities; the dashboard's 2 is sized for a capped timeline
+
+/**
+ * One wallet's Creature transfers across BOTH eras, newest first.
+ *
+ * zkEVM covers July 2025 onward; immutascan's archive covers the StarkEx years before it,
+ * the same way the sales feed already spans the two. Without the archive half, a wallet
+ * that was gifted a Creature in 2022 shows that Creature arriving at the migration mint —
+ * true of the token and false of the wallet.
+ *
+ * Either era failing costs its own rows and nothing else: the other still answers.
+ */
+async function creatureWalletTransfers(addr) {
+  const [live, archived] = await Promise.all([
+    fetchCreatureActivities(addr, WALLET_ACTIVITY_PAGES_MAX).then(({ acts, saleTxs }) => {
+      const rows = [];
+      for (const a of acts) {
+        if (a.type !== 'transfer') continue;
+        const tx = a.blockchain_metadata?.transaction_hash || null;
+        if (tx && saleTxs.has(tx)) continue;   // the NFT leg of a trade — the sale row has it
+        const tokenId = a.details?.asset?.token_id;
+        const at = a.updated_at || a.indexed_at || null;
+        if (!tokenId || !at) continue;
+        const from = (a.details?.from || '').toLowerCase() || null;
+        rows.push({
+          tokenId: String(tokenId),
+          event: from === ZERO_ADDRESS ? 'mint' : 'transfer',
+          at, tx,
+          from: from === ZERO_ADDRESS ? null : from,
+          to: (a.details?.to || '').toLowerCase() || null,
+        });
+      }
+      return rows;
+    }).catch(err => { console.error('Creature wallet transfers failed:', err.message); return []; }),
+    imxArchive.walletTransfers(addr).catch(() => []),
+  ]);
+  return [...live, ...archived];
+}
+
+// One wallet's transfer rows, cached per address so paging a history (which re-asks for the
+// same wallet on every page) doesn't re-read the upstream feeds. Bounded the same way the
+// holdings pool is — many distinct addresses must not grow without limit.
+const TRANSFER_POOL_TTL_MS = 60 * 1000;
+const transferPoolCache = new Map();     // `${collKind}:${addr}` -> { at, rows }
+
+async function walletTransferRows(collKind, addr) {
+  const key = `${collKind}:${addr}`;
+  const hit = transferPoolCache.get(key);
+  if (hit && Date.now() - hit.at < TRANSFER_POOL_TTL_MS) return hit.rows;
+  let rows = [];
+  try {
+    rows = collKind === 'land'
+      ? await landMarket.walletTransfers(addr)
+      : await creatureWalletTransfers(addr);
+  } catch (err) {
+    console.error(`Wallet transfers (${collKind}) failed:`, err.message);
+    return hit?.rows || [];                // a stale answer beats pretending the wallet moved nothing
+  }
+  if (transferPoolCache.size > 300) transferPoolCache.clear();
+  transferPoolCache.set(key, { at: Date.now(), rows });
+  return rows;
+}
+
+// Which rows the Sales tab is being asked for. `sales` is the collection-wide default, and
+// what every existing caller keeps getting. A wallet query defaults to `all` instead: having
+// typed an address, nobody means "show me half of what this wallet did".
+const SALES_EVENT_MODES = new Set(['sales', 'transfers', 'all']);
+function parseSalesEvents(searchParams, isWallet) {
+  const v = searchParams.get('events');
+  if (SALES_EVENT_MODES.has(v)) return v;
+  return isWallet ? 'all' : 'sales';
+}
+
 // Sales-history sort — its own small set (Browse's price-asc default makes no sense for a
 // time-ordered log). Recent first by default.
+//
+// A transfer has no price, so on a price sort it has no place in the order. Rather than let
+// it compare as NaN (which leaves the list in whatever order the engine happened to walk),
+// priceless rows sort to the end both ways round and keep their own newest-first sequence.
+const salesByRecent = (a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0);
+const salesByPrice = dir => (a, b) => {
+  const x = Number.isFinite(a.priceEth) ? a.priceEth : null;
+  const y = Number.isFinite(b.priceEth) ? b.priceEth : null;
+  if (x == null || y == null) return x == null && y == null ? salesByRecent(a, b) : (x == null ? 1 : -1);
+  return dir * (x - y);
+};
 const SALES_SORTS = {
-  recent:       (a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0),
+  recent:       salesByRecent,
   oldest:       (a, b) => (Date.parse(a.at) || 0) - (Date.parse(b.at) || 0),
-  'price-asc':  (a, b) => a.priceEth - b.priceEth,
-  'price-desc': (a, b) => b.priceEth - a.priceEth,
+  'price-asc':  salesByPrice(1),
+  'price-desc': salesByPrice(-1),
 };
 function parseSalesSort(searchParams) {
   const s = searchParams.get('sort');
@@ -3358,7 +3468,7 @@ function shapeSalesHistory(feed, f, sortKey, meta, win) {
   // It matters more here than it did — the Creature feed grew from a few hundred live sales
   // to fourteen thousand once the pre-migration archive joined it, and re-shaping and
   // re-facetting the lot to slice out 24 rows is not something to redo per "load more".
-  const view = browseView(`${meta.kind}:${sortKey}`, meta.stamps, f, () => buildSalesView(feed, f, sortKey, meta, rate));
+  const view = browseView(`${meta.kind}:${sortKey}:${f.events}`, meta.stamps, f, () => buildSalesView(feed, f, sortKey, meta, rate));
   // A window query wants the numbers, not the page: same filters, same memoized view, one
   // slice by time. Answering it here rather than on its own route means it can't drift from
   // what the chart is drawing.
@@ -3382,6 +3492,7 @@ function shapeSalesHistory(feed, f, sortKey, meta, win) {
     // The chart describes the whole matched set, so it's the same for every page of one
     // query. Like the facets, it rides with page 0 and the client keeps its copy.
     ...(f.page === 0 && view.series ? { series: view.series } : {}),
+    ...(f.page === 0 ? { counts: view.counts, events: f.events } : {}),
   });
 }
 
@@ -3406,6 +3517,10 @@ function buildSalesView(feed, f, sortKey, meta, rate) {
     // raw feed already carried (OpenSea LAND events ship these; Immutable sales don't).
     return {
       ...s,
+      // The raw sales feeds carry no `event`; transfer rows arrive already labelled. Naming
+      // it on every row is what lets one list hold both without the client guessing from a
+      // missing price.
+      event: s.event || 'sale',
       name: known?.name || s.name || meta.fallbackName(s.tokenId),
       image: known?.image || s.image || null,
       rarity: known?.rarity || null,
@@ -3422,12 +3537,24 @@ function buildSalesView(feed, f, sortKey, meta, rate) {
   });
   const isAddr = HEX_ADDRESS.test(f.q);
   const fq = isAddr ? { ...f, q: '' } : f; // wallet query is handled below, not as a name match
-  const matched = rows.filter(r =>
-    (!isAddr || r.buyer === f.q || r.seller === f.q) && browseMatch(r, fq)
-  ).sort(SALES_SORTS[sortKey]);
+  // A sale names a buyer and a seller; a transfer names a sender and a receiver. Same
+  // question — was this wallet one of the two parties — asked of the fields each row has.
+  const isParty = r => (r.event === 'sale' ? (r.buyer === f.q || r.seller === f.q)
+                                           : (r.from === f.q || r.to === f.q));
+  const inScope = r => (f.events === 'all' ? true
+                      : f.events === 'transfers' ? r.event !== 'sale'
+                      : r.event === 'sale');
+  const passes = r => (!isAddr || isParty(r)) && browseMatch(r, fq);
+  const universe = rows.filter(passes);
+  const matched = universe.filter(inScope).sort(SALES_SORTS[sortKey]);
+  // What the other tabs of the toggle would hold, counted over the SAME filters — so the
+  // numbers beside "Sales" and "Transfers" answer the query on screen, not the whole wallet.
+  const counts = { sales: 0, transfers: 0 };
+  for (const r of universe) { if (r.event === 'sale') counts.sales++; else counts.transfers++; }
   const pricePoints = salesPricePoints(matched);
   return {
     matched,
+    counts,
     // usdRate did its job in the shaper above (it valued the sale); priceUsd is what the
     // client reads, so the rate itself stays server-side.
     strip: ({ search, usdRate, ...pub }) => pub,
@@ -4017,13 +4144,23 @@ async function getCreatureSalesHistory(searchParams) {
   const f = parseBrowseQuery(searchParams);
   const sortKey = parseSalesSort(searchParams);
   const win = parseSalesWindow(searchParams);
-  const [feed, fx, daily, listIdx] = await Promise.all([getCreatureSalesWithArchive(), getMarketplaceFx(), getEthUsdDaily(), getBrowseIndex()]);
+  const isWallet = HEX_ADDRESS.test(f.q);
+  f.events = parseSalesEvents(searchParams, isWallet);
+  const [sold, fx, daily, listIdx] = await Promise.all([getCreatureSalesWithArchive(), getMarketplaceFx(), getEthUsdDaily(), getBrowseIndex()]);
+  // Transfers are wallet-scoped, so they only exist to fetch when the query is an address.
+  // Fetched in every mode, not just the ones that show them: the toggle prints how many
+  // transfers this query holds, and a count we didn't read would read as a count of none.
+  // The pool is cached per address, so switching modes costs nothing upstream.
+  const moves = isWallet ? await walletTransferRows('creatures', f.q) : [];
+  const feed = moves.length ? [...sold, ...moves].sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0)) : sold;
   const coll = getCollectionIndex(); // null until the first catalogue build lands
   const listedMap = new Map((listIdx?.items || []).map(it => [String(it.tokenId), it.totalEth ?? it.priceEth]));
   return shapeSalesHistory(feed, f, sortKey, {
     kind: 'sales:creatures',
     // Every input the view is derived from: the live feed's read time, the catalogue build,
     // and how many archived rows have landed (0 before the sweep finishes, fixed after).
+    // The transfer count joins them so a wallet's freshly-read moves can't serve a cached
+    // view built before them.
     stamps: [creatureSalesFeed.at, collectionIndex.at, feed.length],
     at: creatureSalesFeed.at,
     daily, ethUsd: fx.ethUsd, fxRates: fx.fxRates,
@@ -4193,7 +4330,11 @@ async function getLandSalesHistory(searchParams) {
   const f = parseBrowseQuery(searchParams);
   const sortKey = parseSalesSort(searchParams);
   const win = parseSalesWindow(searchParams);
-  const [feed, fx, daily, listings] = await Promise.all([getLandSalesFeed(), getMarketplaceFx(), getEthUsdDaily(), landListingsByToken()]);
+  const isWallet = HEX_ADDRESS.test(f.q);
+  f.events = parseSalesEvents(searchParams, isWallet);
+  const [sold, fx, daily, listings] = await Promise.all([getLandSalesFeed(), getMarketplaceFx(), getEthUsdDaily(), landListingsByToken()]);
+  const moves = isWallet ? await walletTransferRows('land', f.q) : [];
+  const feed = moves.length ? [...sold, ...moves].sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0)) : sold;
   const index = slimeIndex.getSlimeIndex(); // null while the first sweep runs
   const data = shapeSalesHistory(feed, f, sortKey, {
     kind: 'sales:land',
@@ -4666,6 +4807,13 @@ async function handleMarketplaceApi(request, response, url) {
   // Recent completed Creature sales, filtered by the same query as Browse (search / price /
   // traits), for the Sales History tab. Public on-chain data; short-cached like Browse.
   if (pathname === '/api/market/creatures/sales') {
+    // A wallet query is no longer a filter over data we already hold: it reads that address's
+    // transfers upstream. Same modest per-IP budget the wallet browse carries, and paging
+    // shares a 60s per-address pool, so a member reading one history pays for it once.
+    if (HEX_ADDRESS.test((url.searchParams.get('q') || '').trim().toLowerCase())) {
+      const w = rateLimited(`mktwallet:${ip}`, 40, 60 * 1000);
+      if (w) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(w) }); return; }
+    }
     try {
       const data = await getCreatureSalesHistory(url.searchParams);
       // Sales are settled history, not a live book: they attach health for context but
@@ -5854,6 +6002,13 @@ async function handleMarketplaceApi(request, response, url) {
   }
 
   if (pathname === '/api/market/land/sales') {
+    // A wallet query is no longer a filter over data we already hold: it reads that address's
+    // transfers upstream. Same modest per-IP budget the wallet browse carries, and paging
+    // shares a 60s per-address pool, so a member reading one history pays for it once.
+    if (HEX_ADDRESS.test((url.searchParams.get('q') || '').trim().toLowerCase())) {
+      const w = rateLimited(`mktwallet:${ip}`, 40, 60 * 1000);
+      if (w) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(w) }); return; }
+    }
     if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
     try {
       const data = await getLandSalesHistory(url.searchParams);

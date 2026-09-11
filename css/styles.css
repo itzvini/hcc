@@ -6772,6 +6772,74 @@ a.trade-dash-who:hover { border-color: var(--hr-primary); background: rgba(81,25
 .trade-sale-price { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; white-space: nowrap; }
 .trade-sale-eth { font-family: var(--hr-sans); font-weight: 900; font-size: 16px; color: var(--hr-primary); }
 .trade-sale-usd { font-size: 11.5px; color: var(--hr-fg-3); }
+
+/* --- A wallet's history ------------------------------------------------------------------
+   Paste an address into the Sales search and the tab answers a different question, so it
+   gets a header that says so: who, and which half of the story is on screen. Lavender like
+   the chart's period buttons, because this is the other control that changes what the plot
+   is describing; the mint stays with the money. */
+.trade-wallet-strip {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 10px 16px; margin: 0 0 14px; padding: 11px 14px;
+  border-radius: var(--hr-radius-lg);
+  background: linear-gradient(180deg, rgba(133,97,255,.10), rgba(133,97,255,.03));
+  border: 1px solid rgba(133,97,255,.28);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+  animation: trade-sale-in .35s ease both;
+}
+.trade-wallet-who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.trade-wallet-eyebrow {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--hr-secondary);
+}
+.trade-wallet-addr {
+  font-size: 13px; font-weight: 700; color: var(--hr-fg-0);
+  overflow: hidden; text-overflow: ellipsis;
+}
+.trade-wallet-segs { display: flex; gap: 6px; flex-wrap: wrap; }
+.trade-wallet-seg {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--hr-sans); font-weight: 800; font-size: 11.5px;
+  color: var(--hr-fg-3); background: rgba(255,255,255,.04);
+  border: 1px solid var(--hr-line); border-radius: var(--hr-radius-pill);
+  padding: 5px 12px; cursor: pointer; white-space: nowrap;
+  transition: border-color .2s, color .2s, background .2s;
+}
+.trade-wallet-seg:hover { border-color: var(--hr-line-strong); color: var(--hr-fg-0); }
+.trade-wallet-seg:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; }
+.trade-wallet-seg[aria-pressed="true"] {
+  color: var(--hr-secondary); border-color: rgba(133,97,255,.45); background: rgba(133,97,255,.14);
+}
+.trade-wallet-seg-n {
+  font-size: 10.5px; font-weight: 800; color: var(--hr-fg-2);
+  background: rgba(255,255,255,.07); border-radius: var(--hr-radius-pill); padding: 1px 7px;
+}
+.trade-wallet-seg[aria-pressed="true"] .trade-wallet-seg-n { color: var(--hr-secondary); background: rgba(133,97,255,.18); }
+
+/* A move nobody paid for. It sits in the same list as the sales, so it has to be legible as
+   a different KIND of row at a glance without shouting: a quieter card, and the word in the
+   slot where a price would be rather than an empty column that reads as missing data. */
+.trade-sale-move {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .02em;
+  padding: 3px 9px; border-radius: var(--hr-radius-pill);
+  color: var(--hr-fg-1); background: rgba(255,255,255,.06); border: 1px solid var(--hr-line);
+}
+.trade-sale-move.is-mint { color: var(--hr-accent); background: rgba(255,249,95,.10); border-color: rgba(255,249,95,.32); }
+.trade-sale-move svg { flex: 0 0 auto; }
+.trade-sale-card.is-move { background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.012)); }
+.trade-sale-card.is-move:hover { box-shadow: var(--hr-shadow-2), 0 0 22px rgba(133,97,255,.10); }
+.trade-sale-noprice { font-family: var(--hr-sans); font-weight: 800; font-size: 13px; color: var(--hr-fg-3); }
+.trade-sale-noprice-sub { font-size: 11px; color: var(--hr-fg-3); opacity: .75; }
+
+@media (max-width: 560px) {
+  .trade-wallet-strip { flex-direction: column; align-items: stretch; }
+  .trade-wallet-segs { overflow-x: auto; scrollbar-width: none; }
+  .trade-wallet-segs::-webkit-scrollbar { display: none; }
+  .trade-sale-price.is-move { align-items: baseline; }
+}
+@media (prefers-reduced-motion: reduce) { .trade-wallet-strip { animation: none; } }
 @media (max-width: 560px) {
   .trade-sale-card { grid-template-columns: 58px 1fr; gap: 11px; }
   .trade-sale-media { width: 58px; height: 58px; }

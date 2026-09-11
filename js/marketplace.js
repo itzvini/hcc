@@ -235,6 +235,12 @@ let salesTotal = null;
 let salesSort = 'recent';      // 'recent' | 'oldest' | 'price-asc' | 'price-desc'
 let salesFacets = null;
 let salesReqId = 0;
+// Paste a wallet into the search box and the tab stops being a price list and starts being
+// that address's history: its trades AND the moves that never had a price — a gift, a wallet
+// being consolidated, the mint the Creature arrived on. `salesEvents` is which of those the
+// list is showing; it only means anything while the query is an address.
+let salesEvents = 'all';       // 'all' | 'sales' | 'transfers'
+let salesCounts = null;        // {sales, transfers} over the SAME filters, for the toggle
 // Price chart over the SAME matched set the list below shows: every sale as a dot, a
 // bucketed average through them, and the headline numbers. Arrives with page 0 only (it
 // describes the whole match, not the page), so "load more" never clears it.
@@ -4935,6 +4941,9 @@ function salesQuery(page) {
   if (flt.max) p.set('max', flt.max);
   for (const [type, vals] of flt.traits) for (const v of vals) p.append('t', `${type}:${v}`);
   if (salesSort !== 'recent') p.set('sort', salesSort);
+  // Only a wallet query has transfers to show, and the server defaults such a query to
+  // 'all' — so the parameter only ever rides when it's narrowing that down.
+  if (isWalletQuery(flt.q) && salesEvents !== 'all') p.set('events', salesEvents);
   if (page) p.set('page', String(page));
   return p.toString();
 }
@@ -4970,6 +4979,9 @@ async function loadSales(reset = true) {
     salesHasMore = !!data.hasMore;
     salesTotal = data.total ?? null;
     if (data.facets) salesFacets = data.facets;
+    // Page 0 only, like the facets and the series — they all describe the whole matched set.
+    if (data.counts) salesCounts = data.counts;
+    if (reset && !data.counts) salesCounts = null;
     // Only page 0 carries the chart; a "load more" response must not blank it.
     // A new matched set is a new timeline: whatever period was on screen no longer means
     // anything, and the chart's axis resets to the new range below.
@@ -4984,7 +4996,7 @@ async function loadSales(reset = true) {
       setFeedBusy(false);
       if (!added || !appendTiles('#trade-sales-grid', '#trade-sales-loadmore', added,
         (s, i) => saleCardHtml(s, i), salesLoadMoreHtml, 'trade-sale-card')) patchSalesGrid();
-      if (reset) patchSalesChart();
+      if (reset) { patchSalesChart(); patchSalesEvents(); }
       patchFilters();
     }
   }
@@ -5023,10 +5035,50 @@ function salesToolbarHtml() {
   <div class="trade-flt-active" id="flt-active">${activeChipsHtml()}</div>`;
 }
 
+/* --- A wallet's history, not a price list ------------------------------------------------
+   The search box has always taken an address (the server matches it against the buyer and
+   the seller rather than the name), but half of what an address has done was never a sale.
+   Showing only the trades reads as a complete answer and isn't one: a Creature that was
+   gifted in 2022 and sold in 2026 looks like it appeared out of nowhere.
+
+   So a wallet query gets this: one strip naming the address, and a toggle between all of
+   it, the trades alone, and the moves alone. The counts are the server's, measured over the
+   SAME filters — so they answer the query on screen rather than the whole wallet.
+
+   What the toggle must never touch is the chart. A transfer has no price, so it is not a
+   comparable and cannot be averaged; the figures above the plot stay over the sales however
+   many transfers are in the list below. */
+function salesEventsHtml() {
+  if (!isWalletQuery(flt.q)) return '';
+  const c = salesCounts;
+  const n = k => (c && c[k] != null ? c[k] : null);
+  const tabs = [
+    ['all', 'trade.sales.events.all', (n('sales') != null && n('transfers') != null) ? n('sales') + n('transfers') : null],
+    ['sales', 'trade.sales.events.sales', n('sales')],
+    ['transfers', 'trade.sales.events.transfers', n('transfers')],
+  ];
+  return `<div class="trade-wallet-strip">
+    <div class="trade-wallet-who">
+      <span class="trade-wallet-eyebrow">${ico('wallet', 13)}${esc(t('trade.sales.events.eyebrow'))}</span>
+      <code class="trade-wallet-addr" title="${esc(flt.q)}">${esc(shortWallet(flt.q))}</code>
+    </div>
+    <div class="trade-wallet-segs" role="group" aria-label="${esc(t('trade.sales.events.aria'))}">
+      ${tabs.map(([v, k, num]) => `<button type="button" class="trade-wallet-seg" data-act="sales-events" data-v="${v}"
+        aria-pressed="${salesEvents === v}">${esc(t(k))}${num != null ? `<span class="trade-wallet-seg-n">${esc(num.toLocaleString())}</span>` : ''}</button>`).join('')}
+    </div>
+  </div>`;
+}
+
+function patchSalesEvents() {
+  const el = root()?.querySelector('#trade-sales-events');
+  if (el) el.innerHTML = salesEventsHtml();
+}
+
 // "142 recent sales" / "18 sales match" — response-time state, dimmed mid-fetch.
 function salesCountHtml() {
   if (salesTotal == null) return '';
-  const key = fltActive() ? 'trade.sales.countFiltered' : 'trade.sales.count';
+  const key = salesEvents !== 'sales' && isWalletQuery(flt.q) ? 'trade.sales.countMoves'
+            : fltActive() ? 'trade.sales.countFiltered' : 'trade.sales.count';
   return `<span class="trade-flt-count ${salesLoading ? 'is-stale' : ''}" role="status">${esc(t(key).replace('{n}', salesTotal.toLocaleString()))}</span>`;
 }
 
@@ -5310,6 +5362,9 @@ function chartNoteHtml() {
   if (ser.sampled) notes.push(esc(t('trade.chart.sampled')
     .replace('{n}', ser.shown.toLocaleString()).replace('{total}', ser.stats.n.toLocaleString())));
   else if (ser.detail) notes.push(esc(t(coll === 'land' ? 'trade.chart.clickHintLand' : 'trade.chart.clickHint')));
+  // With transfers in the list below, the gap between "42 events" and a chart of 4 dots is
+  // the kind of thing a reader assumes is a bug. Say why instead of letting them wonder.
+  if (salesEvents === 'all' && salesCounts?.transfers) notes.push(esc(t('trade.sales.chartSalesOnly')));
   return notes.join(' · ');
 }
 
@@ -5700,6 +5755,7 @@ function salesHtml() {
         </div>
       </div>
       ${salesToolbarHtml()}
+      <div id="trade-sales-events">${salesEventsHtml()}</div>
       <div id="trade-chart-slot">${salesChartHtml()}</div>
       <div class="trade-sales" id="trade-sales-grid">${salesGridInnerHtml()}</div>
       <div class="trade-loadmore" id="trade-sales-loadmore">${salesLoadMoreHtml()}</div>
@@ -5758,9 +5814,14 @@ function saleCardHtml(s, i = 0, swap = false) {
   // Open the asset inside OUR marketplace (buy modal if it's currently listed, detail +
   // make-offer if not). knownListed skips the "brand-new listing, syncing…" hunt when unlisted.
   const openAttrs = `data-act="sale-open" data-token="${esc(s.tokenId)}" data-listed="${listed ? '1' : '0'}"`;
-  const wallets = [];
-  if (s.seller) wallets.push(`<span class="trade-sale-party"><span class="trade-sale-party-k">${esc(t('trade.sales.seller'))}</span><code>${esc(shortWallet(s.seller))}</code></span>`);
-  if (s.buyer) wallets.push(`<span class="trade-sale-party"><span class="trade-sale-party-k">${esc(t('trade.sales.buyer'))}</span><code>${esc(shortWallet(s.buyer))}</code></span>`);
+  // A sale has a seller and a buyer; a move has a sender and a receiver, and a mint has
+  // only a receiver. Same row, named for what actually happened.
+  const isMove = s.event && s.event !== 'sale';
+  const party = (k, addr) => (addr
+    ? `<span class="trade-sale-party"><span class="trade-sale-party-k">${esc(t(k))}</span><code>${esc(shortWallet(addr))}</code></span>` : '');
+  const wallets = isMove
+    ? [party('trade.sales.from', s.from), party('trade.sales.to', s.to)]
+    : [party('trade.sales.seller', s.seller), party('trade.sales.buyer', s.buyer)];
   const txLink = s.tx
     ? `<a href="${esc(txExplorerUrl(s.tx))}" target="_blank" rel="noopener" class="trade-sale-link">${esc(t('trade.sales.tx'))} ${ico('external', 12)}</a>`
     : saleEraLinkHtml(s);
@@ -5776,15 +5837,19 @@ function saleCardHtml(s, i = 0, swap = false) {
   const anim = swap ? '' : ` style="animation-delay:${Math.min(i * 35, 350)}ms"`;
   const era = s.era === 'imx'
     ? `<span class="trade-sale-era" title="${esc(t('trade.sales.imxWhy'))}">${esc(t('trade.sales.imxChip'))}</span>` : '';
+  // What kind of event this row is, said once and plainly. A sale says it with its price,
+  // so only the priceless ones need the word.
+  const moveChip = isMove
+    ? `<span class="trade-sale-move is-${s.event === 'mint' ? 'mint' : 'transfer'}">${ico(s.event === 'mint' ? 'sparkle' : 'send', 12)}${esc(t(s.event === 'mint' ? 'trade.sales.minted' : 'trade.sales.transferred'))}</span>` : '';
   return `
-    <article class="trade-sale-card ${swap ? 'is-swap' : ''}"${anim}>
+    <article class="trade-sale-card ${isMove ? 'is-move' : ''} ${swap ? 'is-swap' : ''}"${anim}>
       <button type="button" class="trade-sale-media" ${openAttrs} aria-label="${esc(t('trade.sales.view'))}">${img}</button>
       <div class="trade-sale-body">
         <div class="trade-sale-top">
           <button type="button" class="trade-sale-name" ${openAttrs}>${esc(s.name)}</button>
           <span class="trade-sale-type">${esc(saleTypeLabel(s))}</span>
         </div>
-        <div class="trade-sale-tags">${rarityChip(s.rarity)}${rankChip(s.rank)}${status}${era}</div>
+        <div class="trade-sale-tags">${moveChip}${rarityChip(s.rarity)}${rankChip(s.rank)}${status}${era}</div>
         ${saleTraitChips(s)}
         <div class="trade-sale-meta">
           ${wallets.join('')}
@@ -5792,10 +5857,15 @@ function saleCardHtml(s, i = 0, swap = false) {
         </div>
         <div class="trade-sale-links">${viewBtn}${assetLink}${txLink}</div>
       </div>
-      <div class="trade-sale-price">
-        <span class="trade-sale-eth ${s.currency === 'usdc' ? 'is-usdc' : ''}">${esc(s.currency ? fmtListingAmt({ currency: s.currency, totalAmt: s.priceAmt, totalEth: s.priceEth }) : fmtEth(s.priceEth))}</span>
-        ${fiat ? `<span class="trade-sale-usd">${esc(fiat)}</span>` : ''}
-      </div>
+      ${isMove
+        ? `<div class="trade-sale-price is-move">
+            <span class="trade-sale-noprice">${esc(t('trade.sales.noPrice'))}</span>
+            <span class="trade-sale-noprice-sub">${esc(t(s.event === 'mint' ? 'trade.sales.mintedSub' : 'trade.sales.transferredSub'))}</span>
+          </div>`
+        : `<div class="trade-sale-price">
+            <span class="trade-sale-eth ${s.currency === 'usdc' ? 'is-usdc' : ''}">${esc(s.currency ? fmtListingAmt({ currency: s.currency, totalAmt: s.priceAmt, totalEth: s.priceEth }) : fmtEth(s.priceEth))}</span>
+            ${fiat ? `<span class="trade-sale-usd">${esc(fiat)}</span>` : ''}
+          </div>`}
     </article>`;
 }
 
@@ -5808,6 +5878,10 @@ function salesGridInnerHtml(swap = false) {
       <button class="apply-btn-ghost" data-act="sales-retry" type="button">${esc(t('trade.browse.retry'))}</button></div>`;
   }
   if (!salesItems || !salesItems.length) {
+    if (salesEvents === 'transfers' && isWalletQuery(flt.q)) {
+      return `<div class="trade-grid-state"><div class="trade-grid-state-ico" aria-hidden="true">${ico('send', 40)}</div><p>${esc(t('trade.sales.noneMoves'))}</p>
+        <button class="apply-btn-ghost" data-act="sales-events" data-v="all" type="button">${esc(t('trade.sales.events.all'))}</button></div>`;
+    }
     if (fltActive()) {
       return `<div class="trade-grid-state"><div class="trade-grid-state-ico" aria-hidden="true">${ico('search', 40)}</div><p>${esc(t('trade.sales.noneFiltered'))}</p>
         <button class="apply-btn-ghost" data-act="flt-clear" type="button">${esc(t('trade.filter.clear'))}</button></div>`;
@@ -9374,6 +9448,15 @@ function onClick(e) {
     case 'sales-loadmore': return loadSales(false);
     case 'sales-retry':    salesItems = null; salesError = false; return loadSales(true);
     case 'sales-refresh':  salesItems = null; salesError = false; return loadSales(true);
+    case 'sales-events': {
+      const v = target.dataset.v;
+      if (!v || v === salesEvents) return;
+      salesEvents = v;
+      // Answer on the press: the pressed state moves now, the rows follow. Waiting for the
+      // round trip to redraw the toggle reads as the button not having registered.
+      patchSalesEvents();
+      return loadSales(true);
+    }
     case 'sale-open':      return openDeepLink(target.dataset.token, { knownListed: target.dataset.listed === '1' });
     case 'seller-refresh': loadSellerData(); loadListings(true); return; // manual wallet refresh (Sell/Transfer)
     case 'flt-scope':
@@ -9387,12 +9470,13 @@ function onClick(e) {
       openFacet = openFacet === target.dataset.type ? null : target.dataset.type;
       return patchFilters();
     case 'flt-clear':
+      salesEvents = 'all'; salesCounts = null;
       resetFilters();
       syncFilterInputs();
       return applyFilters();
     case 'flt-rm': {
       const { kind, type, val } = target.dataset;
-      if (kind === 'q') flt.q = '';
+      if (kind === 'q') { flt.q = ''; salesEvents = 'all'; salesCounts = null; }
       else if (kind === 'min') flt.min = '';
       else if (kind === 'max') flt.max = '';
       else if (kind === 't') toggleTrait(type, val);
@@ -9613,6 +9697,9 @@ function onInput(e) {
     // the "All" scope. Apply at once when it's a complete address (the view flip should feel
     // instant); debounce ordinary name/number typing so every keystroke isn't a request.
     if (nowWallet && !isWalletQuery(flt.q) && flt.scope !== 'all') flt.scope = 'all';
+    // A new address is a new history: the Sales tab's All/Sales/Transfers pick belonged to
+    // the wallet before it, and carrying it over hides half of the next one without saying so.
+    if (v !== flt.q) { salesEvents = 'all'; salesCounts = null; }
     flt.q = v;
     return applyFilters(nowWallet ? 0 : 300);
   }

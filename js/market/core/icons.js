@@ -68,6 +68,11 @@ const PATHS = {
   user:    '<circle cx="12" cy="8.2" r="3.9"/><path d="M4.8 20.2a7.2 7.2 0 0 1 14.4 0"/>',
   layers:  '<path d="m12 3.2 8.2 4.3-8.2 4.3-8.2-4.3Z"/><path d="m4.4 12 7.6 4 7.6-4"/><path d="m4.4 16.4 7.6 4 7.6-4"/>',
   tag:     '<path d="M11.3 3.5H20v8.7l-8.6 8.6a1.6 1.6 0 0 1-2.3 0l-6.4-6.4a1.6 1.6 0 0 1 0-2.3Z"/><path d="M16.2 7.8h.01"/>',
+  // A token changing hands without a sale: one arrow, one direction, no money.
+  send:    '<path d="M3.6 12h14.2"/><path d="m12.8 6.6 5.4 5.4-5.4 5.4"/><path d="M20.4 4.4v15.2"/>',
+  // A token coming into existence. Four points, not a five-pointed star: a star reads as a
+  // rating, and nothing here is being rated.
+  sparkle: '<path d="M12 3.2 13.9 9 19.7 10.9 13.9 12.8 12 18.6 10.1 12.8 4.3 10.9 10.1 9Z"/><path d="M18.4 16.2l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8Z"/>',
 };
 
 /**
