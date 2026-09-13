@@ -239,8 +239,14 @@ let salesReqId = 0;
 // that address's history: its trades AND the moves that never had a price — a gift, a wallet
 // being consolidated, the mint the Creature arrived on. `salesEvents` is which of those the
 // list is showing; it only means anything while the query is an address.
-let salesEvents = 'all';       // 'all' | 'sales' | 'transfers'
+// null means "whatever this view defaults to" — so clearing a wallet out of the search box
+// drops back to the collection's own default instead of stranding you on the pick you made
+// for an address that is no longer the query.
+let salesEvents = null;        // null | 'all' | 'sales' | 'transfers'
 let salesCounts = null;        // {sales, transfers} over the SAME filters, for the toggle
+// true when the server could not read the withdrawal history at all. Not the same as "none
+// were withdrawn", so the toggle goes away rather than claiming a zero.
+let salesMovesUnavailable = false;
 // Price chart over the SAME matched set the list below shows: every sale as a dot, a
 // bucketed average through them, and the headline numbers. Arrives with page 0 only (it
 // describes the whole match, not the page), so "load more" never clears it.
@@ -274,6 +280,24 @@ let browseOwnerProfile = null;
 let browseProfileExpandedFor = null; // query we've already auto-expanded to scope=all
 const WALLET_RE = /^0x[0-9a-fA-F]{40}$/;
 const isWalletQuery = s => WALLET_RE.test((s || '').trim());
+/* Which history toggle the Sales tab gets, if any. A wallet query gets one address's whole
+   story. LAND's own feed gets its MINTS beside its sales: a mint here is a parcel being
+   withdrawn out of the game onto Ethereum, which is the only way LAND reaches the chain —
+   and while those were invisible, a burst of them read on a block explorer like new land
+   being conjured. Plain wallet-to-wallet transfers stay out of the collection-wide feed;
+   they outnumber sales four to one and would bury the prices people came for. */
+const salesEventsScope = () => (isWalletQuery(flt.q) ? 'wallet' : coll === 'land' ? 'land' : null);
+// Having typed an address, nobody means "show me half of what this wallet did". The
+// collection feed is the opposite: it stays a price list until you ask it for more.
+const salesEventsDefault = () => (isWalletQuery(flt.q) ? 'all' : 'sales');
+const salesEventsMode = () => salesEvents || salesEventsDefault();
+/* "Minted" is the chain's word, and on LAND it is the misleading one: the parcel is not new,
+   it was withdrawn out of Highrise onto Ethereum, where the contract mints it at that moment.
+   Saying "Withdrawn" is what stops a burst of these reading as land being conjured. */
+const moveLabelKey = s => (s.event !== 'mint' ? 'trade.sales.transferred'
+  : coll === 'land' ? 'trade.sales.withdrawn' : 'trade.sales.minted');
+const moveSubKey = s => (s.event !== 'mint' ? 'trade.sales.transferredSub'
+  : coll === 'land' ? 'trade.sales.withdrawnSub' : 'trade.sales.mintedSub');
 // Creatures only come in two tiers — Legendary and Epic. (Rare/Uncommon/Common never
 // existed in the collection; listing them just showed permanently-disabled chips.)
 const RARITY_TIERS = ['Legendary', 'Epic'];
@@ -4941,9 +4965,9 @@ function salesQuery(page) {
   if (flt.max) p.set('max', flt.max);
   for (const [type, vals] of flt.traits) for (const v of vals) p.append('t', `${type}:${v}`);
   if (salesSort !== 'recent') p.set('sort', salesSort);
-  // Only a wallet query has transfers to show, and the server defaults such a query to
-  // 'all' — so the parameter only ever rides when it's narrowing that down.
-  if (isWalletQuery(flt.q) && salesEvents !== 'all') p.set('events', salesEvents);
+  // The parameter only ever rides when it narrows the view AWAY from what the server would
+  // pick anyway — 'all' for a wallet, 'sales' for the collection feed.
+  if (salesEventsScope() && salesEventsMode() !== salesEventsDefault()) p.set('events', salesEventsMode());
   if (page) p.set('page', String(page));
   return p.toString();
 }
@@ -4982,6 +5006,7 @@ async function loadSales(reset = true) {
     // Page 0 only, like the facets and the series — they all describe the whole matched set.
     if (data.counts) salesCounts = data.counts;
     if (reset && !data.counts) salesCounts = null;
+    if (data.counts) salesMovesUnavailable = !!data.movesUnavailable;
     // Only page 0 carries the chart; a "load more" response must not blank it.
     // A new matched set is a new timeline: whatever period was on screen no longer means
     // anything, and the chart's axis resets to the new range below.
@@ -5049,22 +5074,31 @@ function salesToolbarHtml() {
    comparable and cannot be averaged; the figures above the plot stay over the sales however
    many transfers are in the list below. */
 function salesEventsHtml() {
-  if (!isWalletQuery(flt.q)) return '';
+  const scope = salesEventsScope();
+  if (!scope) return '';
+  const isWallet = scope === 'wallet';
+  if (!isWallet && salesMovesUnavailable) return '';
   const c = salesCounts;
   const n = k => (c && c[k] != null ? c[k] : null);
+  // Same three buttons, named for what the third one actually holds: every priceless move of
+  // one wallet, or — collection-wide — the mints alone.
+  const movesKey = isWallet ? 'trade.sales.events.transfers' : 'trade.sales.events.mints';
   const tabs = [
     ['all', 'trade.sales.events.all', (n('sales') != null && n('transfers') != null) ? n('sales') + n('transfers') : null],
     ['sales', 'trade.sales.events.sales', n('sales')],
-    ['transfers', 'trade.sales.events.transfers', n('transfers')],
+    ['transfers', movesKey, n('transfers')],
   ];
+  const who = isWallet
+    ? `<span class="trade-wallet-eyebrow">${ico('wallet', 13)}${esc(t('trade.sales.events.eyebrow'))}</span>
+       <code class="trade-wallet-addr" title="${esc(flt.q)}">${esc(shortWallet(flt.q))}</code>`
+    : `<span class="trade-wallet-eyebrow">${ico('sparkle', 13)}${esc(t('trade.sales.events.eyebrowLand'))}</span>
+       <span class="trade-wallet-note">${esc(t('trade.sales.events.mintsNote'))}</span>`;
+  const mode = salesEventsMode();
   return `<div class="trade-wallet-strip">
-    <div class="trade-wallet-who">
-      <span class="trade-wallet-eyebrow">${ico('wallet', 13)}${esc(t('trade.sales.events.eyebrow'))}</span>
-      <code class="trade-wallet-addr" title="${esc(flt.q)}">${esc(shortWallet(flt.q))}</code>
-    </div>
-    <div class="trade-wallet-segs" role="group" aria-label="${esc(t('trade.sales.events.aria'))}">
+    <div class="trade-wallet-who">${who}</div>
+    <div class="trade-wallet-segs" role="group" aria-label="${esc(t(isWallet ? 'trade.sales.events.aria' : 'trade.sales.events.ariaLand'))}">
       ${tabs.map(([v, k, num]) => `<button type="button" class="trade-wallet-seg" data-act="sales-events" data-v="${v}"
-        aria-pressed="${salesEvents === v}">${esc(t(k))}${num != null ? `<span class="trade-wallet-seg-n">${esc(num.toLocaleString())}</span>` : ''}</button>`).join('')}
+        aria-pressed="${mode === v}">${esc(t(k))}${num != null ? `<span class="trade-wallet-seg-n">${esc(num.toLocaleString())}</span>` : ''}</button>`).join('')}
     </div>
   </div>`;
 }
@@ -5077,7 +5111,7 @@ function patchSalesEvents() {
 // "142 recent sales" / "18 sales match" — response-time state, dimmed mid-fetch.
 function salesCountHtml() {
   if (salesTotal == null) return '';
-  const key = salesEvents !== 'sales' && isWalletQuery(flt.q) ? 'trade.sales.countMoves'
+  const key = salesEventsMode() !== 'sales' && salesEventsScope() ? 'trade.sales.countMoves'
             : fltActive() ? 'trade.sales.countFiltered' : 'trade.sales.count';
   return `<span class="trade-flt-count ${salesLoading ? 'is-stale' : ''}" role="status">${esc(t(key).replace('{n}', salesTotal.toLocaleString()))}</span>`;
 }
@@ -5093,6 +5127,7 @@ function salesCountHtml() {
 
 const CHART_MINT = '#51FFA5';
 const CHART_LAV  = '#8561FF';
+const CHART_BANANA = '#FFF95F';
 const CHART_FONT = "'Museo Sans Rounded', sans-serif";
 const chartNarrow = () => window.matchMedia('(max-width: 640px)').matches;
 const chartStill  = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -5280,6 +5315,24 @@ function chartXBounds(ser) {
   return { min: ser.from - pad, max: ser.to + pad };
 }
 
+/* How far out the reader is allowed to drag and zoom: the whole run, always.
+ *
+ * This used to say `'original'`, which asks chartjs-plugin-zoom for the bounds it cached the
+ * FIRST time anyone zoomed or panned. A range button moves the axis by writing
+ * options.scales.x directly, which the plugin never sees — so on a chart where the reader
+ * pressed "1 month" before touching the wheel, the first wheel notch cached that month as
+ * the original and pinned them inside it. Nothing could zoom out and nothing could drag.
+ *
+ * Stating the numbers ourselves takes the plugin's capture timing out of it entirely. They
+ * come from salesSeries (the whole matched set), never from the window on screen, and are
+ * rewritten whenever a filter changes what "the whole run" means.
+ */
+function chartZoomLimits(ser = salesSeries) {
+  if (!ser) return {};
+  const full = chartXBounds(ser);
+  return { x: { min: full.min, max: full.max } };
+}
+
 // Creature prices run from a hundredth of an ETH to five ETH. On a linear axis that puts
 // almost every dot on the floor, so a wide spread defaults to a log axis — the toggle in
 // the chart head pins it either way.
@@ -5364,7 +5417,9 @@ function chartNoteHtml() {
   else if (ser.detail) notes.push(esc(t(coll === 'land' ? 'trade.chart.clickHintLand' : 'trade.chart.clickHint')));
   // With transfers in the list below, the gap between "42 events" and a chart of 4 dots is
   // the kind of thing a reader assumes is a bug. Say why instead of letting them wonder.
-  if (salesEvents === 'all' && salesCounts?.transfers) notes.push(esc(t('trade.sales.chartSalesOnly')));
+  if (salesEventsMode() === 'all' && salesCounts?.transfers) {
+    notes.push(esc(t(salesEventsScope() === 'wallet' ? 'trade.sales.chartSalesOnly' : 'trade.sales.chartSalesOnlyLand')));
+  }
   return notes.join(' · ');
 }
 
@@ -5553,18 +5608,47 @@ function chartDatasets() {
     // `mid` is where that bucket's sales actually are; `t` is only where its window opens.
     .map(b => ({ x: b.mid ?? b.t, y: chartValue(b.avgEth, b.avgUsd) }))
     .filter(p => p.y != null && p.y > 0);
+  // Withdrawals have no price, so they are counted per bucket and drawn low against their
+  // own hidden axis rather than faked onto the price scale. Empty in Sales mode, which is
+  // what keeps the default view a plain price chart.
+  const moves = (ser.moveBuckets || []).map(b => ({ x: b.t, y: b.n }));
   return [
     {
       type: 'scatter', label: t('trade.chart.legendSales'), data: dots,
       backgroundColor: 'rgba(81,255,165,.55)', borderColor: CHART_MINT, borderWidth: 1,
       pointRadius: dots.length > 250 ? 2 : 3.4, pointHoverRadius: 6, order: 1,
+      // Named, not inferred. Chart.js hands an unnamed dataset the first y-axis scale it
+      // finds, so declaring the withdrawals axis took the price dots with it and drew them
+      // against a count scale, far off the top of the canvas.
+      yAxisID: 'y',
     },
     {
       type: 'line', label: chartAvgLabel(), data: line, showLine: true,
       borderColor: CHART_LAV, backgroundColor: CHART_LAV, borderWidth: 2.4,
       pointRadius: 0, pointHoverRadius: 4, tension: .32, spanGaps: true, order: 2,
+      yAxisID: 'y',
     },
+    // ONLY when there is something to draw. An empty bar dataset left in a scatter chart
+    // makes Chart.js drop the scatter entirely — the price dots stopped painting altogether
+    // in Sales mode (measured on the canvas: 7,801 mint pixels down to 118). So the third
+    // dataset comes and goes, and every caller must cope with the length changing.
+    ...(moves.length ? [{
+      type: 'bar', label: t('trade.chart.legendWithdrawals'), data: moves,
+      backgroundColor: 'rgba(255,249,95,.30)', borderColor: CHART_BANANA, borderWidth: 1,
+      borderRadius: 2, yAxisID: 'yMoves', order: 3,
+      barPercentage: 1, categoryPercentage: 1, grouped: false,
+    }] : []),
   ];
+}
+
+/* The withdrawal bars get their own axis, hidden, so counts never borrow the price scale's
+   meaning. Its top is three times the tallest bucket, which pins the bars to the bottom
+   third: they are context for the prices, not a second chart competing with them. */
+function chartMoveAxisMax(datasets) {
+  const data = datasets?.[2]?.data || [];
+  let hi = 0;
+  for (const d of data) if (d.y > hi) hi = d.y;
+  return hi > 0 ? hi * 3 : 1;
 }
 
 // The price axis for whatever is drawn now. Split out because a camera move has to set it
@@ -5597,10 +5681,20 @@ function renderSalesChart() {
     // resetting the x bounds every time would throw away the period the member zoomed to.
     const newSeries = salesChart.$hccSeries !== salesSeries;   // a filter changed the data
     const newDrawn  = salesChart.$hccDrawn !== drawnSeries();  // a zoom swapped the detail
-    salesChart.data.datasets[0].data = datasets[0].data;
-    salesChart.data.datasets[0].pointRadius = datasets[0].pointRadius;
-    salesChart.data.datasets[1].data = datasets[1].data;
-    salesChart.data.datasets[1].label = datasets[1].label;
+    if (salesChart.data.datasets.length !== datasets.length) {
+      // The withdrawals bars just appeared or went away. Patching by index cannot express
+      // that, so hand over the whole list.
+      salesChart.data.datasets = datasets;
+    } else {
+      salesChart.data.datasets[0].data = datasets[0].data;
+      salesChart.data.datasets[0].pointRadius = datasets[0].pointRadius;
+      salesChart.data.datasets[1].data = datasets[1].data;
+      salesChart.data.datasets[1].label = datasets[1].label;
+      if (datasets[2]) salesChart.data.datasets[2].data = datasets[2].data;
+    }
+    // Rescaled with the bars themselves: left on the last set's top, one big burst would
+    // flatten every other bucket to nothing.
+    if (salesChart.options.scales.yMoves) salesChart.options.scales.yMoves.max = chartMoveAxisMax(datasets);
     // The price axis belongs with the points, not with the camera: both describe WHICH sales
     // are on screen, so they change together in one frame. Held back for the camera instead,
     // the full run's dots landed for a moment on the last window's price scale.
@@ -5609,7 +5703,11 @@ function renderSalesChart() {
       // New data means a new full range, so the window resets to it. Writing the bounds IS
       // the reset — resetZoom() would put back the range the plugin cached at build time,
       // which is a window from before the filter and may not contain a single sale.
-      if (salesChart.$zoom) salesChart.$zoom._originalScaleLimits = null;
+      // A new matched set is a new "whole run", so the zoom ceiling moves with it. (The line
+      // that used to sit here cleared salesChart.$zoom._originalScaleLimits — a property the
+      // plugin has not had since v2, where the state is held in a WeakMap. It never ran.)
+      const zoomOpts = salesChart.options.plugins?.zoom;
+      if (zoomOpts) zoomOpts.limits = chartZoomLimits(salesSeries);
       Object.assign(salesChart.options.scales.x, chartXBounds(salesSeries));
       salesChart.$hccSeries = salesSeries;
     }
@@ -5647,7 +5745,10 @@ function renderSalesChart() {
         legend: {
           position: 'bottom',
           labels: { font: { family: CHART_FONT, size: 11, weight: '700' }, color: '#CCCADC',
-            padding: 16, usePointStyle: true, pointStyleWidth: 12, boxHeight: 7 },
+            padding: 16, usePointStyle: true, pointStyleWidth: 12, boxHeight: 7,
+            // Sales mode carries an empty withdrawals dataset; without this the legend would
+            // still name it and invite a click that does nothing.
+            filter: (item, data) => (data.datasets[item.datasetIndex]?.data?.length ?? 0) > 0 },
         },
         tooltip: {
           callbacks: {
@@ -5656,6 +5757,11 @@ function renderSalesChart() {
               return x == null ? '' : fmtSaleDate(new Date(x).toISOString());
             },
             label: ctx => {
+              // A bar is "how many parcels came out of the game in this period" — a count,
+              // and putting a currency on it would be a lie about what the number is.
+              if (ctx.datasetIndex === 2) {
+                return `  ${t('trade.chart.tipWithdrawals').replace('{n}', Number(ctx.parsed.y).toLocaleString())}`;
+              }
               const money = fmtChartMoney(ctx.parsed.y);
               if (ctx.datasetIndex === 1) return `  ${chartAvgLabel()}: ${money}`;
               const name = ctx.raw?.label;
@@ -5668,7 +5774,7 @@ function renderSalesChart() {
         zoom: {
           pan: { enabled: true, mode: 'x', onPanComplete: onChartViewChanged },
           zoom: { wheel: { enabled: true, speed: .08 }, pinch: { enabled: true }, mode: 'x', onZoomComplete: onChartViewChanged },
-          limits: { x: { min: 'original', max: 'original' } },
+          limits: chartZoomLimits(salesSeries),
         },
       },
       scales: {
@@ -5695,6 +5801,11 @@ function renderSalesChart() {
             // "US$ 59,20" at the foot of the scale is a number, not a price.
             includeBounds: false,
           },
+        },
+        // Declared AFTER y so the default y-axis lookup still lands on the price scale.
+        yMoves: {
+          type: 'linear', position: 'right', display: false,
+          min: 0, max: chartMoveAxisMax(datasets),
         },
       },
     },
@@ -5840,7 +5951,7 @@ function saleCardHtml(s, i = 0, swap = false) {
   // What kind of event this row is, said once and plainly. A sale says it with its price,
   // so only the priceless ones need the word.
   const moveChip = isMove
-    ? `<span class="trade-sale-move is-${s.event === 'mint' ? 'mint' : 'transfer'}">${ico(s.event === 'mint' ? 'sparkle' : 'send', 12)}${esc(t(s.event === 'mint' ? 'trade.sales.minted' : 'trade.sales.transferred'))}</span>` : '';
+    ? `<span class="trade-sale-move is-${s.event === 'mint' ? 'mint' : 'transfer'}">${ico(s.event === 'mint' ? 'sparkle' : 'send', 12)}${esc(t(moveLabelKey(s)))}</span>` : '';
   return `
     <article class="trade-sale-card ${isMove ? 'is-move' : ''} ${swap ? 'is-swap' : ''}"${anim}>
       <button type="button" class="trade-sale-media" ${openAttrs} aria-label="${esc(t('trade.sales.view'))}">${img}</button>
@@ -5860,7 +5971,7 @@ function saleCardHtml(s, i = 0, swap = false) {
       ${isMove
         ? `<div class="trade-sale-price is-move">
             <span class="trade-sale-noprice">${esc(t('trade.sales.noPrice'))}</span>
-            <span class="trade-sale-noprice-sub">${esc(t(s.event === 'mint' ? 'trade.sales.mintedSub' : 'trade.sales.transferredSub'))}</span>
+            <span class="trade-sale-noprice-sub">${esc(t(moveSubKey(s)))}</span>
           </div>`
         : `<div class="trade-sale-price">
             <span class="trade-sale-eth ${s.currency === 'usdc' ? 'is-usdc' : ''}">${esc(s.currency ? fmtListingAmt({ currency: s.currency, totalAmt: s.priceAmt, totalEth: s.priceEth }) : fmtEth(s.priceEth))}</span>
@@ -5878,8 +5989,9 @@ function salesGridInnerHtml(swap = false) {
       <button class="apply-btn-ghost" data-act="sales-retry" type="button">${esc(t('trade.browse.retry'))}</button></div>`;
   }
   if (!salesItems || !salesItems.length) {
-    if (salesEvents === 'transfers' && isWalletQuery(flt.q)) {
-      return `<div class="trade-grid-state"><div class="trade-grid-state-ico" aria-hidden="true">${ico('send', 40)}</div><p>${esc(t('trade.sales.noneMoves'))}</p>
+    if (salesEventsMode() === 'transfers' && salesEventsScope()) {
+      const isWallet = salesEventsScope() === 'wallet';
+      return `<div class="trade-grid-state"><div class="trade-grid-state-ico" aria-hidden="true">${ico(isWallet ? 'send' : 'sparkle', 40)}</div><p>${esc(t(isWallet ? 'trade.sales.noneMoves' : 'trade.sales.noneMints'))}</p>
         <button class="apply-btn-ghost" data-act="sales-events" data-v="all" type="button">${esc(t('trade.sales.events.all'))}</button></div>`;
     }
     if (fltActive()) {
@@ -9450,7 +9562,7 @@ function onClick(e) {
     case 'sales-refresh':  salesItems = null; salesError = false; return loadSales(true);
     case 'sales-events': {
       const v = target.dataset.v;
-      if (!v || v === salesEvents) return;
+      if (!v || v === salesEventsMode()) return;
       salesEvents = v;
       // Answer on the press: the pressed state moves now, the rows follow. Waiting for the
       // round trip to redraw the toggle reads as the button not having registered.
@@ -9470,13 +9582,13 @@ function onClick(e) {
       openFacet = openFacet === target.dataset.type ? null : target.dataset.type;
       return patchFilters();
     case 'flt-clear':
-      salesEvents = 'all'; salesCounts = null;
+      salesEvents = null; salesCounts = null;
       resetFilters();
       syncFilterInputs();
       return applyFilters();
     case 'flt-rm': {
       const { kind, type, val } = target.dataset;
-      if (kind === 'q') { flt.q = ''; salesEvents = 'all'; salesCounts = null; }
+      if (kind === 'q') { flt.q = ''; salesEvents = null; salesCounts = null; }
       else if (kind === 'min') flt.min = '';
       else if (kind === 'max') flt.max = '';
       else if (kind === 't') toggleTrait(type, val);
@@ -9699,7 +9811,7 @@ function onInput(e) {
     if (nowWallet && !isWalletQuery(flt.q) && flt.scope !== 'all') flt.scope = 'all';
     // A new address is a new history: the Sales tab's All/Sales/Transfers pick belonged to
     // the wallet before it, and carrying it over hides half of the next one without saying so.
-    if (v !== flt.q) { salesEvents = 'all'; salesCounts = null; }
+    if (v !== flt.q) { salesEvents = null; salesCounts = null; }
     flt.q = v;
     return applyFilters(nowWallet ? 0 : 300);
   }

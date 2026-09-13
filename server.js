@@ -3402,13 +3402,21 @@ function salesStatsOf(pts) {
   };
 }
 
-function buildSalesSeries(pts) {
+/**
+ * `moves` is the timestamps of the rows that have no price (on LAND, the withdrawals). They
+ * cannot be dots — there is no y to put them at — so they are counted per bucket and drawn
+ * as their own low series. Bucketed with the SAME boundaries as the price line, which is the
+ * whole point: a burst of withdrawals only means anything lined up against what the market
+ * was doing that week.
+ */
+function buildSalesSeries(pts, moves = []) {
   if (!pts.length) return null;
   const from = pts[0].t, to = pts[pts.length - 1].t;
   const bucket = salesBucketSize(Math.max(to - from, 1));
+  const bucketKey = t => (bucket.ms ? Math.floor(t / bucket.ms) * bucket.ms : monthStart(t));
   const acc = new Map(); // bucket start ms -> running aggregate
   for (const p of pts) {
-    const k = bucket.ms ? Math.floor(p.t / bucket.ms) * bucket.ms : monthStart(p.t);
+    const k = bucketKey(p.t);
     let a = acc.get(k);
     if (!a) acc.set(k, a = { t: k, n: 0, sumT: 0, sumEth: 0, sumUsd: 0, usdN: 0, lo: Infinity, hi: -Infinity });
     a.n++; a.sumT += p.t; a.sumEth += p.eth; a.lo = Math.min(a.lo, p.eth); a.hi = Math.max(a.hi, p.eth);
@@ -3440,8 +3448,22 @@ function buildSalesSeries(pts) {
   // few hundred the chart is a cloud you read as a whole, and 39-digit token ids for every
   // one of them would be most of the response.
   const detail = pts.length <= SALES_SERIES_DETAIL_MAX;
+
+  // How many priceless moves fell in each bucket. Only buckets that actually hold one are
+  // sent: a run of zeroes is the commonest case by far and says nothing the gap doesn't.
+  const moveAcc = new Map();
+  for (const t of moves) {
+    if (!t) continue;
+    const k = bucketKey(t);
+    moveAcc.set(k, (moveAcc.get(k) || 0) + 1);
+  }
+  const moveBuckets = [...moveAcc.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([t, n]) => ({ t, n }));
+
   return {
     from, to, bucket: bucket.key, sampled, shown: kept.length, detail,
+    moveBuckets, moveTotal: moves.length,
     points: kept.map(p => (detail
       ? { t: p.t, e: round6(p.eth), u: round2(p.usd), id: p.id, n: p.name }
       : { t: p.t, e: round6(p.eth), u: round2(p.usd) })),
@@ -3474,6 +3496,7 @@ function shapeSalesHistory(feed, f, sortKey, meta, win) {
   // what the chart is drawing.
   if (win) {
     const inWindow = view.pricePoints.filter(p => p.t >= win.from && p.t <= win.to);
+    const movesInWindow = (view.movePoints || []).filter(t => t >= win.from && t <= win.to);
     // The drawing as well as the figures. Page 0's scatter is an even sample of the WHOLE
     // matched set, so on a big set a six-month window inherits about eight of its four
     // hundred dots: a true picture of nothing much. Re-sampled over the window it gets its
@@ -3482,7 +3505,7 @@ function shapeSalesHistory(feed, f, sortKey, meta, win) {
     return {
       window: win,
       stats: salesStatsOf(inWindow),
-      series: buildSalesSeries(inWindow),
+      series: buildSalesSeries(inWindow, movesInWindow),
       fetchedAt: view.fetchedAt,
     };
   }
@@ -3493,6 +3516,8 @@ function shapeSalesHistory(feed, f, sortKey, meta, win) {
     // query. Like the facets, it rides with page 0 and the client keeps its copy.
     ...(f.page === 0 && view.series ? { series: view.series } : {}),
     ...(f.page === 0 ? { counts: view.counts, events: f.events } : {}),
+    // Only ever sent to say "this half of the toggle has no data behind it".
+    ...(f.page === 0 && meta.moves === false ? { movesUnavailable: true } : {}),
   });
 }
 
@@ -3552,6 +3577,14 @@ function buildSalesView(feed, f, sortKey, meta, rate) {
   const counts = { sales: 0, transfers: 0 };
   for (const r of universe) { if (r.event === 'sale') counts.sales++; else counts.transfers++; }
   const pricePoints = salesPricePoints(matched);
+  // Taken from `matched`, not from the whole universe — so the chart's bars answer the same
+  // question the list does. In Sales mode `matched` holds no priceless row at all and this is
+  // empty, which is exactly how the bars stay off the default view.
+  const movePoints = matched
+    .filter(r => r.event && r.event !== 'sale')
+    .map(r => Date.parse(r.at) || 0)
+    .filter(Boolean)
+    .sort((a, b) => a - b);
   return {
     matched,
     counts,
@@ -3562,7 +3595,8 @@ function buildSalesView(feed, f, sortKey, meta, rate) {
     // Never serialized — browsePage picks the response's fields by name. This is here so a
     // window query is a filter over a list that already exists.
     pricePoints,
-    series: buildSalesSeries(pricePoints),
+    movePoints,
+    series: buildSalesSeries(pricePoints, movePoints),
     // The sales feed's own cache time: when the DATA was read, not when this response was
     // assembled, so paging through settled history doesn't churn the response's validator.
     fetchedAt: new Date(meta.at || Date.now()).toISOString(),
@@ -4311,6 +4345,13 @@ async function getLandBrowse(searchParams) {
 // its sale (price/date/wallets) — just without trait facets, same as LAND browse.
 const LAND_SALES_TTL_MS = 3 * 60 * 1000;
 const landSalesFeed = { data: null, at: 0, inFlight: null };
+// Mints move in bursts and then not at all for weeks, and none of them carries a price, so
+// nothing on the page goes stale while this sits. Longer TTL than the sales feed for that
+// reason, and because the read is the whole history every time rather than a recent window.
+const LAND_MINTS_TTL_MS = 10 * 60 * 1000;
+// `ok` is "we have really read this at least once". Until then the Sales tab hides the
+// withdrawals toggle rather than showing a count of nothing.
+const landMintsFeed = { data: null, at: 0, inFlight: null, ok: false };
 async function getLandSalesFeed() {
   const fresh = landSalesFeed.data && Date.now() - landSalesFeed.at < LAND_SALES_TTL_MS;
   if (!fresh && !landSalesFeed.inFlight) {
@@ -4326,6 +4367,25 @@ async function getLandSalesFeed() {
   return landSalesFeed.data || landSalesFeed.inFlight;
 }
 
+/**
+ * Every LAND mint, newest first — a parcel withdrawn out of the game onto Ethereum. Shares
+ * the sales feed's shape: a failed read keeps the last good copy rather than becoming an
+ * empty list, because "no mints" and "we couldn't read the chain" must never look alike.
+ */
+async function getLandMintsFeed() {
+  const fresh = landMintsFeed.data && Date.now() - landMintsFeed.at < LAND_MINTS_TTL_MS;
+  if (!fresh && !landMintsFeed.inFlight) {
+    landMintsFeed.inFlight = landMarket.collectionMints()
+      .then(d => { landMintsFeed.data = d; landMintsFeed.at = Date.now(); landMintsFeed.ok = true; return d; })
+      .catch(err => {
+        console.error('LAND mints feed build failed:', err.message);
+        return landMintsFeed.data || [];
+      })
+      .finally(() => { landMintsFeed.inFlight = null; });
+  }
+  return landMintsFeed.data || landMintsFeed.inFlight;
+}
+
 async function getLandSalesHistory(searchParams) {
   const f = parseBrowseQuery(searchParams);
   const sortKey = parseSalesSort(searchParams);
@@ -4333,12 +4393,18 @@ async function getLandSalesHistory(searchParams) {
   const isWallet = HEX_ADDRESS.test(f.q);
   f.events = parseSalesEvents(searchParams, isWallet);
   const [sold, fx, daily, listings] = await Promise.all([getLandSalesFeed(), getMarketplaceFx(), getEthUsdDaily(), landListingsByToken()]);
-  const moves = isWallet ? await walletTransferRows('land', f.q) : [];
+  // A wallet query reads that address's own moves (its transfers AND its mints). Everything
+  // else gets the collection's mints: the withdrawals that put a parcel on-chain in the first
+  // place. Plain wallet-to-wallet transfers stay out of the collection-wide feed — there are
+  // four of them for every sale, and they'd bury the thing people came to read.
+  const moves = isWallet ? await walletTransferRows('land', f.q) : await getLandMintsFeed();
   const feed = moves.length ? [...sold, ...moves].sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0)) : sold;
   const index = slimeIndex.getSlimeIndex(); // null while the first sweep runs
   const data = shapeSalesHistory(feed, f, sortKey, {
     kind: 'sales:land',
-    stamps: [landSalesFeed.at, index?.builtAt ?? 0, feed.length],
+    stamps: [landSalesFeed.at, landMintsFeed.at, landMintsFeed.ok, index?.builtAt ?? 0, feed.length],
+    // Told to the client so it can hide the toggle instead of publishing a count it can't stand behind.
+    moves: isWallet || landMintsFeed.ok,
     at: landSalesFeed.at,
     daily, ethUsd: fx.ethUsd, fxRates: fx.fxRates,
     listed: id => { const L = listings.get(String(id)); if (!L) return null; return L.currency === 'usdc' ? (fx.ethUsd ? Math.round(L.priceAmt / fx.ethUsd * 1e4) / 1e4 : null) : (L.priceEth ?? L.priceAmt ?? null); },

@@ -6797,6 +6797,12 @@ a.trade-dash-who:hover { border-color: var(--hr-primary); background: rgba(81,25
   font-size: 13px; font-weight: 700; color: var(--hr-fg-0);
   overflow: hidden; text-overflow: ellipsis;
 }
+/* The collection-wide strip has no address to name, so it says what the third tab holds
+   instead. Sits where the address sits, in the quieter body weight. */
+.trade-wallet-note {
+  font-size: 12.5px; font-weight: 600; color: var(--hr-fg-2);
+  overflow: hidden; text-overflow: ellipsis;
+}
 .trade-wallet-segs { display: flex; gap: 6px; flex-wrap: wrap; }
 .trade-wallet-seg {
   display: inline-flex; align-items: center; gap: 7px;
