@@ -24,7 +24,29 @@ import {
   BRIDGE_STORE, BRIDGE_TERMINAL, CARD_PHASES,
 } from './market/core/consts.js';
 
-const collIco = id => `<img class="trade-coll-ico" src="${COLL_ICONS[id]}" alt="" aria-hidden="true" />`;
+const collIco = id => (id === 'all'
+  // Both collections at once, said with both collections' own marks rather than a glyph
+  // standing in for them — there is no "All" brand to draw.
+  ? `<span class="trade-coll-ico-stack" aria-hidden="true">${Object.keys(COLLECTIONS)
+      .map(k => `<img src="${COLL_ICONS[k]}" alt="" />`).join('')}</span>`
+  : `<img class="trade-coll-ico" src="${COLL_ICONS[id]}" alt="" aria-hidden="true" />`);
+
+// --- Browsing both collections at once ---------------------------------------------------
+// Only the two READING views can hold both: Buy (the grid) and Sales History. Everything that
+// signs needs one chain, so on Sell, Transfer, the dashboard and the money views the scope
+// quietly narrows back to `coll` and the All chip isn't offered.
+const ALL_SCOPE_TABS = new Set(['buy', 'sales']);
+/** Is the merged, both-collections view the one actually on screen? */
+const allMode = () => browseAll && ALL_SCOPE_TABS.has(tradeTab);
+/** Which collection a row belongs to. Merged rows say; single-collection rows are the view's. */
+const rowColl = it => it?.coll || coll;
+/** The collection that settles on this chain, or null for a chain neither uses. */
+const collForChainHex = hex => Object.keys(COLLECTIONS)
+  .find(k => COLLECTIONS[k].chainHex === String(hex || '').toLowerCase()) || null;
+/** The value the address bar carries for the current scope. */
+const urlColl = () => (allMode() ? 'all' : coll);
+/** Both collections when merged, the active one otherwise — for anything done per market. */
+const scopeColls = () => (allMode() ? Object.keys(COLLECTIONS) : [coll]);
 // Both collections use the same faceted browse. LAND is browsed via its attached Slime
 // (a parcel and its slime are one NFT): one card per parcel, filtered by slime traits +
 // rarity rank, priced/buyable when the parcel is listed.
@@ -36,13 +58,13 @@ function petUrl(it) {
   const c = it?.coords;
   return Number.isInteger(c?.x) && Number.isInteger(c?.y) ? `/api/market/land/pet/${c.x}/${c.y}` : null;
 }
-function tokenExplorerUrl(tokenId) {
-  return coll === 'land'
+function tokenExplorerUrl(tokenId, c = coll) {
+  return c === 'land'
     ? `https://opensea.io/assets/ethereum/${LAND_CONTRACT_L1}/${encodeURIComponent(tokenId)}`
     : `${EXPLORER}/token/${CREATURE_CONTRACT}/instance/${encodeURIComponent(tokenId)}`;
 }
-function txExplorerUrl(hash) {
-  return coll === 'land' ? `https://etherscan.io/tx/${hash}` : `${EXPLORER}/tx/${hash}`;
+function txExplorerUrl(hash, c = coll) {
+  return c === 'land' ? `https://etherscan.io/tx/${hash}` : `${EXPLORER}/tx/${hash}`;
 }
 
 // The genuinely shared state — wallet, active collection, active view, display currency.
@@ -50,8 +72,8 @@ function txExplorerUrl(hash) {
 // the setters, because assigning to an imported binding is an early SyntaxError, which is
 // what makes an extraction like this fail loudly instead of quietly forking the state.
 import {
-  account, chainId, busy, coll, tradeTab, currency, ethUsd, fxRates, loadedOnce, pendingFlash,
-  setAccount, setChainId, setBusy, setColl, setTradeTab,
+  account, chainId, busy, coll, browseAll, tradeTab, currency, ethUsd, fxRates, loadedOnce, pendingFlash,
+  setAccount, setChainId, setBusy, setColl, setBrowseAll, setTradeTab,
   setCurrency, setEthUsd, setFxRates, setLoadedOnce, setPendingFlash, takeFlash,
   bridgeJob, gasState, unwrapState, setBridgeJobRaw, setGasState, setUnwrapState,
 } from './market/core/state.js';
@@ -114,11 +136,21 @@ function applyHealth(data, respColl) {
     // was staring at an outage banner, put the real data back without making them ask.
     healthPollAttempt[respColl] = 0;
     stopHealthPoll(respColl);
-    if (was && was !== 'live' && respColl === coll) refreshAfterRecovery();
+    if (was && was !== 'live' && scopeColls().includes(respColl)) refreshAfterRecovery();
   } else if (h.state !== 'checking') {
     scheduleHealthPoll(respColl); // keep checking on our own until it comes back
   }
-  if (respColl === coll) patchDegradedBanner();
+  if (scopeColls().includes(respColl)) patchDegradedBanner();
+}
+
+// A merged response carries one envelope PER collection, because half a grid can be perfectly
+// good while the other half is unreachable. Single-collection responses keep the old shape.
+function applyHealthEnvelope(data, reqColl) {
+  if (data?.healthByColl) {
+    for (const [c, h] of Object.entries(data.healthByColl)) applyHealth({ health: h }, c);
+    return;
+  }
+  applyHealth(data, reqColl);
 }
 
 // --- Automatic recovery -------------------------------------------------------
@@ -156,6 +188,8 @@ function scheduleHealthPoll(c) {
 // Came back to life: reload what the outage denied us, for the active collection only.
 function refreshAfterRecovery() {
   loadBrowse(true, true);
+  if (tradeTab === 'sales') loadSales(true);
+  // Offers belong to the collection being acted on, which stays singular even in All mode.
   if (coll === 'creatures') { loadCollOffers(); if (account) loadMyOffers(); }
   else { loadLandCollOffers(); if (account) loadLandMyOffers(); }
 }
@@ -258,6 +292,11 @@ let salesScale = 'auto';       // y axis: 'auto' (log when the spread demands it
 let salesWindow = null;        // {from, to} in ms — the visible slice of the timeline
 let salesWindowStats = null;   // its exact stats; null falls the rail back to the full range
 let salesZoom = null;          // the same shape as salesSeries, re-sampled over that period
+// In the merged view the same matched set also arrives cut by collection, so the chart can
+// draw a cloud per collection instead of one series mixing 0.02 ETH Creatures with parcels at
+// a hundred times that. Null whenever a single collection is on screen.
+let salesSplit = null;         // {creatures, land} — each the shape of salesSeries
+let salesZoomSplit = null;     // the same, re-sampled over the zoom window
 let salesWindowBusy = false;
 let salesWindowReq = 0;
 let salesWindowTimer = null;
@@ -286,7 +325,9 @@ const isWalletQuery = s => WALLET_RE.test((s || '').trim());
    and while those were invisible, a burst of them read on a block explorer like new land
    being conjured. Plain wallet-to-wallet transfers stay out of the collection-wide feed;
    they outnumber sales four to one and would bury the prices people came for. */
-const salesEventsScope = () => (isWalletQuery(flt.q) ? 'wallet' : coll === 'land' ? 'land' : null);
+// In the merged feed the collection-wide moves are LAND's withdrawals (Creatures have no
+// collection-wide move feed), so the toggle reads the same as it does on the LAND tab.
+const salesEventsScope = () => (isWalletQuery(flt.q) ? 'wallet' : (allMode() || coll === 'land') ? 'land' : null);
 // Having typed an address, nobody means "show me half of what this wallet did". The
 // collection feed is the opposite: it stays a price list until you ask it for more.
 const salesEventsDefault = () => (isWalletQuery(flt.q) ? 'all' : 'sales');
@@ -295,9 +336,9 @@ const salesEventsMode = () => salesEvents || salesEventsDefault();
    it was withdrawn out of Highrise onto Ethereum, where the contract mints it at that moment.
    Saying "Withdrawn" is what stops a burst of these reading as land being conjured. */
 const moveLabelKey = s => (s.event !== 'mint' ? 'trade.sales.transferred'
-  : coll === 'land' ? 'trade.sales.withdrawn' : 'trade.sales.minted');
+  : rowColl(s) === 'land' ? 'trade.sales.withdrawn' : 'trade.sales.minted');
 const moveSubKey = s => (s.event !== 'mint' ? 'trade.sales.transferredSub'
-  : coll === 'land' ? 'trade.sales.withdrawnSub' : 'trade.sales.mintedSub');
+  : rowColl(s) === 'land' ? 'trade.sales.withdrawnSub' : 'trade.sales.mintedSub');
 // Creatures only come in two tiers — Legendary and Epic. (Rare/Uncommon/Common never
 // existed in the collection; listing them just showed permanently-disabled chips.)
 const RARITY_TIERS = ['Legendary', 'Epic'];
@@ -316,6 +357,14 @@ let invFacets = null;          // [{type, values:[{v,n}]}] computed from the own
 // are all "rare", so only the computed rank distinguishes them). Lets one filter bar
 // serve both the Creature collection and the Slime catalogue.
 function browseDataset() {
+  if (allMode()) {
+    return {
+      api: '/api/market/all/browse', hasRarityChips: true, defaultScope: 'listed',
+      scopeAll: 'trade.filter.scopeAllAll', noMatch: 'trade.filter.noMatchAll',
+      countAll: 'trade.filter.countAllAll', countCollection: 'trade.filter.countCollectionAll',
+      countFiltered: 'trade.filter.countFilteredAll', indexing: 'trade.filter.indexingAll',
+    };
+  }
   if (coll === 'land') {
     return {
       api: '/api/market/land/browse', hasRarityChips: false, defaultScope: 'listed',
@@ -362,7 +411,7 @@ function resetBrowseForView() {
   // Sales History shares this collection scope — drop its sold set + facets so the new
   // collection reloads its own (via maybeLoadSales on the next render).
   salesItems = null; salesFacets = null; salesPage = 0; salesHasMore = false; salesTotal = null; salesError = false;
-  salesSeries = null; salesScale = 'auto'; clearSalesWindow(); destroySalesChart();
+  salesSeries = null; salesSplit = null; salesScale = 'auto'; clearSalesWindow(); destroySalesChart();
   setFltSheet(false);
   clearTimeout(fltDebounce);
 }
@@ -843,31 +892,47 @@ function fmtAge(ms) {
   return t('trade.health.ageHr').replace('{n}', String(Math.floor(mins / 60)));
 }
 
-function degradedBannerHtml() {
-  const h = hOf();
+function oneDegradedBannerHtml(c, merged) {
+  const h = hOf(c);
   // Nothing to say while we have never heard back ('live' by default), and nothing to say
   // while the server is merely retrying ('checking'). The banner is a claim that the market
   // is unreachable, so it only goes up once that is actually established.
   if (!h || h.state === 'live' || h.state === 'checking') return '';
   const down = h.state === 'down';
   // The other market's state, so the banner can point at something that still works.
-  const other = coll === 'creatures' ? 'land' : 'creatures';
+  const other = c === 'creatures' ? 'land' : 'creatures';
   const otherOk = (health[other]?.state ?? 'live') === 'live';
+  // In the merged view you are already looking at the other market, so "switch to it" is
+  // noise — but WHICH market has gone quiet is now the thing the banner has to say, because
+  // half the grid is still filling normally.
+  const lead = merged
+    ? `<strong>${esc(t(down ? 'trade.health.all.down.h' : 'trade.health.all.degraded.h')
+        .replace('{coll}', t(COLLECTIONS[c].labelKey)))}</strong>`
+    : `<strong>${esc(t(skey(down ? 'trade.health.down.h' : 'trade.health.degraded.h', c)))}</strong>`;
 
   const age = h.ageMs != null ? fmtAge(h.ageMs) : '';
   return `
     <div class="trade-degraded ${down ? 'is-down' : 'is-stale'}" role="status" aria-live="polite">
       <span aria-hidden="true">${down ? ico('alert', 17) : ico('pause', 17)}</span>
       <div class="trade-degraded-body">
-        <strong>${esc(t(skey(down ? 'trade.health.down.h' : 'trade.health.degraded.h')))}</strong>
-        <span>${esc(t(skey(down ? 'trade.health.down.p' : 'trade.health.degraded.p')))}</span>
+        ${lead}
+        <span>${esc(t(skey(down ? 'trade.health.down.p' : 'trade.health.degraded.p', c)))}</span>
         ${!down && age ? `<span class="trade-degraded-age">${esc(t('trade.health.degraded.age').replace('{t}', age))}</span>` : ''}
-        ${otherOk ? `<span>${esc(t(skey('trade.health.otherOk')))}</span>` : ''}
+        ${merged
+          ? `<span>${esc(t('trade.health.all.otherOk').replace('{coll}', t(COLLECTIONS[other].labelKey)))}</span>`
+          : (otherOk ? `<span>${esc(t(skey('trade.health.otherOk', c)))}</span>` : '')}
       </div>
-      ${tipHtml(skey('trade.health.detail'))}
-      ${otherOk ? `<button class="trade-degraded-switch" data-act="coll" data-coll="${esc(other)}" type="button">${esc(t(skey('trade.health.switch')))}</button>` : ''}
+      ${tipHtml(skey('trade.health.detail', c))}
+      ${!merged && otherOk ? `<button class="trade-degraded-switch" data-act="coll" data-coll="${esc(other)}" type="button">${esc(t(skey('trade.health.switch', c)))}</button>` : ''}
       <button class="trade-degraded-retry" data-act="health-retry" type="button">${esc(t('trade.health.retryBtn'))}</button>
     </div>`;
+}
+
+// One banner per market in view: in All mode a LAND outage must be sayable over a grid whose
+// Creature half is arriving perfectly well, rather than blanking the lot or saying nothing.
+function degradedBannerHtml() {
+  const merged = allMode();
+  return scopeColls().map(c => oneDegradedBannerHtml(c, merged)).join('');
 }
 function patchDegradedBanner() {
   const el = root()?.querySelector('#trade-degraded-slot');
@@ -1033,6 +1098,9 @@ async function connect() {
     setChainId(await eth().request({ method: 'eth_chainId' }));
     // Land them on whatever chain the active collection needs (zkEVM for Creatures,
     // Ethereum for LAND) — not always zkEVM, or connecting on the LAND tab misfires.
+    // In the merged view both chains are valid, so the collection moves to the wallet
+    // instead: a member already on Ethereum has not asked to be dragged to zkEVM.
+    syncCollToChain();
     if (account && !onRightChain()) await switchToChain(C().chainHex);
   } catch (err) {
     console.error('Wallet connect failed:', err);
@@ -1093,10 +1161,31 @@ async function autoSwitchNetwork() {
 }
 
 // Repaint just the wallet bar (network pill, balances, action pills) in place.
+/**
+ * Both chains' balances, grouped by collection and marked with each collection's own brand
+ * mark. Seeded from the last-known values so a repaint never flashes em-dashes over figures
+ * we already have; refreshAllBalances() overwrites them a moment later.
+ */
+function allBalsHtml() {
+  const seed = allBalCache.get(account) || {};
+  // The group's title has to cover the whole group, not just the count: two "ETH" figures on
+  // two different chains sit side by side here, and the brand mark is the only other thing
+  // saying which is which.
+  const group = (c, rows) => `<span class="trade-bar-group is-${esc(c)}" title="${esc(t(c === 'land' ? 'trade.balance.groupLand' : 'trade.balance.groupCreatures'))}">
+    <img class="trade-bal-ico" src="${COLL_ICONS[c]}" alt="" aria-hidden="true" />${rows}</span>`;
+  return group('creatures',
+    `<b id="trade-bal">${esc(seed.cCount ?? '—')}</b>
+     <span class="trade-bar-bal">ETH <b id="trade-bal-eth">${esc(seed.cEth ?? '—')}</b></span>
+     <span class="trade-bar-bal">IMX <b id="trade-bal-imx">${esc(seed.imx ?? '—')}</b></span>`)
+    + group('land',
+      `<b id="trade-bal-land">${esc(seed.lCount ?? '—')}</b>
+       <span class="trade-bar-bal">ETH <b id="trade-bal-land-eth">${esc(seed.lEth ?? '—')}</b></span>`);
+}
+
 function patchWalletBar() {
   const bar = root()?.querySelector('.trade-command .trade-bar');
   if (bar) bar.outerHTML = walletBarHtml();
-  if (account && (coll === 'land' || onZk())) refreshBalance();
+  if (account && (allMode() || coll === 'land' || onZk())) refreshBalance();
 }
 
 async function sendTransfer(contract, tokenId, to) {
@@ -1146,7 +1235,7 @@ async function loadBrowse(reset = true, quiet = false) {
     const res = await fetch(`${ds.api}${qs ? '?' + qs : ''}`, { headers: { Accept: 'application/json' }, signal: ctl.signal });
     // A 503 still carries a health envelope, so parse before deciding.
     const data = await res.json().catch(() => null);
-    applyHealth(data, reqColl);
+    applyHealthEnvelope(data, reqColl);
     if (!res.ok) throw new Error('http ' + res.status);
     if (rid !== browseReqId || ds.api !== browseDataset().api) return; // superseded — newer request (or view) owns the grid
     if (data.ethUsd != null) setEthUsd(data.ethUsd);
@@ -1271,27 +1360,35 @@ function fmtListingLine(it) {
   return fiat ? `${fmtListingAmt(it)} (${fiat})` : fmtListingAmt(it);
 }
 
+// Which collection a tile belongs to, worn on the tile. Only in the merged grid: with one
+// collection on screen the badge would repeat the switcher above it on every card.
+function collBadgeHtml(c) {
+  if (!allMode()) return '';
+  return `<span class="trade-tile-coll is-${esc(c)}">${collIco(c)}<span>${esc(t(COLLECTIONS[c].labelKey))}</span></span>`;
+}
+
 function tileHtml(it) {
+  const c = rowColl(it);
   const unlisted = it.listed === false; // scope=all rows; LAND/listed rows lack the flag
   const fiat = unlisted ? '' : fmtListingFiat(it);
   // LAND tiles show the parcel's slime pet (plot art is in the modal); if the parcel
   // has no pet (404) the delegated error handler swaps in the plot image.
-  const pet = coll === 'land' ? petUrl(it) : null;
+  const pet = c === 'land' ? petUrl(it) : null;
   const src = pet || it.image;
   const fallback = pet && it.image ? ` data-fallback="${esc(it.image)}"` : '';
   const img = src
     ? `<img class="trade-tile-img ${pet ? 'is-pet' : ''}" src="${esc(src)}"${fallback} alt="" loading="lazy" />`
-    : `<div class="trade-tile-img trade-tile-noimg" aria-hidden="true">${ico(coll === 'land' ? 'map' : 'paw', 40)}</div>`;
+    : `<div class="trade-tile-img trade-tile-noimg" aria-hidden="true">${ico(c === 'land' ? 'map' : 'paw', 40)}</div>`;
   const price = unlisted
     ? `<span class="trade-tile-price is-unlisted">${esc(t('trade.filter.unlisted'))}</span>`
     : `<span class="trade-tile-price ${it.currency === 'usdc' ? 'is-usdc' : ''}">${esc(fmtListingAmt(it))}</span>`;
   // LAND: one card is a parcel, shown via its slime — lead with the slime's nickname,
   // with the parcel coordinates (the asset you're buying) as the subtitle.
-  const sub = coll === 'land' && it.slimeName && it.parcelName
+  const sub = c === 'land' && it.slimeName && it.parcelName
     ? `<span class="trade-tile-sub">${esc(it.parcelName)}</span>` : '';
   return `
-    <button class="trade-tile" type="button" data-act="open" data-token="${esc(it.tokenId)}">
-      <div class="trade-tile-media">${img}${rankChip(it.rank)}${rarityChip(it.rarity)}</div>
+    <button class="trade-tile" type="button" data-act="open" data-token="${esc(it.tokenId)}" data-coll="${esc(c)}">
+      <div class="trade-tile-media">${img}${collBadgeHtml(c)}${rankChip(it.rank)}${rarityChip(it.rarity)}</div>
       <div class="trade-tile-body">
         <span class="trade-tile-name">${esc(it.name)}</span>
         ${sub}
@@ -1315,7 +1412,7 @@ function gridInnerHtml() {
     // A resolved wallet with nothing to show: either it holds none of this collection, or
     // the extra filters emptied its holdings — say which, and offer the matching way out.
     if (isBrowseView() && browseOwner) {
-      const noun = t(coll === 'land' ? 'trade.wallet.nounLand' : 'trade.wallet.noun');
+      const noun = t(allMode() ? 'trade.wallet.nounAll' : coll === 'land' ? 'trade.wallet.nounLand' : 'trade.wallet.noun');
       if (extraFiltersActive()) {
         return `<div class="trade-grid-state"><div class="trade-grid-state-ico" aria-hidden="true">${ico('search', 40)}</div><p>${esc(t(browseDataset().noMatch))}</p>
           <button class="apply-btn-ghost" data-act="flt-clear" type="button">${esc(t('trade.filter.clear'))}</button></div>`;
@@ -1373,8 +1470,10 @@ function appendTiles(sel, moreSel, rows, render, moreHtml, rowClass) {
 // The open modal's listing: the grid feed first, then the deep-link fallback (a token
 // arriving via ?token= is often beyond the feed's first page, or newer than it).
 function listingForToken(tokenId) {
-  return listings.find(l => String(l.tokenId) === String(tokenId))
-    || (linkListing && String(linkListing.tokenId) === String(tokenId) ? linkListing : null);
+  // In the merged grid a Creature and a parcel can share an id, so the row must match the
+  // collection being acted on as well as the number.
+  const same = l => String(l.tokenId) === String(tokenId) && (!l.coll || l.coll === coll);
+  return listings.find(same) || (linkListing && same(linkListing) ? linkListing : null);
 }
 
 // --- The marketplace's addresses ---------------------------------------------------------
@@ -1408,7 +1507,10 @@ function tradeUrl(tab = tradeTab) {
   const p = new URLSearchParams();
   for (const v of keep.getAll('t')) p.append('t', v);
   if (keep.get('scope') === 'all') p.set('scope', 'all');
-  if (coll !== 'creatures') p.set('coll', coll);
+  // An open token names the collection it is in, never 'all': ids repeat across the two
+  // collections, so `?coll=all&token=5` would be a link to either of two assets.
+  const cv = modalToken ? coll : urlColl();
+  if (cv !== 'creatures') p.set('coll', cv);
   if (modalToken) p.set('token', modalToken);
   const qs = p.toString();
   return tradePath(tab) + (qs ? `?${qs}` : '');
@@ -1481,7 +1583,31 @@ async function maybeLoadHolderProfile(wallet) {
   if (modalToken && String(modalOwnerWallet() || '').toLowerCase() === w) patchModal();
 }
 
-async function openModal(tokenId) {
+/**
+ * Move the app onto `c` without disturbing the merged grid — the one thing the collection
+ * switcher must NOT do here. Everything that signs reads the active collection, so opening a
+ * tile in All mode has to set it first and move the wallet with it; the grid itself stays,
+ * because the member never asked to leave it.
+ */
+/** In the merged view, point the acting collection at whatever chain the wallet is on. */
+function syncCollToChain() {
+  if (!browseAll || !chainId) return;
+  const c = collForChainHex(chainId);
+  if (c && c !== coll) { setColl(c); resetPriceGuide(); tokenOffers = null; resetSellerState(); }
+}
+
+function actOnColl(c) {
+  if (!c || c === coll || !COLLECTIONS[c]) return;
+  setColl(c);
+  resetPriceGuide();  // LAND must never be priced off Creature comparables
+  tokenOffers = null;
+  resetSellerState();
+  autoSwitchNetwork();
+  patchWalletBar();
+}
+
+async function openModal(tokenId, itemColl) {
+  if (allMode()) actOnColl(itemColl);
   modalToken = tokenId; modalMeta = null; modalLoading = true; buyState = null;
   tokenOffers = null;
   if (offerCtx === 'modal') { offerState = null; offerCtx = null; }
@@ -1546,13 +1672,14 @@ async function fetchListingFor(tokenId) {
 const LINK_RETRY_MS = [0, 10000, 25000];
 
 async function openDeepLink(tokenId, opts = {}) {
+  if (allMode()) actOnColl(opts.coll);
   const wantColl = coll;
   // Known-unlisted (a profile tile told us): don't enter the "brand-new listing, syncing…"
   // hunt — that message is for a listing that may still be propagating, not for an item
   // the owner simply hasn't listed. Open the detail modal straight to "Not listed".
-  if (opts.knownListed === false) { linkSync = null; openModal(tokenId); return; }
+  if (opts.knownListed === false) { linkSync = null; openModal(tokenId, opts.coll); return; }
   linkSync = tokenId;
-  openModal(tokenId);
+  openModal(tokenId, opts.coll);
   const moved = () => coll !== wantColl || String(modalToken) !== String(tokenId);
   for (const ms of LINK_RETRY_MS) {
     if (ms) await new Promise(resolve => setTimeout(resolve, ms));
@@ -3089,7 +3216,7 @@ function buyAreaHtml(it) {
       ${esc(t('trade.buy.btn'))} · ${esc(fmtEthFiat(it.totalEth ?? it.priceEth))}</button>`;
   }
   const gasNote = coll === 'land' ? `<p class="trade-beta-micro">${esc(t('trade.land.gasMicro'))}</p>` : '';
-  return `<div class="trade-buy">${btn}<p class="trade-beta-micro">${esc(t('trade.beta.micro'))}</p>${gasNote}${buyStatusHtml()}</div>`;
+  return `<div class="trade-buy">${btn}${gasNote}${buyStatusHtml()}</div>`;
 }
 
 function setBuy(phase, extra) {
@@ -4261,17 +4388,25 @@ function walletBarHtml() {
   // Wrong network is an action, not a status — the pill itself switches. The chip carries
   // both a full label (desktop) and a short one (mobile, where "Immutable zkEVM" beside the
   // address would overflow the wallet row); CSS shows one or the other.
-  const netFull = coll === 'land' ? t('trade.net.eth') : t('trade.net.ok');
-  const netShort = coll === 'land' ? t('trade.net.eth.short') : t('trade.net.ok.short');
-  const net = onRightChain()
-    ? `<span class="trade-net is-ok"><span class="trade-net-full">${esc(netFull)}</span><span class="trade-net-short">${esc(netShort)}</span></span>`
+  // In the merged view BOTH chains are the right chain, so the pill names the one the wallet
+  // is on instead of calling it wrong. It only goes red on a chain neither collection uses.
+  const onKnown = !!collForChainHex(chainId);
+  const netColl = allMode() ? (collForChainHex(chainId) || coll) : coll;
+  const netFull = netColl === 'land' ? t('trade.net.eth') : t('trade.net.ok');
+  const netShort = netColl === 'land' ? t('trade.net.eth.short') : t('trade.net.ok.short');
+  const netOk = allMode() ? onKnown : onRightChain();
+  const net = netOk
+    ? `<span class="trade-net is-ok" ${allMode() ? `title="${esc(t('trade.net.allTitle'))}"` : ''}><span class="trade-net-full">${esc(netFull)}</span><span class="trade-net-short">${esc(netShort)}</span></span>`
     : `<button class="trade-net is-bad" data-act="switch" type="button" title="${esc(t('trade.net.switch'))}">${esc(t('trade.net.bad'))}</button>`;
   // Live on-chain balances straight from the RPC — the user's ground truth when a
   // wallet UI mis-reports (e.g. MetaMask's phantom "insufficient IMX" on custom nets).
   // Seed from the last-known values so a re-render doesn't flash '—' while the async
   // reads run; refreshBalance() overwrites (and re-caches) right after.
   const seed = balCache.get(`${account}|${coll}`) || {};
-  const bal = coll === 'land'
+  // Merged view: both chains at once. The wallet can only see the one it is on, so the other
+  // side is read server-side (/api/market/all/balances) — see refreshAllBalances. Each figure
+  // is its own element so a partial read fills in what it has and leaves the rest at '—'.
+  const bal = allMode() ? allBalsHtml() : coll === 'land'
     ? `<span class="trade-bar-bal" title="${esc(t('trade.balance.landLabel'))}"><img class="trade-bal-ico" src="${COLL_ICONS.land}" alt="" aria-hidden="true" /> <b id="trade-bal">${esc(seed.count ?? '—')}</b></span>
        <span class="trade-bar-bal">ETH <b id="trade-bal-eth">${esc(seed.eth ?? '—')}</b></span>`
     : (onZk()
@@ -4297,11 +4432,28 @@ function walletBarHtml() {
 // Browse like a pro: name search, rarity tiers, every trait as a faceted popover,
 // price range, and sort — all server-filtered against the full listing snapshot.
 
+// In the merged browse both collections bring an Eyes drawer, and they are not the same
+// drawer, so the server namespaces every facet type: 'c:Eyes', 'l:Eyes'. These three read the
+// prefix back off. Outside All mode the names are bare and every one of them is a no-op.
+const FACET_COLL = { c: 'creatures', l: 'land' };
+/** The collection a facet type belongs to, or null when the name isn't namespaced. */
+function facetColl(type) {
+  const m = /^([cl]):/.exec(type || '');
+  return m ? FACET_COLL[m[1]] : null;
+}
+/** The drawer's own name, without the collection in front of it. */
+const facetName = type => String(type || '').replace(/^[cl]:/, '');
+/** Does this facet type belong to `c`? Bare names belong to whatever is on screen. */
+const facetIn = (type, c) => (facetColl(type) ?? c) === c;
+
 function rarityFacet() {
   // Live counts come from the server; the tier vocabulary is stable so the chips can
   // render (uncounted) before the first response lands.
-  const f = (curFacets() || []).find(x => /rarity/i.test(x.type));
-  return { type: f?.type || 'Rarity', counts: new Map((f?.values || []).map(({ v, n }) => [v, n])) };
+  const f = (curFacets() || []).find(x => /rarity/i.test(facetName(x.type)));
+  // Bare 'Rarity' before the first response; 'c:Rarity' once the merged facets land — either
+  // way the chips post back the exact type the server will match on.
+  const fallback = allMode() ? 'c:Rarity' : 'Rarity';
+  return { type: f?.type || fallback, counts: new Map((f?.values || []).map(({ v, n }) => [v, n])) };
 }
 
 function traitSelected(type, v) { return flt.traits.get(type)?.has(v) || false; }
@@ -4331,13 +4483,14 @@ function rarityChipsHtml() {
 // toggle mechanism as any trait value (data-act="flt-val"), so it reuses the existing
 // filter handler.
 function tierFacet() {
-  return (curFacets() || []).find(x => x.type === 'Tier') || null;
+  return (curFacets() || []).find(x => facetName(x.type) === 'Tier') || null;
 }
 function tierChipsHtml() {
   const vals = new Map((tierFacet()?.values || []).map(o => [o.v, o]));
   return TIER_VALUES.map(name => {
     const o = vals.get(name);
-    const sel = traitSelected('Tier', name);
+    const tierType = tierFacet()?.type || (allMode() ? 'l:Tier' : 'Tier');
+    const sel = traitSelected(tierType, name);
     const n = curFacets() ? (o?.n ?? 0) : null; // unknown before first response → enabled
     // Collection browse pairs each tier's share with the count it's computed from — both
     // describe the whole collection, so the two numbers read as one fact and don't shift
@@ -4355,7 +4508,7 @@ function tierChipsHtml() {
     const aria = pct && cntStr
       ? t('trade.filter.tierChipAria').replace('{t}', name).replace('{n}', cntStr).replace('{p}', pct) : '';
     return `<button type="button" class="trade-flt-rchip ${sel ? 'is-on' : ''}" data-tier="${esc(name.toLowerCase())}"
-      data-act="flt-val" data-type="Tier" data-val="${esc(name)}" aria-pressed="${sel}"
+      data-act="flt-val" data-type="${esc(tierType)}" data-val="${esc(name)}" aria-pressed="${sel}"
       ${aria ? `aria-label="${esc(aria)}"` : ''} ${n === 0 && !sel ? 'disabled' : ''}>
       <span class="trade-flt-rdot" aria-hidden="true"></span>${esc(name)}${pct
         ? `<span class="trade-flt-pct" title="${esc(t('trade.filter.rarityPct'))}">${esc(pct)}</span>` : ''}${cntStr
@@ -4440,7 +4593,8 @@ function traitSearchHtml() {
         aria-selected="${sel}" data-act="flt-val" data-type="${esc(h.type)}" data-val="${esc(h.v)}"
         ${h.n === 0 && !sel ? 'disabled' : ''}>
         <span class="trade-flt-check" aria-hidden="true">${sel ? ico('check', 13) : ''}</span>
-        <span class="trade-flt-optv"><span class="trade-flt-hit-v">${markMatch(h.v, traitQ)}</span><span class="trade-flt-hit-type">${esc(h.type)}</span></span>
+        <span class="trade-flt-optv"><span class="trade-flt-hit-v">${markMatch(h.v, traitQ)}</span><span class="trade-flt-hit-type">${
+          facetColl(h.type) ? `${collIco(facetColl(h.type))} ` : ''}${esc(facetName(h.type))}</span></span>
         ${pctStr ? `<span class="trade-flt-pct" title="${esc(t('trade.filter.rarityPct'))}">${esc(pctStr)}</span>` : ''}
         <span class="trade-flt-n">${h.n}</span>
       </button>`;
@@ -4455,16 +4609,28 @@ function traitDropsHtml() {
   if (traitQ) return traitSearchHtml();
   if (!curFacets()) return `<span class="trade-flt-loading">${esc(t('trade.filter.loading'))}</span>`;
   // 'Tier' is rendered as its own chip group (see tierChipsHtml), so keep it out here.
-  return curFacets().filter(f => !/rarity/i.test(f.type) && f.type !== 'Tier').map(f => {
+  const drawers = curFacets().filter(f => !/rarity/i.test(facetName(f.type)) && facetName(f.type) !== 'Tier');
+  const one = f => {
     const selCount = flt.traits.get(f.type)?.size || 0;
     const open = openFacet === f.type;
     return `
     <div class="trade-flt-dd ${open ? 'is-open' : ''}">
       <button type="button" class="trade-flt-ddbtn ${selCount ? 'has-sel' : ''}" data-act="flt-open" data-type="${esc(f.type)}"
         aria-expanded="${open}" aria-haspopup="listbox">
-        ${esc(f.type)}${selCount ? `<span class="trade-flt-badge">${selCount}</span>` : ''}<span class="trade-flt-caret" aria-hidden="true">▾</span>
+        ${esc(facetName(f.type))}${selCount ? `<span class="trade-flt-badge">${selCount}</span>` : ''}<span class="trade-flt-caret" aria-hidden="true">▾</span>
       </button>
       ${open ? traitPopHtml(f) : ''}
+    </div>`;
+  };
+  if (!allMode()) return drawers.map(one).join('');
+  // Two vocabularies, so say whose is whose. Without the headings a member reads two Eyes
+  // buttons side by side and can only tell them apart by opening both.
+  return scopeColls().map(c => {
+    const mine = drawers.filter(f => facetIn(f.type, c));
+    if (!mine.length) return '';
+    return `<div class="trade-flt-group">
+      <h5 class="trade-flt-grouph">${collIco(c)}<span>${esc(t(COLLECTIONS[c].labelKey))}</span></h5>
+      ${mine.map(one).join('')}
     </div>`;
   }).join('');
 }
@@ -4518,7 +4684,7 @@ function activeChipsHtml() {
   if (flt.q && !isWalletQuery(flt.q) && !browseOwnerProfile) chips.push({ k: 'q', label: `“${flt.q}”` });
   if (flt.min) chips.push({ k: 'min', label: `≥ ${flt.min} ETH` });
   if (flt.max) chips.push({ k: 'max', label: `≤ ${flt.max} ETH` });
-  for (const [type, vals] of flt.traits) for (const v of vals) chips.push({ k: 't', type, v, label: `${type}: ${v}` });
+  for (const [type, vals] of flt.traits) for (const v of vals) chips.push({ k: 't', type, v, label: `${facetName(type)}: ${v}` });
   const count = countLineHtml();
   if (!chips.length) return count;
   return `${count}${chips.map(c => `
@@ -4534,7 +4700,7 @@ function activeChipsHtml() {
 function walletBannerHtml() {
   // Profile-username match: show whose collection this is + a link to their full profile.
   if (browseOwnerProfile) {
-    const noun = t(coll === 'land' ? 'trade.wallet.nounLand' : 'trade.wallet.noun');
+    const noun = t(allMode() ? 'trade.wallet.nounAll' : coll === 'land' ? 'trade.wallet.nounLand' : 'trade.wallet.noun');
     const n = (browseOwnedTotal ?? 0).toLocaleString();
     return `<div class="trade-wallet-banner is-profile" role="status">
       <svg class="trade-wallet-ico" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
@@ -4547,7 +4713,7 @@ function walletBannerHtml() {
     </div>`;
   }
   if (!browseOwner) return '';
-  const noun = t(coll === 'land' ? 'trade.wallet.nounLand' : 'trade.wallet.noun');
+  const noun = t(allMode() ? 'trade.wallet.nounAll' : coll === 'land' ? 'trade.wallet.nounLand' : 'trade.wallet.noun');
   const n = (browseOwnedTotal ?? 0).toLocaleString();
   return `<div class="trade-wallet-banner" role="status">
     <svg class="trade-wallet-ico" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
@@ -4578,8 +4744,8 @@ function filterSideHtml() {
         <h4 class="trade-side-h">${esc(t('trade.filter.rarityH'))}</h4>
         <div class="trade-flt-rar" id="flt-rar" role="group" aria-label="${esc(t('trade.filter.rarityAria'))}">${rarityChipsHtml()}</div>
       </div>` : ''}
-      ${coll === 'land' ? `<div class="trade-side-sec">
-        <h4 class="trade-side-h">${esc(t('trade.filter.tierH'))}</h4>
+      ${coll === 'land' || allMode() ? `<div class="trade-side-sec">
+        <h4 class="trade-side-h">${esc(t(allMode() ? 'trade.filter.tierHAll' : 'trade.filter.tierH'))}</h4>
         <div class="trade-flt-rar" id="flt-tier" role="group" aria-label="${esc(t('trade.filter.tierAria'))}">${tierChipsHtml()}</div>
       </div>` : ''}
       <div class="trade-side-sec">
@@ -4604,7 +4770,7 @@ function filterSideHtml() {
         <!-- These dropdowns are 466 trait names with no pictures. The showcase is the same
              vocabulary with the art beside it, and it links back here filtered, so anyone
              who doesn't already know what "Glowing Torn Socket Eyes" looks like can go see. -->
-        ${coll === 'creatures' ? `<a class="trade-flt-see" href="/collections/traits">${
+        ${coll === 'creatures' || allMode() ? `<a class="trade-flt-see" href="/collections/traits">${
           esc(t('trade.filter.seeTraits'))}<span aria-hidden="true">→</span></a>` : ''}
       </div>
       <button type="button" class="trade-send trade-side-done" data-act="flt-drawer">${esc(t('trade.filter.done'))}</button>
@@ -4929,7 +5095,7 @@ function resetInvFilter() { invFlt = { q: '', traits: new Map(), sort: 'rank' };
 function repaintFacetUI() { (tradeTab === 'sell' || tradeTab === 'transfer') ? patchInvFilter() : patchFilters(); }
 
 function browseHtml() {
-  const subTip = coll === 'land' ? 'trade.land.subSlimes' : 'trade.browse.sub';
+  const subTip = allMode() ? 'trade.browse.subAll' : coll === 'land' ? 'trade.land.subSlimes' : 'trade.browse.sub';
   return `<section class="trade-browse has-side">
     ${filterSideHtml()}
     <div class="trade-main">
@@ -4944,7 +5110,7 @@ function browseHtml() {
       </div>
       ${browseToolbarHtml()}
       <div id="trade-wallet-slot">${walletBannerHtml()}</div>
-      ${coll === 'creatures' ? collStripHtml() : landOfferStripHtml()}
+      ${allMode() ? '' : coll === 'creatures' ? collStripHtml() : landOfferStripHtml()}
       <div class="trade-grid" id="trade-grid">${gridInnerHtml()}</div>
       <div class="trade-loadmore" id="trade-loadmore">${loadMoreHtml()}</div>
     </div>
@@ -4972,13 +5138,17 @@ function salesQuery(page) {
   return p.toString();
 }
 
+/** The sales feed for the scope on screen: both collections merged, or one of them. */
+const salesApi = () => `/api/market/${allMode() ? 'all' : coll === 'land' ? 'land' : 'creatures'}/sales`;
+
 async function loadSales(reset = true) {
   if (!reset && (!salesHasMore || salesLoading)) return;
   const page = reset ? 0 : salesPage + 1;
   if (reset) salesError = false; // keep any current rows on screen through a filter reload (no flash)
   const rid = ++salesReqId;
   const startColl = coll;
-  const api = `/api/market/${coll === 'land' ? 'land' : 'creatures'}/sales`;
+  const startAll = allMode();
+  const api = salesApi();
   let added = null; // rows this page added, when it was a "load more" rather than a reset
   salesLoading = true;
   // Rows already on screen are the last true answer to a slightly different question —
@@ -4993,7 +5163,8 @@ async function loadSales(reset = true) {
     const res = await fetch(`${api}${qs ? '?' + qs : ''}`, { headers: { Accept: 'application/json' } });
     if (!res.ok) throw new Error('http ' + res.status);
     const data = await res.json();
-    if (rid !== salesReqId || coll !== startColl) return; // superseded by a newer request / view
+    if (rid !== salesReqId || coll !== startColl || allMode() !== startAll) return; // superseded by a newer request / view
+    applyHealthEnvelope(data, startColl);
     if (data.ethUsd != null) setEthUsd(data.ethUsd);
     if (data.fxRates) setFxRates(data.fxRates);
     const items = data.items || [];
@@ -5010,7 +5181,7 @@ async function loadSales(reset = true) {
     // Only page 0 carries the chart; a "load more" response must not blank it.
     // A new matched set is a new timeline: whatever period was on screen no longer means
     // anything, and the chart's axis resets to the new range below.
-    if (reset) { salesSeries = data.series || null; clearSalesWindow(); }
+    if (reset) { salesSeries = data.series || null; salesSplit = data.split || null; clearSalesWindow(); }
   } catch (err) {
     if (rid !== salesReqId) return;
     console.error('Sales history load failed:', err);
@@ -5341,6 +5512,11 @@ function salesScaleMode() {
   // Judged on what's drawn, not on the whole run: five years of Creature prices span four
   // orders of magnitude and need the log axis, one month of them spans seven times and is
   // unreadable on it. The toggle still pins whichever the member prefers.
+  // Two collections on one canvas is the case that needs it most: a parcel and a Creature
+  // are both priced in ETH and sit two orders of magnitude apart, so on a linear axis the
+  // whole Creature cloud lies flat along the bottom.
+  const sp = drawnSplit();
+  if (sp?.creatures?.points?.length && sp?.land?.points?.length) return 'log';
   const st = salesWindowStats || salesSeries?.stats;
   return st && st.loEth > 0 && st.hiEth / st.loEth > 50 ? 'log' : 'linear';
 }
@@ -5366,9 +5542,9 @@ function chartYBounds() {
 }
 
 // "Weekly average" — names the trend line after the bucket the server chose.
-function chartAvgLabel() {
+function chartAvgLabel(ser = drawnSeries()) {
   const keys = { day: 'trade.chart.avgDay', week: 'trade.chart.avgWeek', month: 'trade.chart.avgMonth' };
-  return t(keys[drawnSeries()?.bucket] || 'trade.chart.avgDay');
+  return t(keys[ser?.bucket] || 'trade.chart.avgDay');
 }
 
 /* What actually gets drawn: the window's own dots and trend line once the server has sent
@@ -5376,11 +5552,14 @@ function chartAvgLabel() {
    for good — it is what the axis bounds, the range buttons and "All time" are measured
    against, and a zoom that redefined those could never be undone. */
 function drawnSeries() { return salesZoom || salesSeries; }
+/** The per-collection cut of whatever is drawn, or null outside the merged view. */
+function drawnSplit() { return (salesZoom ? salesZoomSplit : salesSplit) || null; }
 
 /* What the chart is showing, in words. LAND is the other market: it settles on Ethereum
    through OpenSea, it never saw Immutable X, and what changes hands is a plot rather than
    a Creature — so it can't borrow the Creature market's sentence. */
 function chartLeadKey() {
+  if (allMode()) return fltActive() ? 'trade.chart.leadAllFiltered' : 'trade.chart.leadAll';
   const land = coll === 'land';
   if (fltActive()) return land ? 'trade.chart.leadLandFiltered' : 'trade.chart.leadFiltered';
   return land ? 'trade.chart.leadLand' : 'trade.chart.lead';
@@ -5414,7 +5593,8 @@ function chartNoteHtml() {
     : [esc(`${fmtSaleDate(new Date(ser.from).toISOString())} – ${fmtSaleDate(new Date(ser.to).toISOString())}`)];
   if (ser.sampled) notes.push(esc(t('trade.chart.sampled')
     .replace('{n}', ser.shown.toLocaleString()).replace('{total}', ser.stats.n.toLocaleString())));
-  else if (ser.detail) notes.push(esc(t(coll === 'land' ? 'trade.chart.clickHintLand' : 'trade.chart.clickHint')));
+  else if (ser.detail) notes.push(esc(t(allMode() ? 'trade.chart.clickHintAll'
+    : coll === 'land' ? 'trade.chart.clickHintLand' : 'trade.chart.clickHint')));
   // With transfers in the list below, the gap between "42 events" and a chart of 4 dots is
   // the kind of thing a reader assumes is a bug. Say why instead of letting them wonder.
   if (salesEventsMode() === 'all' && salesCounts?.transfers) {
@@ -5429,7 +5609,7 @@ function chartNoteHtml() {
 function clearSalesWindow() {
   clearTimeout(salesWindowTimer);
   salesWindowReq++; // any answer still in flight is for a period nobody is looking at now
-  salesWindow = null; salesWindowStats = null; salesWindowBusy = false; salesZoom = null;
+  salesWindow = null; salesWindowStats = null; salesWindowBusy = false; salesZoom = null; salesZoomSplit = null;
   // A move toward a period nobody is asking for any more.
   clearTimeout(chartCameraTimer); cancelAnimationFrame(chartFlyRaf); chartCamera = null;
 }
@@ -5462,7 +5642,7 @@ function localWindowStats(win) {
 // Same filters, same view on the server, sliced by time — so the numbers can't drift from
 // the cards below or from what the chart is drawing.
 async function fetchWindowStats(win, rid) {
-  const api = `/api/market/${coll === 'land' ? 'land' : 'creatures'}/sales`;
+  const api = salesApi();
   const qs = new URLSearchParams(salesQuery(0));
   qs.set('from', String(win.from));
   qs.set('to', String(win.to));
@@ -5473,12 +5653,13 @@ async function fetchWindowStats(win, rid) {
     if (rid !== salesWindowReq) return;
     salesWindowStats = data.stats || { n: 0 };
     salesZoom = data.series || null;
+    salesZoomSplit = data.split || null;
   } catch (err) {
     if (rid !== salesWindowReq) return;
     console.error('Sales window stats failed:', err);
     // The rail says so by going back to the full-range figures, and the scatter keeps the
     // thin sample it had rather than emptying out.
-    salesWindowStats = null; salesZoom = null;
+    salesWindowStats = null; salesZoom = null; salesZoomSplit = null;
   } finally {
     if (rid === salesWindowReq) { salesWindowBusy = false; patchChartStats(); patchChartDrawn(); }
   }
@@ -5492,7 +5673,7 @@ function setSalesWindow(win, opts = {}) {
   const rid = ++salesWindowReq;
   salesWindow = win;
   if (!win) {
-    salesWindowStats = null; salesWindowBusy = false; salesZoom = null;
+    salesWindowStats = null; salesWindowBusy = false; salesZoom = null; salesZoomSplit = null;
     patchChartStats(); patchChartDrawn(); return true;
   }
   // Every point is already here, so the scatter in the window is the real thing and needs
@@ -5599,43 +5780,76 @@ function salesChartHtml() {
 
 // Datasets for the current series + display currency: the dots (one per sale) and the trend
 // line through the server's buckets.
-function chartDatasets() {
-  const ser = drawnSeries();
+// Which colour each collection's cloud wears in the merged chart. Creatures keep the mint
+// they have always had; LAND takes lavender, leaving banana to the withdrawal bars — which
+// are LAND's too, and would be unreadable drawn in the same colour as LAND's dots.
+const CHART_COLL_COLOR = { creatures: CHART_MINT, land: CHART_LAV };
+const CHART_COLL_FILL = { creatures: 'rgba(81,255,165,.55)', land: 'rgba(133,97,255,.55)' };
+
+/** The dots and the trend line for one series. `c` names its collection, or null for "the lot". */
+function seriesDatasets(ser, c, order) {
+  if (!ser) return [];
   const dots = ser.points
-    .map(p => ({ x: p.t, y: chartValue(p.e, p.u), id: p.id || null, label: p.n || null }))
+    .map(p => ({ x: p.t, y: chartValue(p.e, p.u), id: p.id || null, label: p.n || null, coll: c }))
     .filter(p => p.y != null && p.y > 0);
   const line = ser.buckets
     // `mid` is where that bucket's sales actually are; `t` is only where its window opens.
     .map(b => ({ x: b.mid ?? b.t, y: chartValue(b.avgEth, b.avgUsd) }))
     .filter(p => p.y != null && p.y > 0);
-  // Withdrawals have no price, so they are counted per bucket and drawn low against their
-  // own hidden axis rather than faked onto the price scale. Empty in Sales mode, which is
-  // what keeps the default view a plain price chart.
-  const moves = (ser.moveBuckets || []).map(b => ({ x: b.t, y: b.n }));
+  if (!dots.length && !line.length) return [];
+  const color = c ? CHART_COLL_COLOR[c] : CHART_MINT;
+  const fill = c ? CHART_COLL_FILL[c] : 'rgba(81,255,165,.55)';
+  const name = c ? t(COLLECTIONS[c].labelKey) : null;
+  const avg = chartAvgLabel(ser);
   return [
     {
-      type: 'scatter', label: t('trade.chart.legendSales'), data: dots,
-      backgroundColor: 'rgba(81,255,165,.55)', borderColor: CHART_MINT, borderWidth: 1,
-      pointRadius: dots.length > 250 ? 2 : 3.4, pointHoverRadius: 6, order: 1,
+      $kind: 'sales', $coll: c,
+      type: 'scatter', label: name || t('trade.chart.legendSales'), data: dots,
+      backgroundColor: fill, borderColor: color, borderWidth: 1,
+      pointRadius: dots.length > 250 ? 2 : 3.4, pointHoverRadius: 6, order,
       // Named, not inferred. Chart.js hands an unnamed dataset the first y-axis scale it
       // finds, so declaring the withdrawals axis took the price dots with it and drew them
       // against a count scale, far off the top of the canvas.
       yAxisID: 'y',
     },
     {
-      type: 'line', label: chartAvgLabel(), data: line, showLine: true,
-      borderColor: CHART_LAV, backgroundColor: CHART_LAV, borderWidth: 2.4,
-      pointRadius: 0, pointHoverRadius: 4, tension: .32, spanGaps: true, order: 2,
+      $kind: 'avg', $coll: c,
+      // A line in the legend, not another dot: with a pair of datasets per collection the
+      // legend otherwise shows four identical circles in two colours.
+      pointStyle: 'line',
+      type: 'line', label: name ? `${name} · ${avg}` : avg, data: line, showLine: true,
+      // With one collection on screen the trend line keeps its lavender: there is nothing
+      // for it to be confused with. With both, each line belongs to its own cloud.
+      borderColor: c ? color : CHART_LAV, backgroundColor: c ? color : CHART_LAV, borderWidth: 2.4,
+      pointRadius: 0, pointHoverRadius: 4, tension: .32, spanGaps: true, order: order + 1,
       yAxisID: 'y',
     },
+  ];
+}
+
+// Datasets for the current series + display currency: the dots (one per sale) and the trend
+// line through the server's buckets — one pair per collection in the merged view.
+function chartDatasets() {
+  const ser = drawnSeries();
+  const split = drawnSplit();
+  const price = split
+    ? scopeColls().flatMap((c, i) => seriesDatasets(split[c], c, 1 + i * 2))
+    : seriesDatasets(ser, null, 1);
+  // Withdrawals have no price, so they are counted per bucket and drawn low against their
+  // own hidden axis rather than faked onto the price scale. Empty in Sales mode, which is
+  // what keeps the default view a plain price chart.
+  const moves = (ser.moveBuckets || []).map(b => ({ x: b.t, y: b.n }));
+  return [
+    ...price,
     // ONLY when there is something to draw. An empty bar dataset left in a scatter chart
     // makes Chart.js drop the scatter entirely — the price dots stopped painting altogether
-    // in Sales mode (measured on the canvas: 7,801 mint pixels down to 118). So the third
+    // in Sales mode (measured on the canvas: 7,801 mint pixels down to 118). So the bar
     // dataset comes and goes, and every caller must cope with the length changing.
     ...(moves.length ? [{
+      $kind: 'moves', $coll: 'land',
       type: 'bar', label: t('trade.chart.legendWithdrawals'), data: moves,
       backgroundColor: 'rgba(255,249,95,.30)', borderColor: CHART_BANANA, borderWidth: 1,
-      borderRadius: 2, yAxisID: 'yMoves', order: 3,
+      borderRadius: 2, yAxisID: 'yMoves', order: 9,
       barPercentage: 1, categoryPercentage: 1, grouped: false,
     }] : []),
   ];
@@ -5645,7 +5859,7 @@ function chartDatasets() {
    meaning. Its top is three times the tallest bucket, which pins the bars to the bottom
    third: they are context for the prices, not a second chart competing with them. */
 function chartMoveAxisMax(datasets) {
-  const data = datasets?.[2]?.data || [];
+  const data = (datasets || []).find(d => d.$kind === 'moves')?.data || [];
   let hi = 0;
   for (const d of data) if (d.y > hi) hi = d.y;
   return hi > 0 ? hi * 3 : 1;
@@ -5681,16 +5895,20 @@ function renderSalesChart() {
     // resetting the x bounds every time would throw away the period the member zoomed to.
     const newSeries = salesChart.$hccSeries !== salesSeries;   // a filter changed the data
     const newDrawn  = salesChart.$hccDrawn !== drawnSeries();  // a zoom swapped the detail
-    if (salesChart.data.datasets.length !== datasets.length) {
-      // The withdrawals bars just appeared or went away. Patching by index cannot express
-      // that, so hand over the whole list.
+    // The list changes shape on its own: the withdrawal bars come and go, and the merged
+    // view carries a pair of datasets per collection where a single one carries one. Patch in
+    // place only while the kinds still line up one for one; otherwise hand over the whole list.
+    const live = salesChart.data.datasets;
+    const alignable = live.length === datasets.length
+      && datasets.every((d, i) => live[i].$kind === d.$kind && live[i].$coll === d.$coll);
+    if (!alignable) {
       salesChart.data.datasets = datasets;
     } else {
-      salesChart.data.datasets[0].data = datasets[0].data;
-      salesChart.data.datasets[0].pointRadius = datasets[0].pointRadius;
-      salesChart.data.datasets[1].data = datasets[1].data;
-      salesChart.data.datasets[1].label = datasets[1].label;
-      if (datasets[2]) salesChart.data.datasets[2].data = datasets[2].data;
+      for (let i = 0; i < datasets.length; i++) {
+        live[i].data = datasets[i].data;
+        live[i].label = datasets[i].label;
+        if (datasets[i].pointRadius !== undefined) live[i].pointRadius = datasets[i].pointRadius;
+      }
     }
     // Rescaled with the bars themselves: left on the last set's top, one big burst would
     // flatten every other bucket to nothing.
@@ -5732,12 +5950,15 @@ function renderSalesChart() {
       // A dot is a Creature that sold — open it. Only while the server still labels each
       // point (below a few hundred matches); past that the ids aren't sent.
       onClick(_evt, els) {
-        const hit = els?.find(e => e.datasetIndex === 0);
-        const pt = hit ? this.data.datasets[0].data[hit.index] : null;
-        if (pt?.id) openDeepLink(String(pt.id), {});
+        const hit = els?.find(e => this.data.datasets[e.datasetIndex]?.$kind === 'sales');
+        const pt = hit ? this.data.datasets[hit.datasetIndex].data[hit.index] : null;
+        // The dot carries its own collection in the merged chart, so the modal opens against
+        // the right chain rather than against whichever collection was last active.
+        if (pt?.id) openDeepLink(String(pt.id), { coll: pt.coll });
       },
       onHover(evt, els) {
-        const over = els?.some(e => e.datasetIndex === 0 && this.data.datasets[0].data[e.index]?.id);
+        const over = els?.some(e => this.data.datasets[e.datasetIndex]?.$kind === 'sales'
+          && this.data.datasets[e.datasetIndex].data[e.index]?.id);
         const cv2 = evt.native?.target;
         if (cv2?.style) cv2.style.cursor = over ? 'pointer' : 'default';
       },
@@ -5759,11 +5980,11 @@ function renderSalesChart() {
             label: ctx => {
               // A bar is "how many parcels came out of the game in this period" — a count,
               // and putting a currency on it would be a lie about what the number is.
-              if (ctx.datasetIndex === 2) {
+              if (ctx.dataset?.$kind === 'moves') {
                 return `  ${t('trade.chart.tipWithdrawals').replace('{n}', Number(ctx.parsed.y).toLocaleString())}`;
               }
               const money = fmtChartMoney(ctx.parsed.y);
-              if (ctx.datasetIndex === 1) return `  ${chartAvgLabel()}: ${money}`;
+              if (ctx.dataset?.$kind === 'avg') return `  ${ctx.dataset.label}: ${money}`;
               const name = ctx.raw?.label;
               return name ? `  ${name}: ${money}` : `  ${money}`;
             },
@@ -5857,7 +6078,8 @@ function salesHtml() {
     ${filterSideHtml()}
     <div class="trade-main">
       <div class="trade-results-head">
-        <h3 class="trade-browse-h">${esc(t('trade.sales.h'))} ${tipHtml(coll === 'land' ? 'trade.sales.subLand' : 'trade.sales.sub')}</h3>
+        <h3 class="trade-browse-h">${esc(t('trade.sales.h'))} ${tipHtml(allMode() ? 'trade.sales.subAll'
+          : coll === 'land' ? 'trade.sales.subLand' : 'trade.sales.sub')}</h3>
         <div class="trade-browse-actions">
           <select class="seg-select trade-currency" id="trade-currency" aria-label="${esc(t('trade.currency.aria'))}">
             ${CURRENCIES.map(c => `<option value="${c}" ${currency === c ? 'selected' : ''}>${c.toUpperCase()}</option>`).join('')}
@@ -5885,11 +6107,14 @@ function fmtSaleDate(iso) {
 
 // The asset's type line: "Creature" / "LAND", with the plot tier or rarity tier when known.
 function saleTypeLabel(s) {
-  if (coll === 'land') {
+  if (rowColl(s) === 'land') {
     const tier = s.traits && (s.traits.Tier || s.traits.tier);
+    // In the merged feed the badge beside this already says LAND, so the label keeps only
+    // what the badge can't tell you: which kind of plot it was.
+    if (allMode()) return tier || '';
     return tier ? `${t('trade.sales.typeLand')} · ${tier}` : t('trade.sales.typeLand');
   }
-  return t('trade.sales.typeCreature');
+  return allMode() ? '' : t('trade.sales.typeCreature');
 }
 
 // Up to three notable traits as chips (rarity/tier are shown separately as the badge), so a
@@ -5913,18 +6138,19 @@ function saleEraLinkHtml(s) {
 }
 
 function saleCardHtml(s, i = 0, swap = false) {
-  const pet = coll === 'land' ? petUrl(s) : null;
+  const c = rowColl(s);
+  const pet = c === 'land' ? petUrl(s) : null;
   const src = pet || s.image;
   const fallback = pet && s.image ? ` data-fallback="${esc(s.image)}"` : '';
   const img = src
     ? `<img class="trade-sale-img ${pet ? 'is-pet' : ''}" src="${esc(src)}"${fallback} alt="" loading="lazy" />`
-    : `<div class="trade-sale-img trade-tile-noimg" aria-hidden="true">${ico(coll === 'land' ? 'map' : 'paw', 40)}</div>`;
+    : `<div class="trade-sale-img trade-tile-noimg" aria-hidden="true">${ico(c === 'land' ? 'map' : 'paw', 40)}</div>`;
   const fiat = fmtSaleFiat(s.priceUsd);
   const when = esc(fmtSaleDate(s.at));
   const listed = s.listedNow != null;
   // Open the asset inside OUR marketplace (buy modal if it's currently listed, detail +
   // make-offer if not). knownListed skips the "brand-new listing, syncing…" hunt when unlisted.
-  const openAttrs = `data-act="sale-open" data-token="${esc(s.tokenId)}" data-listed="${listed ? '1' : '0'}"`;
+  const openAttrs = `data-act="sale-open" data-token="${esc(s.tokenId)}" data-listed="${listed ? '1' : '0'}" data-coll="${esc(c)}"`;
   // A sale has a seller and a buyer; a move has a sender and a receiver, and a mint has
   // only a receiver. Same row, named for what actually happened.
   const isMove = s.event && s.event !== 'sale';
@@ -5934,9 +6160,9 @@ function saleCardHtml(s, i = 0, swap = false) {
     ? [party('trade.sales.from', s.from), party('trade.sales.to', s.to)]
     : [party('trade.sales.seller', s.seller), party('trade.sales.buyer', s.buyer)];
   const txLink = s.tx
-    ? `<a href="${esc(txExplorerUrl(s.tx))}" target="_blank" rel="noopener" class="trade-sale-link">${esc(t('trade.sales.tx'))} ${ico('external', 12)}</a>`
+    ? `<a href="${esc(txExplorerUrl(s.tx, c))}" target="_blank" rel="noopener" class="trade-sale-link">${esc(t('trade.sales.tx'))} ${ico('external', 12)}</a>`
     : saleEraLinkHtml(s);
-  const assetLink = `<a href="${esc(tokenExplorerUrl(s.tokenId))}" target="_blank" rel="noopener" class="trade-sale-link">${esc(t('trade.sales.asset'))} ${ico('external', 12)}</a>`;
+  const assetLink = `<a href="${esc(tokenExplorerUrl(s.tokenId, c))}" target="_blank" rel="noopener" class="trade-sale-link">${esc(t('trade.sales.asset'))} ${ico('external', 12)}</a>`;
   const viewBtn = `<button type="button" class="trade-sale-link is-view" ${openAttrs}>${esc(t('trade.sales.view'))}</button>`;
   // Status: currently for sale (with its live all-in price) or not listed. Doubles as the
   // rank/rarity tag row so nothing collides in the little thumbnail corner.
@@ -5960,7 +6186,7 @@ function saleCardHtml(s, i = 0, swap = false) {
           <button type="button" class="trade-sale-name" ${openAttrs}>${esc(s.name)}</button>
           <span class="trade-sale-type">${esc(saleTypeLabel(s))}</span>
         </div>
-        <div class="trade-sale-tags">${moveChip}${rarityChip(s.rarity)}${rankChip(s.rank)}${status}${era}</div>
+        <div class="trade-sale-tags">${collBadgeHtml(c)}${moveChip}${rarityChip(s.rarity)}${rankChip(s.rank)}${status}${era}</div>
         ${saleTraitChips(s)}
         <div class="trade-sale-meta">
           ${wallets.join('')}
@@ -6848,11 +7074,32 @@ function sellPickerHtml() {
 
 // Collection scope: Creatures (zkEVM) ⟷ LAND (Ethereum). Sits above the action tabs.
 function collSwitcherHtml() {
-  return `<div class="seg trade-coll-switch" role="tablist" aria-label="${esc(t('trade.coll.aria'))}">
-    ${Object.entries(COLLECTIONS).map(([id, c]) => `
-      <button type="button" role="tab" class="seg-btn ${coll === id ? 'is-active' : ''}"
-        aria-selected="${coll === id}" data-act="coll" data-coll="${id}">${collIco(id)} ${esc(t(c.labelKey))}</button>`).join('')}
+  // "All" is offered only where it can be honoured. On a tab that signs something it isn't
+  // there to click, and the chip that lights up is the collection being acted on.
+  const ids = [...(ALL_SCOPE_TABS.has(tradeTab) ? ['all'] : []), ...Object.keys(COLLECTIONS)];
+  const active = allMode() ? 'all' : coll;
+  return `<div class="seg trade-coll-switch ${allMode() ? 'is-all' : ''}" role="tablist" aria-label="${esc(t('trade.coll.aria'))}">
+    ${ids.map(id => {
+      const label = id === 'all' ? t('trade.coll.all') : t(COLLECTIONS[id].labelKey);
+      // Only the merged view carries a beta mark now. The marketplace itself is out of beta,
+      // so the note under every Buy button has gone; this one is still earning its place.
+      const beta = id === 'all' ? `<span class="trade-beta-chip is-mini">${esc(t('trade.coll.allBeta'))}</span>` : '';
+      return `
+      <button type="button" role="tab" class="seg-btn ${active === id ? 'is-active' : ''}"
+        aria-selected="${active === id}" data-act="coll" data-coll="${id}"
+        ${id === 'all' ? `title="${esc(t('trade.coll.allBetaTitle'))}"` : ''}>${collIco(id)} ${esc(label)}${beta}</button>`;
+    }).join('')}
   </div>`;
+}
+
+/* Buying, selling and transferring each need one chain, so a signing view can't hold both
+   collections at once. The switcher above has already dropped its All chip by the time this
+   renders — this says WHY, quietly, for as long as the answer is useful. Not a banner and
+   not an alert: nothing has gone wrong, and the way back is the chip it points at. */
+function collScopeNoteHtml() {
+  if (!browseAll || ALL_SCOPE_TABS.has(tradeTab)) return '';
+  return `<p class="trade-coll-note">${ico('layers', 13)}<span>${
+    esc(t('trade.coll.allNarrowed').replace('{coll}', t(COLLECTIONS[coll].labelKey)))}</span></p>`;
 }
 
 function maybeLoadSeller() {
@@ -6903,8 +7150,8 @@ function walletGateHtml() {
 
 // LAND reuses the Creature sell views; copy that must read differently has a `.land`
 // variant in the locale file. Falls back to the base (Creature) copy when none exists.
-function skey(base) {
-  if (coll !== 'land') return base;
+function skey(base, c = coll) {
+  if (c !== 'land') return base;
   const k = `${base}.land`;
   return t(k) === k ? base : k;
 }
@@ -7222,8 +7469,11 @@ export function openTokenInMarket(collKind, tokenId, opts = {}) {
   if (!loadedOnce) return;
   const tk = String(tokenId || '').trim();
   if (!/^\d{1,80}$/.test(tk)) return;
-  const switching = COLLECTIONS[collKind] && collKind !== coll;
+  // A profile tile is one asset in one collection, so this leaves the merged scope rather
+  // than opening a Creature detail over a grid that is showing both.
+  const switching = COLLECTIONS[collKind] && (collKind !== coll || browseAll);
   if (switching) {
+    setBrowseAll(false);
     setColl(collKind);
     try { localStorage.setItem('hcc-trade-coll', coll); } catch { /* fine */ }
     tokenOffers = null;
@@ -9189,8 +9439,66 @@ async function handleMassTransfer(form) {
 // Last-known wallet-bar balances per account+collection — re-renders seed from this
 // instead of flashing '—' while the fresh async reads run.
 const balCache = new Map(); // `${account}|${coll}` -> { count, eth, imx }
+const allBalCache = new Map(); // account -> { cCount, cEth, imx, lCount, lEth } (merged view)
+
+/**
+ * Both chains at once, for the merged view's wallet bar.
+ *
+ * The wallet can only answer for the chain it is on, and the whole point of this bar is to
+ * show the member what they have on BOTH — so the figures come from the server, which can
+ * read either. The chain the wallet is actually on is then re-read from the wallet itself and
+ * allowed to win: a top-up that has just landed shows up in MetaMask before a third-party node
+ * has indexed it, and the number beside the buy button should never be the staler of the two.
+ */
+async function refreshAllBalances() {
+  const reqAccount = account;
+  if (!reqAccount) return;
+  let data = null;
+  try {
+    const res = await fetch(`/api/market/all/balances/${reqAccount}`, { headers: { Accept: 'application/json' } });
+    if (res.ok) data = await res.json();
+  } catch (err) { console.error('Merged balances failed:', err); }
+  if (reqAccount !== account) return;  // switched wallets mid-read
+  const wei = v => (v == null ? null : fmtWeiEth(BigInt(v)));
+  const next = {
+    cCount: data?.creatures?.count != null ? String(data.creatures.count) : null,
+    cEth: wei(data?.creatures?.ethWei),
+    imx: wei(data?.creatures?.imxWei),
+    lCount: data?.land?.count != null ? String(data.land.count) : null,
+    lEth: wei(data?.land?.ethWei),
+  };
+  // The live side, straight from the wallet — authoritative, and it matches what MetaMask
+  // shows. Only ever overwrites the server's figure for the chain we can actually read.
+  try {
+    if (onZk()) {
+      const [n, zkEth, imx] = await Promise.all([readBalance(), readErc20(IMX_ETH_TOKEN, reqAccount), readNative(reqAccount)]);
+      if (reqAccount !== account) return;
+      if (n != null) next.cCount = String(n);
+      if (zkEth != null) next.cEth = fmtWeiEth(zkEth);
+      if (imx != null) next.imx = fmtWeiEth(imx);
+    } else if (collForChainHex(chainId) === 'land') {
+      const l1 = await readNative(reqAccount);
+      if (reqAccount !== account) return;
+      if (l1 != null) next.lEth = fmtWeiEth(l1);
+    }
+  } catch { /* the server's figures stand */ }
+  if (reqAccount !== account) return;
+  // Keep whatever we already had for anything this pass couldn't read: a figure that was true
+  // a minute ago beats an em-dash that reads as "you have nothing".
+  const prev = allBalCache.get(reqAccount) || {};
+  const merged = {};
+  for (const k of ['cCount', 'cEth', 'imx', 'lCount', 'lEth']) merged[k] = next[k] ?? prev[k] ?? null;
+  allBalCache.set(reqAccount, merged);
+  const put = (id, v) => { const el = root()?.querySelector(id); if (el && v != null) el.textContent = v; };
+  put('#trade-bal', merged.cCount);
+  put('#trade-bal-eth', merged.cEth);
+  put('#trade-bal-imx', merged.imx);
+  put('#trade-bal-land', merged.lCount);
+  put('#trade-bal-land-eth', merged.lEth);
+}
 
 async function refreshBalance() {
+  if (allMode()) return refreshAllBalances();
   const el = root()?.querySelector('#trade-bal');
   if (!el) return;
   const key = `${account}|${coll}`; // drop stale writes if the user moved on mid-read
@@ -9242,6 +9550,7 @@ function render() {
     el.innerHTML = `${safeSection(flashBanner)}
       <div class="trade-command">
         <div class="trade-command-top">${safeSection(collSwitcherHtml)}${safeSection(walletBarHtml)}</div>
+        ${safeSection(collScopeNoteHtml)}
         <div class="trade-command-nav">${safeSection(tradeTabsHtml)}${safeSection(profileNavPillHtml)}</div>
       </div>
       <div id="trade-mmwarn-slot">${safeSection(walletNoticeHtml)}</div>
@@ -9259,7 +9568,7 @@ function render() {
   // the boot spinner up while already claiming the panel was ready.
   el.setAttribute('aria-busy', 'false');
   ensureDelegation();
-  if (account && (coll === 'land' || onZk())) {
+  if (account && (allMode() || coll === 'land' || onZk())) {
     refreshBalance();
     maybeLoadSeller();
     // `=== null` means "never loaded". The error flag stops a failed load from re-firing
@@ -9355,7 +9664,7 @@ function onClick(e) {
       if (coll === 'creatures') { loadCollOffers(); loadListings(true); }
       else { loadLandCollOffers(); loadListings(true); }
       return;
-    case 'open':       return openModal(target.dataset.token);
+    case 'open':       return openModal(target.dataset.token, target.dataset.coll);
     case 'close':      return closeModal();
     case 'copy':       return copyValue(target);
     case 'buy':        return handleBuy(target.dataset.listing);
@@ -9363,7 +9672,14 @@ function onClick(e) {
       if (tradeTab === target.dataset.tab) return;
       return openTradeTab(target.dataset.tab);
     case 'coll': {
-      if (coll === target.dataset.coll || !COLLECTIONS[target.dataset.coll]) return;
+      const want = target.dataset.coll;
+      const wantAll = want === 'all';
+      // "All" is a read scope over both collections, not a third collection: it only exists
+      // on the two views that read, and it leaves `coll` — the collection anything signed
+      // acts on — exactly where it was.
+      if (wantAll && !ALL_SCOPE_TABS.has(tradeTab)) return;
+      if (want === (allMode() ? 'all' : coll)) return;
+      if (!wantAll && !COLLECTIONS[want]) return;
       // Both money views mean something different per collection: Add funds brings ETH onto
       // Immutable zkEVM for Creatures but buys it on Ethereum for LAND, and Cash out moves
       // ETH for one while unwrapping WETH for the other. So re-enter the flow from its
@@ -9372,12 +9688,14 @@ function onClick(e) {
       // relabelled Ethereum.
       const reenterFunds = onFundsView() ? tradeTab : null;
       if (reenterFunds && !leaveFundsState()) return; // mid-signature — the switch waits
-      setColl(target.dataset.coll);
+      setBrowseAll(wantAll);
+      if (!wantAll) setColl(want);
+      else syncCollToChain(); // both chains are valid now — act on the one the wallet is on
       resetPriceGuide(); // LAND must never be priced off Creature comparables
       syncTradeUrl(); // ?coll=land belongs in the address: the LAND market is a linkable thing
       if (reenterFunds === 'cash-out') enterCashOut({ step: 'intent' });
       else if (reenterFunds === 'add-funds') enterAddFunds({ step: 'intent' });
-      try { localStorage.setItem('hcc-trade-coll', coll); } catch { /* fine */ }
+      try { localStorage.setItem('hcc-trade-coll', urlColl()); } catch { /* fine */ }
       tokenOffers = null;
       // Clear the "we already tried and failed" latches so switching INTO a collection
       // always re-checks it. Without this, a market that recovered would still look dead
@@ -9395,6 +9713,7 @@ function onClick(e) {
       // so the user doesn't land on a "wrong network" pill they have to tap themselves.
       autoSwitchNetwork();
       loadListings(true);
+      if (tradeTab === 'sales') loadSales(true);
       if (coll === 'creatures') loadCollOffers(); else if (coll === 'land') loadLandCollOffers();
       maybeLoadSeller();
       return;
@@ -9569,7 +9888,7 @@ function onClick(e) {
       patchSalesEvents();
       return loadSales(true);
     }
-    case 'sale-open':      return openDeepLink(target.dataset.token, { knownListed: target.dataset.listed === '1' });
+    case 'sale-open':      return openDeepLink(target.dataset.token, { knownListed: target.dataset.listed === '1', coll: target.dataset.coll });
     case 'seller-refresh': loadSellerData(); loadListings(true); return; // manual wallet refresh (Sell/Transfer)
     case 'flt-scope':
       if (flt.scope === target.dataset.scope) return;
@@ -9934,6 +10253,13 @@ function wireProviderEvents() {
     const c = String(cid || '').toLowerCase();
     if (c === String(chainId || '').toLowerCase()) return; // no actual change; ignore the echo
     setChainId(c);
+    // In the merged view the wallet's chain IS the choice of collection: a member who moves
+    // to Ethereum in MetaMask has said "LAND" as plainly as tapping a parcel would. Follow
+    // it, so the next thing they sign settles where they are.
+    if (browseAll) {
+      const c2 = collForChainHex(c);
+      if (c2 && c2 !== coll) { setColl(c2); resetPriceGuide(); tokenOffers = null; resetSellerState(); }
+    }
     // The echo of a switch WE initiated: the initiating flow patches the affected bits
     // itself — skip the full re-render (and don't wipe the seller loads it just started).
     if (expectedChainHex === c) { setExpectedChainHex(null); patchWalletBar(); return; }
@@ -10038,25 +10364,40 @@ export async function loadMarketplace() {
   try { const c = localStorage.getItem('hcc-trade-cur'); if (c && CURRENCIES.includes(c)) setCurrency(c); } catch { /* fine */ }
   try { const u = localStorage.getItem('hcc-trade-sellunit'); if (u && CURRENCIES.includes(u)) sellUnit = u; } catch { /* fine */ }
   try { const u = localStorage.getItem('hcc-trade-offerunit'); if (u && CURRENCIES.includes(u)) offerUnit = u; } catch { /* fine */ }
-  try { const k = localStorage.getItem('hcc-trade-coll'); if (k && COLLECTIONS[k]) setColl(k); } catch { /* fine */ }
+  // 'all' is remembered like a collection, but it sets the scope and leaves the acting
+  // collection at its default — the wallet still has to be on one chain.
+  try {
+    const k = localStorage.getItem('hcc-trade-coll');
+    if (k === 'all') setBrowseAll(true);
+    else if (k && COLLECTIONS[k]) setColl(k);
+  } catch { /* fine */ }
   flt.scope = browseDataset().defaultScope;
   // Deep link (/trade?coll=…&token=…): land straight on that token's detail modal.
   // The coll param wins over the saved preference for this visit, without persisting.
   let deepToken = null;
   try {
     const params = new URLSearchParams(location.search);
-    if (COLLECTIONS[params.get('coll')]) setColl(params.get('coll'));
+    const wantColl = params.get('coll');
+    if (wantColl === 'all') setBrowseAll(true);
+    else if (COLLECTIONS[wantColl]) { setBrowseAll(false); setColl(wantColl); }
     const tk = (params.get('token') || '').trim();
     if (/^\d{1,80}$/.test(tk)) deepToken = tk;
     // …&t=Type:Value (repeatable) opens Browse already filtered — how the Collections
     // trait showcase hands a trait over ("show me Creatures with these eyes"). Same wire
     // shape the server's browse query takes, so the two ends can't drift apart.
     for (const pair of params.getAll('t').slice(0, 40)) {
-      const i = pair.indexOf(':');
+      // Same split the server does: a leading 'c:'/'l:' is the collection the facet belongs
+      // to (merged view only) and is not part of the type name.
+      const pm = /^([cl]):/.exec(pair);
+      const rest = pm ? pair.slice(2) : pair;
+      const i = rest.indexOf(':');
       if (i < 1) continue;
-      const type = pair.slice(0, i).slice(0, 60);
-      const value = pair.slice(i + 1).slice(0, 120);
+      const type = (pm ? `${pm[1]}:` : '') + rest.slice(0, i).slice(0, 60);
+      const value = rest.slice(i + 1).slice(0, 120);
       if (!value) continue;
+      // A bare type came from a single-collection link (the trait showcase). It can't match
+      // anything in the merged grid, so honour the link and leave the merged scope.
+      if (!pm) setBrowseAll(false);
       if (!flt.traits.has(type)) flt.traits.set(type, new Set());
       flt.traits.get(type).add(value);
     }
@@ -10069,7 +10410,7 @@ export async function loadMarketplace() {
   // on the way in: it's our own data, but it survived a trip through storage.
   const back = takeTradeReturn();
   if (back) {
-    if (COLLECTIONS[back.coll]) setColl(back.coll);
+    if (COLLECTIONS[back.coll]) { setBrowseAll(false); setColl(back.coll); }
     if (TRADE_TABS.has(back.tab)) setTradeTab(back.tab);
     for (const id of (Array.isArray(back.picks) ? back.picks : []).slice(0, 200)) {
       if (/^\d{1,80}$/.test(String(id))) transferSet.add(String(id));

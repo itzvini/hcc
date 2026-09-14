@@ -2274,10 +2274,16 @@ function parseBrowseQuery(searchParams) {
   const num = v => { const n = Number(v); return v != null && v !== '' && Number.isFinite(n) && n >= 0 ? n : null; };
   const traits = new Map(); // type -> Set(values)
   for (const pair of searchParams.getAll('t').slice(0, 40)) {
-    const i = pair.indexOf(':');
+    // The merged "All" browse namespaces its facet types by collection ('c:Eyes'), so that
+    // prefix comes off before the type/value split and goes straight back on: split on the
+    // first colon regardless and 'c:Eyes:Cutesy' reads as type "c", value "Eyes:Cutesy".
+    // Anchored to a single known letter, so no real trait type can be mistaken for one.
+    const pm = /^([cl]):/.exec(pair);
+    const rest = pm ? pair.slice(2) : pair;
+    const i = rest.indexOf(':');
     if (i < 1) continue;
-    const type = pair.slice(0, i).slice(0, 60);
-    const value = pair.slice(i + 1).slice(0, 120);
+    const type = (pm ? `${pm[1]}:` : '') + rest.slice(0, i).slice(0, 60);
+    const value = rest.slice(i + 1).slice(0, 120);
     if (!value) continue;
     if (!traits.has(type)) traits.set(type, new Set());
     traits.get(type).add(value);
@@ -2289,6 +2295,12 @@ function parseBrowseQuery(searchParams) {
   return { q, min: num(searchParams.get('min')), max: num(searchParams.get('max')), traits, sort, page, scope };
 }
 
+// Which trait bag the filters and facets read. Normally the row's own `traits`. A merged
+// "All" view sets `ftraits` instead, with every key prefixed by its collection ('c:Eyes',
+// 'l:Eyes'), because both collections have an Eyes facet and they are not the same drawer.
+// The row keeps its plain `traits` for display, so nothing downstream sees the prefix.
+const facetTraitsOf = it => it.ftraits || it.traits;
+
 // skipType: evaluate every filter EXCEPT that trait type — how facet counts answer
 // "what would I get if I picked this value", given everything else stays selected.
 function browseMatch(it, f, skipType) {
@@ -2298,8 +2310,9 @@ function browseMatch(it, f, skipType) {
   const price = it.totalEth ?? it.priceEth ?? null;
   if (f.min != null && (price == null || price < f.min)) return false;
   if (f.max != null && (price == null || price > f.max)) return false;
+  const bag = facetTraitsOf(it);
   for (const [type, values] of f.traits) {
-    if (type !== skipType && !values.has(it.traits[type])) return false;
+    if (type !== skipType && !values.has(bag[type])) return false;
   }
   return true;
 }
@@ -2331,7 +2344,7 @@ const BROWSE_SORTS = {
 function computeBrowseFacets(items, f) {
   const types = new Map(); // type -> Map(value -> count)
   for (const it of items) {
-    for (const [type, v] of Object.entries(it.traits)) {
+    for (const [type, v] of Object.entries(facetTraitsOf(it))) {
       if (!types.has(type)) types.set(type, new Map());
       const vals = types.get(type);
       if (!vals.has(v)) vals.set(v, 0);
@@ -2339,7 +2352,7 @@ function computeBrowseFacets(items, f) {
   }
   for (const [type, vals] of types) {
     for (const it of items) {
-      const v = it.traits[type];
+      const v = facetTraitsOf(it)[type];
       if (v !== undefined && browseMatch(it, f, type)) vals.set(v, vals.get(v) + 1);
     }
   }
@@ -3375,7 +3388,7 @@ function salesPricePoints(matched) {
   for (const r of matched) {
     const t = Date.parse(r.at) || 0;
     if (!t || !Number.isFinite(r.priceEth) || r.priceEth <= 0) continue;
-    pts.push({ t, eth: r.priceEth, usd: r.priceUsd ?? null, id: r.tokenId, name: r.name });
+    pts.push({ t, eth: r.priceEth, usd: r.priceUsd ?? null, id: r.tokenId, name: r.name, c: r.coll });
   }
   return pts.sort((a, b) => a.t - b.t);
 }
@@ -3506,6 +3519,12 @@ function shapeSalesHistory(feed, f, sortKey, meta, win) {
       window: win,
       stats: salesStatsOf(inWindow),
       series: buildSalesSeries(inWindow, movesInWindow),
+      // A zoom re-samples each collection's cloud over the window too — otherwise the
+      // period's Creature dots would still be the handful that survived the whole run's cap.
+      ...(view.split ? { split: {
+        creatures: buildSalesSeries(inWindow.filter(p => p.c === 'creatures'), []),
+        land:      buildSalesSeries(inWindow.filter(p => p.c === 'land'), movesInWindow),
+      } } : {}),
       fetchedAt: view.fetchedAt,
     };
   }
@@ -3515,6 +3534,7 @@ function shapeSalesHistory(feed, f, sortKey, meta, win) {
     // The chart describes the whole matched set, so it's the same for every page of one
     // query. Like the facets, it rides with page 0 and the client keeps its copy.
     ...(f.page === 0 && view.series ? { series: view.series } : {}),
+    ...(f.page === 0 && view.split ? { split: view.split } : {}),
     ...(f.page === 0 ? { counts: view.counts, events: f.events } : {}),
     // Only ever sent to say "this half of the toggle has no data behind it".
     ...(f.page === 0 && meta.moves === false ? { movesUnavailable: true } : {}),
@@ -3523,7 +3543,7 @@ function shapeSalesHistory(feed, f, sortKey, meta, win) {
 
 function buildSalesView(feed, f, sortKey, meta, rate) {
   const rows = feed.map(s => {
-    const known = meta.lookup(s.tokenId);
+    const known = meta.lookup(s.tokenId, s);
     const ts = Date.parse(s.at) || 0;
     // A sale that knows the ETH/USD rate it happened at (the pre-migration archive records
     // one per trade) is valued with it: our daily table only reaches back a year and would
@@ -3531,7 +3551,7 @@ function buildSalesView(feed, f, sortKey, meta, rate) {
     const usd = s.usdRate ?? rate(ts);
     // Is this token listed RIGHT NOW? (drives the "For sale / Not listed" badge + the
     // in-marketplace deep link.) meta.listed returns the current all-in list price or null.
-    const listedNow = meta.listed ? (meta.listed(s.tokenId) ?? null) : null;
+    const listedNow = meta.listed ? (meta.listed(s.tokenId, s) ?? null) : null;
     // Currency-aware valuation: a USDC sale's USD is its dollar amount 1:1 and its ETH-
     // equivalent (the sort/compare key) is amount / that day's ETH-USD; an ETH sale is the
     // mirror. priceAmt/currency ride through for the client's currency-aware display.
@@ -3546,7 +3566,7 @@ function buildSalesView(feed, f, sortKey, meta, rate) {
       // it on every row is what lets one list hold both without the client guessing from a
       // missing price.
       event: s.event || 'sale',
-      name: known?.name || s.name || meta.fallbackName(s.tokenId),
+      name: known?.name || s.name || meta.fallbackName(s.tokenId, s),
       image: known?.image || s.image || null,
       rarity: known?.rarity || null,
       rank: known?.rank ?? null,
@@ -3558,6 +3578,10 @@ function buildSalesView(feed, f, sortKey, meta, rate) {
       priceEth,
       priceUsd,
       listedNow,
+      // A merged "All" view adds the collection tag and the collection-scoped facet bag
+      // here, so one feed can hold rows from two collections without their Eyes drawers
+      // running into each other.
+      ...(meta.extra ? meta.extra(s, known) : null),
     };
   });
   const isAddr = HEX_ADDRESS.test(f.q);
@@ -3585,12 +3609,22 @@ function buildSalesView(feed, f, sortKey, meta, rate) {
     .map(r => Date.parse(r.at) || 0)
     .filter(Boolean)
     .sort((a, b) => a - b);
+  // One chart, two clouds. A parcel and a Creature are both priced in ETH but sit orders
+  // of magnitude apart, so plotting them as a single series would flatten the Creatures onto
+  // the axis. Each collection gets its own scatter, its own trend line and its own even
+  // sample of the cap, and the combined `series` stays behind them for the axis bounds and
+  // the headline figures. The withdrawal bars belong to LAND alone.
+  const split = meta.split ? {
+    creatures: buildSalesSeries(pricePoints.filter(p => p.c === 'creatures'), []),
+    land:      buildSalesSeries(pricePoints.filter(p => p.c === 'land'), movePoints),
+  } : null;
   return {
     matched,
     counts,
+    split,
     // usdRate did its job in the shaper above (it valued the sale); priceUsd is what the
     // client reads, so the rate itself stays server-side.
-    strip: ({ search, usdRate, ...pub }) => pub,
+    strip: ({ search, usdRate, ftraits, ...pub }) => pub,
     facets: computeBrowseFacets(rows, fq),
     // Never serialized — browsePage picks the response's fields by name. This is here so a
     // window query is a filter over a list that already exists.
@@ -4279,6 +4313,24 @@ const listingRowOf = (tokenId, L, ethUsd = null) => landRowOf({
   parcelName: L.name || `LAND #${tokenId}`, traits: {}, rank: null,
 }, L, ethUsd);
 
+// Every parcel as a browse row, built once per (catalogue, listings, rate) rather than per
+// query: without a memo here the merged "All" view rebuilt all ~3,000 of them alongside the
+// LAND view's own copy.
+const landRowsMemo = { key: '', rows: null };
+function landRowsOf(index, listings, ethUsd) {
+  const key = `${index?.builtAt ?? 0}|${slimeListingsCache.at}|${ethUsd ?? ''}`;
+  if (landRowsMemo.key === key && landRowsMemo.rows) return landRowsMemo.rows;
+  const rows = [];
+  const seen = new Set();
+  if (index) for (const sl of index.items) { seen.add(String(sl.tokenId)); rows.push(landRowOf(sl, listings.get(String(sl.tokenId)), ethUsd)); }
+  // Listed parcels missing from the catalogue still show for sale (completeness — a
+  // marketplace must never hide a buyable item behind an unfinished index).
+  for (const [tokenId, L] of listings) if (!seen.has(tokenId)) rows.push(listingRowOf(tokenId, L, ethUsd));
+  landRowsMemo.key = key;
+  landRowsMemo.rows = rows;
+  return rows;
+}
+
 async function getLandBrowse(searchParams) {
   const f = parseBrowseQuery(searchParams);
   if (HEX_ADDRESS.test(f.q)) return getWalletBrowse('land', f);
@@ -4292,13 +4344,7 @@ async function getLandBrowse(searchParams) {
   // Same memo as Creatures, and LAND needs it more: without one, every request rebuilt a
   // row for all ~3,000 parcels before sorting and faceting them.
   const view = browseView('land', [index?.builtAt ?? 0, slimeListingsCache.at], f, () => {
-    const rows = [];
-    const seen = new Set();
-    if (index) for (const s of index.items) { seen.add(String(s.tokenId)); rows.push(landRowOf(s, listings.get(String(s.tokenId)), fx.ethUsd)); }
-    // Listed parcels missing from the catalogue still show for sale (completeness — a
-    // marketplace must never hide a buyable item behind an unfinished index).
-    for (const [tokenId, L] of listings) if (!seen.has(tokenId)) rows.push(listingRowOf(tokenId, L, fx.ethUsd));
-
+    const rows = landRowsOf(index, listings, fx.ethUsd);
     const wantAll = f.scope === 'all';
     const pool = wantAll ? rows : rows.filter(r => r.listed);
     const matched = pool.filter(it => browseMatch(it, f)).sort(BROWSE_SORTS[f.sort]);
@@ -4338,6 +4384,248 @@ async function getLandBrowse(searchParams) {
     ethUsd: fx.ethUsd,
     fxRates: fx.fxRates,
   });
+}
+
+// ===================== "All" — one browse across both collections =========================
+// The club's two collections now carry the same member benefits, so "what can I buy" rarely
+// means "…on Ethereum" or "…on zkEVM". This is the same faceted browse over the union of both
+// pools: one grid, one price filter, one sort, with every row carrying the collection it came
+// from so the client can act on it on the right chain.
+//
+// Deliberately READ-ONLY. A wallet is on one network at a time, so buying, selling and
+// transferring stay per collection — tapping a tile here moves the app to that tile's
+// collection first. Nothing below signs anything.
+//
+// Per-collection isolation is kept: if one side's upstream is down the other still renders,
+// with its own health envelope, rather than the whole grid going dark.
+const ALL_COLL_PREFIX = { creatures: 'c', land: 'l' };
+
+/**
+ * Tag a pool's rows with their collection, give their facet keys a collection-scoped name,
+ * and record where each row's rank falls WITHIN its own collection.
+ *
+ * Both collections have an Eyes facet and they are not the same drawer, hence the prefix.
+ * And rank #5 of 10,000 Creatures is not rank #5 of 2,973 parcels, so a merged rarity sort
+ * can only honestly compare the fraction — "rarest relative to its own collection first".
+ */
+function taggedAllRows(rows, kind, total) {
+  const pfx = ALL_COLL_PREFIX[kind];
+  const out = new Array(rows.length);
+  for (let i = 0; i < rows.length; i++) {
+    const it = rows[i];
+    const ftraits = {};
+    for (const type in (it.traits || {})) ftraits[`${pfx}:${type}`] = it.traits[type];
+    out[i] = { ...it, coll: kind, ftraits, rankPct: total && it.rank != null ? it.rank / total : null };
+  }
+  return out;
+}
+
+// Sorting the merged set. Same rules as BROWSE_SORTS, with the percentile standing in for
+// the raw rank and a final tie-break on (collection, tokenId) — ids repeat across the two
+// collections, so without it the order of two equal rows could change between rebuilds.
+const allRankOf = it => it.rankPct ?? 2; // unranked rows sink below every ranked one
+const allTieOf = (a, b) => String(a.coll).localeCompare(String(b.coll))
+  || String(a.tokenId).localeCompare(String(b.tokenId));
+function cmpAllPrice(a, b, dir) {
+  const pa = browsePriceOf(a), pb = browsePriceOf(b);
+  if (pa != null && pb != null) return dir * (pa - pb) || allRankOf(a) - allRankOf(b) || allTieOf(a, b);
+  if (pa != null) return -1;
+  if (pb != null) return 1;
+  return allRankOf(a) - allRankOf(b) || allTieOf(a, b);
+}
+const ALL_BROWSE_SORTS = {
+  'price-asc':  (a, b) => cmpAllPrice(a, b, 1),
+  'price-desc': (a, b) => cmpAllPrice(a, b, -1),
+  'newest':     (a, b) => (b.listedAt ?? 0) - (a.listedAt ?? 0) || allRankOf(a) - allRankOf(b) || allTieOf(a, b),
+  'rarity':     (a, b) => allRankOf(a) - allRankOf(b) || cmpAllPrice(a, b, 1),
+};
+
+/** The Creature side of a merged browse: its pool, its stamps, and what it can account for. */
+async function creatureBrowsePool(f) {
+  upstreamHealth.throwIfFaulted('creatures', 'listings');
+  const listIdx = await getBrowseIndex();
+  const cIdx = getCollectionIndex(); // null until the first catalogue build lands
+  const wantAll = f.scope === 'all';
+  return {
+    stamps: [browseIndex.at, collectionIndex.at],
+    rows: wantAll && cIdx ? allPoolOf(listIdx, cIdx) : listedPoolOf(listIdx, cIdx),
+    indexing: wantAll && !cIdx,
+    listedTotal: listIdx.items.length,
+    collectionTotal: cIdx?.total ?? null,
+    at: browseIndex.at,
+  };
+}
+
+/** The LAND side of the same. */
+async function landBrowsePool(f, ethUsd) {
+  upstreamHealth.throwIfFaulted('land', 'listings');
+  const listings = await landListingsByToken();
+  const index = slimeIndex.getSlimeIndex(); // null while the first sweep runs
+  const rows = landRowsOf(index, listings, ethUsd);
+  const wantAll = f.scope === 'all';
+  return {
+    stamps: [index?.builtAt ?? 0, slimeListingsCache.at],
+    rows: wantAll ? rows : rows.filter(r => r.listed),
+    indexing: !index,
+    listedTotal: rows.reduce((n, r) => n + (r.listed ? 1 : 0), 0),
+    collectionTotal: index ? index.total : null,
+    at: index?.builtAt || Date.now(),
+  };
+}
+
+async function getAllBrowse(searchParams) {
+  const f = parseBrowseQuery(searchParams);
+  // A wallet or a profile name means "everything this address holds" — and in All mode that
+  // is both collections at once, which is the whole point of the view.
+  if (HEX_ADDRESS.test(f.q)) return getWalletBrowse('all', f);
+  const profMatch = f.q ? await db.findEnabledProfileByQuery(f.q).catch(() => null) : null;
+  if (profMatch && profMatch.wallets.length) {
+    return getWalletBrowse('all', f, { wallets: profMatch.wallets, profile: { name: profMatch.profile.display_name, slug: profMatch.profile.slug } });
+  }
+  const fx = await getMarketplaceFx();
+  // allSettled, not all: one collection's outage must cost only that collection's rows.
+  const [cRes, lRes] = await Promise.allSettled([creatureBrowsePool(f), landBrowsePool(f, fx.ethUsd)]);
+  const cPart = cRes.status === 'fulfilled' ? cRes.value : null;
+  const lPart = lRes.status === 'fulfilled' ? lRes.value : null;
+  if (cRes.status === 'rejected') console.error('All browse: Creature side failed:', cRes.reason?.message);
+  if (lRes.status === 'rejected') console.error('All browse: LAND side failed:', lRes.reason?.message);
+  if (!cPart && !lPart) {
+    const err = new Error('both collections unavailable');
+    err.code = 'upstream_down';
+    throw err;
+  }
+  // A missing side is part of the view's identity: when it comes back, the key moves and the
+  // half-empty view falls out on its own.
+  const stamps = [...(cPart?.stamps ?? ['down']), ...(lPart?.stamps ?? ['down'])];
+  const view = browseView('all', stamps, f, () => {
+    const pool = [
+      ...(cPart ? taggedAllRows(cPart.rows, 'creatures', cPart.collectionTotal) : []),
+      ...(lPart ? taggedAllRows(lPart.rows, 'land', lPart.collectionTotal) : []),
+    ];
+    const matched = pool.filter(it => browseMatch(it, f)).sort(ALL_BROWSE_SORTS[f.sort]);
+    let lo = null, hi = null;
+    for (const r of pool) {
+      const price = r.totalEth ?? r.priceEth;
+      if (price == null) continue;
+      if (lo === null || price < lo) lo = price;
+      if (hi === null || price > hi) hi = price;
+    }
+    const bothUnbuilt = (cPart?.collectionTotal ?? null) === null && (lPart?.collectionTotal ?? null) === null;
+    return {
+      matched,
+      // Traits ride along for every row here (LAND's modal reads them, and only a page of
+      // rows is ever serialized); ftraits is internal bookkeeping and never goes out.
+      strip: ({ search, listedAt, ftraits, ...pub }) => pub,
+      facets: computeBrowseFacets(pool, f),
+      priceRange: lo === null ? null : { min: lo, max: hi },
+      scope: f.scope === 'all' ? 'all' : 'listed',
+      indexing: !!(cPart?.indexing || lPart?.indexing),
+      listedTotal: (cPart?.listedTotal ?? 0) + (lPart?.listedTotal ?? 0),
+      collectionTotal: bothUnbuilt ? null : (cPart?.collectionTotal ?? 0) + (lPart?.collectionTotal ?? 0),
+      fetchedAt: new Date(Math.min(cPart?.at || Date.now(), lPart?.at || Date.now())).toISOString(),
+    };
+  });
+  return browsePage(view, f, {
+    scope: view.scope,
+    indexing: view.indexing,
+    listedTotal: view.listedTotal,
+    collectionTotal: view.collectionTotal,
+    ethUsd: fx.ethUsd,
+    fxRates: fx.fxRates,
+    // Which side answered, so the ROUTE can build one health envelope per collection: the
+    // banner has to be able to say "LAND prices are unavailable" over half a grid that is
+    // otherwise perfectly good. (The envelope helpers live inside the request handler.)
+    collStatus: {
+      creatures: { ok: !!cPart, err: cRes.reason || null },
+      land: { ok: !!lPart && landMarket.configured(), err: lRes.reason || (lPart ? { code: 'not_configured' } : null) },
+    },
+  });
+}
+
+// --- "All" sales history: both collections' completed trades in one feed -------------------
+// Both feeds already shape through shapeSalesHistory, so this is a merge and one call. The
+// tagging is memoized on the two feeds' read times: re-tagging fourteen thousand archived
+// Creature sales per request to slice out 24 rows is not work worth repeating.
+// A wallet bar re-reads on every render, a network switch and a tab return, so the same
+// five chain reads would otherwise repeat within seconds. Short enough that a top-up shows
+// up promptly, long enough that a repaint is free.
+const ALL_BALANCES_TTL_MS = 20 * 1000;
+const allBalancesCache = new Map(); // address -> { at, data }
+
+const allSalesMemo = { key: '', feed: null };
+function allSalesFeedOf(creatureSold, landSold) {
+  const key = `${creatureSalesFeed.at}|${landSalesFeed.at}|${creatureSold.length}|${landSold.length}`;
+  if (allSalesMemo.key === key && allSalesMemo.feed) return allSalesMemo.feed;
+  const feed = [
+    ...creatureSold.map(r => ({ ...r, coll: 'creatures' })),
+    ...landSold.map(r => ({ ...r, coll: 'land' })),
+  ].sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0));
+  allSalesMemo.key = key;
+  allSalesMemo.feed = feed;
+  return feed;
+}
+
+async function getAllSalesHistory(searchParams) {
+  const f = parseBrowseQuery(searchParams);
+  const sortKey = parseSalesSort(searchParams);
+  const win = parseSalesWindow(searchParams);
+  const isWallet = HEX_ADDRESS.test(f.q);
+  f.events = parseSalesEvents(searchParams, isWallet);
+  const [fx, daily, listIdx] = await Promise.all([getMarketplaceFx(), getEthUsdDaily(), getBrowseIndex()]);
+  const [cSoldRes, lSoldRes] = await Promise.allSettled([getCreatureSalesWithArchive(), getLandSalesFeed()]);
+  const cSold = cSoldRes.status === 'fulfilled' ? cSoldRes.value : [];
+  const lSold = lSoldRes.status === 'fulfilled' ? lSoldRes.value : [];
+  if (cSoldRes.status === 'rejected' && lSoldRes.status === 'rejected') {
+    const err = new Error('both sales feeds unavailable');
+    err.code = 'unavailable';
+    throw err;
+  }
+  // The moves beside the sales: a wallet query reads that address's own transfers on BOTH
+  // chains; the collection-wide feed carries LAND's withdrawals, which is the only way a
+  // parcel reaches Ethereum at all. Creatures have no collection-wide move feed.
+  const moves = isWallet
+    ? [
+      ...(await walletTransferRows('creatures', f.q).catch(() => [])).map(r => ({ ...r, coll: 'creatures' })),
+      ...(await walletTransferRows('land', f.q).catch(() => [])).map(r => ({ ...r, coll: 'land' })),
+    ]
+    : (await getLandMintsFeed().catch(() => [])).map(r => ({ ...r, coll: 'land' }));
+  const sold = allSalesFeedOf(cSold, lSold);
+  const feed = moves.length ? [...sold, ...moves].sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0)) : sold;
+
+  const cIdx = getCollectionIndex();
+  const sIdx = slimeIndex.getSlimeIndex();
+  const cListed = new Map((listIdx?.items || []).map(it => [String(it.tokenId), it.totalEth ?? it.priceEth]));
+  const lListings = await landListingsByToken().catch(() => new Map());
+  return shapeSalesHistory(feed, f, sortKey, {
+    kind: 'sales:all',
+    stamps: [creatureSalesFeed.at, landSalesFeed.at, landMintsFeed.at, landMintsFeed.ok,
+      collectionIndex.at, sIdx?.builtAt ?? 0, feed.length],
+    moves: isWallet || landMintsFeed.ok,
+    at: Math.min(creatureSalesFeed.at || Date.now(), landSalesFeed.at || Date.now()),
+    split: true,
+    daily, ethUsd: fx.ethUsd, fxRates: fx.fxRates,
+    lookup: (id, row) => {
+      if (row.coll === 'land') {
+        const sl = sIdx?.byToken.get(String(id));
+        return sl ? { name: sl.slimeName || sl.parcelName, traits: sl.traits, rank: sl.rank, coords: sl.coords,
+          search: `${sl.slimeName || ''} ${sl.parcelName} ${sl.coords?.x ?? ''} ${sl.coords?.y ?? ''}` } : null;
+      }
+      return cIdx?.byId.get(String(id)) || null;
+    },
+    listed: (id, row) => {
+      if (row.coll !== 'land') return cListed.get(String(id)) ?? null;
+      const L = lListings.get(String(id));
+      if (!L) return null;
+      return L.currency === 'usdc' ? (fx.ethUsd ? Math.round(L.priceAmt / fx.ethUsd * 1e4) / 1e4 : null) : (L.priceEth ?? L.priceAmt ?? null);
+    },
+    fallbackName: (id, row) => (row.coll === 'land' ? `Highrise LAND #${id}` : `Highrise Creature #${id}`),
+    extra: (row, known) => {
+      const pfx = ALL_COLL_PREFIX[row.coll] || 'c';
+      const ftraits = {};
+      for (const type in (known?.traits || {})) ftraits[`${pfx}:${type}`] = known.traits[type];
+      return { coll: row.coll, ftraits };
+    },
+  }, win);
 }
 
 // LAND sales feed (OpenSea collection events), briefly cached. Traits/rank are joined per
@@ -4524,24 +4812,41 @@ async function getWalletBrowse(collKind, f, opts = {}) {
   const byAddr = new Map();
   for (const w of walletSpec) { const a = String(w.wallet).toLowerCase(); if (!byAddr.has(a)) byAddr.set(a, { ...w, wallet: a }); }
   walletSpec = [...byAddr.values()];
-  const perWallet = await Promise.all(walletSpec.map(async w => {
-    const owned = await ownedRowsFor(collKind, w.wallet);
+  // 'all' fans out across both collections. A member pasting their address into the All view
+  // means everything they hold, not everything they hold on one chain — and a wallet reads the
+  // same either way, so the two fetches simply run side by side.
+  const kinds = collKind === 'all' ? ['creatures', 'land'] : [collKind];
+  // Which collections actually answered, so a merged wallet view reports the same per-market
+  // health as a merged collection browse — "you hold no parcels" and "we could not ask
+  // OpenSea" are different sentences and must not render as the same empty grid.
+  const failed = {};
+  const perWallet = await Promise.all(walletSpec.flatMap(w => kinds.map(async kind => {
+    // One collection's indexer failing must not empty a wallet view that the other can fill.
+    const owned = await ownedRowsFor(kind, w.wallet).catch(err => {
+      console.error(`Wallet browse: ${kind} holdings for ${maskWallet(w.wallet)} failed:`, err.message);
+      failed[kind] = err;
+      return [];
+    });
+    const tagged = collKind === 'all'
+      ? taggedAllRows(owned, kind, kind === 'land' ? (slimeIndex.getSlimeIndex()?.total ?? null) : (getCollectionIndex()?.total ?? null))
+      : owned;
     // Tag each row with its wallet + trust tier so the client can badge per tile.
-    return owned.map(r => ({ ...r, wallet: w.wallet, verified: !!w.verified, highriseLinked: !!w.highriseLinked }));
-  }));
+    return tagged.map(r => ({ ...r, wallet: w.wallet, verified: !!w.verified, highriseLinked: !!w.highriseLinked }));
+  })));
   const rows = perWallet.flat();
   const fx = await getMarketplaceFx();
   const fq = { ...f, q: '' }; // the wallet(s) select the pool; q is not a name substring here
   const pool = f.scope === 'listed' ? rows.filter(r => r.listed) : rows;
-  const matched = pool.filter(it => browseMatch(it, fq)).sort(BROWSE_SORTS[f.sort]);
+  const matched = pool.filter(it => browseMatch(it, fq))
+    .sort((collKind === 'all' ? ALL_BROWSE_SORTS : BROWSE_SORTS)[f.sort]);
   let lo = null, hi = null;
   for (const r of rows) { const p = r.totalEth; if (p == null) continue; if (lo === null || p < lo) lo = p; if (hi === null || p > hi) hi = p; }
   const listedCount = rows.reduce((n, r) => n + (r.listed ? 1 : 0), 0);
   // Match each collection's existing wire shape: LAND keeps `traits` on the row (its modal
   // reads them); Creatures strip them (their modal refetches token detail). Both keep the
   // new wallet/source tags via the spread.
-  const strip = collKind === 'land'
-    ? ({ search, listedAt, ...pub }) => pub
+  const strip = collKind === 'all' ? ({ search, listedAt, ftraits, ...pub }) => pub
+    : collKind === 'land' ? ({ search, listedAt, ...pub }) => pub
     : ({ traits, listedAt, ...pub }) => pub;
   // Paged and faceted like collection browse (facets on page 0 only), but not memoized:
   // the costly part is the upstream holdings read, and that already has its own pool cache.
@@ -4560,11 +4865,18 @@ async function getWalletBrowse(collKind, f, opts = {}) {
     // Traits/ranks (and LAND slime names) come from the background catalogues — until
     // they're warm this response degrades (raw/absent traits, parcel-only names), so
     // tell the client it's worth a quiet re-poll, same as collection-mode browse.
-    indexing: collKind === 'land' ? !slimeIndex.getSlimeIndex() : !getCollectionIndex(),
+    indexing: collKind === 'all' ? (!slimeIndex.getSlimeIndex() || !getCollectionIndex())
+      : collKind === 'land' ? !slimeIndex.getSlimeIndex() : !getCollectionIndex(),
     listedTotal: listedCount,
     collectionTotal: rows.length,
     ethUsd: fx.ethUsd,
     fxRates: fx.fxRates,
+    ...(collKind === 'all' ? {
+      collStatus: {
+        creatures: { ok: !failed.creatures, err: failed.creatures || null },
+        land: { ok: !failed.land && landMarket.configured(), err: failed.land || (landMarket.configured() ? null : { code: 'not_configured' }) },
+      },
+    } : {}),
   });
 }
 
@@ -4732,6 +5044,9 @@ async function handleMarketplaceApi(request, response, url) {
   // Keeping the buckets apart is what lets one market stay usable while the other is down.
   const mktBucket = /^\/api\/market\/land\//.test(pathname) ? 'land'
     : /^\/api\/market\/creatures\//.test(pathname) ? 'creatures'
+    // The merged view reads both collections, so it gets its own budget rather than
+    // spending the shared one the on-ramp also draws on.
+    : /^\/api\/market\/all\//.test(pathname) ? 'all'
     : 'shared';
   if (!isPetRender) {
     const wait = rateLimited(`mkt:${mktBucket}:${ip}`, 90, 60 * 1000);
@@ -6026,6 +6341,117 @@ async function handleMarketplaceApi(request, response, url) {
   }
   // Unified LAND browse: every parcel via its Slime — trait facets, rarity rank,
   // price when listed. (LAND and its Slime are one NFT — one browse, not two.)
+  // --- Both collections at once ------------------------------------------------------------
+  // Read-only: the union of the two browses, and the union of the two sales feeds. Every
+  // WRITE stays on its collection's own route, because it needs that collection's chain.
+  if (pathname === '/api/market/all/browse') {
+    if (HEX_ADDRESS.test((url.searchParams.get('q') || '').trim().toLowerCase())) {
+      // Two collections' holdings per address, so the wallet budget is spent twice as fast.
+      const w = rateLimited(`mktwallet:${ip}`, 40, 60 * 1000);
+      if (w) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(w) }); return; }
+    }
+    try {
+      const { collStatus, ...data } = await getAllBrowse(url.searchParams);
+      // One envelope per collection, built here because the helpers are request-scoped.
+      // A side with no entry answered: the rows are in hand, so reporting it live is a
+      // statement about this response rather than an assumption about the upstream.
+      const cOk = collStatus?.creatures?.ok !== false;
+      const lOk = collStatus?.land?.ok !== false;
+      const healthByColl = {
+        creatures: cOk ? creatureBrowseHealth(true) : creatureBrowseHealth(false, null, errCode(collStatus.creatures.err)),
+        land: lOk ? landHealth(true) : landHealth(false, null, errCode(collStatus.land.err)),
+      };
+      const allLive = cOk && lOk;
+      sendJson(response, 200, { ...data, healthByColl },
+        // A half-served grid must not be cached as if it were the whole thing.
+        { 'Cache-Control': allLive ? 'public, max-age=15' : 'no-store' },
+        { request, compress: true, etagIgnore: HEALTH_CLOCK_KEYS });
+    } catch (err) {
+      console.error('All browse failed:', err.message);
+      sendJson(response, 503, {
+        error: err.code || 'unavailable',
+        items: null,
+        healthByColl: {
+          creatures: creatureBrowseHealth(false, null, errCode(err)),
+          land: landHealth(false, null, errCode(err)),
+        },
+      }, { 'Cache-Control': 'no-store' });
+    }
+    return;
+  }
+
+  // Both chains' spendable balances at once, for the merged view's wallet bar.
+  //
+  // A wallet sits on one network at a time, so the browser can only ever read one side: the
+  // other one it simply cannot see. Read server-side, both sides are the same cheap pair of
+  // eth_calls, and the member gets the whole picture instead of half of it with no way to
+  // tell whether the missing half is empty or merely unreachable.
+  //
+  // Public chain data for an address the caller names — the same shape as the existing
+  // eth-elsewhere and land/owned routes. Nothing here touches our database or any off-chain
+  // identity. Everything is settled independently: a slow node costs its own figure and
+  // nothing else, and a missing figure is sent as null so the bar can show "—" rather than
+  // a zero balance nobody measured.
+  const allBalMatch = pathname.match(/^\/api\/market\/all\/balances\/(0x[0-9a-fA-F]{40})$/);
+  if (allBalMatch) {
+    const addr = allBalMatch[1].toLowerCase();
+    const hit = allBalancesCache.get(addr);
+    if (hit && Date.now() - hit.at < ALL_BALANCES_TTL_MS) {
+      sendJson(response, 200, hit.data, { 'Cache-Control': 'no-store' });
+      return;
+    }
+    const [cCount, cEth, imx, lCount, lEth] = await Promise.allSettled([
+      erc721BalanceOf(ZK_RPC_URL, CREATURE_CONTRACT, addr),
+      ethCall(ZK_RPC_URL, IMX_ETH_TOKEN, SEL_BALANCE_OF + padUint(BigInt(addr))),
+      ethGetBalance(ZK_RPC_URL, addr),
+      // The LAND contract's own balanceOf, NOT the holder count: estate-locked parcels are
+      // owned by the estate contract and can't be traded from here, so counting them in a
+      // trading bar would promise something the Sell picker then refuses.
+      erc721BalanceOf(ETH_RPC_URL, LAND_CONTRACT, addr),
+      ethGetBalance(ETH_BALANCE_RPC, addr),
+    ]);
+    const num = r => (r.status === 'fulfilled' && Number.isFinite(r.value) ? r.value : null);
+    const wei = r => {
+      if (r.status !== 'fulfilled' || r.value == null) return null;
+      try { return BigInt(r.value).toString(); } catch { return null; }
+    };
+    for (const [what, r] of [['Creature count', cCount], ['zkEVM ETH', cEth], ['IMX', imx],
+      ['LAND count', lCount], ['mainnet ETH', lEth]]) {
+      if (r.status === 'rejected') console.error(`All balances: ${what} for ${maskWallet(addr)} failed:`, r.reason?.message);
+    }
+    const data = {
+      creatures: { count: num(cCount), ethWei: wei(cEth), imxWei: wei(imx) },
+      land: { count: num(lCount), ethWei: wei(lEth) },
+    };
+    if (allBalancesCache.size > 200) allBalancesCache.clear();
+    allBalancesCache.set(addr, { at: Date.now(), data });
+    sendJson(response, 200, data, { 'Cache-Control': 'no-store' });
+    return;
+  }
+
+  if (pathname === '/api/market/all/sales') {
+    if (HEX_ADDRESS.test((url.searchParams.get('q') || '').trim().toLowerCase())) {
+      const w = rateLimited(`mktwallet:${ip}`, 40, 60 * 1000);
+      if (w) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(w) }); return; }
+    }
+    try {
+      const data = await getAllSalesHistory(url.searchParams);
+      // Settled history, so like each collection's own sales route this reports against the
+      // non-pricing `meta` source and must never move `trading`.
+      sendJson(response, 200, {
+        ...data,
+        healthByColl: {
+          creatures: upstreamHealth.collectionHealth('creatures', { meta: srcHealth('creatures', 'meta', true) }),
+          land: upstreamHealth.collectionHealth('land', { meta: srcHealth('land', 'meta', true) }),
+        },
+      }, { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=150' }, { request, etagIgnore: HEALTH_CLOCK_KEYS, compress: true });
+    } catch (err) {
+      console.error('All sales history failed:', err.message);
+      sendJson(response, 503, { error: 'unavailable', sales: null }, { 'Cache-Control': 'no-store' });
+    }
+    return;
+  }
+
   if (pathname === '/api/market/land/browse') {
     if (HEX_ADDRESS.test((url.searchParams.get('q') || '').trim().toLowerCase())) {
       const w = rateLimited(`mktwallet:${ip}`, 40, 60 * 1000);
@@ -9743,7 +10169,7 @@ const server = http.createServer((request, response) => {
   }
 
   if (request.url.startsWith('/api/market/creatures') || request.url.startsWith('/api/market/land')
-      || request.url.startsWith('/api/market/onramp')) {
+      || request.url.startsWith('/api/market/all') || request.url.startsWith('/api/market/onramp')) {
     const url = parseRequestUrl(request);
     if (!url) { sendJson(response, 400, { error: 'bad_request' }); return; }
     handleMarketplaceApi(request, response, url).catch(err => {

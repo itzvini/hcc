@@ -9773,6 +9773,98 @@ span.hp-statchip-ico { font-size: 17px; line-height: 22px; text-align: center; c
 /* Wallet-bar balance pips (Creatures / LAND counts) — brand marks, not emoji. */
 .trade-bal-ico { width: 14px; height: 14px; object-fit: contain; border-radius: 3px; vertical-align: -2px; }
 
+/* --- "All": both collections in one view ------------------------------------------------
+   A read scope over the two collections, so it wears both their marks rather than a glyph
+   invented to stand for them. The two overlap like stacked cards and fan apart on hover. */
+/* Side by side, not stacked. The overlap needed a ring to separate the two marks, and that
+   ring read as an outlined box around each icon — worse than the problem it solved. Two
+   marks with a gap say "both" just as plainly and have nothing drawn around them. */
+.trade-coll-ico-stack { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.trade-coll-ico-stack img {
+  width: 15px; height: 15px; object-fit: contain; display: block;
+  transition: transform .22s cubic-bezier(.2,.7,.2,1);
+}
+.trade-coll-switch .seg-btn:hover .trade-coll-ico-stack img:first-child,
+.trade-coll-switch .seg-btn.is-active .trade-coll-ico-stack img:first-child { transform: translateY(-1px); }
+.trade-coll-switch .seg-btn:hover .trade-coll-ico-stack img:last-child,
+.trade-coll-switch .seg-btn.is-active .trade-coll-ico-stack img:last-child { transform: translateY(1px); }
+/* Both palettes are in play, so the active All pill borrows from both rather than picking
+   a side: mint on the left edge, lavender on the right. */
+.trade-coll-switch.is-all .seg-btn.is-active {
+  background: linear-gradient(100deg, var(--hr-primary-25), rgba(133,97,255,.28));
+  border-color: rgba(133,97,255,.5);
+}
+
+/* The beta mark on the All chip. Small enough to read as a footnote on the control rather
+   than as a second label competing with it. */
+.trade-coll-switch .trade-beta-chip.is-mini {
+  margin-left: 2px; font-size: 8px; padding: 2px 5px; letter-spacing: .06em;
+}
+
+/* Merged wallet bar: one group per collection, each led by its own brand mark, so two sets
+   of figures on two different chains can't be read as one running total. */
+.trade-bar-group {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px 3px 6px; border-radius: var(--hr-radius-pill);
+  background: rgba(255,255,255,.035); border: 1px solid var(--hr-line);
+  font-size: 11.5px; color: var(--hr-fg-2); white-space: nowrap;
+}
+.trade-bar-group b { color: var(--hr-fg-0); font-weight: 800; font-variant-numeric: tabular-nums; }
+.trade-bar-group.is-creatures { border-color: rgba(81,255,165,.28); }
+.trade-bar-group.is-land { border-color: rgba(133,97,255,.28); }
+.trade-bar-group .trade-bar-bal { display: inline-flex; align-items: center; gap: 4px; }
+.trade-bar-group .trade-bar-bal::before {
+  content: ""; width: 1px; height: 11px; background: var(--hr-line); margin-right: 2px;
+}
+
+/* Which collection a card belongs to, worn on the card — only ever rendered in the merged
+   view, where the switcher above can no longer answer it. Bottom-left of the art, clear of
+   the rank pill (top-left) and the rarity chip (top-right). */
+.trade-tile-coll {
+  position: absolute; left: 8px; bottom: 8px; z-index: 2;
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--hr-sans); font-weight: 900; font-size: 9.5px;
+  text-transform: uppercase; letter-spacing: .05em;
+  padding: 4px 9px 4px 5px; border-radius: var(--hr-radius-pill);
+  color: var(--hr-fg-0); background: rgba(15,16,20,.72);
+  border: 1px solid var(--hr-line-strong);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+.trade-tile-coll .trade-coll-ico-stack img { width: 13px; height: 13px; }
+.trade-tile-coll.is-creatures { border-color: rgba(81,255,165,.42); }
+.trade-tile-coll.is-land { border-color: rgba(133,97,255,.42); }
+/* On a sale card the tag row is in flow, so the badge un-absolutes itself like the others. */
+.trade-sale-tags .trade-tile-coll {
+  position: static; left: auto; bottom: auto;
+  box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+
+/* Why the All chip has gone: shown on the views that sign something, for as long as the
+   merged scope is the one being returned to. Quiet by design — nothing has failed. */
+.trade-coll-note {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 4px;
+  font-size: 12.5px; line-height: 1.45; color: var(--hr-fg-3);
+}
+.trade-coll-note .trade-ico { flex: none; color: var(--hr-secondary); }
+
+/* Two vocabularies in the filter drawer: say whose is whose, or two "Eyes" buttons sit side
+   by side with nothing to tell them apart. */
+.trade-flt-group + .trade-flt-group { margin-top: 12px; }
+.trade-flt-grouph {
+  display: flex; align-items: center; gap: 6px; margin: 0 0 7px;
+  font-family: var(--hr-sans); font-weight: 900; font-size: 10px;
+  text-transform: uppercase; letter-spacing: .07em; color: var(--hr-fg-3);
+}
+.trade-flt-grouph .trade-coll-ico { width: 13px; height: 13px; }
+.trade-flt-hit-type .trade-coll-ico { width: 12px; height: 12px; vertical-align: -2px; margin-right: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .trade-coll-ico-stack img { transition: none; }
+  .trade-coll-switch .seg-btn:hover .trade-coll-ico-stack img,
+  .trade-coll-switch .seg-btn.is-active .trade-coll-ico-stack img { transform: none; }
+}
+
 /* --- Holder profile: nav pill (action-tab row) + in-view manage card --- */
 /* The pill sits at the far right of the action-tab row — the persistent doorway to
    your own profile. Clicking it swaps the marketplace content area for the profile

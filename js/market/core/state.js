@@ -24,6 +24,15 @@ export function setBusy(v)    { busy = v; }
 export let coll = 'creatures';
 export function setColl(v) { coll = v; }
 
+// --- Browsing both collections at once ------------------------------------------------
+// `browseAll` is a READ scope laid over `coll`, not a third collection. The two collections
+// now carry the same member benefits, so "what can I buy" rarely means "…on one chain"; but
+// a wallet is only ever on one network, so buying, selling and transferring still happen
+// against `coll`. Opening a tile in the merged grid sets `coll` to that tile's collection
+// first, which is what keeps every signing path exactly as it was.
+export let browseAll = false;
+export function setBrowseAll(v) { browseAll = v; }
+
 // --- Which view is on screen --------------------------------------------------------
 // The two funds views own a URL, and their tab value IS their URL slug ('/trade/cash-out'),
 // so there is no name-to-slug table anywhere to drift out of step.
