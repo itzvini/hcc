@@ -19,6 +19,7 @@ const squidBridge = require('./lib/squid-bridge');
 const layerswapBridge = require('./lib/layerswap-bridge');
 const gasFaucet = require('./lib/gas-faucet');
 const landMarket = require('./lib/land-market');
+const landBook = require('./lib/land-book');   // our own LAND orderbook, merged with OpenSea's
 const landPets = require('./lib/land-pets');
 const upstreamHealth = require('./lib/upstream-health'); // per-collection upstream state
 const lastKnown = require('./lib/last-known');           // failure-path snapshots only
@@ -4289,9 +4290,30 @@ async function landListingsByToken(force = false) {
       cursor = nextCursor;
     } while (cursor && ++pages < 20);
   }
+  // Our own book, merged in on the same rule the OpenSea side already uses within itself:
+  // a parcel shows its cheapest order, wherever that order is held. A house listing is
+  // normally the cheaper of the two by the 1% it doesn't pay, so this is usually where a
+  // cross-listed parcel ends up — which is the point. The buy path routes on the row's
+  // `source`, so either book can win without the grid needing to care.
+  //
+  // The house book is read even when OpenSea isn't configured: it needs no API key, so a
+  // missing key costs us their listings, not ours.
+  try {
+    for (const [tokenId, it] of await landBook.listingsByToken()) {
+      const prev = map.get(tokenId);
+      if (!prev || cheaperListing(it, prev)) map.set(tokenId, it);
+    }
+  } catch (err) {
+    console.error('LAND house book read failed:', err.message);
+  }
   slimeListingsCache.data = map; slimeListingsCache.at = Date.now();
   return map;
 }
+
+// Which of two listings for the same parcel to show. Same currency: the smaller amount.
+// Different currencies: prefer ETH, so the comparison never needs an exchange rate at a
+// point where we may not have one (getLandBrowse re-sorts by true ETH-equivalent later).
+const cheaperListing = (a, b) => (a.currency === b.currency ? a.priceAmt < b.priceAmt : a.currency === 'eth');
 
 // Shape a parcel + its (optional) listing into a browse row. Mixed-currency: an ETH listing's
 // native amount IS its ETH-equivalent; a USDC listing is dollar-denominated, so its ETH-
@@ -4327,6 +4349,9 @@ const landRowOf = (s, L, ethUsd = null) => {
     totalEth, // ETH-equivalent (all-in) — the sort/floor key
     listingId: L ? L.orderHash : null,
     protocolAddress: L ? L.protocolAddress : null,
+    // 'book' (held here) or 'opensea' (relayed there). The buy path needs it to know which
+    // book to fill from, and the tile shows it so a buyer knows where their money goes.
+    source: L ? (L.source || 'opensea') : null,
     seller: L ? L.seller : null,
     listedAt: 0,
   };
@@ -6319,11 +6344,25 @@ async function handleMarketplaceApi(request, response, url) {
   // Same shape as the Creature endpoints; different chain + protocol underneath.
   if (pathname === '/api/market/land/listings') {
     if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
-    const [data, fx] = await Promise.all([
-      landMarket.listListings(url.searchParams.get('cursor') || ''),
+    const cursor = url.searchParams.get('cursor') || '';
+    const [data, fx, house] = await Promise.all([
+      landMarket.listListings(cursor),
       getMarketplaceFx(),
+      // The house book is small and unpaginated, so it rides on the first page and only the
+      // first. Paging OpenSea's cursor is their feed's business; interleaving ours into it
+      // would mean re-sending the same house rows on every page.
+      cursor ? Promise.resolve({ items: [] }) : landBook.openListings().catch(() => ({ items: [] })),
     ]);
-    sendJson(response, 200, { ...data, ethUsd: fx.ethUsd, fxRates: fx.fxRates }, { 'Cache-Control': 'public, max-age=30' });
+    // One row per parcel, the cheaper order wins, and a tie goes to the house book: at the
+    // same price to the buyer, a fill here pays the seller the 1% OpenSea would have taken.
+    const byToken = new Map(house.items.map(it => [it.tokenId, it]));
+    for (const it of data.items) {
+      const prev = byToken.get(it.tokenId);
+      if (!prev || cheaperListing(it, prev)) byToken.set(it.tokenId, it);
+    }
+    const items = [...byToken.values()]
+      .sort((a, b) => (a.currency === b.currency ? a.priceAmt - b.priceAmt : a.currency === 'eth' ? -1 : 1));
+    sendJson(response, 200, { ...data, items, ethUsd: fx.ethUsd, fxRates: fx.fxRates }, { 'Cache-Control': 'public, max-age=30' });
     return;
   }
   // Active collection-wide offers ("standing offers") on LAND, best first. Read-only:
@@ -6493,6 +6532,10 @@ async function handleMarketplaceApi(request, response, url) {
       const priced = landMarket.configured();
       sendJson(response, 200, {
         ...data,
+        // Whether our own book is taking listings. The sell form reads it: it decides
+        // whether a seller is offered USDC (which only this book settles) and whether the
+        // "where do you want it listed" choice appears at all.
+        landBook: landBook.enabled(),
         health: priced ? landHealth(true) : landHealth(false, null, 'not_configured'),
       }, { 'Cache-Control': priced ? 'public, max-age=15' : 'no-store' }, { request, compress: true, etagIgnore: HEALTH_CLOCK_KEYS });
     } catch (err) {
@@ -6617,7 +6660,15 @@ async function handleMarketplaceApi(request, response, url) {
     if (!HEX_ADDRESS.test(taker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
 
     try {
-      sendJson(response, 200, await landMarket.prepareBuy({ orderHash, protocolAddress, taker }));
+      // Which book holds this order is decided HERE, by looking the hash up, not by what the
+      // caller says it is. The client sends a `source` for its own display; trusting it would
+      // let someone point the house path at an OpenSea hash and vice versa. A hash exists in
+      // at most one book (a cross-listed parcel is two different orders), so the lookup is
+      // unambiguous.
+      const mine = await landBook.getOrder(orderHash);
+      sendJson(response, 200, mine
+        ? await landBook.prepareBuy({ orderHash, taker })
+        : await landMarket.prepareBuy({ orderHash, protocolAddress, taker }));
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }
@@ -6665,17 +6716,22 @@ async function handleMarketplaceApi(request, response, url) {
     // legacy callers send `priceEth`. Converted at the currency's own decimals (ETH 18, USDC 6).
     const cur = landMarket.currency(body.currency || 'eth');
     const units = cur ? amountToUnits(body.price ?? body.priceEth, cur.decimals) : null;
+    // Where the listing goes: OpenSea, our own book, or one order in each. Defaults to
+    // 'both' — nothing loses OpenSea's reach, and the parcel is also fillable here at the
+    // cheaper fee. See LISTING_DESTINATIONS in lib/land-market.js.
+    const destination = ['opensea', 'book', 'both'].includes(body.destination) ? body.destination : 'both';
     if (!HEX_ADDRESS.test(maker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
     if (!/^\d{1,80}$/.test(tokenId)) { sendJson(response, 400, { error: 'bad_token' }); return; }
     if (!cur) { sendJson(response, 400, { error: 'bad_currency' }); return; }
-    // Known currency, but not one OpenSea settles a LISTING in (USDC). Say so here rather than
-    // letting the seller sign an order OpenSea then rejects — see LAND_LISTING_CURRENCIES.
-    if (!landMarket.listingCurrency(cur.code)) { sendJson(response, 400, { error: 'currency_unsupported' }); return; }
+    // A currency OpenSea won't settle a listing in (USDC) is no longer a dead end: our own
+    // book takes it. Only refuse when OpenSea is the ONLY destination asked for — prepareListing
+    // drops the book that can't take the order and reports the drop for every other case.
+    if (destination === 'opensea' && !landMarket.listingCurrency(cur.code)) { sendJson(response, 400, { error: 'currency_unsupported' }); return; }
     if (units == null || BigInt(units) <= 0n) { sendJson(response, 400, { error: 'bad_price' }); return; }
 
     try {
       sendJson(response, 200, await landMarket.prepareListing({
-        tokenId, currency: cur.code, priceUnits: units, maker, durationDays: body.durationDays,
+        tokenId, currency: cur.code, priceUnits: units, maker, durationDays: body.durationDays, destination,
       }));
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
@@ -6691,24 +6747,49 @@ async function handleMarketplaceApi(request, response, url) {
     const cWait = mktLimit(ip, 'write');
     if (cWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(cWait) }); return; }
 
-    const body = await readJsonBody(request, 32 * 1024);
-    const { orderParameters, signature } = body || {};
-    if (!orderParameters || typeof orderParameters !== 'object'
-      || !/^0x[0-9a-f]{60,2600}$/i.test(String(signature || ''))) {
-      sendJson(response, 400, { error: 'bad_order' }); return;
+    const body = await readJsonBody(request, 64 * 1024);
+    // One listing or two. `orders` is the cross-listing shape (an order per book, each
+    // separately signed); a bare {orderParameters, signature} is the older single-order
+    // shape and still means OpenSea, so nothing that predates the house book has to change.
+    const orders = Array.isArray(body?.orders) && body.orders.length
+      ? body.orders.slice(0, 2)
+      : [{ target: 'opensea', orderParameters: body?.orderParameters, signature: body?.signature, counter: body?.counter }];
+    const wellFormed = o => o && typeof o.orderParameters === 'object' && o.orderParameters
+      && /^0x[0-9a-f]{60,2600}$/i.test(String(o.signature || ''));
+    if (!orders.every(wellFormed)) { sendJson(response, 400, { error: 'bad_order' }); return; }
+
+    // Each order is created independently, and a failure in one must not discard the other:
+    // they are separate offers to sell the same parcel, and the seller has already signed
+    // both. So every result is reported, and the call only fails outright when nothing at
+    // all got created. `results` tells the client which books it actually landed in.
+    const results = [];
+    for (const o of orders) {
+      const target = o.target === 'book' ? 'book' : 'opensea';
+      try {
+        const created = target === 'book'
+          ? await landBook.ingest({ orderParameters: o.orderParameters, signature: o.signature, counter: o.counter })
+          : await landMarket.createListing({ orderParameters: o.orderParameters, signature: o.signature });
+        results.push({ target, ok: true, ...created });
+      } catch (err) {
+        console.error(`LAND listing create failed for ${target}:`, err.code || err.message);
+        results.push({ target, ok: false, error: err.code || 'unavailable' });
+      }
     }
-    try {
-      const created = await landMarket.createListing({ orderParameters, signature });
-      // The new listing should appear on the "On sale" browse promptly. Drop the cached
-      // listings snapshot now, and force-refresh it ~10s out — by then OpenSea has indexed
-      // the order, so the refresh captures it (a plain re-fetch right now could re-cache a
-      // still-missing snapshot for a full TTL). See landListingsByToken(force).
-      slimeListingsCache.data = null;
-      setTimeout(() => { landListingsByToken(true).catch(() => {}); }, 10000);
-      sendJson(response, 200, created);
-    } catch (err) {
-      sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+    const good = results.filter(r => r.ok);
+    if (!good.length) {
+      const first = results[0] || {};
+      sendJson(response, 503, { error: first.error || 'unavailable', results });
+      return;
     }
+    // The new listing should appear on the "On sale" browse promptly. Drop the cached
+    // listings snapshot now, and force-refresh it ~10s out — by then OpenSea has indexed
+    // the order, so the refresh captures it (a plain re-fetch right now could re-cache a
+    // still-missing snapshot for a full TTL). See landListingsByToken(force).
+    slimeListingsCache.data = null;
+    setTimeout(() => { landListingsByToken(true).catch(() => {}); }, 10000);
+    // Flat fields describe the first order that succeeded, so a single-listing caller reads
+    // the same answer it always did.
+    sendJson(response, 200, { ...good[0], results, created: good.length });
     return;
   }
 
@@ -6771,7 +6852,17 @@ async function handleMarketplaceApi(request, response, url) {
   if (landMineMatch) {
     if (!landMarket.configured()) { sendJson(response, 503, { error: 'not_configured' }); return; }
     try {
-      const data = await landMarket.myListings(landMineMatch[1]);
+      // Both books, one list. A cross-listed parcel legitimately appears twice, once per
+      // order, because they ARE two orders: each has its own hash, its own proceeds and its
+      // own withdrawal. Collapsing them would leave the seller unable to cancel one of them.
+      const [os, house] = await Promise.all([
+        landMarket.myListings(landMineMatch[1]),
+        landBook.myListings(landMineMatch[1]).catch(err => {
+          console.error('LAND house "my listings" failed:', err.message);
+          return { items: [] };
+        }),
+      ]);
+      const data = { items: [...house.items, ...(os.items || [])] };
       // Attach coords + slime traits (same sweep join as /owned) so "My listings" shows the
       // parcel's slime pet, matching the grid + pickers rather than the flat plot tile.
       const sidx = slimeIndex.getSlimeIndex();
@@ -6856,7 +6947,11 @@ async function handleMarketplaceApi(request, response, url) {
     if (!/^0x[0-9a-f]{64}$/.test(orderHash)) { sendJson(response, 400, { error: 'bad_listing' }); return; }
     if (!HEX_ADDRESS.test(maker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
     try {
-      sendJson(response, 200, await landMarket.prepareCancel({ orderHash, maker, mode }));
+      // Same rule as the buy path: the hash decides which book answers, not the caller.
+      const mine = await landBook.getOrder(orderHash);
+      sendJson(response, 200, mine
+        ? await landBook.prepareCancel({ orderHash, maker, mode })
+        : await landMarket.prepareCancel({ orderHash, maker, mode }));
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }
@@ -6879,7 +6974,10 @@ async function handleMarketplaceApi(request, response, url) {
     if (!HEX_ADDRESS.test(maker)) { sendJson(response, 400, { error: 'bad_address' }); return; }
     if (!/^0x[0-9a-f]{60,2600}$/i.test(signature)) { sendJson(response, 400, { error: 'bad_signature' }); return; }
     try {
-      sendJson(response, 200, await landMarket.submitOffchainCancel({ orderHash, maker, signature, protocolAddress }));
+      const mine = await landBook.getOrder(orderHash);
+      sendJson(response, 200, mine
+        ? await landBook.submitCancel({ orderHash, maker, signature })
+        : await landMarket.submitOffchainCancel({ orderHash, maker, signature, protocolAddress }));
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }
@@ -10388,6 +10486,18 @@ server.listen(port, host, () => {
   // here so the first member to open Sales History doesn't wait on it — the tab answers
   // from the live window meanwhile, and picks up the rest as soon as it lands.
   landMarket.warmSalesArchive().catch(() => {});
+  // Our own LAND book advertises orders nobody else is checking, so it checks them itself:
+  // a parcel that moved, an approval pulled or a counter bumped kills a listing silently,
+  // and a stale row is what turns into a stranger's wasted gas. One pass now, then every
+  // two minutes; reads also sweep on demand when their answer has aged out.
+  if (landBook.enabled()) {
+    landBook.sweep()
+      .then(r => { if (r.checked) console.log(`[land-book] ${r.checked} open listing(s), ${r.closed} closed.`); })
+      .catch(err => console.error('[land-book] first sweep failed:', err.message));
+    landBook.startSweeper();
+  } else {
+    console.log('[land-book] off (LAND_BOOK=0) — LAND listings come from OpenSea only.');
+  }
   // Gas assist state at boot — the float is the thing that silently runs out, so say it
   // out loud on every deploy. Logs the faucet ADDRESS (public) and never the key.
   gasFaucet.health().then(h => {

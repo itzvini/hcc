@@ -5095,6 +5095,47 @@ footer { margin-top: 28px; }
 .trade-tile-price.is-usdc, .trade-modal-price-eth.is-usdc, .trade-mass-unit.is-usdc,
 .trade-offer-price.is-usdc, .trade-sale-eth.is-usdc, .trade-myoffer-chip .is-usdc,
 .trade-colloffer-price.is-usdc, .trade-mine-price.is-usdc { color: var(--hr-online); }
+/* "List it: Both / Here only / OpenSea only" — same segmented control as the currency
+   picker, with a line underneath that spells out what the chosen option costs. Three
+   labels don't fit 74px each on a phone, so these flex instead of holding a min-width. */
+.trade-dest-field { display: flex; flex-direction: column; }
+.trade-dest-seg { display: flex; width: 100%; gap: 4px; padding: 4px; margin: 6px 0 0; }
+.trade-dest-seg .seg-btn { flex: 1 1 0; min-width: 0; min-height: 34px; font-size: 12.5px; font-weight: 800; padding: 0 6px; }
+/* This is body copy, not a field label, so it has to undo `.trade-field > span` — which
+   uppercases and letter-spaces everything directly inside a field. Caps belong on eyebrows
+   and chips; a sentence set in them is the one thing the brand voice rules out. */
+.trade-dest-field > .trade-dest-note {
+  display: block; margin: 6px 0 0; font-size: 11.5px; font-weight: 600;
+  color: var(--hr-fg-3); line-height: 1.45; text-transform: none; letter-spacing: 0;
+}
+
+/* Which book an order lives in. Mint for ours, neutral for OpenSea's — the colour carries
+   "this one is cheaper for you", so it only ever goes on the house chip.
+   NOT `.trade-src-chip`: that name is already Add funds' source-chain picker, defined far
+   later in this file, and same-specificity rules are settled by order — so the picker's
+   15px flex button quietly won and these chips rendered as full-size pills. */
+.trade-book-chip {
+  display: inline-flex; align-items: center; margin-left: 6px; vertical-align: middle;
+  padding: 1px 7px; border-radius: var(--hr-radius-pill);
+  font-size: 9.5px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--hr-fg-3); background: var(--hr-bg-3); border: 1px solid var(--hr-line);
+  white-space: nowrap;
+}
+.trade-book-chip.is-here { color: var(--hr-primary); background: var(--hr-primary-25); border-color: rgba(81,255,165,.35); }
+/* On a tile the chip sits over the art, so it needs its own backdrop to stay readable. */
+.trade-tile-media .trade-book-chip {
+  position: absolute; left: 8px; bottom: 8px; margin: 0; z-index: 2;
+  backdrop-filter: blur(6px); background: rgba(12,14,18,.62);
+}
+.trade-tile-media .trade-book-chip.is-here { background: rgba(12,14,18,.62); }
+/* The honest footnote under a house listing's Cancel button. */
+.trade-mine-soft {
+  margin: 6px 0 0; padding: 7px 10px; border-radius: var(--hr-radius-sm);
+  font-size: 11px; font-weight: 600; line-height: 1.45;
+  color: var(--hr-fg-3); background: var(--hr-bg-2); border: 1px solid var(--hr-line);
+}
+.trade-status-sub { display: block; margin-top: 3px; font-size: 11.5px; font-weight: 600; opacity: .85; }
+
 /* Compact ETH|USDC toggle inside the inline offer forms — smaller than the sell picker. */
 .trade-offer-cur { margin: 0 6px 0 0; padding: 3px; gap: 3px; }
 .trade-offer-cur .seg-btn { min-width: 52px; min-height: 30px; font-size: 12px; font-weight: 800; }
@@ -6111,7 +6152,12 @@ body.trade-sheet-open { overflow: hidden; }
 /* LAND slime pet: contain-fit on a soft tile so the transparent-padded SVG isn't cropped. */
 .trade-mine-card img[data-fallback] { object-fit: contain; padding: 8%; box-sizing: border-box; background: var(--hr-bg-2); }
 .trade-mine-info { display: flex; flex-direction: column; min-width: 0; }
-.trade-mine-name { font-size: 12.5px; font-weight: 800; color: var(--hr-fg-0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Name and book-chip on one line. The row is the flex container so the chip keeps its own
+   width — dropped straight into .trade-mine-info it stretched to the full card. The name
+   takes the slack and ellipsizes; the chip never shrinks. */
+.trade-mine-title { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.trade-mine-title .trade-book-chip { flex: 0 0 auto; }
+.trade-mine-name { font-size: 12.5px; font-weight: 800; color: var(--hr-fg-0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .trade-mine-price { font-size: 12.5px; font-weight: 900; color: var(--hr-primary); }
 /* What the seller keeps, under what the buyer pays. Quiet on purpose: the headline above is
    the price the rest of the marketplace quotes, and this is the reconciliation for it. */

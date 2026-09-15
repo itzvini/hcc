@@ -21,6 +21,11 @@ SQUID_INTEGRATOR_ID=your_squid_integrator_id
 TRANSAK_API_KEY=your_transak_publishable_key
 ```
 
+Three kill switches take a real-money path down without touching the rest of the
+marketplace: `LAND_SELL=0` stops all LAND listing creation, `LAND_OFFER=0` stops LAND
+collection bids, and `LAND_BOOK=0` turns off [our own LAND orderbook](#our-own-land-orderbook)
+and leaves the OpenSea path alone. All three default to on.
+
 `SQUID_INTEGRATOR_ID` (optional) powers the Trade tab's one-tap, exact-amount ETH
 bridge quotes (Ethereum → Immutable zkEVM) via the [Squid Router API](https://docs.squidrouter.com).
 Get one free from Squid's integrator portal. Without it, the funds helper falls back
@@ -810,6 +815,68 @@ the life of the process, because StarkEx is sunset and the archive can never gro
   for a date we have none for, so they're dropped rather than quoted wrong.
 - If the archive is unreachable the tab is exactly the live zkEVM feed — it only ever extends
   the history backwards.
+
+## Our own LAND orderbook
+
+LAND listings used to come from one place: we built the Seaport order, the seller signed it,
+and we relayed it to OpenSea, who indexed it. We now keep a second book of our own
+(`lib/land-book.js`, table `land_orders`) and merge the two everywhere a listing is read.
+
+**Why it works.** A LAND listing is a plain Seaport order: measured across 248 live listings
+on 2026-09-10, every one uses zone `0x0` and `orderType 0`, so no marketplace's signature
+gates fulfilment. A signed order is a self-contained public offer to sell, and whoever holds
+it can fill it straight on Seaport. OpenSea's book is an index, not a gatekeeper. Orders here
+keep OpenSea's conduit key, so sellers need no second approval and buyers reuse any they have.
+
+**Why it's worth having.**
+
+- **Fees.** OpenSea won't accept an order that doesn't pay them 1%. A house order owes the 5%
+  creator royalty and nothing else, so on a 1 ETH parcel the seller keeps 0.95 instead of 0.94.
+- **USDC.** OpenSea's Ethereum book refuses every dollar token, for listings *and* offers
+  (measured 2026-09-07, after the seller had already signed). Our book has no such rule, so a
+  LAND parcel can finally be priced in dollars — here only.
+- **The blocklist** stops being "we refuse to broker it" and becomes "the order never exists".
+
+**Where a listing goes** is the seller's choice, on the Sell form:
+
+| Choice | Orders | Cost | Reach |
+| --- | --- | --- | --- |
+| Both (default) | two, one per book | 6% there, 5% here | everywhere |
+| Here only | one | 5% | this site |
+| OpenSea only | one | 6% | everywhere |
+
+The same picker sits on the mass lister, where it counts the batch: "two orders each, so 12
+signatures for 6 parcels". How many times the wallet is about to ask is the thing a seller
+most needs to know before starting a run, and it's the one number that changes with the
+choice.
+
+Cross-listing means two signatures for two genuinely separate orders at the same all-in
+price. Whichever fills first wins; the loser then reverts on a parcel the seller no longer
+owns, which is ordinary cross-listing behaviour. Both appear in "Your listings", each with
+its own price, proceeds and withdrawal. A USDC price removes the choice, because only one
+book settles it.
+
+**Keeping the book honest.** Four things kill a listing silently: the parcel moves, the
+conduit approval is pulled, the seller bumps their Seaport counter, or the clock runs out.
+OpenSea runs that check for its own book; for ours it's `sweep()` — every two minutes, and
+again on any read whose answer has aged past 30 seconds. Reads are grouped (one `ownerOf`
+per parcel, one counter and approval per seller) and a *failed* read leaves its order alone,
+because a flaky node is not evidence a listing is dead. Before a buy the same checks run
+fail-closed: a buyer should never learn an order was stale from a reverted transaction.
+
+**What a cancel really does.** Withdrawing a house order costs nothing and takes it off the
+site at once, but it does not revoke the signature — anyone holding a copy could still fill
+it on Seaport. The seller is told that in as many words, and the paid on-chain cancel sits
+next to it. This is the same limitation OpenSea's own zone-0 listings have; it's just said
+out loud here.
+
+**Guards.** Only an order our own `prepareListing` could have produced is accepted: the fee
+schedule is re-derived from the live one and compared to the wei, proceeds must go to the
+seller, the zone must be empty, the conduit must be ours, and the signature must verify
+against the offerer (ECDSA, or EIP-1271 when there's contract code at the address). The chain
+is then asked whether the seller still owns the parcel, has approved the conduit, and is on
+the current counter. `LAND_BOOK=0` takes the whole thing out without touching the OpenSea
+path; `LAND_SELL=0` still stops all listing creation.
 
 ## Trading from a phone (the MetaMask in-app browser)
 

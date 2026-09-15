@@ -1241,6 +1241,7 @@ async function loadBrowse(reset = true, quiet = false) {
     if (data.ethUsd != null) setEthUsd(data.ethUsd);
     if (data.fxRates) setFxRates(data.fxRates);
     if (data.feeBps != null) setFeeBps(data.feeBps);
+    if (data.landBook != null) setLandBook(data.landBook);
     const fresh = data.items || [];
     // Only the rows this page added; the finally block appends them rather than rebuilding
     // every tile already on screen.
@@ -1327,10 +1328,25 @@ function rankChip(rank) {
 // currency tag (LAND parcels, older cached rows).
 const CUR_SYM = { eth: 'ETH', usdc: 'USDC' };
 const LISTING_CURRENCIES = ['eth', 'usdc']; // seller's choice of listing denomination
-// LAND is the exception: OpenSea settles an Ethereum listing in ETH/WETH only and rejects a
-// USDC one at create time, AFTER the seller has signed. So don't offer the choice there.
-// Offers are unaffected — OpenSea settles those in ERC-20s, USDC included.
-const sellCurrencies = () => (coll === 'land' ? ['eth'] : LISTING_CURRENCIES);
+// Is our own LAND book taking listings? Comes from the browse payload (server.js reads
+// LAND_BOOK), because it decides two things the sell form can't guess: whether USDC is on
+// the table at all, and whether the seller gets a choice of where to list.
+let landBookOn = false;
+const setLandBook = on => { landBookOn = !!on; };
+// LAND used to be ETH-only here: OpenSea settles an Ethereum listing in ETH/WETH and rejects
+// a USDC one at create time, AFTER the seller has signed. Our own book has no such rule, so a
+// dollar price is offered again the moment that book is up — it just can't also go to OpenSea.
+// Offers are still OpenSea's, and still ETH-only (see offerCurrencies).
+const sellCurrencies = () => (coll === 'land' ? (landBookOn ? LISTING_CURRENCIES : ['eth']) : LISTING_CURRENCIES);
+// Where a new LAND listing goes. 'both' is the default: OpenSea keeps the parcel visible to
+// every aggregator, and the house order is fillable here without their 1%.
+let sellDest = 'both';
+const setSellDest = d => { sellDest = ['both', 'book', 'opensea'].includes(d) ? d : 'both'; };
+// USDC can only live in our book, so picking dollars settles the question of where it goes.
+const effectiveSellDest = () => (coll !== 'land' ? 'opensea'
+  : !landBookOn ? 'opensea'
+  : sellCurrency === 'usdc' ? 'book'
+  : sellDest);
 // Offers are the same story: OpenSea refuses a USDC offer on Ethereum too ("not supported for
 // offers on this chain"), and on that path the bidder has already paid mainnet gas for the
 // conduit approval before the create fails. Creature offers (Immutable zkEVM) are unaffected.
@@ -1376,9 +1392,17 @@ function fmtListingLine(it) {
 // `totalAmt`/`netAmt` — always prefer those (an order made on another marketplace pays an
 // extra 1% ecosystem fee that no rate of ours knows about).
 const payerAmt  = amt => (coll === 'land' || !(amt > 0) ? amt : amt * (1 + feeBps / 10000));
-const sellerAmt = amt => (coll === 'land' && amt > 0 ? amt * 0.94 : amt);
-// Fee rate as a display percentage ("7", "6") for the hint copy.
-const feePctStr = () => (coll === 'land' ? '6' : String(Math.round(feeBps / 100)));
+// What a LAND seller keeps depends on which book the order is in: 6% off an OpenSea order
+// (their 1% plus the 5% royalty), 5% off one kept here.
+const landFeePctFor = source => (source === 'book' ? 5 : 6);
+// For a price still being TYPED, the book is whatever the form is pointed at. A cross-listing
+// is quoted at the OpenSea rate, the worse of the two, so the figure is never a promise we
+// might undershoot. An order that already EXISTS must be read from its own `source` instead
+// (see listingNet) — reading the form there would quote a live listing at another book's rate.
+const landFeePct = () => (effectiveSellDest() === 'book' ? 5 : 6);
+const sellerAmt = (amt, pct) => (coll === 'land' && amt > 0 ? amt * (1 - (pct ?? landFeePct()) / 100) : amt);
+// Fee rate as a display percentage ("7", "6", "5") for the hint copy.
+const feePctStr = pct => (coll === 'land' ? String(pct ?? landFeePct()) : String(Math.round(feeBps / 100)));
 
 // Which collection a tile belongs to, worn on the tile. Only in the merged grid: with one
 // collection on screen the badge would repeat the switcher above it on every card.
@@ -1408,7 +1432,7 @@ function tileHtml(it) {
     ? `<span class="trade-tile-sub">${esc(it.parcelName)}</span>` : '';
   return `
     <button class="trade-tile" type="button" data-act="open" data-token="${esc(it.tokenId)}" data-coll="${esc(c)}">
-      <div class="trade-tile-media">${img}${collBadgeHtml(c)}${rankChip(it.rank)}${rarityChip(it.rarity)}</div>
+      <div class="trade-tile-media">${img}${collBadgeHtml(c)}${rankChip(it.rank)}${rarityChip(it.rarity)}${unlisted ? '' : sourceChipHtml(it)}</div>
       <div class="trade-tile-body">
         <span class="trade-tile-name">${esc(it.name)}</span>
         ${sub}
@@ -1748,6 +1772,7 @@ function modalCardHtml() {
     ? `<div class="trade-modal-price">
          <span class="trade-modal-price-eth ${it.currency === 'usdc' ? 'is-usdc' : ''}">${esc(modalPrice)}</span>
          ${modalFiat ? `<span class="trade-modal-price-usd">${esc(modalFiat)}</span>` : ''}
+         ${sourceChipHtml(it)}
          <span class="trade-modal-fees">${esc(t('trade.price.allin'))} ${tipHtml('trade.price.allin.tip')}</span>
        </div>
        ${buyAreaHtml(it)}`
@@ -6388,7 +6413,12 @@ function sellStatusHtml() {
     create: 'trade.sell.create',
   };
   if (sellState.phase === 'done') {
-    return `<div class="trade-status is-ok"><span aria-hidden="true">${ico('check', 17)}</span><span>${esc(t(skey('trade.sell.done')))}</span></div>`;
+    // A cross-listing where one book refused still listed the parcel, so this stays a
+    // success — with the shortfall named, because "listed" and "listed in both places" are
+    // different facts and the seller is the one who has to know which they got.
+    const partial = sellState.partial?.length
+      ? `<span class="trade-status-sub">${esc(t(`trade.sell.done.missed.${sellState.partial[0]}`))}</span>` : '';
+    return `<div class="trade-status is-ok"><span aria-hidden="true">${ico('check', 17)}</span><span>${esc(t(skey('trade.sell.done')))}${partial}</span></div>`;
   }
   if (sellState.phase === 'error') {
     return `<div class="trade-status is-error"><span aria-hidden="true">${ico('alert', 17)}</span><span>${esc(sellState.msg)}</span></div>`;
@@ -6415,7 +6445,10 @@ function cheaperListing(a, b) {
 function listingGroups() {
   const groups = new Map();
   for (const l of (mine || [])) {
-    const key = String(l.tokenId);
+    // Grouped by parcel AND by book. A cross-listed parcel is two live orders, not one order
+    // with a stale twin: each has its own price, its own proceeds and its own withdrawal, so
+    // folding one under "older listings" would leave the seller unable to cancel it.
+    const key = coll === 'land' ? `${l.tokenId}|${l.source || 'opensea'}` : String(l.tokenId);
     const g = groups.get(key);
     if (!g) { groups.set(key, { live: l, older: [] }); continue; }
     const live = cheaperListing(g.live, l);
@@ -6440,7 +6473,7 @@ function myListingsHtml() {
 // (the number on the grid, on every tile and on other marketplaces), so the seller needs the
 // other half said out loud or the two readings of their own listing look like a mistake.
 // A live order's own `netAmt` wins; LAND rows carry none, so their 6% comes off the ask here.
-const listingNet = l => l.netAmt ?? (coll === 'land' ? sellerAmt(listingAmt(l)) : listingAmt(l));
+const listingNet = l => l.netAmt ?? (coll === 'land' ? sellerAmt(listingAmt(l), landFeePctFor(l.source)) : listingAmt(l));
 function mineNetHtml(l) {
   const net = listingNet(l);
   const gross = l.totalAmt ?? l.totalEth ?? listingAmt(l);
@@ -6449,6 +6482,16 @@ function mineNetHtml(l) {
   if (!(net > 0) || !(gross > 0) || Math.abs(gross - net) < 1e-9) return '';
   const amt = l.currency ? fmtListingAmt({ currency: l.currency, totalAmt: net }) : fmtEth(net);
   return `<span class="trade-mine-net">${esc(t('trade.mine.net').replace('{x}', amt))}</span>`;
+}
+
+// Which book an order sits in, worn on the order. LAND only, and only once there is a
+// choice to make — with no house book every listing is an OpenSea listing and a chip saying
+// so on all of them is noise. It matters to a buyer because it changes the price (no 1%
+// here) and to a seller because it changes their proceeds and how they withdraw it.
+function sourceChipHtml(l) {
+  if (coll !== 'land' || !landBookOn || !l?.source) return '';
+  const here = l.source === 'book';
+  return `<span class="trade-book-chip ${here ? 'is-here' : ''}" title="${esc(t(here ? 'trade.src.book.tip' : 'trade.src.opensea.tip'))}">${esc(t(here ? 'trade.src.book' : 'trade.src.opensea'))}</span>`;
 }
 
 function mineCardHtml({ live: l, older }) {
@@ -6460,7 +6503,7 @@ function mineCardHtml({ live: l, older }) {
           ? `<img src="${esc(petUrl(l))}" ${l.image ? `data-fallback="${esc(l.image)}"` : ''} alt="" loading="lazy" />`
           : (l.image ? `<img src="${esc(l.image)}" alt="" loading="lazy" />` : `<div class="trade-tile-noimg" aria-hidden="true">${ico('paw', 28)}</div>`)}
         <div class="trade-mine-info">
-          <span class="trade-mine-name">${esc(l.name)}</span>
+          <span class="trade-mine-title"><span class="trade-mine-name">${esc(l.name)}</span>${sourceChipHtml(l)}</span>
           <span class="trade-mine-price">${esc(l.currency ? fmtListingLine(l) : fmtEthFiat(l.totalEth ?? l.priceEth))}</span>
           ${mineNetHtml(l)}
         </div>
@@ -6471,6 +6514,7 @@ function mineCardHtml({ live: l, older }) {
             ${cancelBusy ? 'disabled' : ''}>${esc(cancelBusy === l.listingId ? t('trade.mine.cancelling') : t('trade.mine.cancel'))}</button>
         </div>
       </div>
+      ${l.cancelKind === 'soft' ? `<p class="trade-mine-soft">${esc(t('trade.mine.softCancel'))}</p>` : ''}
       ${editing ? mineEditHtml(l) : ''}
       ${older.map(mineOlderHtml).join('')}
     </div>`;
@@ -6539,8 +6583,11 @@ function editIsFree(l, pay) {
 function mineEditSplitHtml(l) {
   const pay = editPricePayload(editPrice, l.currency);
   if (!pay.ok || !(pay.amount > 0)) return '';
+  // An edit replaces the order in the book it already lives in, so the rate is the listing's,
+  // not the sell form's.
+  const pct = landFeePctFor(l.source);
   const body = coll === 'land'
-    ? t('trade.sell.netNote').replace('{net}', `<b>${esc(fmtEth(sellerAmt(pay.amount)))}</b>`).replace('{fee}', '6')
+    ? t('trade.sell.netNote').replace('{net}', `<b>${esc(fmtEth(sellerAmt(pay.amount, pct)))}</b>`).replace('{fee}', feePctStr(pct))
     : t('trade.sell.payerNote')
         .replace('{x}', `<b>${esc(fmtListingAmt({ currency: pay.currency, totalAmt: payerAmt(pay.amount) }))}</b>`)
         .replace('{pct}', feePctStr());
@@ -8088,8 +8135,9 @@ function sellSideHtml() {
 }
 
 // Segmented "settle in ETH ⟷ USDC" picker. USDC is dollar-pegged, so sellers who want to dodge
-// the swings price directly in dollars. Creatures only (Immutable orderbook, zkEVM USDC):
-// see sellCurrencies() for why LAND listings stay ETH-only.
+// the swings price directly in dollars. Creatures settle it on Immutable's orderbook in zkEVM
+// USDC; LAND only gets the choice while our own book is up, because OpenSea's Ethereum book
+// refuses every dollar token. See sellCurrencies().
 function sellCurrencyPickerHtml() {
   const curs = sellCurrencies();
   if (curs.length < 2) return ''; // a one-option picker is a dead control, not a choice
@@ -8120,6 +8168,7 @@ function sellSingleHtml() {
         <span class="trade-price-conv" id="trade-price-conv">${esc(isUsdc ? '' : sellConvHtml(price))}</span></label>
       <div class="trade-sell-net" id="trade-sell-net">${sellSplitHtml(price)}</div>
       ${priceGuideHtml()}
+      ${isLand ? sellDestPickerHtml() : ''}
       ${isLand ? landSellDurationHtml() : ''}
       <button class="trade-send" id="trade-sell-submit" type="submit" ${sellBusy || !sellSel ? 'disabled' : ''}>
         ${esc(t('trade.sell.btn'))} <span aria-hidden="true">→</span></button>
@@ -8216,7 +8265,7 @@ function sellMassHtml() {
           : `<select id="trade-sell-unit" class="seg-select trade-price-unit" aria-label="${esc(t('trade.sell.unitAria'))}" ${sellFiatReady() ? '' : 'disabled'}>${sellUnitOptions()}</select>`}
         <button type="button" class="apply-btn-ghost" data-act="mass-apply-all">${esc(t('trade.mass.apply'))}</button>
       </div>
-      ${isLand ? `<div class="trade-mass-dur">${landSellDurationHtml()}</div>` : ''}
+      ${isLand ? `<div class="trade-mass-dur">${sellDestPickerHtml(items.length)}${landSellDurationHtml()}</div>` : ''}
       <form class="trade-form" id="trade-mass-sell-form" data-writes novalidate>
         <div class="trade-mass-rows">${rows}</div>
         ${totalLine ? `<div class="trade-mass-total">${totalLine}</div>` : ''}
@@ -8256,6 +8305,34 @@ function patchMassStatus() {
 
 // LAND listing length (Seaport startTime→endTime). A short expiry means abandoned test
 // listings self-clear; the seller can still cancel early on-chain via "My listings".
+// Where the listing goes. Three real choices, and the difference between them is money, so
+// each option says what it costs rather than naming a venue and leaving the seller to guess.
+// Hidden when there is nothing to choose: no house book, or a USDC price (which only the
+// house book settles, so the answer is already decided).
+//
+// `count` is how many parcels this applies to — the single Sell form passes nothing, the
+// mass lister passes its batch size. It changes the note, because the thing a seller most
+// needs to know before starting is how many times the wallet is going to ask them, and
+// "two signatures" for a batch of twelve would be off by twenty-two.
+function sellDestPickerHtml(count = 1) {
+  if (coll !== 'land' || !landBookOn || sellCurrency === 'usdc') return '';
+  const opts = [
+    ['both', 'trade.sell.dest.both'],
+    ['book', 'trade.sell.dest.book'],
+    ['opensea', 'trade.sell.dest.opensea'],
+  ];
+  const many = count > 1;
+  const note = t(`trade.sell.dest.${sellDest}.note${many ? '.many' : ''}`)
+    .replace('{n}', String(count))
+    .replace('{sigs}', String(count * (sellDest === 'both' ? 2 : 1)));
+  return `<div class="trade-field trade-dest-field"><span>${esc(t(many ? 'trade.sell.dest.many' : 'trade.sell.dest'))} ${tipHtml('trade.sell.dest.tip')}</span>
+    <div class="seg trade-dest-seg" role="tablist" aria-label="${esc(t('trade.sell.dest'))}">
+      ${opts.map(([v, k]) => `<button type="button" role="tab" class="seg-btn ${sellDest === v ? 'is-active' : ''}"
+        aria-selected="${sellDest === v}" data-act="sell-dest" data-dest="${v}">${esc(t(k))}</button>`).join('')}
+    </div>
+    <span class="trade-dest-note">${esc(note)}</span></div>`;
+}
+
 function landSellDurationHtml(id = 'trade-sell-duration') {
   return `<label class="trade-field"><span>${esc(t('trade.sell.duration'))}</span>
     <select id="${esc(id)}">
@@ -8286,11 +8363,13 @@ function sellSplitHtml(raw) {
   const p = parseFloat(String(amount).replace(',', '.'));
   const isLand = coll === 'land';
   if (!(p > 0)) {
-    const key = isLand ? 'trade.sell.feeNote' : 'trade.sell.feeNote.creature';
+    const key = !isLand ? 'trade.sell.feeNote.creature'
+      : effectiveSellDest() === 'book' ? 'trade.sell.feeNote.book'
+      : 'trade.sell.feeNote';
     return `<span class="trade-sell-net-hint">${esc(t(key).replace('{pct}', feePctStr()))}</span>`;
   }
   const body = isLand
-    ? t('trade.sell.netNote').replace('{net}', `<b>${esc(fmtEth(sellerAmt(p)))}</b>`).replace('{fee}', '6')
+    ? t('trade.sell.netNote').replace('{net}', `<b>${esc(fmtEth(sellerAmt(p)))}</b>`).replace('{fee}', feePctStr())
     : t('trade.sell.payerNote')
         .replace('{x}', `<b>${esc(fmtListingAmt({ currency: curKey, totalAmt: payerAmt(p) }))}</b>`)
         .replace('{pct}', feePctStr());
@@ -8935,6 +9014,41 @@ async function handleSell(form) {
 // LAND listing: build + sign a Seaport order on Ethereum mainnet, then relay it to
 // OpenSea. The server constructs the order (so fees/recipients can't be tampered with);
 // the wallet signs the EIP-712 order and, the first time only, a one-off conduit approval.
+/**
+ * Walk a LAND sell/prepare answer: send the conduit approval if one came back, then sign
+ * every order in it. Returns the array the create route takes, or the string 'txfailed' if
+ * the approval transaction didn't confirm. Shared by the single sell and the mass lister so
+ * cross-listing behaves identically in both.
+ *
+ * Each signature is paired with the order it covers. The wallet shows one prompt per order,
+ * which is honest: they are two separate offers to sell the same parcel, and the seller is
+ * agreeing to both.
+ */
+async function signLandOrders(data, onPhase, onHash) {
+  const byHash = new Map((data.orders || []).map(o => [o.orderHash, o]));
+  const signed = [];
+  for (const action of (data.actions || [])) {
+    if (action.type === 'TRANSACTION') { // one-time setApprovalForAll to OpenSea's conduit
+      onPhase('approve');
+      const hash = await eth().request({
+        method: 'eth_sendTransaction',
+        params: [{ from: account, to: action.to, data: action.data, value: action.value && action.value !== '0x0' ? action.value : undefined }],
+      });
+      onHash?.(hash);
+      const receipt = await waitForReceipt(hash);
+      if (!receipt || receipt.status !== '0x1') return 'txfailed';
+    } else if (action.type === 'SIGNABLE') {
+      onPhase('sign');
+      const signature = await signTypedData(action.typedData);
+      // Fall back to the flat fields for a server that predates the house book and sends
+      // one order with no `orders` array.
+      const order = byHash.get(action.orderHash) || { target: action.target || 'opensea', orderParameters: data.orderParameters, counter: data.counter };
+      signed.push({ target: order.target, orderParameters: order.orderParameters, counter: order.counter, signature });
+    }
+  }
+  return signed;
+}
+
 async function handleSellLand(form) {
   const durationDays = Number(form.querySelector('#trade-sell-duration')?.value) || 7;
   if (!sellSel) return setSell('error', { msg: t(skey('trade.err.noSel')) });
@@ -8946,38 +9060,31 @@ async function handleSellLand(form) {
     await switchToChain('0x1'); // sign + approve happen on mainnet (no-op if already there)
     const res = await fetch('/api/market/land/sell/prepare', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ makerAddress: account, tokenId: sellSel, currency: pay.currency, price: pay.price, durationDays }),
+      body: JSON.stringify({ makerAddress: account, tokenId: sellSel, currency: pay.currency, price: pay.price, durationDays, destination: effectiveSellDest() }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return setSell('error', { msg: sellServerError(data.error) });
 
-    let signature = null;
-    for (const action of (data.actions || [])) {
-      if (action.type === 'TRANSACTION') { // one-time setApprovalForAll to OpenSea's conduit
-        setSell('approve');
-        const hash = await eth().request({
-          method: 'eth_sendTransaction',
-          params: [{ from: account, to: action.to, data: action.data, value: action.value && action.value !== '0x0' ? action.value : undefined }],
-        });
-        setSell('approveWait', { hash });
-        const receipt = await waitForReceipt(hash);
-        if (!receipt || receipt.status !== '0x1') return setSell('error', { msg: t('trade.err.txFailed') });
-      } else if (action.type === 'SIGNABLE') {
-        setSell('sign');
-        signature = await signTypedData(action.typedData);
-      }
-    }
-    if (!signature) return setSell('error', { msg: t(skey('trade.err.sellUnavailable')) });
+    // Cross-listing means TWO orders — one per book — so there are two signatures to collect,
+    // each tied to the order it belongs to. The single-listing case is the same loop with one
+    // pass through it. The conduit approval, if any, is signed once and covers both.
+    const signed = await signLandOrders(data, phase => setSell(phase === 'approve' ? 'approve' : 'sign'),
+      hash => setSell('approveWait', { hash }));
+    if (signed === 'txfailed') return setSell('error', { msg: t('trade.err.txFailed') });
+    if (!signed.length) return setSell('error', { msg: t(skey('trade.err.sellUnavailable')) });
 
     setSell('create');
     const createRes = await fetch('/api/market/land/sell/create', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ orderParameters: data.orderParameters, signature }),
+      body: JSON.stringify({ orders: signed }),
     });
     const created = await createRes.json().catch(() => ({}));
     if (!createRes.ok) return setSell('error', { msg: sellServerError(created.error) });
 
-    setSell('done');
+    // One of two orders failing is a real outcome, not a failure: the parcel IS listed, just
+    // in one book rather than both. Say which, instead of a green tick that hides it.
+    const missed = (created.results || []).filter(r => !r.ok);
+    setSell('done', missed.length ? { partial: missed.map(r => r.target) } : undefined);
     if (sellSel != null) { sellSet.delete(String(sellSel)); sellPrices.delete(String(sellSel)); syncSellSel(); }
     form.reset();
     // "my listings" + picker + browse, with retries — OpenSea takes a few seconds to index
@@ -9000,32 +9107,41 @@ const isUserReject = err => err?.code === 4001 || /user (rejected|denied)/i.test
 // carry the one-time collection approval (needs IMX gas); every later item is just a
 // signature. Currency ('eth'|'usdc') + native price flow to the same endpoints the single
 // sell uses. Throws on failure (with `.friendly`), `.gas` on IMX shortfall, or 4001 on reject.
-async function listOne(tokenId, currency, price, durationDays) {
+async function listOne(tokenId, currency, price, durationDays, destination) {
   const isLand = coll === 'land';
   if (isLand) await switchToChain('0x1');
   const res = await fetch(isLand ? '/api/market/land/sell/prepare' : '/api/market/creatures/sell/prepare', {
     method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify(isLand
-      ? { makerAddress: account, tokenId, currency, price, durationDays }
+      ? { makerAddress: account, tokenId, currency, price, durationDays, destination: destination || effectiveSellDest() }
       : { makerAddress: account, tokenId, currency, price }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(sellServerError(data.error)), { friendly: sellServerError(data.error) });
   let signature = null;
-  for (const action of (data.actions || [])) {
-    if (action.type === 'TRANSACTION') { // one-time collection approval
-      if (!isLand) { const imxBal = await readNative(account); if (imxBal != null && imxBal < GAS_MIN_WEI) throw Object.assign(new Error('gas'), { gas: true }); }
-      const hash = await eth().request({ method: 'eth_sendTransaction', params: [{ from: account, to: action.to, data: action.data, value: action.value && action.value !== '0x0' ? action.value : undefined }] });
-      const receipt = await waitForReceipt(hash);
-      if (!receipt || receipt.status !== '0x1') throw new Error(t('trade.err.txFailed'));
-    } else if (action.type === 'SIGNABLE') {
-      signature = await signTypedData(action.typedData);
+  let landOrders = null;
+  if (isLand) {
+    // Cross-listing makes this two signatures for one parcel, so the mass lister uses the
+    // same walker the single sell does rather than keeping its own copy of the rules.
+    landOrders = await signLandOrders(data, () => {});
+    if (landOrders === 'txfailed') throw new Error(t('trade.err.txFailed'));
+    if (!landOrders.length) throw new Error(t(skey('trade.err.sellUnavailable')));
+  } else {
+    for (const action of (data.actions || [])) {
+      if (action.type === 'TRANSACTION') { // one-time collection approval
+        const imxBal = await readNative(account); if (imxBal != null && imxBal < GAS_MIN_WEI) throw Object.assign(new Error('gas'), { gas: true });
+        const hash = await eth().request({ method: 'eth_sendTransaction', params: [{ from: account, to: action.to, data: action.data, value: action.value && action.value !== '0x0' ? action.value : undefined }] });
+        const receipt = await waitForReceipt(hash);
+        if (!receipt || receipt.status !== '0x1') throw new Error(t('trade.err.txFailed'));
+      } else if (action.type === 'SIGNABLE') {
+        signature = await signTypedData(action.typedData);
+      }
     }
+    if (!signature) throw new Error(t(skey('trade.err.sellUnavailable')));
   }
-  if (!signature) throw new Error(t(skey('trade.err.sellUnavailable')));
   const createRes = await fetch(isLand ? '/api/market/land/sell/create' : '/api/market/creatures/sell/create', {
     method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify(isLand ? { orderParameters: data.orderParameters, signature } : { orderComponents: data.orderComponents, orderHash: data.orderHash, signature }),
+    body: JSON.stringify(isLand ? { orders: landOrders } : { orderComponents: data.orderComponents, orderHash: data.orderHash, signature }),
   });
   const created = await createRes.json().catch(() => ({}));
   if (!createRes.ok) throw Object.assign(new Error(sellServerError(created.error)), { friendly: sellServerError(created.error) });
@@ -9100,7 +9216,11 @@ async function cancelCreatureOrders(orderIds, errFor = sellServerError) {
 async function cancelLandOrder(orderHash, errFor = sellServerError, mode) {
   const prep = await prepareLandCancel(orderHash, errFor, mode);
 
-  if (prep.mode === 'offchain' && prep.typedData) {
+  // 'offchain' is OpenSea's binding cancellation; 'soft' is ours, which de-indexes the order
+  // here without revoking the signature (see lib/land-book.js — the seller is told as much
+  // before they choose). Both are a signature and no gas, and the submit route routes itself
+  // on the order hash, so the two share this path.
+  if ((prep.mode === 'offchain' || prep.mode === 'soft') && prep.typedData) {
     const signature = await signTypedData(prep.typedData);
     const subRes = await fetch('/api/market/land/cancel', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -9231,7 +9351,9 @@ function priceEdited(l, listingId, pay) {
     listingId,
     currency: pay.currency,
     priceAmt: pay.amount, totalAmt: total,
-    netAmt: sellerAmt(pay.amount),
+    // `...l` carries the row's own `source` through, so the optimistic net is quoted at the
+    // rate of the book the replacement order actually went into.
+    netAmt: sellerAmt(pay.amount, landFeePctFor(l.source)),
     priceEth: isEth ? pay.amount : null,
     totalEth: isEth ? total : null,
     priceUsd: isEth ? (ethUsd != null ? total * ethUsd : null) : total,
@@ -9268,7 +9390,11 @@ async function handleEditPrice() {
       mine = (mine || []).filter(x => x.listingId !== l.listingId);
     }
     setEdit('list');
-    const newId = await listOne(String(l.tokenId), pay.currency, pay.price, editDuration());
+    // Re-list into the book this order already lives in, never into whatever the Sell form
+    // happens to be pointed at. Otherwise editing an OpenSea listing while the form said
+    // "Here only" would leave the OpenSea order live and add a second one beside it.
+    const newId = await listOne(String(l.tokenId), pay.currency, pay.price, editDuration(),
+      coll === 'land' ? (l.source === 'book' ? 'book' : 'opensea') : undefined);
     // Show the new price straight away and hold it there through the refreshes below: the
     // orderbook takes a few seconds to report it, and the editor (with its confirmation)
     // lives on the row. Only a cancel replaces a row; a free LAND cut leaves the old
@@ -9837,6 +9963,13 @@ function onClick(e) {
       if (sellCurrency === next || !sellCurrencies().includes(next)) return;
       sellCurrency = next;
       return patchSellSide(); // re-render the price row (unit picker vs fixed USDC)
+    }
+    case 'sell-dest': {
+      const next = target.dataset.dest;
+      if (sellDest === next) return;
+      setSellDest(next);
+      // The "you keep" line follows the choice (5% here, 6% on OpenSea), so re-render it too.
+      return patchSellSide();
     }
     case 'offer-cur': {
       const next = target.dataset.cur === 'usdc' ? 'usdc' : 'eth';
