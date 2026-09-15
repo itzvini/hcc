@@ -643,6 +643,16 @@ const ZK_CURRENCIES = {
   eth:  { key: 'eth',  address: IMX_ETH_TOKEN,  decimals: 18, symbol: 'ETH'  },
   usdc: { key: 'usdc', address: IMX_USDC_TOKEN, decimals: 6,  symbol: 'USDC' },
 };
+// What a Creature trade costs on top of the seller's ask, in basis points. MEASURED against
+// every active order 2026-09-15: a 5% ROYALTY to the Pocket Worlds royalty wallet
+// (0xc4862a6e…647bfb, the same one lib/land-market.js pays) plus Immutable's own 2% PROTOCOL
+// fee (0xb2f4dcc6…c38b49). We add nothing: makerFees/takerFees are always [] (see
+// lib/marketplace-orderbook.js). Immutable embeds both in the order at create time, so a
+// listing's exact fees always ride on the order itself — this constant is ONLY for quoting a
+// listing that does not exist yet ("buyers will pay…" as the seller types). An order created
+// on another marketplace carries an extra 1% ecosystem fee, which is why a live order's own
+// fees[] must win wherever one is available.
+const CREATURE_FEE_BPS = 700;
 const ZK_CURRENCY_BY_ADDR = new Map(Object.values(ZK_CURRENCIES).map(c => [c.address.toLowerCase(), c]));
 const zkCurrency = key => ZK_CURRENCIES[String(key || '').toLowerCase()] || null;
 const zkCurrencyByAddr = addr => ZK_CURRENCY_BY_ADDR.get(String(addr || '').toLowerCase()) || null;
@@ -1933,18 +1943,31 @@ async function getMyListings(address) {
       const meta = metaById.get(String(tokenId)) || {};
       // The listing's currency (default ETH); USDC uses 6 decimals, so amounts are per-currency.
       const cur = zkCurrencyByAddr(buy.contract_address) || ZK_CURRENCIES.eth;
+      // Two different numbers, and a seller needs both. `priceAmt` is the ask they typed and
+      // the amount they keep; the buyer also pays the order's fee items on top, which is the
+      // figure the browse grid and every other marketplace quote. Showing only the ask here
+      // is what made a 400 USDC listing read as $428 everywhere else with nothing to explain
+      // the gap. Read from the order's OWN fees, never from a rate constant — an order listed
+      // elsewhere carries an extra ecosystem fee and would be understated by a flat 7%.
+      const feesUnits = (o.fees ?? []).reduce((s, f) => s + (f.amount ? BigInt(f.amount) : 0n), 0n);
       const priceAmt = unitsToAmount(amount, cur.decimals);
-      const priceUsd = cur.key === 'usdc' ? priceAmt : (ethUsd != null ? round4(priceAmt * ethUsd) : null);
+      const totalAmt = unitsToAmount(BigInt(amount) + feesUnits, cur.decimals);
+      const toUsd = amt => (cur.key === 'usdc' ? amt : (ethUsd != null ? round4(amt * ethUsd) : null));
+      const toEth = amt => (cur.key === 'eth' ? amt : (ethUsd ? round4(amt / ethUsd) : amt));
       return {
         listingId: o.id,
         tokenId,
         currency: cur.key,
-        priceAmt, totalAmt: priceAmt, priceUsd,
-        priceEth: cur.key === 'eth' ? priceAmt : (ethUsd ? round4(priceAmt / ethUsd) : priceAmt),
+        // priceAmt stays the ask: the price editor prefills from it and the LAND free-cut
+        // check compares against it, so it must keep meaning "what the seller set".
+        priceAmt, totalAmt, priceUsd: toUsd(totalAmt),
+        netAmt: priceAmt, netUsd: toUsd(priceAmt),   // what lands in the seller's wallet
+        priceEth: toEth(priceAmt), totalEth: toEth(totalAmt),
         name: meta.name || `Highrise Creature #${tokenId}`,
         image: meta.image || null,
       };
     }).filter(Boolean),
+    feeBps: CREATURE_FEE_BPS,
   };
 }
 
@@ -2120,6 +2143,7 @@ async function getCreatureListings(cursor = '') {
     nextCursor: page.nextCursor,
     ethUsd: fx.ethUsd,
     fxRates: fx.fxRates, // { usd:1, eur, gbp, brl, rub, try, jpy, cad, aud } for the currency picker
+    feeBps: CREATURE_FEE_BPS,
     fetchedAt: new Date().toISOString(),
   };
   // Oldest out first. Clearing the whole map threw away the hot first page (cursor '')
@@ -2791,6 +2815,7 @@ async function getCreatureBrowse(searchParams) {
     truncated: view.truncated,
     ethUsd: fx.ethUsd,
     fxRates: fx.fxRates,
+    feeBps: CREATURE_FEE_BPS, // lets Sell quote "buyers will pay…" before an order exists
   });
 }
 

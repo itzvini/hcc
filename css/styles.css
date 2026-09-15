@@ -6113,6 +6113,9 @@ body.trade-sheet-open { overflow: hidden; }
 .trade-mine-info { display: flex; flex-direction: column; min-width: 0; }
 .trade-mine-name { font-size: 12.5px; font-weight: 800; color: var(--hr-fg-0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .trade-mine-price { font-size: 12.5px; font-weight: 900; color: var(--hr-primary); }
+/* What the seller keeps, under what the buyer pays. Quiet on purpose: the headline above is
+   the price the rest of the marketplace quotes, and this is the reconciliation for it. */
+.trade-mine-net { font-size: 11px; font-weight: 700; color: var(--hr-fg-3); margin-top: 2px; }
 .trade-mine-cancel {
   margin-left: auto; cursor: pointer; flex: 0 0 auto;
   padding: 7px 13px; border-radius: var(--hr-radius-pill); font-size: 12px; font-weight: 700;

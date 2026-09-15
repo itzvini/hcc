@@ -60,6 +60,15 @@ export function setCurrency(v) { currency = v; }
 export function setEthUsd(v)   { ethUsd = v; }
 export function setFxRates(v)  { fxRates = v; }
 
+// What a Creature buyer pays on top of the seller's ask, in basis points: 5% creator royalty
+// + 2% Immutable protocol fee, both embedded in the order by Immutable (we add 0%). The
+// server sends the live figure on every browse/listings payload; this default matches it so
+// the Sell form can quote a buyer's price on a cold first paint. It is ONLY for quoting a
+// listing that doesn't exist yet — a live order carries its own exact fees, and those always
+// win (an order made on another marketplace runs 1% dearer).
+export let feeBps = 700;
+export function setFeeBps(v) { if (Number.isFinite(v) && v >= 0 && v < 5000) feeBps = v; }
+
 // --- Money in flight ------------------------------------------------------------------
 // A bridge outlives any one screen: the job is held here AND persisted to localStorage, so
 // leaving the page, switching tabs or reloading never loses track of it — the banner on the

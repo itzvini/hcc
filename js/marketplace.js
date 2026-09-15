@@ -72,9 +72,9 @@ function txExplorerUrl(hash, c = coll) {
 // the setters, because assigning to an imported binding is an early SyntaxError, which is
 // what makes an extraction like this fail loudly instead of quietly forking the state.
 import {
-  account, chainId, busy, coll, browseAll, tradeTab, currency, ethUsd, fxRates, loadedOnce, pendingFlash,
+  account, chainId, busy, coll, browseAll, tradeTab, currency, ethUsd, fxRates, feeBps, loadedOnce, pendingFlash,
   setAccount, setChainId, setBusy, setColl, setBrowseAll, setTradeTab,
-  setCurrency, setEthUsd, setFxRates, setLoadedOnce, setPendingFlash, takeFlash,
+  setCurrency, setEthUsd, setFxRates, setFeeBps, setLoadedOnce, setPendingFlash, takeFlash,
   bridgeJob, gasState, unwrapState, setBridgeJobRaw, setGasState, setUnwrapState,
 } from './market/core/state.js';
 import { root, esc, safeSection } from './market/core/dom.js';
@@ -1240,6 +1240,7 @@ async function loadBrowse(reset = true, quiet = false) {
     if (rid !== browseReqId || ds.api !== browseDataset().api) return; // superseded — newer request (or view) owns the grid
     if (data.ethUsd != null) setEthUsd(data.ethUsd);
     if (data.fxRates) setFxRates(data.fxRates);
+    if (data.feeBps != null) setFeeBps(data.feeBps);
     const fresh = data.items || [];
     // Only the rows this page added; the finally block appends them rather than rebuilding
     // every tile already on screen.
@@ -1359,6 +1360,25 @@ function fmtListingLine(it) {
   const fiat = fmtListingFiat(it);
   return fiat ? `${fmtListingAmt(it)} (${fiat})` : fmtListingAmt(it);
 }
+
+// The two sides of a listing's price, for a seller who needs to see both.
+//
+// On Creatures the fees (5% creator royalty + Immutable's 2% protocol fee) are added ON TOP
+// of the ask: the seller keeps every coin they typed and the buyer pays ~7% more. That gap is
+// the whole reason this exists — the browse grid has always quoted the buyer's price while
+// the seller's own card quoted the ask, and nothing on screen said they were different
+// numbers for the same listing. LAND is the mirror image: OpenSea takes its 1% and the 5%
+// royalty OUT of the sale price, so there the ask IS what a buyer pays and the seller nets
+// less. Hence one helper per direction rather than a single "fee" number.
+//
+// Both project from a rate, so they are only for a price that is still being typed. A listing
+// that already exists carries its own exact fees on the order, and the server sends those as
+// `totalAmt`/`netAmt` — always prefer those (an order made on another marketplace pays an
+// extra 1% ecosystem fee that no rate of ours knows about).
+const payerAmt  = amt => (coll === 'land' || !(amt > 0) ? amt : amt * (1 + feeBps / 10000));
+const sellerAmt = amt => (coll === 'land' && amt > 0 ? amt * 0.94 : amt);
+// Fee rate as a display percentage ("7", "6") for the hint copy.
+const feePctStr = () => (coll === 'land' ? '6' : String(Math.round(feeBps / 100)));
 
 // Which collection a tile belongs to, worn on the tile. Only in the merged grid: with one
 // collection on screen the badge would repeat the switcher above it on every card.
@@ -6329,6 +6349,7 @@ async function loadSellerData() {
       ]);
       owned = mergePendingOwned(o.items || []);
       mine = mergePendingListing(m.items || []);
+      if (m.feeBps != null) setFeeBps(m.feeBps);
     }
   } catch (err) {
     console.error('Seller data failed:', err);
@@ -6415,6 +6436,21 @@ function myListingsHtml() {
     </div>`;
 }
 
+// What actually reaches the seller's wallet. The card's headline is the buyer's all-in price
+// (the number on the grid, on every tile and on other marketplaces), so the seller needs the
+// other half said out loud or the two readings of their own listing look like a mistake.
+// A live order's own `netAmt` wins; LAND rows carry none, so their 6% comes off the ask here.
+const listingNet = l => l.netAmt ?? (coll === 'land' ? sellerAmt(listingAmt(l)) : listingAmt(l));
+function mineNetHtml(l) {
+  const net = listingNet(l);
+  const gross = l.totalAmt ?? l.totalEth ?? listingAmt(l);
+  // Nothing to explain when the two agree (and never print a "you receive" that repeats the
+  // headline — that reads as a bug, not as reassurance).
+  if (!(net > 0) || !(gross > 0) || Math.abs(gross - net) < 1e-9) return '';
+  const amt = l.currency ? fmtListingAmt({ currency: l.currency, totalAmt: net }) : fmtEth(net);
+  return `<span class="trade-mine-net">${esc(t('trade.mine.net').replace('{x}', amt))}</span>`;
+}
+
 function mineCardHtml({ live: l, older }) {
   const editing = editSel === l.listingId;
   return `
@@ -6425,7 +6461,8 @@ function mineCardHtml({ live: l, older }) {
           : (l.image ? `<img src="${esc(l.image)}" alt="" loading="lazy" />` : `<div class="trade-tile-noimg" aria-hidden="true">${ico('paw', 28)}</div>`)}
         <div class="trade-mine-info">
           <span class="trade-mine-name">${esc(l.name)}</span>
-          <span class="trade-mine-price">${esc(l.currency ? fmtListingLine(l) : fmtEthFiat(l.priceEth))}</span>
+          <span class="trade-mine-price">${esc(l.currency ? fmtListingLine(l) : fmtEthFiat(l.totalEth ?? l.priceEth))}</span>
+          ${mineNetHtml(l)}
         </div>
         <div class="trade-mine-acts">
           <button class="trade-mine-edit ${editing ? 'is-on' : ''}" data-act="edit-listing" data-listing="${esc(l.listingId)}"
@@ -6466,6 +6503,7 @@ function mineEditHtml(l) {
           <span class="trade-price-unit trade-cur-fixed">${esc(CUR_SYM[cur])}</span>
         </div>
         <span class="trade-price-conv" id="trade-mine-conv">${esc(cur === 'usdc' ? '' : unitConvHtml(editPrice, 'eth'))}</span></label>
+      <div class="trade-sell-net" id="trade-mine-split">${mineEditSplitHtml(l)}</div>
       ${coll === 'land' ? landSellDurationHtml('trade-mine-duration') : ''}
       <p class="trade-mine-note" id="trade-mine-note">${mineEditNoteHtml(l)}</p>
       <div class="trade-mine-form-btns">
@@ -6492,6 +6530,21 @@ function landCutOnly(l, pay) {
 function editIsFree(l, pay) {
   if (coll !== 'land') return true;
   return !!l.freeCancel || landCutOnly(l, pay);
+}
+
+// What the other side of the trade sees for the price being typed, live in the editor. Same
+// two directions as the Sell form's hint (see sellSplitHtml): a Creature seller is quoted what
+// a buyer will pay, a LAND seller what they'll keep. The editor's box is always in the
+// listing's own currency, so the typed amount needs no unit conversion here.
+function mineEditSplitHtml(l) {
+  const pay = editPricePayload(editPrice, l.currency);
+  if (!pay.ok || !(pay.amount > 0)) return '';
+  const body = coll === 'land'
+    ? t('trade.sell.netNote').replace('{net}', `<b>${esc(fmtEth(sellerAmt(pay.amount)))}</b>`).replace('{fee}', '6')
+    : t('trade.sell.payerNote')
+        .replace('{x}', `<b>${esc(fmtListingAmt({ currency: pay.currency, totalAmt: payerAmt(pay.amount) }))}</b>`)
+        .replace('{pct}', feePctStr());
+  return `<span class="trade-sell-net-hint">${body}</span>`;
 }
 
 // What this edit costs, in advance. Creatures: nothing, ever. LAND: a cut is free, and a
@@ -6550,6 +6603,8 @@ function patchMineNote() {
   if (note) note.innerHTML = mineEditNoteHtml(l);
   const conv = root()?.querySelector('#trade-mine-conv');
   if (conv) conv.textContent = l.currency === 'usdc' ? '' : unitConvHtml(editPrice, 'eth');
+  const split = root()?.querySelector('#trade-mine-split');
+  if (split) split.innerHTML = mineEditSplitHtml(l);
   const st = root()?.querySelector('#trade-mine-status');
   if (st) st.innerHTML = mineEditStatusHtml();
 }
@@ -8063,9 +8118,9 @@ function sellSingleHtml() {
             : `<select id="trade-sell-unit" class="seg-select trade-price-unit" aria-label="${esc(t('trade.sell.unitAria'))}" ${sellFiatReady() ? '' : 'disabled'}>${sellUnitOptions()}</select>`}
         </div>
         <span class="trade-price-conv" id="trade-price-conv">${esc(isUsdc ? '' : sellConvHtml(price))}</span></label>
+      <div class="trade-sell-net" id="trade-sell-net">${sellSplitHtml(price)}</div>
       ${priceGuideHtml()}
       ${isLand ? landSellDurationHtml() : ''}
-      ${isLand ? `<div class="trade-sell-net" id="trade-sell-net">${landSellNetHtml(sellEthFromInput(price))}</div>` : ''}
       <button class="trade-send" id="trade-sell-submit" type="submit" ${sellBusy || !sellSel ? 'disabled' : ''}>
         ${esc(t('trade.sell.btn'))} <span aria-hidden="true">→</span></button>
       <div id="trade-sell-status" role="status" aria-live="polite">${sellStatusHtml()}</div>
@@ -8100,17 +8155,19 @@ function massSellTotal() {
   }
   return sum;
 }
-// The mass "total" line, currency-aware. LAND nets 6% less (1% OpenSea + 5% royalty); Creatures
-// list fee-free. USDC shows dollars 1:1; ETH shows its fiat estimate.
+// The mass "total" line, currency-aware, and it names the same two numbers the single Sell
+// form does. LAND: the typed total is what buyers pay and the seller keeps 6% less. Creatures:
+// the typed total is what the seller keeps and buyers pay ~7% more, so the buyers' figure
+// leads (matching the grid) with the seller's take beside it.
 function massTotalLineHtml(total) {
   if (!(total > 0)) return '';
-  const isLand = coll === 'land';
-  const net = isLand ? total * 0.94 : total;
-  const key = isLand ? 'trade.mass.sell.netTotal' : 'trade.mass.sell.total';
-  const shown = sellCurrency === 'usdc'
-    ? `${net.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC`
-    : fmtEthFiat(net);
-  return t(key).replace('{x}', `<b>${esc(shown)}</b>`);
+  const money = v => (sellCurrency === 'usdc' && coll !== 'land'
+    ? `${v.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC`
+    : fmtEthFiat(v));
+  if (coll === 'land') return t('trade.mass.sell.netTotal').replace('{x}', `<b>${esc(money(sellerAmt(total)))}</b>`);
+  return t('trade.mass.sell.totalSplit')
+    .replace('{x}', `<b>${esc(money(payerAmt(total)))}</b>`)
+    .replace('{net}', `<b>${esc(money(total))}</b>`);
 }
 
 // Mass-list panel (2+ Creatures/parcels picked): a per-item price row for each, an
@@ -8206,16 +8263,38 @@ function landSellDurationHtml(id = 'trade-sell-duration') {
     </select></label>`;
 }
 
-// Live "you'll receive" estimate under the LAND price field — the 6% (1% OpenSea + 5%
-// royalty) is shown up front; the exact split is in the order the wallet shows on sign.
-// Takes an amount ALREADY IN ETH (LAND lists in ETH only), so every caller must convert a
-// price typed in a fiat unit first — the first render used to hand it the raw "290" from a
-// BRL box and print "272.6 ETH". fmtEth supplies the "ETH" suffix; don't add a second one.
-function landSellNetHtml(ethAmount) {
-  const p = parseFloat(String(ethAmount).replace(',', '.'));
-  if (!(p > 0)) return `<span class="trade-sell-net-hint">${esc(t('trade.sell.feeNote'))}</span>`;
-  const net = fmtEth(p * 0.94);
-  return `<span class="trade-sell-net-hint">${t('trade.sell.netNote').replace('{net}', `<b>${esc(net)}</b>`).replace('{fee}', '6')}</span>`;
+// The typed price as a plain number in the LISTING's own currency. USDC is typed straight in
+// dollars; an ETH listing may be typed in a fiat unit and has to be converted first — the
+// first version of the LAND hint skipped that and printed the raw "290" from a BRL box as
+// "272.6 ETH".
+function sellSplitAmount(raw) {
+  if (coll !== 'land' && sellCurrency === 'usdc') return { amount: String(raw ?? '').trim().replace(',', '.'), currency: 'usdc' };
+  return { amount: sellEthFromInput(raw), currency: 'eth' };
+}
+
+// The live line under a price box, saying what the OTHER side of the trade sees.
+//
+// The two collections put their fees on opposite sides of the price, so this says opposite
+// things. On LAND the seller types what a buyer pays and OpenSea's 1% + the 5% royalty come
+// out of it, so quote what they'll keep. On Creatures the seller types what they KEEP and the
+// 5% royalty + Immutable's 2% ride on top, so quote what a buyer will pay: that is the figure
+// the browse grid shows, and a seller who has never seen it reads their own listing as
+// mispriced. Both are estimates from a rate; the exact split is in the order the wallet shows
+// on sign. fmtEth/fmtListingAmt supply the unit — don't add a second one.
+function sellSplitHtml(raw) {
+  const { amount, currency: curKey } = sellSplitAmount(raw);
+  const p = parseFloat(String(amount).replace(',', '.'));
+  const isLand = coll === 'land';
+  if (!(p > 0)) {
+    const key = isLand ? 'trade.sell.feeNote' : 'trade.sell.feeNote.creature';
+    return `<span class="trade-sell-net-hint">${esc(t(key).replace('{pct}', feePctStr()))}</span>`;
+  }
+  const body = isLand
+    ? t('trade.sell.netNote').replace('{net}', `<b>${esc(fmtEth(sellerAmt(p)))}</b>`).replace('{fee}', '6')
+    : t('trade.sell.payerNote')
+        .replace('{x}', `<b>${esc(fmtListingAmt({ currency: curKey, totalAmt: payerAmt(p) }))}</b>`)
+        .replace('{pct}', feePctStr());
+  return `<span class="trade-sell-net-hint">${body}</span>`;
 }
 
 // Picker of transferable Creatures (owned minus actively listed — transferring a
@@ -8749,7 +8828,7 @@ function patchSellView() {
     const convEl = view.querySelector('#trade-price-conv');
     if (convEl) convEl.textContent = sellConvHtml(price);
     const net = view.querySelector('#trade-sell-net');
-    if (net) net.innerHTML = landSellNetHtml(sellEthFromInput(price));
+    if (net) net.innerHTML = sellSplitHtml(price);
   }
   applyTradingPause();
 }
@@ -9139,16 +9218,23 @@ function refreshCancelGas() {
 
 // The just-listed row, before any indexer has seen it: the old row with the new id and the
 // new money on it. fmtListingLine reads totalAmt/priceUsd/totalEth, so all three are set.
+//
+// `totalAmt` is the BUYER's price and has to be projected from the fee rate here, because the
+// order this row stands in for hasn't come back from the orderbook yet. Leaving it equal to
+// the ask made the card understate by 7% for the few seconds before the real row landed, and
+// then jump — the one moment a seller is most likely to be watching their own price.
 function priceEdited(l, listingId, pay) {
   const isEth = pay.currency === 'eth';
+  const total = payerAmt(pay.amount);
   return {
     ...l,
     listingId,
     currency: pay.currency,
-    priceAmt: pay.amount, totalAmt: pay.amount,
+    priceAmt: pay.amount, totalAmt: total,
+    netAmt: sellerAmt(pay.amount),
     priceEth: isEth ? pay.amount : null,
-    totalEth: isEth ? pay.amount : null,
-    priceUsd: isEth ? (ethUsd != null ? pay.amount * ethUsd : null) : pay.amount,
+    totalEth: isEth ? total : null,
+    priceUsd: isEth ? (ethUsd != null ? total * ethUsd : null) : total,
   };
 }
 
@@ -10034,7 +10120,7 @@ function onChange(e) {
     const convEl = root()?.querySelector('#trade-price-conv');
     if (convEl) convEl.textContent = sellConvHtml(input?.value || '');
     const net = root()?.querySelector('#trade-sell-net'); // LAND only
-    if (net) net.innerHTML = landSellNetHtml(sellEthFromInput(input?.value || ''));
+    if (net) net.innerHTML = sellSplitHtml(input?.value || '');
     patchPriceGuide(); // its workings quote money, in whichever unit they are typing in
     return;
   }
@@ -10087,7 +10173,7 @@ function onInput(e) {
     const convEl = root()?.querySelector('#trade-price-conv');
     if (convEl) convEl.textContent = sellCurrency === 'usdc' ? '' : sellConvHtml(e.target.value); // USDC = dollars, no conversion
     const net = root()?.querySelector('#trade-sell-net'); // LAND only — element absent for Creatures
-    if (net) net.innerHTML = landSellNetHtml(sellEthFromInput(e.target.value));
+    if (net) net.innerHTML = sellSplitHtml(e.target.value);
     return;
   }
   // The price editor on a live listing: keep the typed value in state (a background
