@@ -140,6 +140,7 @@
   "trade.err.needUsdcLand": "You need {x} in USDC on Ethereum mainnet to buy this LAND. Top up your USDC and try again.",
   "trade.err.landGas": "You need a little ETH on Ethereum mainnet to cover gas (the price is paid in USDC). Add a bit of ETH and try again.",
   "trade.err.osBlocked": "OpenSea is refusing trades for this wallet (a compliance block on their side, not ours). Try a different wallet.",
+  "trade.err.blockedStolen": "This parcel was taken from a Highrise treasury account and is under investigation. It can't be bought or sold here.",
   "trade.tab.buy": "Buy",
   "trade.tab.sell": "Sell",
   "trade.tab.transfer": "Transfer",

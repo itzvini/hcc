@@ -3230,6 +3230,7 @@ function buyServerError(code) {
     not_found: 'trade.err.gone', not_active: 'trade.err.gone',
     insufficient: 'trade.err.funds', rate_limited: 'trade.err.rate',
     own_listing: 'trade.buy.own', blocked_account: 'trade.err.osBlocked',
+    blocked_stolen: 'trade.err.blockedStolen',
   };
   // skey() swaps in the LAND variant when buying a parcel ("...another parcel", mainnet
   // wording) and falls back to the Creature copy otherwise.
@@ -3762,6 +3763,7 @@ function landAcceptServerError(code) {
   const KEY = {
     not_owner: 'trade.err.notOwner', not_found: 'trade.err.offerGone', not_active: 'trade.err.offerGone',
     rate_limited: 'trade.err.rate', blocked_account: 'trade.err.osBlocked', disabled: 'trade.err.sellDisabled',
+    blocked_stolen: 'trade.err.blockedStolen',
   };
   return t(KEY[code] || 'trade.err.acceptUnavailable');
 }
@@ -4177,6 +4179,7 @@ function landOfferServerError(code) {
   const KEY = {
     bad_price: 'trade.err.badPrice', rate_limited: 'trade.err.rate',
     blocked_account: 'trade.err.osBlocked', disabled: 'trade.err.offerDisabled',
+    blocked_stolen: 'trade.err.blockedStolen',
   };
   return t(KEY[code] || 'trade.err.acceptUnavailable');
 }
@@ -8772,6 +8775,7 @@ function sellServerError(code) {
     not_active: 'trade.err.gone',
     disabled: 'trade.err.sellDisabled', blocked_account: 'trade.err.osBlocked',
     currency_unsupported: 'trade.err.curUnsupported',
+    blocked_stolen: 'trade.err.blockedStolen',
   };
   // Fall back to the SELL wording, not the buy one: a failed listing telling the seller
   // "buying isn't available" sent people hunting the wrong problem. skey() picks the LAND
