@@ -20,6 +20,7 @@ const layerswapBridge = require('./lib/layerswap-bridge');
 const gasFaucet = require('./lib/gas-faucet');
 const landMarket = require('./lib/land-market');
 const landBook = require('./lib/land-book');   // our own LAND orderbook, merged with OpenSea's
+const marketAudit = require('./lib/market-audit'); // the trail every money path writes to
 const landPets = require('./lib/land-pets');
 const upstreamHealth = require('./lib/upstream-health'); // per-collection upstream state
 const lastKnown = require('./lib/last-known');           // failure-path snapshots only
@@ -4291,17 +4292,17 @@ async function landListingsByToken(force = false) {
     } while (cursor && ++pages < 20);
   }
   // Our own book, merged in on the same rule the OpenSea side already uses within itself:
-  // a parcel shows its cheapest order, wherever that order is held. A house listing is
-  // normally the cheaper of the two by the 1% it doesn't pay, so this is usually where a
-  // cross-listed parcel ends up — which is the point. The buy path routes on the row's
-  // `source`, so either book can win without the grid needing to care.
+  // a parcel shows its cheapest order, wherever that order is held. A cross-listing is the
+  // SAME all-in price in both books (the 1% comes out of the seller's proceeds, not off the
+  // buyer's price), so the usual case here is a tie — which bestListing hands to the house
+  // book. The buy path routes on the row's `source`, so either book can win without the grid
+  // needing to care.
   //
   // The house book is read even when OpenSea isn't configured: it needs no API key, so a
   // missing key costs us their listings, not ours.
   try {
     for (const [tokenId, it] of await landBook.listingsByToken()) {
-      const prev = map.get(tokenId);
-      if (!prev || cheaperListing(it, prev)) map.set(tokenId, it);
+      map.set(tokenId, bestListing(map.get(tokenId), it));
     }
   } catch (err) {
     console.error('LAND house book read failed:', err.message);
@@ -4310,10 +4311,26 @@ async function landListingsByToken(force = false) {
   return map;
 }
 
-// Which of two listings for the same parcel to show. Same currency: the smaller amount.
-// Different currencies: prefer ETH, so the comparison never needs an exchange rate at a
-// point where we may not have one (getLandBrowse re-sorts by true ETH-equivalent later).
-const cheaperListing = (a, b) => (a.currency === b.currency ? a.priceAmt < b.priceAmt : a.currency === 'eth');
+// Which of two listings for the same parcel to show.
+//
+// Cheaper wins. Different currencies: prefer ETH, so the comparison never needs an exchange
+// rate at a point where we may not have one (getLandBrowse re-sorts by true ETH-equivalent
+// later). On a TIE the house book wins, because a cross-listing puts the same all-in price
+// in both books: the buyer pays the same either way, and a fill here hands the seller the 1%
+// OpenSea would have taken.
+//
+// Deliberately order-independent. The two places that merge the books seed their maps from
+// opposite sides, and an asymmetric comparison made them disagree: the first cross-listed
+// parcels in production showed as OpenSea orders on the grid while /listings showed them as
+// ours. Same price to the buyer, so nothing looked wrong — the seller just quietly lost the
+// percent the whole book exists to save.
+function bestListing(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  if (a.currency !== b.currency) return a.currency === 'eth' ? a : b;
+  if (a.priceAmt !== b.priceAmt) return a.priceAmt < b.priceAmt ? a : b;
+  return b.source === 'book' ? b : a;
+}
 
 // Shape a parcel + its (optional) listing into a browse row. Mixed-currency: an ETH listing's
 // native amount IS its ETH-equivalent; a USDC listing is dollar-denominated, so its ETH-
@@ -5366,7 +5383,9 @@ async function handleMarketplaceApi(request, response, url) {
     try {
       const prepared = await mktOrderbook.prepareBuy(listingId, taker);
       sendJson(response, 200, prepared);
+      marketAudit.record('buy_prepare', { coll: 'creatures', book: 'immutable', wallet: taker, orderHash: listingId });
     } catch (err) {
+      marketAudit.record('buy_prepare', { ok: false, coll: 'creatures', wallet: taker, orderHash: listingId, error: err.code || 'unavailable' });
       // On a LISTING buy the "fulfiller" is the buyer — seaport's fulfiller-balance
       // error here just means the buyer lacks ETH, which the client turns into the
       // funds-help panel (balances + bridge quote), not a generic failure.
@@ -5463,8 +5482,17 @@ async function handleMarketplaceApi(request, response, url) {
       const created = await mktOrderbook.createSell({ orderComponents, orderHash, signature });
       listingsCache.clear(); // the new listing should appear in browse promptly
       sendJson(response, 200, created);
+      marketAudit.record('list', {
+        coll: 'creatures', book: 'immutable', wallet: orderComponents.offerer,
+        tokenId: String(offer[0]?.identifierOrCriteria || ''),
+        currency: payCur?.code, orderHash: created.listingId || orderHash,
+      });
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+      marketAudit.record('list', {
+        ok: false, coll: 'creatures', book: 'immutable', wallet: orderComponents.offerer,
+        tokenId: String(offer[0]?.identifierOrCriteria || ''), error: err.code || 'unavailable',
+      });
     }
     return;
   }
@@ -5493,9 +5521,14 @@ async function handleMarketplaceApi(request, response, url) {
         const result = await mktOrderbook.submitCancel(orderIds, addr, signature);
         listingsCache.clear(); // cancelled listings should drop out of browse promptly
         sendJson(response, 200, result);
+        // Immutable's cancel is binding (they hold the zone signature), unlike our own book's.
+        marketAudit.record('cancel', { coll: 'creatures', book: 'immutable', wallet: addr, orders: orderIds, kind: 'offchain' });
       }
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+      if (!pathname.endsWith('/prepare')) {
+        marketAudit.record('cancel', { ok: false, coll: 'creatures', wallet: addr, orders: orderIds, error: err.code || 'unavailable' });
+      }
     }
     return;
   }
@@ -5748,7 +5781,16 @@ async function handleMarketplaceApi(request, response, url) {
     try {
       const created = await mktOrderbook.createOffer({ orderComponents, orderHash, signature, collection: !!body.collection });
       sendJson(response, 200, created);
+      marketAudit.record('offer', {
+        coll: 'creatures', book: 'immutable', wallet: orderComponents.offerer,
+        scope: body.collection ? 'collection' : 'token', currency: payCur?.code,
+        orderHash: created.offerId || orderHash,
+      });
     } catch (err) {
+      marketAudit.record('offer', {
+        ok: false, coll: 'creatures', wallet: orderComponents.offerer,
+        scope: body.collection ? 'collection' : 'token', error: err.code || 'unavailable',
+      });
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }
     return;
@@ -6012,9 +6054,14 @@ async function handleMarketplaceApi(request, response, url) {
     if (wei == null || wei > 100n * 10n ** 18n) { sendJson(response, 400, { error: 'bad_price' }); return; }
 
     try {
-      sendJson(response, 200, await layerswapBridge.createCashout(wei, addr), { 'Cache-Control': 'no-store' });
+      const swap = await layerswapBridge.createCashout(wei, addr);
+      sendJson(response, 200, swap, { 'Cache-Control': 'no-store' });
+      // A swap registered, not money moved: the member still has to sign and send. The id is
+      // the only handle we will ever have if one goes missing mid-flight.
+      marketAudit.record('funds', { direction: 'out', wallet: addr, priceUnits: wei.toString(), currency: 'eth', swapId: swap?.id || swap?.swapId });
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+      marketAudit.record('funds', { ok: false, direction: 'out', wallet: addr, priceUnits: wei.toString(), currency: 'eth', error: err.code || 'unavailable' });
     }
     return;
   }
@@ -6079,9 +6126,12 @@ async function handleMarketplaceApi(request, response, url) {
     if (!HEX_ADDRESS.test(addr)) { sendJson(response, 400, { error: 'bad_address' }); return; }
     if (wei == null || wei > 100n * 10n ** 18n) { sendJson(response, 400, { error: 'bad_price' }); return; }
     try {
-      sendJson(response, 200, await layerswapBridge.createTopup(wei, addr, body.source), { 'Cache-Control': 'no-store' });
+      const swap = await layerswapBridge.createTopup(wei, addr, body.source);
+      sendJson(response, 200, swap, { 'Cache-Control': 'no-store' });
+      marketAudit.record('funds', { direction: 'in', wallet: addr, priceUnits: wei.toString(), currency: 'eth', source: String(body.source || ''), swapId: swap?.id || swap?.swapId });
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+      marketAudit.record('funds', { ok: false, direction: 'in', wallet: addr, priceUnits: wei.toString(), currency: 'eth', error: err.code || 'unavailable' });
     }
     return;
   }
@@ -6334,11 +6384,28 @@ async function handleMarketplaceApi(request, response, url) {
     try {
       const prepared = await mktOrderbook.prepareFulfill(offerId, taker, tokenId, amountToFill);
       sendJson(response, 200, prepared);
+      marketAudit.record('offer_accept_prepare', { coll: 'creatures', book: 'immutable', wallet: taker, tokenId, orderHash: offerId });
     } catch (err) {
+      marketAudit.record('offer_accept_prepare', { ok: false, coll: 'creatures', wallet: taker, tokenId, orderHash: offerId, error: err.code || 'unavailable' });
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }
     return;
   }
+
+  // What the buyer pays all-in, and in what, read off a signed Seaport order. The audit row
+  // wants the money facts and nothing else — the order itself is a payload, and part of it is
+  // a bearer credential (see lib/market-audit.js).
+  const landOrderMoney = p => {
+    const items = Array.isArray(p?.consideration) ? p.consideration : [];
+    if (!items.length) return {};
+    try {
+      const cur = landMarket.internals.landCurrencyByItem(items[0].itemType, items[0].token);
+      return {
+        priceUnits: items.reduce((sum, c) => sum + BigInt(c.startAmount || '0'), 0n).toString(),
+        currency: cur?.code,
+      };
+    } catch { return {}; } // a malformed order is the create path's problem, not the trail's
+  };
 
   // --- LAND (Ethereum mainnet, via OpenSea) ---
   // Same shape as the Creature endpoints; different chain + protocol underneath.
@@ -6356,10 +6423,7 @@ async function handleMarketplaceApi(request, response, url) {
     // One row per parcel, the cheaper order wins, and a tie goes to the house book: at the
     // same price to the buyer, a fill here pays the seller the 1% OpenSea would have taken.
     const byToken = new Map(house.items.map(it => [it.tokenId, it]));
-    for (const it of data.items) {
-      const prev = byToken.get(it.tokenId);
-      if (!prev || cheaperListing(it, prev)) byToken.set(it.tokenId, it);
-    }
+    for (const it of data.items) byToken.set(it.tokenId, bestListing(byToken.get(it.tokenId), it));
     const items = [...byToken.values()]
       .sort((a, b) => (a.currency === b.currency ? a.priceAmt - b.priceAmt : a.currency === 'eth' ? -1 : 1));
     sendJson(response, 200, { ...data, items, ethUsd: fx.ethUsd, fxRates: fx.fxRates }, { 'Cache-Control': 'public, max-age=30' });
@@ -6669,8 +6733,16 @@ async function handleMarketplaceApi(request, response, url) {
       sendJson(response, 200, mine
         ? await landBook.prepareBuy({ orderHash, taker })
         : await landMarket.prepareBuy({ orderHash, protocolAddress, taker }));
+      // Intent, not a sale: the wallet signs and broadcasts somewhere we never see. For a
+      // house order we at least know what was on offer, so record it.
+      marketAudit.record('buy_prepare', {
+        coll: 'land', book: mine ? 'book' : 'opensea', wallet: taker, orderHash,
+        tokenId: mine ? String(mine.token_id) : undefined,
+        priceUnits: mine ? String(mine.price_units) : undefined, currency: mine ? mine.currency : undefined,
+      });
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+      marketAudit.record('buy_prepare', { ok: false, coll: 'land', wallet: taker, orderHash, error: err.code || 'unavailable' });
     }
     return;
   }
@@ -6694,8 +6766,10 @@ async function handleMarketplaceApi(request, response, url) {
 
     try {
       sendJson(response, 200, await landMarket.prepareAcceptOffer({ orderHash, protocolAddress, tokenId, taker }));
+      marketAudit.record('offer_accept_prepare', { coll: 'land', book: 'opensea', wallet: taker, tokenId, orderHash });
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
+      marketAudit.record('offer_accept_prepare', { ok: false, coll: 'land', wallet: taker, tokenId, orderHash, error: err.code || 'unavailable' });
     }
     return;
   }
@@ -6770,9 +6844,19 @@ async function handleMarketplaceApi(request, response, url) {
           ? await landBook.ingest({ orderParameters: o.orderParameters, signature: o.signature, counter: o.counter })
           : await landMarket.createListing({ orderParameters: o.orderParameters, signature: o.signature });
         results.push({ target, ok: true, ...created });
+        marketAudit.record('list', {
+          coll: 'land', book: target, wallet: o.orderParameters?.offerer,
+          tokenId: String(o.orderParameters?.offer?.[0]?.identifierOrCriteria || ''),
+          ...landOrderMoney(o.orderParameters), orderHash: created.orderHash,
+        });
       } catch (err) {
         console.error(`LAND listing create failed for ${target}:`, err.code || err.message);
         results.push({ target, ok: false, error: err.code || 'unavailable' });
+        marketAudit.record('list', {
+          ok: false, coll: 'land', book: target, wallet: o.orderParameters?.offerer,
+          tokenId: String(o.orderParameters?.offer?.[0]?.identifierOrCriteria || ''),
+          ...landOrderMoney(o.orderParameters), error: err.code || 'unavailable',
+        });
       }
     }
     const good = results.filter(r => r.ok);
@@ -6839,7 +6923,13 @@ async function handleMarketplaceApi(request, response, url) {
       sendJson(response, 400, { error: 'bad_order' }); return;
     }
     try {
-      sendJson(response, 200, await landMarket.createOffer({ orderParameters, signature, criteria }));
+      const createdOffer = await landMarket.createOffer({ orderParameters, signature, criteria });
+      sendJson(response, 200, createdOffer);
+      marketAudit.record('offer', {
+        coll: 'land', book: 'opensea', wallet: orderParameters?.offerer, scope: 'collection',
+        priceUnits: String(orderParameters?.offer?.[0]?.startAmount || ''),
+        orderHash: createdOffer.offerId,
+      });
     } catch (err) {
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }
@@ -6978,7 +7068,15 @@ async function handleMarketplaceApi(request, response, url) {
       sendJson(response, 200, mine
         ? await landBook.submitCancel({ orderHash, maker, signature })
         : await landMarket.submitOffchainCancel({ orderHash, maker, signature, protocolAddress }));
+      marketAudit.record('cancel', {
+        coll: 'land', book: mine ? 'book' : 'opensea', wallet: maker, orderHash,
+        tokenId: mine ? String(mine.token_id) : undefined,
+        // Worth naming: withdrawing a house order de-indexes it and leaves the signature
+        // live, so "cancelled" here is a weaker claim than it is on OpenSea's side.
+        kind: mine ? 'soft' : 'offchain',
+      });
     } catch (err) {
+      marketAudit.record('cancel', { ok: false, coll: 'land', wallet: maker, orderHash, error: err.code || 'unavailable' });
       sendJson(response, err.statusCode || 503, { error: err.code || 'unavailable' });
     }
     return;

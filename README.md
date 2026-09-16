@@ -878,6 +878,69 @@ is then asked whether the seller still owns the parcel, has approved the conduit
 the current counter. `LAND_BOOK=0` takes the whole thing out without touching the OpenSea
 path; `LAND_SELL=0` still stops all listing creation.
 
+## The marketplace audit trail
+
+Every money path writes to `audit_log` under a `market.*` event (`lib/market-audit.js`).
+Until 2026-09-16 it wrote nothing at all: logins, ballots, gas grants and announcements were
+all recorded, and the part that moves real money was not. That was survivable while every
+order lived in OpenSea's book and they held the record. It stopped being survivable when we
+started keeping [a book of our own](#our-own-land-orderbook).
+
+| Event | Written when |
+| --- | --- |
+| `market.list` | a listing is created, per book (so a cross-listing writes two rows) |
+| `market.cancel` | an order is withdrawn; `kind` says `soft` or `offchain` |
+| `market.buy_prepare` | we hand an address the calldata to fill an order |
+| `market.offer` | a bid is created |
+| `market.offer_accept_prepare` | a seller is handed the calldata to sell into a bid |
+| `market.funds` | a Layerswap swap is registered, in or out |
+| `market.book_closed` | our sweep retires a house order the chain killed |
+
+**What a row is evidence of.** This marketplace is non-custodial: we prepare unsigned
+transactions and the member's wallet signs them somewhere we never see. So a row is evidence
+of what *this server* did, never of what settled on-chain. The event names keep that
+distinction instead of blurring it — `buy_prepare` means "we handed this address the calldata
+for that order", which is the whole truth and is not the same claim as "they bought it". The
+chain is where fills are checked.
+
+The exception is `market.book_closed`: that one is our sweep reading the chain and retiring
+an order it can no longer settle, so it *is* a fact about the world. `reason: owner_changed`
+on a live listing is, nearly always, the sale itself.
+
+**A refusal is half the value.** `ok: false` rows carry the error code, so "it wouldn't let me
+list" has an answer.
+
+**What never goes in.** `lib/market-audit.js` keeps a denylist rather than a convention,
+because of one field: a Seaport **signature is a bearer credential**. Anyone holding it can
+fill the order straight on Seaport, and our house cancel is a soft one that leaves the
+signature live — so a signature in the audit table would be a working key to an order its
+seller believes they withdrew, kept in the one place we promise to retain forever. Order
+bodies, typed data and keys are out for the same reason. Amounts are stored in smallest units
+as strings, never floats.
+
+**Wallets are stored in full, and Discord ids are not attached.** Trading is wallet-gated,
+not account-gated, so the wallet is the actor, and a trail that can't name the actor answers
+no dispute. A listing is a public on-chain offer signed by that address anyway. Writing a
+Discord id onto the same row would mint a new wallet-to-identity link in a table with no
+business holding one, so it is deliberately left null. Console lines mask the address, since
+stdout leaves for a log aggregator and the table does not.
+
+**Reading it back.** Not exposed over HTTP. From a trusted context:
+
+```js
+await db.getEvents({ prefix: 'market.', limit: 500 });   // the whole trail, newest first
+await db.getEvents({ event: 'market.book_closed' });     // just what the chain killed
+```
+
+```sql
+SELECT at, event, ok, detail FROM audit_log
+WHERE event LIKE 'market.%' AND detail->>'wallet' = '0x…'
+ORDER BY at DESC;
+```
+
+An audit write can never fail a trade: callers don't await it, and nothing in the module is
+allowed to throw back into a route that is holding someone's money.
+
 ## Trading from a phone (the MetaMask in-app browser)
 
 There is no MetaMask extension for phones. In Safari or Chrome on a phone nothing injects
