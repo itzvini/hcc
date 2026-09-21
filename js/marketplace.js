@@ -1326,7 +1326,11 @@ function rankChip(rank) {
 // all-in `priceUsd`. These helpers show the NATIVE price plus a secondary estimate in the
 // user's chosen display currency, and degrade to the old ETH-only path for rows without a
 // currency tag (LAND parcels, older cached rows).
-const CUR_SYM = { eth: 'ETH', usdc: 'USDC' };
+// IMX is here to be READ, not offered: it never appears in LISTING_CURRENCIES because we
+// broker ETH and USDC only. A Creature can still be sold for IMX on another marketplace,
+// and Sales History shows those trades — so the symbol has to exist, or the fallback below
+// would label them ETH and read a 1,080 IMX sale as a $2.9m one.
+const CUR_SYM = { eth: 'ETH', usdc: 'USDC', imx: 'IMX' };
 const LISTING_CURRENCIES = ['eth', 'usdc']; // seller's choice of listing denomination
 // Is our own LAND book taking listings? Comes from the browse payload (server.js reads
 // LAND_BOOK), because it decides two things the sell form can't guess: whether USDC is on
@@ -1356,7 +1360,9 @@ function fmtListingAmt(it) {
   const amt = it.totalAmt ?? it.priceAmt ?? it.totalEth ?? it.priceEth;
   const n = Number(amt);
   if (!Number.isFinite(n)) return '—';
-  return `${n.toLocaleString(undefined, { maximumFractionDigits: cur === 'usdc' ? 2 : 4 })} ${CUR_SYM[cur] || 'ETH'}`;
+  // ETH prices need four places to say anything; a USDC or IMX amount runs to hundreds or
+  // thousands, where four places are just noise.
+  return `${n.toLocaleString(undefined, { maximumFractionDigits: cur === 'eth' ? 4 : 2 })} ${CUR_SYM[cur] || 'ETH'}`;
 }
 function fmtListingFiat(it) {
   if (it.currency && it.priceUsd != null) {
@@ -6248,7 +6254,7 @@ function saleCardHtml(s, i = 0, swap = false) {
             <span class="trade-sale-noprice-sub">${esc(t(moveSubKey(s)))}</span>
           </div>`
         : `<div class="trade-sale-price">
-            <span class="trade-sale-eth ${s.currency === 'usdc' ? 'is-usdc' : ''}">${esc(s.currency ? fmtListingAmt({ currency: s.currency, totalAmt: s.priceAmt, totalEth: s.priceEth }) : fmtEth(s.priceEth))}</span>
+            <span class="trade-sale-eth ${s.currency === 'usdc' ? 'is-usdc' : s.currency === 'imx' ? 'is-imx' : ''}">${esc(s.currency ? fmtListingAmt({ currency: s.currency, totalAmt: s.priceAmt, totalEth: s.priceEth }) : fmtEth(s.priceEth))}</span>
             ${fiat ? `<span class="trade-sale-usd">${esc(fiat)}</span>` : ''}
           </div>`}
     </article>`;

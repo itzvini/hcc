@@ -658,6 +658,17 @@ const CREATURE_FEE_BPS = 700;
 const ZK_CURRENCY_BY_ADDR = new Map(Object.values(ZK_CURRENCIES).map(c => [c.address.toLowerCase(), c]));
 const zkCurrency = key => ZK_CURRENCIES[String(key || '').toLowerCase()] || null;
 const zkCurrencyByAddr = addr => ZK_CURRENCY_BY_ADDR.get(String(addr || '').toLowerCase()) || null;
+// IMX is zkEVM's NATIVE coin, so a trade settled in it carries no token address at all —
+// `payment.token` is a bare `{ symbol: 'NATIVE' }`. It is deliberately NOT in ZK_CURRENCIES:
+// that map is the allowlist we sign orders against, and we broker ETH and USDC only. This
+// entry is for READING other marketplaces' trades (sales history, market stats, a wallet's
+// timeline), which used to match on address alone and so dropped every IMX sale in the
+// collection's history without a word.
+const ZK_NATIVE_IMX = { key: 'imx', address: null, decimals: 18, symbol: 'IMX' };
+// The currency an activity SETTLED in — wider than the trade allowlist, and read-only.
+const zkSettledCurrency = token => (token?.contract_address
+  ? zkCurrencyByAddr(token.contract_address)
+  : (token?.symbol === 'NATIVE' ? ZK_NATIVE_IMX : null));
 // Decimals-aware conversions. amount (human string/number) <-> smallest-unit wei string.
 const CUR_POW = new Map([[18, 10n ** 18n], [6, 10n ** 6n]]);
 function amountToUnits(amount, decimals) {
@@ -757,17 +768,32 @@ async function fetchCreatureSales() {
   await imxPaged(base, { contract_address: CREATURE_CONTRACT, activity_type: 'sale', page_size: '100' }, items => {
     for (const a of items) {
       const p = a.details?.payment;
-      // ETH + USDC sales both count toward volume/history. USDC's `amt` is dollars; its
-      // ETH-equivalent is applied later (computeMarketStats) at each sale's own day rate.
-      const cur = zkCurrencyByAddr(p?.token?.contract_address);
+      // ETH, USDC and IMX sales all count toward volume/history. A non-ETH sale carries its
+      // dollar value in `amt`; the ETH-equivalent is applied later (computeMarketStats) at
+      // each sale's own day rate.
+      const cur = zkSettledCurrency(p?.token);
       if (!cur) continue;
       const amt = Number(p.price_including_fees) / 10 ** cur.decimals;
       const ts = Date.parse(a.updated_at);
       if (Number.isFinite(amt) && amt > 0 && Number.isFinite(ts)) {
-        sales.push(cur.key === 'eth' ? { ts, price: amt, currency: 'eth' } : { ts, currency: 'usdc', amt });
+        if (cur.key === 'eth') sales.push({ ts, price: amt, currency: 'eth' });
+        else if (cur.key === 'usdc') sales.push({ ts, currency: 'usdc', amt });
+        else sales.push({ ts, currency: 'imx', imx: amt }); // priced below, in one pass
       }
     }
   });
+  // What an IMX sale was worth in dollars the day it settled. The rate table is only fetched
+  // when one actually turns up: IMX trades are rare (two in the whole collection history),
+  // and every other run should not pay for a table it has no use for.
+  const paidInImx = sales.filter(s => s.currency === 'imx');
+  if (paidInImx.length) {
+    const daily = await getImxUsdDaily().catch(() => null);
+    for (const s of paidInImx) {
+      const r = daily ? daily.at(s.ts) : null;
+      s.amt = r ? s.imx * r : null;
+      delete s.imx;
+    }
+  }
   return sales;
 }
 
@@ -828,6 +854,30 @@ function cgFetch(url) {
 // pre-migration archive, where every trade carries the rate that applied when it settled.
 // Between the two lies a hole (the archive stops at the July 2025 migration, CoinGecko's
 // window keeps sliding forward), and days in it take the rate of the nearest day we know.
+// A day -> price map turned into { at(ts), current, from }. Sorted once so a lookup is a
+// binary search for the nearest known day rather than a scan outwards — the ETH table is
+// years long and holed, and a scan that ran off the end used to fall back to TODAY's rate,
+// the one number a historical sale must never wear. `from` is the oldest day the table can
+// speak for, so a caller can tell a full one from the 365-day version built before the
+// archive sweep landed.
+function dailyRateTable(byDay, current) {
+  const days = [...byDay.keys()].sort((a, b) => a - b);
+  const at = ts => {
+    if (!days.length) return current;
+    const day = Math.floor(ts / DAY_MS);
+    let lo = 0, hi = days.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (days[mid] < day) lo = mid + 1; else hi = mid;
+    }
+    const after = days[lo];
+    const before = lo > 0 ? days[lo - 1] : after;
+    const nearest = Math.abs(after - day) <= Math.abs(day - before) ? after : before;
+    return byDay.get(nearest);
+  };
+  return { at, current, from: days.length ? days[0] : null };
+}
+
 async function fetchEthUsd() {
   const res = await cgFetch(
     'https://api.coingecko.com/api/v3/coins/ethereum/market_chart?vs_currency=usd&days=365&interval=daily',
@@ -850,26 +900,7 @@ async function fetchEthUsd() {
       if (!byDay.has(day) && rate > 0) byDay.set(day, rate);
     }
   }
-  // Sorted once so a lookup is a binary search for the nearest known day rather than a
-  // scan outwards — the table is now years long and holed, and a scan that ran off the
-  // end used to fall back to TODAY's rate, the one number a historical sale must never wear.
-  const days = [...byDay.keys()].sort((a, b) => a - b);
-  const at = ts => {
-    if (!days.length) return current;
-    const day = Math.floor(ts / DAY_MS);
-    let lo = 0, hi = days.length - 1;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (days[mid] < day) lo = mid + 1; else hi = mid;
-    }
-    const after = days[lo];
-    const before = lo > 0 ? days[lo - 1] : after;
-    const nearest = Math.abs(after - day) <= Math.abs(day - before) ? after : before;
-    return byDay.get(nearest);
-  };
-  // The oldest day the table can speak for, so a caller can tell a full one from the
-  // 365-day version built before the archive sweep landed.
-  return { at, current, from: days.length ? days[0] : null };
+  return dailyRateTable(byDay, current);
 }
 
 // Extra display currencies (USD stays the canonical fiat; these are derived from
@@ -919,6 +950,35 @@ async function getEthUsdDaily() {
       .finally(() => { ethUsdDailyCache.inFlight = null; });
   }
   return ethUsdDailyCache.data || ethUsdDailyCache.inFlight;
+}
+
+// Daily IMX→USD, the same { at(ts), current } shape and there for the same reason: an IMX
+// sale has to be valued in the money of its own day, not this morning's. Simpler than the
+// ETH table — IMX has only ever settled trades since the July 2025 zkEVM migration, so
+// CoinGecko's free 365-day window covers the lot and there is no archive or stored history
+// to merge. A failure leaves an IMX sale showing its native amount and no estimate, which
+// is the honest answer; it never drops the sale from the list.
+async function fetchImxUsd() {
+  const res = await cgFetch(
+    'https://api.coingecko.com/api/v3/coins/immutable-x/market_chart?vs_currency=usd&days=365&interval=daily',
+  );
+  if (!res.ok) throw new Error(`CoinGecko IMX/USD ${res.status}`);
+  const prices = (await res.json()).prices ?? [];
+  const byDay = new Map();
+  for (const [ms, usd] of prices) byDay.set(Math.floor(ms / DAY_MS), usd);
+  return dailyRateTable(byDay, prices.length ? prices[prices.length - 1][1] : null);
+}
+const imxUsdDailyCache = { data: null, at: 0, inFlight: null };
+const IMX_USD_DAILY_TTL_MS = 30 * 60 * 1000;
+async function getImxUsdDaily() {
+  const fresh = imxUsdDailyCache.data && Date.now() - imxUsdDailyCache.at < IMX_USD_DAILY_TTL_MS;
+  if (!fresh && !imxUsdDailyCache.inFlight) {
+    imxUsdDailyCache.inFlight = fetchImxUsd()
+      .then(d => { imxUsdDailyCache.data = d; imxUsdDailyCache.at = Date.now(); return d; })
+      .catch(err => { console.error('IMX/USD daily fetch failed:', err.message); return imxUsdDailyCache.data; })
+      .finally(() => { imxUsdDailyCache.inFlight = null; });
+  }
+  return imxUsdDailyCache.data || imxUsdDailyCache.inFlight;
 }
 
 // Bucket sales into daily aggregates: cheapest sale, dearest sale, ETH volume and trade
@@ -1323,11 +1383,13 @@ async function computeMarketStats() {
   const fxRates = fx.fxRates || { usd: 1 };
   const rate = ethUsd.current;
   const toUsd = eth => (eth != null && rate != null ? Math.round(eth * rate) : null);
-  // Normalize every Creature sale to an ETH price: USDC sales convert at their OWN day's rate
-  // (so historical volume is valued correctly), dropping any USDC sale from a day with no rate.
+  // Normalize every Creature sale to an ETH price: a sale settled in dollars or IMX arrives
+  // carrying its dollar value and converts at its OWN day's rate (so historical volume is
+  // valued correctly), dropping any such sale from a day we have no rate for.
   const creatureSales = creatureSalesRaw.map(s => {
-    if (s.currency === 'usdc') { const r = ethUsd.at(s.ts); return r ? { ts: s.ts, eth: s.amt / r } : null; }
-    return { ts: s.ts, eth: s.price };
+    if (s.currency === 'eth') return { ts: s.ts, eth: s.price };
+    const r = ethUsd.at(s.ts);
+    return r && s.amt > 0 ? { ts: s.ts, eth: s.amt / r } : null;
   }).filter(Boolean);
   // Headline floor = the cheapest listing across BOTH currencies (the USDC floor converted to
   // ETH at the current rate), so a below-ETH-floor USDC listing correctly moves the floor.
@@ -1998,13 +2060,19 @@ const HISTORY_ITEMS_MAX = 80;
  * When we have no rate for that day, priceUsd is left null and the client shows the native
  * amount alone — an honest silence rather than a confident wrong figure.
  */
-function valueAtItsOwnDay(entry, daily) {
+function valueAtItsOwnDay(entry, daily, imxDaily) {
   if (entry.priceAmt == null) { entry.priceEth = null; entry.priceUsd = null; return; }
   const ts = Date.parse(entry.at) || 0;
   const rate = (daily && ts ? daily.at(ts) : null) || null;
   if (entry.currency === 'usdc') {
     entry.priceUsd = entry.priceAmt;                                   // a dollar was a dollar
     entry.priceEth = rate ? round4(entry.priceAmt / rate) : null;
+  } else if (entry.currency === 'imx') {
+    // IMX was worth whatever it was worth the day the trade settled, never today's price.
+    const imxRate = (imxDaily && ts ? imxDaily.at(ts) : null) || null;
+    const usd = imxRate ? entry.priceAmt * imxRate : null;
+    entry.priceUsd = usd != null ? Math.round(usd) : null;
+    entry.priceEth = usd != null && rate ? round4(usd / rate) : null;
   } else {
     entry.priceEth = entry.priceAmt;
     entry.priceUsd = rate ? Math.round(entry.priceAmt * rate) : null;
@@ -2064,8 +2132,9 @@ async function getMyListingHistory(address) {
       const isBuyer = (d.to || '').toLowerCase() === addr;
       // Value the trade in the currency it actually settled in. This used to recognise ETH
       // and nothing else, so a USDC sale arrived with no price at all and the timeline
-      // showed a bare "sold" with the amount missing beside it.
-      const payCur = zkCurrencyByAddr(d.payment?.token?.contract_address);
+      // showed a bare "sold" with the amount missing beside it. IMX settles natively, with
+      // no token address at all, and used to land in that same priceless state.
+      const payCur = zkSettledCurrency(d.payment?.token);
       const priceUnits = d.payment?.price_including_fees; // headline all-in trade price
       const priceAmt = payCur && priceUnits ? unitsToAmount(priceUnits, payCur.decimals) : null;
       entries.push({ kind: isBuyer ? 'bought' : 'sold', tokenId, at, tx,
@@ -2122,15 +2191,16 @@ async function getMyListingHistory(address) {
     .filter(e => e.at)
     .sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0))
     .slice(0, HISTORY_ITEMS_MAX);
-  const [metaById, daily] = await Promise.all([
+  const [metaById, daily, imxDaily] = await Promise.all([
     fetchCreatureMetaBatch([...new Set(items.map(i => String(i.tokenId)))]),
     getEthUsdDaily().catch(() => null),
+    getImxUsdDaily().catch(() => null),
   ]);
   for (const it of items) {
     const meta = metaById.get(String(it.tokenId)) || {};
     it.name = meta.name || `Highrise Creature #${it.tokenId}`;
     it.image = meta.image || null;
-    valueAtItsOwnDay(it, daily);
+    valueAtItsOwnDay(it, daily, imxDaily);
   }
   return { items };
 }
@@ -3120,15 +3190,17 @@ async function buildCreatureSalesFeed() {
       const asset = Array.isArray(d.asset) ? d.asset[0] : d.asset; // sale.asset is an array
       const tokenId = asset?.token_id;
       const p = d.payment;
-      // Sales settled in ETH or USDC (either accepted listing currency); ignore any other token.
-      const cur = zkCurrencyByAddr(p?.token?.contract_address);
+      // Sales settled in ETH, USDC or IMX. We only ever broker the first two, so an IMX
+      // trade always came from another marketplace — but a trade is a trade, and leaving it
+      // out made this history quietly disagree with the chain.
+      const cur = zkSettledCurrency(p?.token);
       if (!tokenId || !cur) continue;
       const amt = p.price_including_fees ? unitsToAmount(p.price_including_fees, cur.decimals) : null;
       const at = a.updated_at || a.indexed_at || null;
       if (!Number.isFinite(amt) || amt <= 0 || !at) continue;
       sales.push({
         tokenId: String(tokenId), currency: cur.key, priceAmt: amt,
-        priceEth: cur.key === 'eth' ? amt : null, // USDC's ETH-equivalent is added per-sale in shapeSalesHistory
+        priceEth: cur.key === 'eth' ? amt : null, // USDC/IMX get their ETH-equivalent per-sale in shapeSalesHistory
         at,
         tx: a.blockchain_metadata?.transaction_hash || null,
         buyer: (d.to || '').toLowerCase() || null,
@@ -3136,6 +3208,18 @@ async function buildCreatureSalesFeed() {
       });
     }
   });
+  // What an IMX sale was worth in dollars on its own day, stamped here so every reader of
+  // this feed — the history rows, the price chart, the price guide — works from one figure
+  // instead of each fetching the rate table for itself. USDC needs no such step: its amount
+  // already is dollars.
+  const paidInImx = sales.filter(s => s.currency === 'imx');
+  if (paidInImx.length) {
+    const daily = await getImxUsdDaily().catch(() => null);
+    for (const s of paidInImx) {
+      const r = daily ? daily.at(Date.parse(s.at) || 0) : null;
+      s.usdAmt = r ? s.priceAmt * r : null;
+    }
+  }
   sales.sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0));
   return sales;
 }
@@ -3579,12 +3663,15 @@ function buildSalesView(feed, f, sortKey, meta, rate) {
     // Is this token listed RIGHT NOW? (drives the "For sale / Not listed" badge + the
     // in-marketplace deep link.) meta.listed returns the current all-in list price or null.
     const listedNow = meta.listed ? (meta.listed(s.tokenId, s) ?? null) : null;
-    // Currency-aware valuation: a USDC sale's USD is its dollar amount 1:1 and its ETH-
-    // equivalent (the sort/compare key) is amount / that day's ETH-USD; an ETH sale is the
-    // mirror. priceAmt/currency ride through for the client's currency-aware display.
-    const isUsdc = s.currency === 'usdc';
-    const priceEth = isUsdc ? (usd ? Math.round(s.priceAmt / usd * 1e6) / 1e6 : null) : s.priceEth;
-    const priceUsd = isUsdc ? s.priceAmt : (usd != null && s.priceEth != null ? Math.round(s.priceEth * usd * 100) / 100 : null);
+    // Currency-aware valuation. A USDC sale's USD is its dollar amount 1:1; an IMX sale's is
+    // `usdAmt`, stamped on the feed at the IMX/USD rate of its own day. Either way the ETH-
+    // equivalent (the sort/compare/chart key) is those dollars / that day's ETH-USD, and an
+    // ETH sale is the mirror. priceAmt/currency ride through for the client's native display.
+    // An IMX sale we could get no rate for keeps its native amount and shows no estimate.
+    const nativeUsd = s.currency === 'usdc' ? s.priceAmt : s.currency === 'imx' ? (s.usdAmt ?? null) : null;
+    const priceEth = nativeUsd != null ? (usd ? Math.round(nativeUsd / usd * 1e6) / 1e6 : null) : s.priceEth;
+    const priceUsd = nativeUsd != null ? Math.round(nativeUsd * 100) / 100
+      : (usd != null && s.priceEth != null ? Math.round(s.priceEth * usd * 100) / 100 : null);
     // Catalogue metadata wins for traits/rank; name/image/coords fall back to whatever the
     // raw feed already carried (OpenSea LAND events ship these; Immutable sales don't).
     return {
@@ -3828,10 +3915,13 @@ function buildPriceModel({ sales, lookup, tierOf, listings, items, rate, now = D
     /* The rate that applied the day this sale settled: each archived trade carries its own,
        and the rest come from the daily table. It does two jobs here. */
     const r0 = s.usdRate ?? (rate ? rate(ts) : null);
-    /* One: a dollar-settled sale is still a sale. The raw feed leaves `priceEth` null on those
-       (only the shaped history fills it in), so reading it straight off dropped every USDC
-       trade — twelve of the live Creature feed's 646, and silently. */
-    const eth = s.priceEth ?? (s.currency === 'usdc' && s.priceAmt > 0 && r0 > 0 ? s.priceAmt / r0 : null);
+    /* One: a sale settled in something other than ETH is still a sale. The raw feed leaves
+       `priceEth` null on those (only the shaped history fills it in), so reading it straight
+       off dropped every USDC trade — twelve of the live Creature feed's 646, and silently.
+       A USDC amount is dollars already; an IMX one wears the `usdAmt` the feed stamped on it
+       at the rate of its own day. */
+    const nativeUsd = s.currency === 'usdc' ? s.priceAmt : s.currency === 'imx' ? s.usdAmt : null;
+    const eth = s.priceEth ?? (nativeUsd > 0 && r0 > 0 ? nativeUsd / r0 : null);
     if (!(eth > 0)) continue;
     /* Two: what it cost in dollars ON THE DAY. The estimate is in today's money, but the last
        sale is a plain fact, and a seller reading in dollars should see the ones that really

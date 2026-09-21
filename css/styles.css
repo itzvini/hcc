@@ -5095,6 +5095,9 @@ footer { margin-top: 28px; }
 .trade-tile-price.is-usdc, .trade-modal-price-eth.is-usdc, .trade-mass-unit.is-usdc,
 .trade-offer-price.is-usdc, .trade-sale-eth.is-usdc, .trade-myoffer-chip .is-usdc,
 .trade-colloffer-price.is-usdc, .trade-mine-price.is-usdc { color: var(--hr-online); }
+/* IMX prices (sales made on other marketplaces — we never list in it) take Immutable's blue,
+   so three currencies in one history are told apart without reading the ticker. */
+.trade-sale-eth.is-imx { color: var(--hr-blueberry); }
 /* "List it: Both / Here only / OpenSea only" — same segmented control as the currency
    picker, with a line underneath that spells out what the chosen option costs. Three
    labels don't fit 74px each on a phone, so these flex instead of holding a min-width. */

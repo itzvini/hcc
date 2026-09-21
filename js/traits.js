@@ -63,6 +63,17 @@ function eth(v) {
   return `${new Intl.NumberFormat(getCurrentLang(), { maximumFractionDigits: 4 }).format(v)} ETH`;
 }
 
+// A sale wears the coin it settled in. Creatures trade for ETH and USDC here and, on other
+// marketplaces, for zkEVM's native IMX — so a row that assumes ETH puts the wrong word after
+// a real number.
+function saleAmt(s) {
+  if (s.currency === 'usdc') return usd(s.priceAmt);
+  if (s.currency === 'imx') {
+    return `${new Intl.NumberFormat(getCurrentLang(), { maximumFractionDigits: 2 }).format(s.priceAmt)} IMX`;
+  }
+  return eth(s.priceAmt);
+}
+
 function usd(v) {
   return new Intl.NumberFormat(getCurrentLang(), { style: 'currency', currency: 'USD',
     maximumFractionDigits: v < 100 ? 2 : 0 }).format(v);
@@ -550,7 +561,7 @@ function salesHtml(ty, val) {
     ${rows.slice(0, SALES_SHOWN).map(s => `
       <a class="ctr-sale-row" href="/trade?coll=creatures&amp;token=${encodeURIComponent(s.tokenId)}">
         <span class="ctr-sale-n">${esc(s.name)}</span>
-        <span class="ctr-sale-p">${esc(s.currency === 'usdc' ? usd(s.priceAmt) : eth(s.priceAmt))}</span>
+        <span class="ctr-sale-p">${esc(saleAmt(s))}</span>
         <span class="ctr-sale-d">${esc(shortDate(s.at))}</span>
       </a>`).join('')}
   </div>`;
