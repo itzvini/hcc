@@ -1452,7 +1452,10 @@ receipt list are published only after the poll closes.
   Copy lives in the locales under `polls.p.<key>.*` — the API never ships display text.
 - **Scheduling** is env-driven, no redeploy needed: e.g. `POLL_GEN2_OPENS` /
   `POLL_GEN2_CLOSES` (ISO timestamps). Unset opens-at → the poll shows as "opens soon";
-  unset closes-at → open-ended until the env is set.
+  unset closes-at → open-ended until the env is set. A poll can also carry a default
+  schedule in code, which the env still overrides: the Halloween 2026 theme poll runs
+  27 Sep to 23:59:59 GMT-3 that Sunday unless `POLL_HALLOWEEN_OPENS` /
+  `POLL_HALLOWEEN_CLOSES` say otherwise.
 - **API**: `GET /api/polls` (viewer context + polls; results once closed),
   `POST /api/polls/vote` `{ poll, choice }` (401 signed-out, 403 non-holder/closed,
   409 already-voted).

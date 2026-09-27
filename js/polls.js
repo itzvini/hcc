@@ -38,6 +38,15 @@ function fmtDate(iso) {
   } catch { return new Date(iso).toLocaleDateString(); }
 }
 
+// An open poll shows the closing hour as well as the day: some run for hours, not
+// weeks, and the viewer's own time zone decides which day it closes on.
+function fmtDateTime(iso) {
+  if (!iso) return '';
+  const opts = { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' };
+  try { return new Date(iso).toLocaleString(getCurrentLang(), opts); }
+  catch { return new Date(iso).toLocaleString(); }
+}
+
 // Map the ?auth=... flag set by the OAuth callback to a friendly message (the
 // callback returns to /polls when the sign-in started here).
 function authError() {
@@ -57,7 +66,7 @@ function statusChip(p) {
 }
 
 function whenLine(p) {
-  if (p.status === 'open' && p.closesAt)     return t('polls.closes').replace('{date}', fmtDate(p.closesAt));
+  if (p.status === 'open' && p.closesAt)     return t('polls.closes').replace('{date}', fmtDateTime(p.closesAt));
   if (p.status === 'upcoming' && p.opensAt)  return t('polls.opens').replace('{date}', fmtDate(p.opensAt));
   if (p.status === 'upcoming')               return t('polls.opens.soon');
   if (p.status === 'closed' && p.closesAt)   return t('polls.closed.on').replace('{date}', fmtDate(p.closesAt));
