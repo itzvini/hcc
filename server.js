@@ -7576,7 +7576,9 @@ async function handleAuthApi(request, response, url) {
     } catch (err) {
       console.error(`OAuth callback failed at stage "${stage}":`, err.message);
       db.recordEvent({ event: 'auth.callback_error', ok: false, detail: { stage, message: err.message } });
-      redirectToApp(request, response, 'failed');
+      // Highrise not answering the wallet check is temporary and not the holder's
+      // fault, so it gets its own message telling them to try again shortly.
+      redirectToApp(request, response, stage === 'fetchHighriseWallet' ? 'highrise' : 'failed');
     }
     return;
   }

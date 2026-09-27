@@ -2884,6 +2884,7 @@
   "apply.err.denied": "Sign-in was cancelled. You can try again whenever you're ready.",
   "apply.err.state": "Your sign-in session expired or didn't match. Please try signing in again.",
   "apply.err.failed": "Something went wrong during sign-in. Please try again.",
+  "apply.err.highrise": "Highrise didn't answer when we checked your wallet. That's usually a short hiccup on their side, so try again in a minute.",
   "apply.race.eyebrow": "The race so far",
   "apply.race.h": "Where the election stands",
   "apply.race.open": "Applications open",

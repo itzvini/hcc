@@ -31,7 +31,7 @@ const TIER_KEY    = { single: 'apply.tier.member',  mid: 'apply.tier.patron',  w
 function authError() {
   const code = new URLSearchParams(location.search).get('auth');
   if (!code) return '';
-  const key = { denied: 'apply.err.denied', state: 'apply.err.state', failed: 'apply.err.failed' }[code]
+  const key = { denied: 'apply.err.denied', state: 'apply.err.state', failed: 'apply.err.failed', highrise: 'apply.err.highrise' }[code]
     || 'apply.err.failed';
   return `<div class="apply-alert" role="alert"><span aria-hidden="true">⚠</span><span>${esc(t(key))}</span></div>`;
 }
