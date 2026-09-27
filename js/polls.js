@@ -113,17 +113,88 @@ function optionRow(p, opt, interactive) {
   const pitch = ptOpt(p, `opt.${opt}.p`);
   const pro = ptOpt(p, `opt.${opt}.pro`);
   const con = ptOpt(p, `opt.${opt}.con`);
+  // The references button sits next to the label, not in it: a button inside a
+  // label is invalid markup, and a tap on it must never pick the option.
+  const refs = p.refs?.[opt] || [];
   return `
-    <label class="ballot-opt ${checked ? 'is-checked' : ''} ${interactive ? '' : 'is-preview'}">
-      <input type="radio" name="poll-${esc(p.id)}" value="${esc(opt)}" ${checked ? 'checked' : ''} ${interactive ? '' : 'disabled'} />
-      <span class="ballot-opt-dot" aria-hidden="true"></span>
-      <span class="ballot-opt-body">
-        <span class="ballot-opt-name">${esc(pt(p, `opt.${opt}`))}</span>
-        ${pitch ? `<span class="ballot-opt-pitch">${esc(pitch)}</span>` : ''}
-        ${pro ? `<span class="ballot-opt-take is-pro"><i aria-hidden="true">✓</i>${esc(pro)}</span>` : ''}
-        ${con ? `<span class="ballot-opt-take is-con"><i aria-hidden="true">✕</i>${esc(con)}</span>` : ''}
-      </span>
-    </label>`;
+    <div class="poll-opt">
+      <label class="ballot-opt ${checked ? 'is-checked' : ''} ${interactive ? '' : 'is-preview'} ${refs.length ? 'has-refs' : ''}">
+        <input type="radio" name="poll-${esc(p.id)}" value="${esc(opt)}" ${checked ? 'checked' : ''} ${interactive ? '' : 'disabled'} />
+        <span class="ballot-opt-dot" aria-hidden="true"></span>
+        <span class="ballot-opt-body">
+          <span class="ballot-opt-name">${esc(pt(p, `opt.${opt}`))}</span>
+          ${pitch ? `<span class="ballot-opt-pitch">${esc(pitch)}</span>` : ''}
+          ${pro ? `<span class="ballot-opt-take is-pro"><i aria-hidden="true">✓</i>${esc(pro)}</span>` : ''}
+          ${con ? `<span class="ballot-opt-take is-con"><i aria-hidden="true">✕</i>${esc(con)}</span>` : ''}
+        </span>
+      </label>
+      ${refs.length ? `
+      <button class="poll-refs-btn" type="button" data-refs="${esc(opt)}" data-poll="${esc(p.id)}" aria-haspopup="dialog">
+        ${REFS_ICON}<span>${esc(t('polls.refs.btn'))}</span><span class="poll-refs-n">${refs.length}</span>
+      </button>` : ''}
+    </div>`;
+}
+
+// --- reference pins (a sheet of Pinterest embeds per option) ---
+
+const REFS_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="M7 5V3h14v14h-2"/><path d="m3 15 4-4 4 4 2-2 4 4"/></svg>';
+
+// One dialog on <body>, outside #polls-app: the poll list re-renders on every pick
+// and tap, and that must not tear down an open sheet or reload its frames.
+let refsDlg = null;
+function refsDialog() {
+  if (refsDlg) return refsDlg;
+  refsDlg = document.createElement('dialog');
+  refsDlg.className = 'col-modal poll-refs-modal';
+  refsDlg.setAttribute('aria-labelledby', 'poll-refs-h');
+  document.body.appendChild(refsDlg);
+  refsDlg.addEventListener('click', e => { if (e.target === refsDlg) refsDlg.close(); }); // backdrop tap
+  refsDlg.addEventListener('close', () => { refsDlg.innerHTML = ''; }); // drop the frames: nothing loads after close
+  return refsDlg;
+}
+
+function openRefs(p, opt) {
+  const ids = p.refs?.[opt] || [];
+  if (!ids.length) return;
+  const dlg = refsDialog();
+  const pitch = ptOpt(p, `opt.${opt}.p`);
+  // Pinterest renders each pin in its own frame, sized to the frame's width. The
+  // frames load only now, when someone opens the sheet.
+  const pins = ids.map((id, i) => `
+    <figure class="poll-ref">
+      <iframe src="https://assets.pinterest.com/ext/embed.html?id=${encodeURIComponent(id)}"
+        title="${esc(t('polls.refs.pin').replace('{n}', i + 1).replace('{total}', ids.length))}"
+        loading="lazy" scrolling="no" referrerpolicy="no-referrer"
+        sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
+      <a class="poll-ref-open" href="https://www.pinterest.com/pin/${encodeURIComponent(id)}/" target="_blank" rel="noopener noreferrer">${esc(t('polls.refs.open'))}</a>
+    </figure>`).join('');
+  dlg.innerHTML = `
+    <div class="poll-refs">
+      <span class="poll-refs-glow" aria-hidden="true"></span>
+      <button class="col-insp-x" type="button" data-close aria-label="${esc(t('polls.refs.close'))}">✕</button>
+      <div class="poll-refs-head">
+        <span class="poll-refs-eyebrow">${esc(t('polls.refs.eyebrow'))}</span>
+        <h3 class="poll-refs-h" id="poll-refs-h">${esc(pt(p, `opt.${opt}`))}</h3>
+        ${pitch ? `<p class="poll-refs-p">${esc(pitch)}</p>` : ''}
+      </div>
+      <div class="poll-refs-track" tabindex="0" aria-label="${esc(t('polls.refs.track'))}">${pins}</div>
+      <div class="poll-refs-foot">
+        <p class="poll-refs-note">${esc(t('polls.refs.note'))}</p>
+        <div class="poll-refs-nav">
+          <button class="col-insp-step" type="button" data-scroll="-1" aria-label="${esc(t('polls.refs.prev'))}">‹</button>
+          <button class="col-insp-step" type="button" data-scroll="1" aria-label="${esc(t('polls.refs.next'))}">›</button>
+        </div>
+      </div>
+    </div>`;
+  dlg.querySelector('[data-close]').addEventListener('click', () => dlg.close());
+  const track = dlg.querySelector('.poll-refs-track');
+  dlg.querySelectorAll('[data-scroll]').forEach(b => b.addEventListener('click', () => {
+    const card = track.querySelector('.poll-ref');
+    const step = card ? card.getBoundingClientRect().width + 14 : 250; // one pin plus the gap
+    const smooth = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    track.scrollBy({ left: step * Number(b.dataset.scroll), behavior: smooth ? 'smooth' : 'auto' });
+  }));
+  if (!dlg.open) dlg.showModal();
 }
 
 function optionsBlock(p, interactive) {
@@ -370,6 +441,12 @@ function bind(el) {
         return;
       }
       castVote(pollId);
+    });
+  });
+  el.querySelectorAll('[data-refs]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const p = (data?.polls || []).find(x => x.id === btn.dataset.poll);
+      if (p) openRefs(p, btn.dataset.refs);
     });
   });
   el.querySelector('#polls-retry')?.addEventListener('click', () => loadPolls(true));

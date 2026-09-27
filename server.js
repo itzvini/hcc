@@ -33,7 +33,7 @@ const slimeIndex = require('./lib/slime-index');
 const imxArchive = require('./lib/imx-archive');        // pre-migration (StarkEx) Creature sales
 const { computeEligibility, BRACKETS } = require('./lib/eligibility');
 const { PROPOSITIONS, PROPOSITION_IDS } = require('./lib/propositions');
-const { POLLS, pollStatus } = require('./lib/polls');
+const { POLLS, pollStatus, publicRefs } = require('./lib/polls');
 const derive = require('./lib/derive-positions');
 
 // Treat common truthy spellings (1/true/yes/on, case- and whitespace-insensitive) as
@@ -9157,6 +9157,7 @@ async function handlePollsApi(request, response, url) {
         id: p.id,
         key: p.i18nKey,
         options: p.options,
+        refs: publicRefs(p), // Pinterest pin ids per option (digits only), may be {}
         status,
         opensAt: p.opensAt ? new Date(p.opensAt).toISOString() : null,
         closesAt: p.closesAt ? new Date(p.closesAt).toISOString() : null,
@@ -9465,7 +9466,8 @@ const SERVABLE_EXT = new Set([
 // Content-Security-Policy for HTML pages: scripts only from self + the Chart.js CDN
 // (no inline/eval scripts); images from self + the Discord & Highrise avatar CDNs;
 // inline styles allowed (the markup uses style="" attributes); frames only for the
-// YouTube guide embeds; everything else self.
+// YouTube guide embeds and Pinterest's pin embeds (poll reference sheets: their code
+// runs in their frame, never on our page); everything else self.
 const CSP = [
   "default-src 'self'",
   "script-src 'self' https://cdn.jsdelivr.net",
@@ -9473,7 +9475,7 @@ const CSP = [
   "img-src 'self' data: https://cdn.highrisegame.com https://cdn.discordapp.com https://media.discordapp.net https://cdn-production.joinhighrise.com https://i2c.seadn.io",
   "font-src 'self'",
   "connect-src 'self'",
-  "frame-src https://www.youtube.com",
+  "frame-src https://www.youtube.com https://assets.pinterest.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

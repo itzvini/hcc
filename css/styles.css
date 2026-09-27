@@ -8260,6 +8260,79 @@ a.trade-buy-btn { display: inline-flex; }
 .poll-empty .poll-note { margin: 10px auto 0; max-width: 420px; }
 .poll-error p { color: var(--hr-fg-1); margin-bottom: 12px; }
 
+/* Reference pins. A "See references" button under a theme opens a sheet of
+   Pinterest pin embeds. The pins run in Pinterest's own frames (CSP frame-src),
+   so none of their code touches the page, and the frames load only on open. */
+.poll-opt { position: relative; }
+.ballot-opt.has-refs { padding-bottom: 52px; }
+.poll-refs-btn {
+  position: absolute; left: 44px; bottom: 12px; /* lines up with the option text */
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  padding: 6px 8px 6px 11px; border-radius: var(--hr-radius-pill);
+  font: 800 11.5px/1 var(--hr-sans); color: var(--hr-fg-1);
+  background: rgba(255,255,255,.06); border: 1px solid var(--hr-line-strong);
+  transition: color .2s, background .2s, border-color .2s, transform .2s;
+}
+.poll-refs-btn:hover {
+  color: var(--hr-fg-0); transform: translateY(-1px);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.poll-refs-btn:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 2px; }
+.poll-refs-btn svg { width: 14px; height: 14px; flex: 0 0 auto; }
+.poll-refs-n {
+  min-width: 18px; padding: 3px 6px; border-radius: var(--hr-radius-pill);
+  font-size: 10.5px; text-align: center; color: var(--hr-on-primary); background: var(--accent);
+}
+
+/* The sheet itself, inside the shared .col-modal dialog shell */
+.poll-refs {
+  --accent: var(--hr-primary); --accent-soft: var(--hr-primary-25);
+  position: relative; overflow: hidden; isolation: isolate;
+  margin: auto; width: min(900px, 100%); padding: 26px 0 20px;
+  border-radius: var(--hr-radius-2xl); border: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(40,39,45,.94), rgba(16,15,19,.97));
+  backdrop-filter: blur(14px);
+  box-shadow: 0 30px 90px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.06);
+  animation: poll-refs-in .35s cubic-bezier(.2,.7,.2,1);
+}
+@keyframes poll-refs-in { from { opacity: 0; transform: translateY(14px) scale(.98); } }
+.poll-refs > * { position: relative; z-index: 1; }
+.poll-refs > .col-insp-x { position: absolute; z-index: 2; } /* the rule above would unpin the close button */
+.poll-refs-glow {
+  position: absolute; z-index: 0; inset: -40% 45% auto -20%; height: 80%; pointer-events: none;
+  background: radial-gradient(closest-side at 35% 25%, color-mix(in srgb, var(--hr-secondary) 34%, transparent), transparent 75%);
+}
+.poll-refs-head { padding: 0 26px; }
+.poll-refs-eyebrow {
+  font: 900 10.5px/1 var(--hr-sans); letter-spacing: var(--hr-tracking-caps);
+  text-transform: uppercase; color: var(--hr-banana);
+}
+.poll-refs-h {
+  margin: 8px 44px 6px 0; font-family: var(--hr-sans); font-weight: 900; font-size: 22px;
+  letter-spacing: var(--hr-tracking-tight); color: var(--hr-fg-0);
+}
+.poll-refs-p { margin: 0; max-width: 62ch; font-size: 13.5px; line-height: 1.5; color: var(--hr-fg-2); }
+.poll-refs-track {
+  display: flex; gap: 14px; overflow-x: auto; overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory; scroll-padding: 0 26px;
+  padding: 20px 26px 8px; scrollbar-width: thin;
+}
+.poll-refs-track:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: -2px; }
+.poll-ref { flex: 0 0 auto; margin: 0; scroll-snap-align: start; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+/* Fixed box: the embed fits its pin to the frame's width and never reports its height.
+   color-scheme: light matches the embed's own page, which keeps the frame transparent
+   on our dark page; normal or dark make Chrome paint the empty space white. */
+.poll-ref iframe {
+  display: block; width: 236px; height: 480px; border: 0; border-radius: 16px;
+  background: transparent; color-scheme: light;
+}
+.poll-ref-open { font: 700 11.5px/1 var(--hr-sans); color: var(--hr-fg-3); text-decoration: none; }
+.poll-ref-open:hover { color: var(--hr-fg-0); text-decoration: underline; }
+.poll-refs-foot { display: flex; align-items: center; gap: 14px; padding: 12px 26px 0; }
+.poll-refs-note { margin: 0; font-size: 12px; line-height: 1.45; color: var(--hr-fg-3); }
+.poll-refs-nav { margin-left: auto; display: flex; gap: 10px; }
+
 @media (max-width: 560px) {
   .poll-card { padding: 20px 16px; }
   .poll-when { margin-left: 0; width: 100%; }
@@ -8268,11 +8341,19 @@ a.trade-buy-btn { display: inline-flex; }
   .poll-discord-btn { width: 100%; justify-content: center; }
   .poll-viewer-out { margin-left: 0; }
   .poll-turnout { margin-left: 0; width: 100%; }
+  .poll-refs-modal[open] { padding: 10px; }
+  .poll-refs { padding: 20px 0 16px; border-radius: var(--hr-radius-xl); }
+  .poll-refs-head, .poll-refs-foot { padding-left: 18px; padding-right: 18px; }
+  .poll-refs-track { padding: 16px 18px 6px; scroll-padding: 0 18px; }
+  .poll-refs-h { font-size: 19px; }
+  .poll-refs-nav { display: none; } /* phones swipe */
 }
 @media (prefers-reduced-motion: reduce) {
   .poll-card, .poll-res-row { opacity: 1; transform: none; animation: none !important; }
   .poll-res-bar i { transform: none; animation: none !important; }
   .poll-chip.is-live i { animation: none; }
+  .poll-refs { animation: none; }
+  .poll-refs-btn:hover { transform: none; }
 }
 
 /* ---------- VOTING-ADVICE MATCHER (voter view) ---------- */

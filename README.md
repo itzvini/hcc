@@ -1456,6 +1456,11 @@ receipt list are published only after the poll closes.
   schedule in code, which the env still overrides: the Halloween 2026 theme poll runs
   27 Sep to 23:59:59 GMT-3 that Sunday unless `POLL_HALLOWEEN_OPENS` /
   `POLL_HALLOWEEN_CLOSES` say otherwise.
+- **Reference pins** (optional): a poll's `refs` maps an option to Pinterest pin ids
+  (strings, the digits from `pinterest.com/pin/<id>/`). Each option with pins gets a
+  "See references" button that opens a sheet of Pinterest's own pin embeds. They run in
+  Pinterest's frames (CSP `frame-src https://assets.pinterest.com`), load only when the
+  sheet opens, and are dropped when it closes. Keep the count equal across options.
 - **API**: `GET /api/polls` (viewer context + polls; results once closed),
   `POST /api/polls/vote` `{ poll, choice }` (401 signed-out, 403 non-holder/closed,
   409 already-voted).
