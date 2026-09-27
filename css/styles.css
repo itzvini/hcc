@@ -10490,10 +10490,13 @@ span.hp-statchip-ico { font-size: 17px; line-height: 22px; text-align: center; c
    accordions were live 4px strips for the same reason.
    Nothing inside a closed sheet may be visible or take a tap. The universal selector
    is deliberate: the bug was a descendant re-enabling itself, so anything added to
-   the sheet later is covered too. Scoped to the mobile layout, because on desktop the
-   menu is an inline row that never carries .is-open. */
+   the sheet later is covered too. !important, because specificity alone lost: picking
+   a language leaves a sticky :hover on its row, `.nav-group:hover > .nav-dropdown`
+   outranks this rule, and the empty row box stayed live across mid-screen, eating
+   every tap there until you tapped somewhere else. Scoped to the mobile layout,
+   because on desktop the menu is an inline row that never carries .is-open. */
 @media (max-width: 1150px) {
-  .nav-menu:not(.is-open) * { visibility: hidden; pointer-events: none; }
+  .nav-menu:not(.is-open) * { visibility: hidden !important; pointer-events: none !important; }
 }
 
 /* ---------- 13. LANGUAGE ROW: ONE LINE ---------- */

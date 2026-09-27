@@ -1,4 +1,12 @@
 const SUPPORTED_LANGS = ['en', 'pt', 'es', 'ru', 'fr', 'de', 'tr'];
+// Only a language you picked from the switcher is saved, and under this key. The old
+// key held more than picks: every first visit saved the browser's language there, and
+// from 22 July to 24 August 2026 the closed phone menu left the language row live but
+// invisible over mid-screen. A tap on a poll option or a filter switched the site,
+// mostly to Spanish or Russian (the middle pills), and saved it for good. Nothing told
+// those values from real picks, so initI18n() reads the old key once and drops it.
+const LANG_KEY = 'hcc-lang-pick';
+const OLD_LANG_KEY = 'hcc-lang';
 let translations = {};
 let fallback = {};        // English, used for any key missing in the active language
 let currentLang = 'en';
@@ -75,7 +83,10 @@ function applyTranslations() {
   });
 }
 
-export async function setLanguage(lang) {
+// `save` is for a pick from the switcher. The language chosen on load, and English
+// standing in for a locale that failed to load, are not choices, and saving them
+// would stop the next visit from asking the browser (or retrying the locale).
+export async function setLanguage(lang, { save = true } = {}) {
   if (!SUPPORTED_LANGS.includes(lang)) lang = 'en';
   // Ensure the English fallback dictionary is loaded for any untranslated keys
   if (!Object.keys(fallback).length) {
@@ -84,14 +95,14 @@ export async function setLanguage(lang) {
   try {
     translations = lang === 'en' ? fallback : await loadLocale(lang);
   } catch {
-    if (lang !== 'en') { await setLanguage('en'); return; }
+    if (lang !== 'en') { await setLanguage('en', { save: false }); return; }
   }
   currentLang = lang;
   // Storage throws when the browser blocks it (Safari private browsing, "block all
   // cookies"). Losing the saved preference is a small cost; letting it throw here cost
   // the whole switch, because every visible change below was skipped — the page stayed
   // in the old language and the click looked like it had done nothing.
-  try { localStorage.setItem('hcc-lang', lang); } catch {}
+  if (save) { try { localStorage.setItem(LANG_KEY, lang); } catch {} }
   document.documentElement.lang = lang;
   applyTranslations();
   document.querySelectorAll('.lang-btn').forEach(btn => {
@@ -102,9 +113,24 @@ export async function setLanguage(lang) {
 }
 
 export async function initI18n() {
+  const browser = (navigator.language || '').split('-')[0].toLowerCase();
   let saved = null;
-  try { saved = localStorage.getItem('hcc-lang'); } catch {}
-  const browser = (navigator.language || '').split('-')[0];
-  const lang    = saved || (SUPPORTED_LANGS.includes(browser) ? browser : 'en');
-  await setLanguage(lang);
+  try {
+    saved = localStorage.getItem(LANG_KEY);
+    const old = localStorage.getItem(OLD_LANG_KEY);
+    if (old !== null) {
+      localStorage.removeItem(OLD_LANG_KEY);
+      // An old value survives only where it can't strand anyone: English, which the
+      // whole community reads, or a language the browser itself lists. Anything else
+      // may be a stray tap, and costs a real picker one tap to set again.
+      const listed = (navigator.languages?.length ? navigator.languages : [navigator.language || ''])
+        .map(l => String(l).split('-')[0].toLowerCase());
+      if (!saved && SUPPORTED_LANGS.includes(old) && (old === 'en' || listed.includes(old))) {
+        saved = old;
+        localStorage.setItem(LANG_KEY, old);
+      }
+    }
+  } catch {}
+  const lang = saved || (SUPPORTED_LANGS.includes(browser) ? browser : 'en');
+  await setLanguage(lang, { save: false });
 }
