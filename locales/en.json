@@ -2812,6 +2812,8 @@
   "polls.receipt": "Receipt",
   "polls.receipt.keep": "Keep this code. It's your private proof that your vote was counted.",
   "polls.results": "Final results",
+  "polls.results.live": "Live results",
+  "polls.results.live.p": "Running totals, updated as votes come in. Nothing is final until the poll closes.",
   "polls.res.receipts": "{n} receipts published. Find yours",
   "polls.res.receipts.p": "Every vote got a random code, tied to neither voter nor choice. Find yours here to confirm your vote was counted. The list always holds exactly one code per vote.",
   "polls.onevote": "One holder, one vote",

@@ -8606,7 +8606,7 @@ async function handleBallotApi(request, response) {
 //          storage is insert-only and re-votes get a 409.
 // PRIVACY: the vote row (voter ↔ choice) exists only to enforce the one-vote rule;
 // it never leaves the server. The audit event records THAT a vote was cast, never
-// the choice. No running tally while a poll is open (same rule as the election).
+// the choice. No running tally while a poll is open (same rule as the election), unless the poll sets liveResults.
 // Read the raw request body as a Buffer (bounded). The ingest route needs the exact
 // bytes to verify the HMAC, so it can't go through readJsonBody (which parses).
 function readRawBody(request, limitBytes = 1024 * 1024) {
@@ -9162,16 +9162,19 @@ async function handlePollsApi(request, response, url) {
         opensAt: p.opensAt ? new Date(p.opensAt).toISOString() : null,
         closesAt: p.closesAt ? new Date(p.closesAt).toISOString() : null,
         // Participation count is public while open (motivating, reveals no choice);
-        // per-option counts wait for the close.
+        // per-option counts wait for the close, unless the poll opts into live results.
         turnout: tallies.filter(t => t.poll_id === p.id).reduce((n, t) => n + t.n, 0),
         myVote: mine ? { choice: mine.choice, receipt: mine.receipt, castAt: mine.cast_at || null } : null,
       };
-      if (status === 'closed') {
+      // Totals only: never who voted for what. The receipt list still waits for the close.
+      if (status === 'closed' || (status === 'open' && p.liveResults)) {
         const counts = {};
         for (const opt of p.options) {
           counts[opt] = tallies.find(t => t.poll_id === p.id && t.choice === opt)?.n || 0;
         }
-        row.results = { counts, receipts: await db.getPollReceipts(p.id) };
+        row.results = status === 'closed'
+          ? { counts, receipts: await db.getPollReceipts(p.id) }
+          : { counts, live: true };
       }
       polls.push(row);
     }

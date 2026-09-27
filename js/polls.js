@@ -246,7 +246,7 @@ function resultsBlock(p) {
       const win = total > 0 && n === top;
       return `
         <div class="poll-res-row ${win ? 'is-win' : ''}" style="--i:${i}">
-          <span class="poll-res-label">${win ? '<i aria-hidden="true">✓</i>' : ''}${esc(pt(p, `opt.${opt}`))}</span>
+          <span class="poll-res-label">${win && !p.results?.live ? '<i aria-hidden="true">✓</i>' : ''}${esc(pt(p, `opt.${opt}`))}</span>
           <span class="poll-res-bar" aria-hidden="true"><i style="--w:${total ? Math.max(2, Math.round((n / (top || 1)) * 100)) : 0}%"></i></span>
           <span class="poll-res-n"><strong>${pct}%</strong> · ${n}</span>
         </div>`;
@@ -260,7 +260,8 @@ function resultsBlock(p) {
       <div class="race-receipt-grid">${receipts.map(c => `<code>${esc(c)}</code>`).join('')}</div>
     </details>` : '';
 
-  const mine = p.myVote ? `
+  const live = !!p.results?.live;
+  const mine = p.myVote && !live ? `
     <div class="poll-res-mine">
       <span class="ballot-voted-chip"><i aria-hidden="true">✓</i>${esc(t('polls.youchose'))} <strong>${esc(pt(p, `opt.${p.myVote.choice}`))}</strong></span>
       <span class="ballot-receipt-pair"><span class="ballot-receipt-l">${esc(t('polls.receipt'))}</span><code class="ballot-receipt">${esc(p.myVote.receipt)}</code></span>
@@ -268,7 +269,8 @@ function resultsBlock(p) {
 
   return `
     <div class="poll-results">
-      <h4 class="poll-res-h">${esc(t('polls.results'))}</h4>
+      <h4 class="poll-res-h">${esc(t(live ? 'polls.results.live' : 'polls.results'))}</h4>
+      ${live ? `<p class="poll-note">${esc(t('polls.results.live.p'))}</p>` : ''}
       ${rows}
       ${mine}
       ${receiptsBlock}
@@ -298,6 +300,8 @@ function pollCard(p, i, viewer) {
     parts.push(optionsBlock(p, true));
     parts.push(castControls(p));
   }
+  // A poll that opted into live results shows the running totals under the ballot.
+  if (p.status === 'open' && p.results?.live) parts.push(resultsBlock(p));
 
   const when = whenLine(p);
   const showTurnout = p.status !== 'upcoming' && p.turnout > 0;
@@ -461,6 +465,24 @@ function render() {
   if (!data.error) { animateCounts(el); revealed = true; }
 }
 
+// Live totals refresh every 30s while the tab is visible, and only re-render when a
+// count actually moved (a re-render replays the bars and would drop a half-made pick).
+let liveTimer = 0;
+function scheduleLive() {
+  clearInterval(liveTimer);
+  if (!data?.polls?.some(p => p.status === 'open' && p.results?.live)) return;
+  liveTimer = setInterval(async () => {
+    if (document.hidden || busy || armed || !root()) return;
+    try {
+      const res = await fetch('/api/polls', { headers: { Accept: 'application/json' } });
+      if (!res.ok) return;
+      const next = await res.json();
+      const sig = d => JSON.stringify((d.polls || []).map(p => [p.id, p.status, p.turnout, p.results?.counts, p.myVote?.receipt]));
+      if (sig(next) !== sig(data)) { data = next; render(); }
+    } catch { /* keep the last totals */ }
+  }, 30000);
+}
+
 export async function loadPolls(showSpinner = true) {
   const el = root();
   if (!el) return;
@@ -475,6 +497,7 @@ export async function loadPolls(showSpinner = true) {
     data = { error: true };
   }
   render();
+  scheduleLive();
 }
 
 // Re-render with cached state after a language switch.
