@@ -11,6 +11,10 @@
 //     sends someone's money the wrong way, and this page is read by people cashing out
 //     their first four figures.
 //   - Rail ids map to gm.geo.rail.* in locales/en.json. Add the key before the id.
+//   - Regulator labels (`reg`) are ids too, under gm.geo.reg.*. Same rule.
+//   - Dates are ISO (YYYY-MM-DD) or a bare year, never words: region-pick.js formats
+//     them in the reader's language, and an English month inside a Russian sentence
+//     is the giveaway this rule exists to stop.
 //   - Notes are i18n keys gm.geo.note.<CC>.<n>, written in locales/en.json.
 //
 // Shape per country, all fields optional:
@@ -60,7 +64,7 @@ export const BINANCE = {
   // Which countries it will open an account for is FETCHED, not listed here — see
   // COUNTRIES[c].bn in the generated file. These are the exceptions that list can't express.
   restricted: [],                    // extra blocks beyond the signup list, if any turn up
-  frozen: { GB: '16 October 2023' }, // no new UK customers since; still true 2026-08-29
+  frozen: { GB: '2023-10-16' }, // no new UK customers since; still true 2026-08-29
   // Markets Binance ANNOUNCED it was leaving, which its signup list does not reflect —
   // both of these are still in that dropdown today. That gap is why the generic line
   // below never says "opens accounts here", and why this list exists at all. It is
@@ -81,7 +85,7 @@ export const BINANCE = {
   //   Binance says it will reapply, and a licence would put all thirty back.
   // NL also sits in `left` above, which is checked first and wins. Its 2023 exit is the
   // older and stronger fact, so a Dutch reader keeps that line.
-  micaDate: '1 July 2026',
+  micaDate: '2026-07-01',
   mica: ['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU',
          'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES',
          'SE', 'IS', 'LI', 'NO'],
@@ -141,10 +145,10 @@ export const CURATED = {
     cb: { acct: 1, cash: 1, buy: 1, rails: ['ach'] },
     notes: ['US.1', 'US.2', 'US.3'],
     loc: [
-      { n: 'Gemini', d: 'www.gemini.com', reg: 'NYDFS trust', rails: ['ach', 'wire', 'debit'], buy: 1, sell: 1, wd: 1 },
-      { n: 'Robinhood Crypto', d: 'robinhood.com', reg: 'NYDFS BitLicense', rails: ['ach', 'debit'], buy: 1, sell: 1, wd: 1 },
+      { n: 'Gemini', d: 'www.gemini.com', reg: 'nydfsTrust', rails: ['ach', 'wire', 'debit'], buy: 1, sell: 1, wd: 1 },
+      { n: 'Robinhood Crypto', d: 'robinhood.com', reg: 'bitlicense', rails: ['ach', 'debit'], buy: 1, sell: 1, wd: 1 },
       // Crypto.com holds state money-transmitter licences but is not on the NYDFS list.
-      { n: 'Crypto.com', d: 'crypto.com', reg: 'State MTLs', rails: ['ach', 'wire', 'card'], buy: 1, sell: 1, wd: 1, notIn: ['NY'] },
+      { n: 'Crypto.com', d: 'crypto.com', reg: 'stateMtl', rails: ['ach', 'wire', 'card'], buy: 1, sell: 1, wd: 1, notIn: ['NY'] },
     ],
   },
   RU: {
@@ -164,23 +168,23 @@ export const CURATED = {
   CA: { notes: ['CA.1', 'CA.2'] },
   IN: {
     notes: ['IN.1', 'IN.2', 'IN.3'],
-    loc: [{ n: 'ZebPay', d: 'zebpay.com', reg: 'FIU-IND registered', rails: ['imps'], buy: 1, sell: 1, wd: 1 }],
+    loc: [{ n: 'ZebPay', d: 'zebpay.com', reg: 'fiuInd', rails: ['imps'], buy: 1, sell: 1, wd: 1 }],
   },
   ID: {
     notes: ['ID.1', 'ID.2', 'ID.3'],
     loc: [
-      { n: 'Indodax', d: 'indodax.com', reg: 'OJK licensed', rails: ['bank', 'qris'], buy: 1, sell: 1, wd: 1 },
-      { n: 'Tokocrypto', d: 'tokocrypto.com', reg: 'OJK licensed, Binance-owned', rails: ['bank'], buy: 1, sell: 1, wd: 1 },
-      { n: 'Pintu', d: 'pintu.co.id', reg: 'OJK licensed', rails: ['bank'], buy: 1, sell: 1, wd: 1 },
-      { n: 'Reku', d: 'reku.id', reg: 'OJK licensed', rails: ['bank', 'qris'], buy: 1, sell: 1, wd: 1 },
+      { n: 'Indodax', d: 'indodax.com', reg: 'ojk', rails: ['bank', 'qris'], buy: 1, sell: 1, wd: 1 },
+      { n: 'Tokocrypto', d: 'tokocrypto.com', reg: 'ojkBinance', rails: ['bank'], buy: 1, sell: 1, wd: 1 },
+      { n: 'Pintu', d: 'pintu.co.id', reg: 'ojk', rails: ['bank'], buy: 1, sell: 1, wd: 1 },
+      { n: 'Reku', d: 'reku.id', reg: 'ojk', rails: ['bank', 'qris'], buy: 1, sell: 1, wd: 1 },
     ],
   },
   PH: {
     notes: ['PH.1', 'PH.2', 'PH.3'],
     loc: [
-      { n: 'Coins.ph', d: 'coins.ph', reg: 'BSP VASP', rails: ['instapay', 'gcash'], buy: 1, sell: 1, wd: 1 },
-      { n: 'PDAX', d: 'pdax.ph', reg: 'BSP VASP', rails: ['instapay', 'gcash'], buy: 1, sell: 1, wd: 1 },
-      { n: 'GCrypto, inside GCash', d: 'www.gcash.com', reg: 'run by PDAX', rails: ['gcash'], buy: 1, sell: 1, wd: 1 },
+      { n: 'Coins.ph', d: 'coins.ph', reg: 'bspVasp', rails: ['instapay', 'gcash'], buy: 1, sell: 1, wd: 1 },
+      { n: 'PDAX', d: 'pdax.ph', reg: 'bspVasp', rails: ['instapay', 'gcash'], buy: 1, sell: 1, wd: 1 },
+      { n: 'GCrypto', d: 'www.gcash.com', reg: 'gcrypto', rails: ['gcash'], buy: 1, sell: 1, wd: 1 },
     ],
   },
   EG: { notes: ['EG.1'] },

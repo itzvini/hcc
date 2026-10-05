@@ -792,9 +792,18 @@ initI18n().then(() => {
   rerenderProfile();
 });
 
+// Header slimes play animation baked from their real skeleton (js/pet-anim.js).
+const { initPetAnim } = lazy('./pet-anim.js');
+initPetAnim();
+
 // Jump animation on hover / click / tap
 document.querySelectorAll('.pet-wrap').forEach(pet => {
   function jumpPet() {
+    // A hop lifts the pet off the cursor and lands it back under it, which reads as a fresh
+    // mouseenter; restarting then snapped it from the landing squash back to take-off on every
+    // bounce. Let a hop finish; animationend clears the class.
+    if (pet.classList.contains('is-jumping')) return;
+    if (pet.dataset.animReady) return;   // js/pet-anim.js runs this pet's hop and backflip
     pet.classList.remove('is-jumping');
     void pet.offsetWidth; // force reflow so re-triggering restarts the animation
     pet.classList.add('is-jumping');
@@ -802,7 +811,7 @@ document.querySelectorAll('.pet-wrap').forEach(pet => {
   pet.addEventListener('mouseenter', jumpPet);
   pet.addEventListener('click', jumpPet);
   pet.addEventListener('animationend', e => {
-    if (e.animationName === 'pet-jump') pet.classList.remove('is-jumping');
+    if (e.animationName === 'pet-jump' || e.animationName === 'pet-hop') pet.classList.remove('is-jumping');
   });
 });
 
@@ -844,9 +853,10 @@ if (g2MotionOK && 'IntersectionObserver' in window && g2Reveals.length) {
   g2Reveals.forEach(el => el.classList.add('is-in'));
 }
 
-// Fetch and inline pet SVGs so internal <g transform> paths render in document context
+// Fetch and inline pet SVGs so internal <g transform> paths render in document context.
+// SVG only: the animated header slimes carry a WebP still that must stay an <img>.
 (async () => {
-  const pets = document.querySelectorAll('.pet-wrap img[src]');
+  const pets = document.querySelectorAll('.pet-wrap img[src$=".svg"]');
   await Promise.all([...pets].map(async img => {
     try {
       const src = img.getAttribute('src');

@@ -1,6 +1,196 @@
 {
   "club": [
     {
+      "date": "October 3, 2026",
+      "title": "The Sushi Slimes are finished",
+      "body": "Gen 2 update #9: the Sushi Slimes, the first Gen 2 pet set, are finished. The artist now works full time on the Dessert Slimes, and early sketches should follow soon. Work on Gen 2 is slower than anyone wants, and the updates keep coming every two weeks so you can see where it stands.",
+      "tag": "announcement",
+      "i18n": {
+        "pt": {
+          "date": "3 de out. de 2026",
+          "title": "Os Sushi Slimes estão prontos",
+          "body": "Atualização #9 da Gen 2: os Sushi Slimes, o primeiro set de pets da Gen 2, estão prontos. O artista agora trabalha em tempo integral nos Dessert Slimes, e os primeiros esboços devem sair em breve. O trabalho na Gen 2 está mais lento do que qualquer um gostaria, e as atualizações continuam a cada duas semanas para você ver em que pé ele está."
+        },
+        "es": {
+          "date": "3 oct. 2026",
+          "title": "Los Sushi Slimes están terminados",
+          "body": "Actualización de Gen 2 #9: los Sushi Slimes, el primer set de mascotas Gen 2, están terminados. El artista ahora trabaja a tiempo completo en los Dessert Slimes, y los primeros bocetos deberían llegar pronto. El trabajo en la Gen 2 va más lento de lo que nadie quisiera, y las actualizaciones siguen llegando cada dos semanas para que veas en qué punto está."
+        },
+        "fr": {
+          "date": "3 oct. 2026",
+          "title": "Les Sushi Slimes sont terminés",
+          "body": "Mise à jour Gen 2 n° 9 : les Sushi Slimes, le premier set de pets Gen 2, sont terminés. L'artiste travaille maintenant à plein temps sur les Dessert Slimes, et les premiers croquis devraient suivre bientôt. Le travail sur la Gen 2 avance plus lentement que personne ne le voudrait, et les mises à jour continuent toutes les deux semaines pour que vous voyiez où il en est."
+        },
+        "de": {
+          "date": "3. Oktober 2026",
+          "title": "Die Sushi Slimes sind fertig",
+          "body": "Update Nr. 9 zu Gen 2: Die Sushi Slimes, das erste Pet-Set von Gen 2, sind fertig. Der Artist arbeitet jetzt Vollzeit an den Dessert Slimes, und erste Skizzen sollten bald folgen. Die Arbeit an Gen 2 geht langsamer voran, als irgendwer will, und die Updates kommen weiter alle zwei Wochen, damit du siehst, wo sie steht."
+        },
+        "ru": {
+          "date": "3 октября 2026",
+          "title": "Sushi Slimes готовы",
+          "body": "Обновление Gen 2 №9: Sushi Slimes, первый набор питомцев Gen 2, готовы. Теперь художник полностью занят Dessert Slimes, и скоро должны появиться первые эскизы. Работа над Gen 2 идёт медленнее, чем всем хотелось бы, а обновления по-прежнему выходят раз в две недели, чтобы вы видели, где она сейчас."
+        },
+        "tr": {
+          "date": "3 Ekim 2026",
+          "title": "Sushi Slimes tamamlandı",
+          "body": "Gen 2 güncellemesi #9: ilk Gen 2 pet seti Sushi Slimes tamamlandı. Sanatçı artık tam zamanlı olarak Dessert Slimes üzerinde çalışıyor ve ilk eskizler yakında gelecek. Gen 2 üzerindeki iş herkesin istediğinden yavaş ilerliyor ve nerede olduğunu görebilmen için güncellemeler iki haftada bir gelmeye devam ediyor."
+        }
+      }
+    },
+    {
+      "date": "September 29, 2026",
+      "title": "Down Below in the Creature Store",
+      "body": "New items are in the Creature Store, with a story to go with them. Down Below picks up after Ghost Town: you go down to the sea floor to bring back Calcifer's lost lantern, past a sunken ship, a diver who never left and jellyfish with teeth.",
+      "tag": "announcement",
+      "i18n": {
+        "pt": {
+          "date": "29 de set. de 2026",
+          "title": "Down Below na Creature Store",
+          "body": "Itens novos chegaram à Creature Store, com uma história junto. Down Below continua de onde Ghost Town parou: você desce ao fundo do mar para trazer de volta a lanterna perdida do Calcifer, passando por um navio afundado, um mergulhador que nunca voltou e águas-vivas com dentes."
+        },
+        "es": {
+          "date": "29 sept. 2026",
+          "title": "Down Below en la Creature Store",
+          "body": "Hay items nuevos en la Creature Store, con una historia que los acompaña. Down Below sigue donde terminó Ghost Town: bajas al fondo del mar para recuperar la linterna perdida de Calcifer, pasando junto a un barco hundido, un buzo que nunca se fue y medusas con dientes."
+        },
+        "fr": {
+          "date": "29 sept. 2026",
+          "title": "Down Below dans la Creature Store",
+          "body": "De nouveaux objets sont dans la Creature Store, avec une histoire qui va avec. Down Below reprend après Ghost Town : vous descendez au fond de la mer pour rapporter la lanterne perdue de Calcifer, en passant devant un navire englouti, un plongeur qui n'est jamais remonté et des méduses à dents."
+        },
+        "de": {
+          "date": "29. September 2026",
+          "title": "Down Below im Creature Store",
+          "body": "Neue Items sind im Creature Store, mit einer Geschichte dazu. Down Below macht da weiter, wo Ghost Town aufgehört hat: Du tauchst hinab zum Meeresgrund, um Calcifers verlorene Laterne zurückzuholen, vorbei an einem gesunkenen Schiff, einem Taucher, der nie zurückkam, und Quallen mit Zähnen."
+        },
+        "ru": {
+          "date": "29 сентября 2026",
+          "title": "Down Below в Creature Store",
+          "body": "В Creature Store новые предметы, и к ним прилагается история. Down Below продолжает Ghost Town: вы спускаетесь на морское дно, чтобы вернуть потерянный фонарь Calcifer, мимо затонувшего корабля, водолаза, который так и не поднялся, и медуз с зубами."
+        },
+        "tr": {
+          "date": "29 Eylül 2026",
+          "title": "Down Below, Creature Store'da",
+          "body": "Creature Store'da yeni eşyalar var ve yanlarında bir hikâye de geliyor. Down Below, Ghost Town'ın bıraktığı yerden devam ediyor: Calcifer'ın kayıp fenerini geri getirmek için deniz dibine iniyorsun; batık bir geminin, hiç geri dönmeyen bir dalgıcın ve dişli denizanalarının yanından geçerek."
+        }
+      }
+    },
+    {
+      "date": "September 27, 2026",
+      "title": "You picked the Halloween theme",
+      "body": "You pitched Halloween themes in creature chat, the Council narrowed them to six, and every holder got a vote on the site. 296 of you voted. 90s Retro Halloween won with 107 votes, ahead of Creepypasta (67) and Blood, Guts & Body Horror (47). The art team builds this year's Halloween grab around it.",
+      "tag": "council",
+      "i18n": {
+        "pt": {
+          "date": "27 de set. de 2026",
+          "title": "Você escolheu o tema do Halloween",
+          "body": "Você sugeriu temas de Halloween no creature chat, o Conselho reduziu a lista a seis, e todo holder pôde votar no site. 296 de vocês votaram. Halloween Retrô Anos 90 venceu com 107 votos, à frente de Creepypasta (67) e Sangue, Tripas e Horror Corporal (47). O time de arte vai criar o grab de Halloween deste ano em torno dele."
+        },
+        "es": {
+          "date": "27 sept. 2026",
+          "title": "Elegiste el tema de Halloween",
+          "body": "Propusiste temas de Halloween en creature chat, el Consejo los redujo a seis y cada holder tuvo un voto en el sitio. Votaron 296 holders. Halloween retro de los 90 ganó con 107 votos, por delante de Creepypasta (67) y Sangre, vísceras y horror corporal (47). El equipo de arte construye a su alrededor el grab de Halloween de este año."
+        },
+        "fr": {
+          "date": "27 sept. 2026",
+          "title": "Vous avez choisi le thème d'Halloween",
+          "body": "Vous avez proposé des thèmes d'Halloween dans creature-chat, le Conseil en a retenu six, et chaque holder a pu voter sur le site. 296 d'entre vous ont voté. Halloween rétro années 90 l'a emporté avec 107 votes, devant Creepypasta (67) et Sang, tripes et body horror (47). L'équipe artistique construit le grab d'Halloween de cette année autour de ce thème."
+        },
+        "de": {
+          "date": "27. September 2026",
+          "title": "Ihr habt das Halloween-Thema gewählt",
+          "body": "Ihr habt im creature-chat Halloween-Themen vorgeschlagen, der Rat hat sie auf sechs eingegrenzt, und jeder Holder konnte auf der Seite abstimmen. 296 von euch haben abgestimmt. Retro-Halloween der 90er hat mit 107 Stimmen gewonnen, vor Creepypasta (67) und Blut, Gedärme & Body Horror (47). Das Art-Team baut den diesjährigen Halloween-Grab darum herum."
+        },
+        "ru": {
+          "date": "27 сентября 2026",
+          "title": "Вы выбрали тему Хэллоуина",
+          "body": "Вы предлагали темы для Хэллоуина в creature chat, Совет сузил их до шести, и каждый холдер проголосовал на сайте. Проголосовали 296 человек. Победил «Ретро-Хэллоуин 90-х» со 107 голосами, опередив «Крипипасту» (67) и «Кровь, кишки и боди-хоррор» (47). Команда художников строит вокруг него хэллоуинский граб этого года."
+        },
+        "tr": {
+          "date": "27 Eylül 2026",
+          "title": "Cadılar Bayramı temasını sen seçtin",
+          "body": "Cadılar Bayramı temalarını creature-chat'te sen önerdin, Konsey altıya indirdi ve her holder sitede oy verdi. 296 kişi oy kullandı. 107 oyla 90'lar Retro Cadılar Bayramı kazandı; onu Creepypasta (67) ve Kan, Bağırsak ve Beden Korkusu (47) izledi. Sanat ekibi bu yılın Cadılar Bayramı grab'ini bu temanın etrafında kuruyor."
+        }
+      }
+    },
+    {
+      "date": "September 4, 2026",
+      "title": "Gen 2 pets: the format problem is solved",
+      "body": "Gen 2 update #7: the slimes now work in the format the game uses, which had been holding up production. That means more detail in less time, and new trait slots may follow. The Sushi Slimes are nearly through production, and the Dessert Slimes have their palette, with a first look at honey, chocolate and an ice cream cone.",
+      "tag": "announcement",
+      "i18n": {
+        "pt": {
+          "date": "4 de set. de 2026",
+          "title": "Pets Gen 2: o problema de formato foi resolvido",
+          "body": "Atualização #7 da Gen 2: os slimes agora funcionam no formato que o jogo usa, o que vinha travando a produção. Isso significa mais detalhe em menos tempo, e novos slots de traits podem vir depois. Os Sushi Slimes estão quase saindo da produção, e os Dessert Slimes já têm paleta, com uma primeira prévia de mel, chocolate e uma casquinha de sorvete."
+        },
+        "es": {
+          "date": "4 sept. 2026",
+          "title": "Mascotas Gen 2: resuelto el problema del formato",
+          "body": "Actualización de Gen 2 #7: los slimes ya funcionan en el formato que usa el juego, que era lo que frenaba la producción. Eso significa más detalle en menos tiempo, y pueden llegar nuevos slots de traits. A los Sushi Slimes les queda muy poco de producción, y los Dessert Slimes ya tienen su paleta, con un primer vistazo a la miel, el chocolate y un cucurucho de helado."
+        },
+        "fr": {
+          "date": "4 sept. 2026",
+          "title": "Pets Gen 2 : le problème de format est réglé",
+          "body": "Mise à jour Gen 2 n° 7 : les slimes fonctionnent maintenant dans le format qu'utilise le jeu, ce qui bloquait la production. Cela veut dire plus de détails en moins de temps, et de nouveaux slots de traits pourraient suivre. Les Sushi Slimes ont presque fini leur production, et les Dessert Slimes ont leur palette, avec un premier aperçu du miel, du chocolat et d'un cornet de glace."
+        },
+        "de": {
+          "date": "4. September 2026",
+          "title": "Gen-2-Pets: Das Formatproblem ist gelöst",
+          "body": "Update Nr. 7 zu Gen 2: Die Slimes funktionieren jetzt in dem Format, das das Spiel nutzt, und genau das hatte die Produktion aufgehalten. Das heißt mehr Details in weniger Zeit, und neue Trait-Slots könnten folgen. Die Sushi Slimes sind fast durch die Produktion, und die Dessert Slimes haben ihre Palette, mit einem ersten Blick auf Honig, Schokolade und eine Eiswaffel."
+        },
+        "ru": {
+          "date": "4 сентября 2026",
+          "title": "Питомцы Gen 2: проблема с форматом решена",
+          "body": "Обновление Gen 2 №7: слаймы теперь работают в формате, который использует игра, а именно это тормозило производство. Это значит больше деталей за меньшее время, и могут появиться новые слоты трейтов. Sushi Slimes почти прошли производство, а у Dessert Slimes есть палитра и первый взгляд на мёд, шоколад и рожок мороженого."
+        },
+        "tr": {
+          "date": "4 Eylül 2026",
+          "title": "Gen 2 pet'leri: format sorunu çözüldü",
+          "body": "Gen 2 güncellemesi #7: slime'lar artık oyunun kullandığı formatta çalışıyor; üretimi bekleten şey buydu. Bu, daha kısa sürede daha fazla detay demek ve yeni trait slotları da gelebilir. Sushi Slimes üretimin sonuna yaklaştı, Dessert Slimes'ın paleti hazır ve bal, çikolata ve bir dondurma külahına ilk bakış paylaşıldı."
+        }
+      }
+    },
+    {
+      "date": "August 22, 2026",
+      "title": "First look at the Gen 2 pets",
+      "body": "Gen 2 update #6 showed the full Sushi Slimes lineup, built from the preview shared years ago, from the grumpy Salmon to the tiny Tako Sausage. The Dessert Slimes are next, and every set now has its own stop on the Gen 2 pets roadmap.",
+      "tag": "announcement",
+      "i18n": {
+        "pt": {
+          "date": "22 de ago. de 2026",
+          "title": "Primeira prévia dos pets Gen 2",
+          "body": "A atualização #6 da Gen 2 mostrou a linha completa dos Sushi Slimes, criada a partir da prévia divulgada anos atrás, do Salmon rabugento ao pequenino Tako Sausage. Os Dessert Slimes vêm a seguir, e cada set agora tem sua própria parada no roadmap dos pets Gen 2."
+        },
+        "es": {
+          "date": "22 ago. 2026",
+          "title": "Primer vistazo a las mascotas Gen 2",
+          "body": "La actualización de Gen 2 #6 mostró la lista completa de los Sushi Slimes, hecha a partir del adelanto compartido hace años, del gruñón Salmon al diminuto Tako Sausage. Los Dessert Slimes son los siguientes, y cada set ya tiene su propia parada en el roadmap de mascotas Gen 2."
+        },
+        "fr": {
+          "date": "22 août 2026",
+          "title": "Premier aperçu des pets Gen 2",
+          "body": "La mise à jour Gen 2 n° 6 a montré toute la gamme des Sushi Slimes, construite à partir de l'aperçu partagé il y a des années, du Salmon grognon au minuscule Tako Sausage. Les Dessert Slimes sont les suivants, et chaque set a maintenant sa propre étape sur le roadmap des pets Gen 2."
+        },
+        "de": {
+          "date": "22. August 2026",
+          "title": "Erster Blick auf die Gen-2-Pets",
+          "body": "Update Nr. 6 zu Gen 2 zeigte die ganze Reihe der Sushi Slimes, gebaut aus der vor Jahren geteilten Vorschau, vom grummeligen Salmon bis zur winzigen Tako Sausage. Als Nächstes kommen die Dessert Slimes, und jedes Set hat jetzt eine eigene Station auf der Roadmap der Pets aus Gen 2."
+        },
+        "ru": {
+          "date": "22 августа 2026",
+          "title": "Первый взгляд на питомцев Gen 2",
+          "body": "Обновление Gen 2 №6 показало всю линейку Sushi Slimes, построенную на превью, показанном годы назад, от ворчливого Salmon до крошечного Tako Sausage. Следующими идут Dessert Slimes, и у каждого набора теперь своя остановка на роадмапе питомцев Gen 2."
+        },
+        "tr": {
+          "date": "22 Ağustos 2026",
+          "title": "Gen 2 pet'lerine ilk bakış",
+          "body": "Gen 2 güncellemesi #6, yıllar önce paylaşılan ön gösterimden yapılan Sushi Slimes kadrosunun tamamını gösterdi: huysuz Salmon'dan minik Tako Sausage'a kadar. Sırada Dessert Slimes var ve artık her setin Gen 2 pet yol haritasında kendi durağı var."
+        }
+      }
+    },
+    {
       "date": "August 12, 2026",
       "title": "Ghost Town drop",
       "body": "HCC revealed its next drop: Ghost Town, a 13-item set. The lore: a boomtown that ran out of things to get excited about, slowly dissolving into glowing green slime as its people turn into gooey, translucent ghosts. Dropping soon.",
@@ -610,6 +800,690 @@
     }
   ],
   "site": [
+    {
+      "date": "September 27, 2026",
+      "title": "References and live counts on polls",
+      "body": "A poll option can now carry a sheet of reference images, so you can see what a theme means before you vote, even signed out. The Halloween theme poll also showed its running totals while voting was open, refreshed every 30 seconds.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "27 de set. de 2026",
+          "title": "Referências e contagem ao vivo nas enquetes",
+          "body": "Uma opção de enquete agora pode trazer uma coleção de imagens de referência, para você ver o que um tema significa antes de votar, mesmo sem entrar. A enquete do tema de Halloween também mostrou os totais parciais enquanto a votação estava aberta, atualizados a cada 30 segundos."
+        },
+        "es": {
+          "date": "27 sept. 2026",
+          "title": "Referencias y recuentos en vivo en las encuestas",
+          "body": "Una opción de encuesta ahora puede llevar una hoja de imágenes de referencia, para que veas qué significa un tema antes de votar, incluso sin iniciar sesión. La encuesta del tema de Halloween también mostró sus totales provisionales mientras la votación estaba abierta, actualizados cada 30 segundos."
+        },
+        "fr": {
+          "date": "27 sept. 2026",
+          "title": "Références et décomptes en direct dans les sondages",
+          "body": "Une option de sondage peut maintenant avoir une planche d'images de référence, pour voir ce qu'un thème veut dire avant de voter, même sans être connecté. Le sondage sur le thème d'Halloween a aussi affiché ses totaux en cours pendant le vote, actualisés toutes les 30 secondes."
+        },
+        "de": {
+          "date": "27. September 2026",
+          "title": "Referenzen und Live-Zahlen bei Umfragen",
+          "body": "Eine Umfrageoption kann jetzt eine Reihe von Referenzbildern mitbringen, damit du siehst, was ein Thema bedeutet, bevor du abstimmst, auch ohne Anmeldung. Die Umfrage zum Halloween-Thema zeigte außerdem ihre laufenden Summen, solange die Abstimmung offen war, alle 30 Sekunden aktualisiert."
+        },
+        "ru": {
+          "date": "27 сентября 2026",
+          "title": "Референсы и живые итоги в опросах",
+          "body": "Теперь к варианту опроса можно приложить подборку референсов, так что вы видите, что значит тема, ещё до голосования, даже без входа. Опрос о теме Хэллоуина также показывал текущие итоги, пока голосование было открыто, с обновлением каждые 30 секунд."
+        },
+        "tr": {
+          "date": "27 Eylül 2026",
+          "title": "Anketlerde referanslar ve canlı sayımlar",
+          "body": "Bir anket seçeneği artık bir referans görsel sayfası taşıyabiliyor; böylece oy vermeden önce, giriş yapmamış olsan bile, bir temanın ne anlama geldiğini görebilirsin. Cadılar Bayramı tema anketi ayrıca oylama açıkken anlık toplamlarını 30 saniyede bir yenileyerek gösterdi."
+        }
+      }
+    },
+    {
+      "date": "September 15, 2026",
+      "title": "Our own LAND order book",
+      "body": "LAND listings now go on our own order book as well as OpenSea's, both at once by default. A sale through ours skips OpenSea's 1% fee, so you keep more, and it takes USDC, which OpenSea doesn't for LAND.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "15 de set. de 2026",
+          "title": "Nosso próprio livro de ofertas de LAND",
+          "body": "Os anúncios de LAND agora vão para o nosso próprio livro de ofertas e também para o da OpenSea, os dois ao mesmo tempo por padrão. Uma venda pelo nosso livro não paga a taxa de 1% da OpenSea, então você fica com mais, e ele aceita USDC, que a OpenSea não aceita para LAND."
+        },
+        "es": {
+          "date": "15 sept. 2026",
+          "title": "Nuestro propio libro de órdenes de LAND",
+          "body": "Los anuncios de LAND ahora van a nuestro propio libro de órdenes además del de OpenSea, a los dos a la vez por defecto. Una venta por el nuestro se salta la comisión del 1% de OpenSea, así que te quedas con más, y acepta USDC, que OpenSea no acepta para LAND."
+        },
+        "fr": {
+          "date": "15 sept. 2026",
+          "title": "Notre propre carnet d'ordres LAND",
+          "body": "Les annonces de LAND vont maintenant dans notre propre carnet d'ordres en plus de celui d'OpenSea, les deux à la fois par défaut. Une vente par le nôtre évite les frais de 1 % d'OpenSea, vous gardez donc plus, et il accepte l'USDC, ce qu'OpenSea ne fait pas pour le LAND."
+        },
+        "de": {
+          "date": "15. September 2026",
+          "title": "Unser eigenes LAND-Orderbuch",
+          "body": "LAND-Listings landen jetzt in unserem eigenen Orderbuch und in dem von OpenSea, standardmäßig in beiden zugleich. Ein Verkauf über unseres spart die 1 % Gebühr von OpenSea, du behältst also mehr, und es nimmt USDC an, was OpenSea bei LAND nicht tut."
+        },
+        "ru": {
+          "date": "15 сентября 2026",
+          "title": "Наша собственная книга ордеров LAND",
+          "body": "Лоты LAND теперь попадают и в нашу собственную книгу ордеров, и в книгу OpenSea, по умолчанию сразу в обе. Продажа через нашу обходится без комиссии OpenSea 1%, так что вам остаётся больше, и она принимает USDC, который OpenSea для LAND не принимает."
+        },
+        "tr": {
+          "date": "15 Eylül 2026",
+          "title": "Kendi LAND emir defterimiz",
+          "body": "LAND ilanları artık OpenSea'ninkinin yanı sıra kendi emir defterimize de giriyor; varsayılan olarak ikisine birden. Bizimki üzerinden yapılan bir satış OpenSea'nin %1 ücretini atlar, yani daha fazlası sende kalır, ve OpenSea'nin LAND için kabul etmediği USDC'yi kabul eder."
+        }
+      }
+    },
+    {
+      "date": "September 15, 2026",
+      "title": "The price you see is the price you pay",
+      "body": "Every price in the marketplace is now what a buyer pays, fees included, and your own listings show both numbers: the buyer's price and what you receive. A Creature sale carries 7% in fees on top of your price, a 5% creator royalty and 2% to Immutable. We still take nothing.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "15 de set. de 2026",
+          "title": "O preço que você vê é o preço que você paga",
+          "body": "Todo preço no marketplace agora é o que o comprador paga, com as taxas incluídas, e seus próprios anúncios mostram os dois números: o preço do comprador e o que você recebe. Uma venda de Creature tem 7% de taxas por cima do seu preço: um royalty de 5% do criador e 2% para a Immutable. Nós continuamos sem cobrar nada."
+        },
+        "es": {
+          "date": "15 sept. 2026",
+          "title": "El precio que ves es el precio que pagas",
+          "body": "Cada precio del marketplace es ahora lo que paga un comprador, con comisiones incluidas, y tus propios anuncios muestran las dos cifras: el precio del comprador y lo que recibes tú. Una venta de Creature lleva un 7% en comisiones sobre tu precio: un 5% de regalía para el creador y un 2% para Immutable. Nosotros seguimos sin cobrar nada."
+        },
+        "fr": {
+          "date": "15 sept. 2026",
+          "title": "Le prix affiché est le prix payé",
+          "body": "Chaque prix du marketplace est maintenant ce que paie un acheteur, frais compris, et vos propres annonces affichent les deux chiffres : le prix pour l'acheteur et ce que vous recevez. Une vente de Creature porte 7 % de frais en plus de votre prix : 5 % de royalties créateur et 2 % pour Immutable. Nous ne prenons toujours rien."
+        },
+        "de": {
+          "date": "15. September 2026",
+          "title": "Der Preis, den du siehst, ist der Preis, den du zahlst",
+          "body": "Jeder Preis im Marktplatz ist jetzt das, was ein Käufer zahlt, Gebühren inklusive, und deine eigenen Listings zeigen beide Zahlen: den Preis für den Käufer und das, was du erhältst. Bei einem Creature-Verkauf kommen 7 % Gebühren auf deinen Preis, 5 % Creator-Royalty und 2 % an Immutable. Wir nehmen weiterhin nichts."
+        },
+        "ru": {
+          "date": "15 сентября 2026",
+          "title": "Цена, которую вы видите, это цена, которую вы платите",
+          "body": "Каждая цена в маркетплейсе теперь показывает, сколько платит покупатель, с комиссиями, а ваши собственные лоты показывают обе цифры: цену для покупателя и то, что получите вы. Продажа существа несёт 7% комиссий сверх вашей цены: 5% роялти автору и 2% Immutable. Мы по-прежнему ничего не берём."
+        },
+        "tr": {
+          "date": "15 Eylül 2026",
+          "title": "Gördüğün fiyat, ödediğin fiyat",
+          "body": "Pazar yerindeki her fiyat artık alıcının ödediği, ücretler dahil tutar ve kendi ilanların iki rakamı birden gösteriyor: alıcının fiyatı ve senin alacağın. Bir Creature satışında fiyatının üstüne %7 ücret eklenir: %5 yaratıcı telifi ve Immutable'a %2. Biz hâlâ hiçbir şey almıyoruz."
+        }
+      }
+    },
+    {
+      "date": "September 14, 2026",
+      "title": "Browse both collections at once",
+      "body": "An All chip beside Creatures and LAND puts both collections in one grid, and Sales History and its chart cover both too. Open any tile and the marketplace switches to the right network for it.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "14 de set. de 2026",
+          "title": "Veja as duas coleções de uma vez",
+          "body": "Um chip Tudo ao lado de Creatures e LAND coloca as duas coleções numa só grade, e o Histórico de vendas e o gráfico dele também cobrem as duas. Abra qualquer item e o marketplace muda para a rede certa dele."
+        },
+        "es": {
+          "date": "14 sept. 2026",
+          "title": "Explora las dos colecciones a la vez",
+          "body": "Un chip Todo junto a Creatures y LAND pone las dos colecciones en una sola cuadrícula, y el Historial de ventas y su gráfico también cubren las dos. Abre cualquier ficha y el marketplace cambia a la red correcta para ella."
+        },
+        "fr": {
+          "date": "14 sept. 2026",
+          "title": "Parcourez les deux collections à la fois",
+          "body": "Un bouton Tout à côté de Creatures et LAND réunit les deux collections dans une seule grille, et l'Historique des ventes et son graphique couvrent aussi les deux. Ouvrez n'importe quelle vignette et le marketplace passe sur le bon réseau pour elle."
+        },
+        "de": {
+          "date": "14. September 2026",
+          "title": "Beide Sammlungen auf einmal durchstöbern",
+          "body": "Ein Chip Alle neben Creatures und LAND zeigt beide Sammlungen in einem Raster, und auch die Verkaufshistorie und ihr Diagramm decken beide ab. Öffne eine Kachel, und der Marktplatz wechselt für sie ins richtige Netzwerk."
+        },
+        "ru": {
+          "date": "14 сентября 2026",
+          "title": "Обе коллекции сразу",
+          "body": "Чип «Все» рядом с Creatures и LAND собирает обе коллекции в одну сетку, и «История продаж» с её графиком тоже охватывает обе. Откройте любую карточку, и маркетплейс сам переключится на нужную сеть."
+        },
+        "tr": {
+          "date": "14 Eylül 2026",
+          "title": "İki koleksiyona aynı anda göz at",
+          "body": "Creatures ve LAND'in yanındaki Tümü etiketi iki koleksiyonu tek bir ızgarada topluyor; Satış Geçmişi ve grafiği de ikisini kapsıyor. Herhangi bir kutucuğu aç, pazar yeri onun için doğru ağa geçer."
+        }
+      }
+    },
+    {
+      "date": "September 13, 2026",
+      "title": "A wallet's whole history",
+      "body": "Search a wallet in Sales History and you now see its transfers and mints as well as its sales, back to 2021, with a switch between everything, sales and transfers. For LAND, a toggle shows parcels withdrawn from the game beside the sales.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "13 de set. de 2026",
+          "title": "O histórico completo de uma carteira",
+          "body": "Pesquise uma carteira no Histórico de vendas e agora você vê as transferências e os mints dela além das vendas, desde 2021, com um seletor entre tudo, vendas e transferências. No LAND, uma opção mostra os lotes retirados do jogo ao lado das vendas."
+        },
+        "es": {
+          "date": "13 sept. 2026",
+          "title": "Todo el historial de una wallet",
+          "body": "Busca una wallet en el Historial de ventas y ahora verás sus transferencias y sus mints además de sus ventas, desde 2021, con un selector entre todo, ventas y transferencias. Para el LAND, un interruptor muestra las parcelas retiradas del juego junto a las ventas."
+        },
+        "fr": {
+          "date": "13 sept. 2026",
+          "title": "Tout l'historique d'un wallet",
+          "body": "Cherchez un wallet dans l'Historique des ventes et vous voyez maintenant ses transferts et ses mints en plus de ses ventes, jusqu'en 2021, avec un bouton pour passer de tout aux ventes ou aux transferts. Pour le LAND, une option affiche les parcelles retirées du jeu à côté des ventes."
+        },
+        "de": {
+          "date": "13. September 2026",
+          "title": "Die ganze Geschichte einer Wallet",
+          "body": "Suchst du in der Verkaufshistorie nach einer Wallet, siehst du jetzt neben ihren Verkäufen auch ihre Transfers und Mints, bis zurück ins Jahr 2021, mit einem Schalter zwischen Alles, Verkäufen und Transfers. Bei LAND zeigt ein Schalter neben den Verkäufen auch Grundstücke, die aus dem Spiel abgehoben wurden."
+        },
+        "ru": {
+          "date": "13 сентября 2026",
+          "title": "Вся история кошелька",
+          "body": "Найдите кошелёк в «Истории продаж», и теперь вы увидите не только его продажи, но и переводы и минты, вплоть до 2021 года, с переключателем между «Всё», «Продажи» и «Переводы». Для LAND переключатель показывает рядом с продажами участки, выведенные из игры."
+        },
+        "tr": {
+          "date": "13 Eylül 2026",
+          "title": "Bir cüzdanın tüm geçmişi",
+          "body": "Satış Geçmişi'nde bir cüzdan arattığında artık satışlarının yanı sıra transferlerini ve mint'lerini de 2021'e kadar görürsün; her şey, satışlar ve transferler arasında geçiş yapabilirsin. LAND için bir düğme, oyundan çekilen parselleri satışların yanında gösterir."
+        }
+      }
+    },
+    {
+      "date": "September 10, 2026",
+      "title": "Change a listing's price",
+      "body": "Every one of your listings now has an Edit price button. On a Creature it's always free. On LAND a cut is free too, and a raise needs one on-chain cancel first, with the gas quoted before your wallet opens.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "10 de set. de 2026",
+          "title": "Mude o preço de um anúncio",
+          "body": "Cada um dos seus anúncios agora tem um botão Editar preço. Numa Creature, é sempre grátis. No LAND, baixar o preço também é grátis, e subir exige antes um cancelamento on-chain, com o gas informado antes de sua carteira abrir."
+        },
+        "es": {
+          "date": "10 sept. 2026",
+          "title": "Cambia el precio de un anuncio",
+          "body": "Cada uno de tus anuncios tiene ahora un botón Editar precio. En una Creature siempre es gratis. En el LAND, bajarlo también es gratis, y subirlo requiere antes una cancelación on-chain, con el gas cotizado antes de que se abra tu wallet."
+        },
+        "fr": {
+          "date": "10 sept. 2026",
+          "title": "Changez le prix d'une annonce",
+          "body": "Chacune de vos annonces a maintenant un bouton Modifier le prix. Sur une Creature, c'est toujours gratuit. Sur le LAND, une baisse est gratuite aussi, et une hausse demande d'abord une annulation on-chain, avec le gas indiqué avant que votre wallet s'ouvre."
+        },
+        "de": {
+          "date": "10. September 2026",
+          "title": "Den Preis eines Listings ändern",
+          "body": "Jedes deiner Listings hat jetzt einen Button Preis ändern. Bei einer Creature ist das immer kostenlos. Bei LAND ist eine Senkung ebenfalls kostenlos, und für eine Erhöhung braucht es zuerst eine Stornierung on-chain; das Gas dafür siehst du, bevor sich deine Wallet öffnet."
+        },
+        "ru": {
+          "date": "10 сентября 2026",
+          "title": "Меняйте цену лота",
+          "body": "У каждого вашего лота теперь есть кнопка «Изменить цену». Для существа это всегда бесплатно. Для LAND снижение тоже бесплатное, а для повышения сначала нужна одна отмена в блокчейне, и стоимость газа показывается до того, как откроется кошелёк."
+        },
+        "tr": {
+          "date": "10 Eylül 2026",
+          "title": "Bir ilanın fiyatını değiştir",
+          "body": "Her ilanında artık bir Fiyatı düzenle düğmesi var. Creature'larda bu her zaman ücretsiz. LAND'de fiyatı düşürmek de ücretsiz; artırmak için önce zincir üstünde bir iptal gerekir ve gas, cüzdanın açılmadan önce gösterilir."
+        }
+      }
+    },
+    {
+      "date": "September 9, 2026",
+      "title": "The marketplace on your phone",
+      "body": "No computer? The marketplace works inside the MetaMask app's browser. The guide walks you through it tap by tap, and on a phone the marketplace now offers to open itself in MetaMask instead of asking you to install it. Share the steps with hcc.highrise.game/guides/marketplace/phone.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "9 de set. de 2026",
+          "title": "O marketplace no seu celular",
+          "body": "Sem computador? O marketplace funciona dentro do navegador do app da MetaMask. O guia mostra o caminho toque a toque e, no celular, o marketplace agora se oferece para abrir na MetaMask em vez de pedir que você a instale. Compartilhe os passos com hcc.highrise.game/guides/marketplace/phone."
+        },
+        "es": {
+          "date": "9 sept. 2026",
+          "title": "El marketplace en tu móvil",
+          "body": "¿Sin computadora? El marketplace funciona dentro del navegador de la app de MetaMask. La guía te lleva toque a toque, y en el móvil el marketplace ahora se ofrece a abrirse en MetaMask en vez de pedirte que lo instales. Comparte los pasos con hcc.highrise.game/guides/marketplace/phone."
+        },
+        "fr": {
+          "date": "9 sept. 2026",
+          "title": "Le marketplace sur votre téléphone",
+          "body": "Pas d'ordinateur ? Le marketplace fonctionne dans le navigateur de l'app MetaMask. Le guide vous accompagne touche par touche, et sur téléphone le marketplace propose maintenant de s'ouvrir lui-même dans MetaMask au lieu de vous demander de l'installer. Partagez les étapes avec hcc.highrise.game/guides/marketplace/phone."
+        },
+        "de": {
+          "date": "9. September 2026",
+          "title": "Der Marktplatz auf deinem Handy",
+          "body": "Kein Computer? Der Marktplatz funktioniert im Browser der MetaMask-App. Die Anleitung führt dich Tipp für Tipp hindurch, und am Handy bietet der Marktplatz jetzt an, sich in MetaMask zu öffnen, statt dich zu bitten, es zu installieren. Teile die Schritte mit hcc.highrise.game/guides/marketplace/phone."
+        },
+        "ru": {
+          "date": "9 сентября 2026",
+          "title": "Маркетплейс на телефоне",
+          "body": "Нет компьютера? Маркетплейс работает в браузере приложения MetaMask. Гайд проведёт вас нажатие за нажатием, а на телефоне маркетплейс теперь предлагает открыть себя в MetaMask, а не просит его установить. Поделиться шагами можно по ссылке hcc.highrise.game/guides/marketplace/phone."
+        },
+        "tr": {
+          "date": "9 Eylül 2026",
+          "title": "Telefonunda pazar yeri",
+          "body": "Bilgisayarın yok mu? Pazar yeri MetaMask uygulamasının tarayıcısında çalışıyor. Rehber seni dokunuş dokunuş yönlendiriyor ve telefonda pazar yeri artık MetaMask'i yüklemeni istemek yerine kendini MetaMask'te açmayı teklif ediyor. Adımları hcc.highrise.game/guides/marketplace/phone ile paylaş."
+        }
+      }
+    },
+    {
+      "date": "September 7, 2026",
+      "title": "What should I charge?",
+      "body": "When you list, a new panel suggests three prices: one to sell this week, a fair one, and one worth waiting for. It works from your asset's tier, its most wanted trait and how those have sold, and it shows its working so you can check it.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "7 de set. de 2026",
+          "title": "Quanto devo cobrar?",
+          "body": "Quando você anuncia, um novo painel sugere três preços: um para vender esta semana, um justo e um que vale esperar. Ele parte do tier do seu ativo, do trait mais procurado dele e de como esses têm sido vendidos, e mostra o cálculo para você conferir."
+        },
+        "es": {
+          "date": "7 sept. 2026",
+          "title": "¿Cuánto debería pedir?",
+          "body": "Cuando pones algo en venta, un panel nuevo sugiere tres precios: uno para vender esta semana, uno justo y uno por el que vale la pena esperar. Se basa en el tier de tu activo, su trait más buscado y cómo se han vendido esos, y muestra sus cálculos para que puedas revisarlos."
+        },
+        "fr": {
+          "date": "7 sept. 2026",
+          "title": "Quel prix demander ?",
+          "body": "Quand vous mettez en vente, un nouveau panneau propose trois prix : un pour vendre cette semaine, un prix juste, et un qui vaut la peine d'attendre. Il se base sur le tier de votre actif, son trait le plus recherché et la façon dont ils se sont vendus, et il montre son calcul pour que vous puissiez le vérifier."
+        },
+        "de": {
+          "date": "7. September 2026",
+          "title": "Was soll ich verlangen?",
+          "body": "Wenn du listest, schlägt ein neues Feld drei Preise vor: einen, um diese Woche zu verkaufen, einen fairen und einen, bei dem sich das Warten lohnt. Es geht von der Stufe deines Assets aus, von seinem gefragtesten Trait und davon, wie sich diese verkauft haben, und es zeigt seinen Rechenweg, damit du ihn prüfen kannst."
+        },
+        "ru": {
+          "date": "7 сентября 2026",
+          "title": "Какую цену поставить?",
+          "body": "Когда вы выставляете лот, новая панель предлагает три цены: чтобы продать на этой неделе, справедливую и ту, которую стоит подождать. Она опирается на тир вашего актива, его самый востребованный трейт и то, как они продавались, и показывает расчёт, чтобы вы могли его проверить."
+        },
+        "tr": {
+          "date": "7 Eylül 2026",
+          "title": "Ne kadar istemeliyim?",
+          "body": "Listelerken yeni bir panel üç fiyat öneriyor: bu hafta satmak için bir fiyat, adil bir fiyat ve beklemeye değer bir fiyat. Varlığının seviyesine, en çok aranan trait'ine ve bunların nasıl satıldığına bakar ve hesabını gösterir, böylece kontrol edebilirsin."
+        }
+      }
+    },
+    {
+      "date": "September 6, 2026",
+      "title": "Where to sell your ETH",
+      "body": "The Cash out guide now goes all the way to your bank. It lays out the four places people sell their ETH (MetaMask Sell, Coinbase, Kraken and Binance), and a country picker shows which ones work where you live.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "6 de set. de 2026",
+          "title": "Onde vender seu ETH",
+          "body": "O guia Sacar agora vai até o seu banco. Ele mostra os quatro lugares onde as pessoas vendem ETH (MetaMask Sell, Coinbase, Kraken e Binance), e um seletor de país mostra quais funcionam onde você mora."
+        },
+        "es": {
+          "date": "6 sept. 2026",
+          "title": "Dónde vender tu ETH",
+          "body": "La guía para retirar ahora llega hasta tu banco. Presenta los cuatro sitios donde la gente vende su ETH (MetaMask Sell, Coinbase, Kraken y Binance), y un selector de país muestra cuáles funcionan donde vives."
+        },
+        "fr": {
+          "date": "6 sept. 2026",
+          "title": "Où vendre votre ETH",
+          "body": "Le guide Encaisser va maintenant jusqu'à votre banque. Il présente les quatre endroits où les gens vendent leur ETH (MetaMask Sell, Coinbase, Kraken et Binance), et un choix de pays montre lesquels fonctionnent là où vous vivez."
+        },
+        "de": {
+          "date": "6. September 2026",
+          "title": "Wo du dein ETH verkaufst",
+          "body": "Die Anleitung zum Auszahlen geht jetzt bis zu deiner Bank. Sie zeigt die vier Orte, an denen Leute ihr ETH verkaufen (MetaMask Sell, Coinbase, Kraken und Binance), und eine Länderauswahl zeigt, welche davon dort funktionieren, wo du lebst."
+        },
+        "ru": {
+          "date": "6 сентября 2026",
+          "title": "Где продать ваш ETH",
+          "body": "Гайд «Вывод денег» теперь доводит до самого банка. В нём четыре места, где люди продают ETH (MetaMask Sell, Coinbase, Kraken и Binance), а выбор страны показывает, какие из них работают там, где вы живёте."
+        },
+        "tr": {
+          "date": "6 Eylül 2026",
+          "title": "ETH'ni nerede satarsın",
+          "body": "Nakde çevir rehberi artık bankana kadar gidiyor. İnsanların ETH sattığı dört yeri (MetaMask Sell, Coinbase, Kraken ve Binance) anlatıyor ve bir ülke seçici, yaşadığın yerde hangilerinin çalıştığını gösteriyor."
+        }
+      }
+    },
+    {
+      "date": "September 6, 2026",
+      "title": "Search the whole site",
+      "body": "A search button now sits in the header on every page, or press / or Ctrl-K. One box finds pages, Creatures, traits, items, releases and glossary terms.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "6 de set. de 2026",
+          "title": "Busque no site inteiro",
+          "body": "Um botão de busca agora fica no cabeçalho de toda página, ou aperte / ou Ctrl-K. Uma única caixa encontra páginas, Creatures, traits, itens, lançamentos e termos do glossário."
+        },
+        "es": {
+          "date": "6 sept. 2026",
+          "title": "Busca en todo el sitio",
+          "body": "Ahora hay un botón de búsqueda en la cabecera de cada página, o pulsa / o Ctrl-K. Una sola casilla encuentra páginas, Creatures, traits, items, lanzamientos y términos del glosario."
+        },
+        "fr": {
+          "date": "6 sept. 2026",
+          "title": "Cherchez sur tout le site",
+          "body": "Un bouton de recherche se trouve maintenant dans l'en-tête de chaque page, ou appuyez sur / ou Ctrl-K. Une seule case trouve les pages, les Creatures, les traits, les objets, les sorties et les termes du glossaire."
+        },
+        "de": {
+          "date": "6. September 2026",
+          "title": "Die ganze Seite durchsuchen",
+          "body": "In der Kopfzeile jeder Seite sitzt jetzt ein Such-Button, oder drück / oder Ctrl-K. Ein Feld findet Seiten, Creatures, Traits, Items, Releases und Glossarbegriffe."
+        },
+        "ru": {
+          "date": "6 сентября 2026",
+          "title": "Поиск по всему сайту",
+          "body": "Кнопка поиска теперь есть в шапке каждой страницы, или нажмите / либо Ctrl-K. Одно поле находит страницы, существ, трейты, предметы, релизы и термины глоссария."
+        },
+        "tr": {
+          "date": "6 Eylül 2026",
+          "title": "Tüm sitede ara",
+          "body": "Artık her sayfanın üst kısmında bir arama düğmesi var; ya da / veya Ctrl-K tuşuna bas. Tek bir kutu sayfaları, Creature'ları, trait'leri, eşyaları, çıkışları ve sözlük terimlerini bulur."
+        }
+      }
+    },
+    {
+      "date": "September 6, 2026",
+      "title": "Market history back to 2021",
+      "body": "The Market chart and Sales History now reach back past the move to Immutable zkEVM: Creatures to November 2021, LAND to April 2022. Each old sale keeps the dollar rate of the day it sold. Sales History also gained a price chart, with quick ranges from 7 days to all time.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "6 de set. de 2026",
+          "title": "Histórico de mercado desde 2021",
+          "body": "O gráfico do Mercado e o Histórico de vendas agora vão além da mudança para a Immutable zkEVM: Creatures até novembro de 2021, LAND até abril de 2022. Cada venda antiga mantém a cotação do dólar do dia em que foi feita. O Histórico de vendas também ganhou um gráfico de preços, com períodos rápidos de 7 dias até todo o período."
+        },
+        "es": {
+          "date": "6 sept. 2026",
+          "title": "Historial de mercado desde 2021",
+          "body": "El gráfico del Mercado y el Historial de ventas ahora llegan más atrás de la migración a Immutable zkEVM: las Creatures hasta noviembre de 2021, el LAND hasta abril de 2022. Cada venta antigua conserva el tipo de cambio del dólar del día en que se vendió. El Historial de ventas también incorporó un gráfico de precios, con intervalos rápidos de 7 días a todo el historial."
+        },
+        "fr": {
+          "date": "6 sept. 2026",
+          "title": "L'historique du marché remonte à 2021",
+          "body": "Le graphique du Marché et l'Historique des ventes remontent maintenant au-delà du passage sur Immutable zkEVM : les Creatures jusqu'en novembre 2021, le LAND jusqu'en avril 2022. Chaque ancienne vente garde le cours du dollar du jour où elle s'est faite. L'Historique des ventes a aussi gagné un graphique des prix, avec des périodes rapides allant de 7 jours à depuis le début."
+        },
+        "de": {
+          "date": "6. September 2026",
+          "title": "Markthistorie bis 2021",
+          "body": "Das Markt-Diagramm und die Verkaufshistorie reichen jetzt über den Umzug zu Immutable zkEVM hinaus zurück: Creatures bis November 2021, LAND bis April 2022. Jeder alte Verkauf behält den Dollarkurs des Tages, an dem er stattfand. Die Verkaufshistorie hat außerdem ein Preisdiagramm bekommen, mit schnellen Zeiträumen von 7 Tagen bis Gesamt."
+        },
+        "ru": {
+          "date": "6 сентября 2026",
+          "title": "История рынка с 2021 года",
+          "body": "График «Рынка» и «История продаж» теперь уходят дальше переезда в Immutable zkEVM: существа до ноября 2021 года, LAND до апреля 2022 года. Каждая старая продажа сохраняет курс доллара на день продажи. В «Истории продаж» также появился график цен с быстрыми периодами от 7 дней до всего времени."
+        },
+        "tr": {
+          "date": "6 Eylül 2026",
+          "title": "2021'e kadar piyasa geçmişi",
+          "body": "Piyasa grafiği ve Satış Geçmişi artık Immutable zkEVM'e taşınmanın öncesine uzanıyor: Creature'lar Kasım 2021'e, LAND Nisan 2022'ye kadar. Her eski satış, satıldığı günün dolar kurunu koruyor. Satış Geçmişi'ne ayrıca 7 günden tüm zamanlara hızlı aralıkları olan bir fiyat grafiği eklendi."
+        }
+      }
+    },
+    {
+      "date": "September 4, 2026",
+      "title": "A link for every announcement",
+      "body": "Each announcement now has its own page, so you can share one post instead of the whole feed.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "4 de set. de 2026",
+          "title": "Um link para cada aviso",
+          "body": "Cada aviso agora tem sua própria página, para você compartilhar um post em vez do feed inteiro."
+        },
+        "es": {
+          "date": "4 sept. 2026",
+          "title": "Un enlace para cada anuncio",
+          "body": "Cada anuncio tiene ahora su propia página, así que puedes compartir un solo post en vez de todo el feed."
+        },
+        "fr": {
+          "date": "4 sept. 2026",
+          "title": "Un lien pour chaque annonce",
+          "body": "Chaque annonce a maintenant sa propre page, pour partager un seul post au lieu de tout le fil."
+        },
+        "de": {
+          "date": "4. September 2026",
+          "title": "Ein Link für jede Ankündigung",
+          "body": "Jede Ankündigung hat jetzt eine eigene Seite, du kannst also einen einzelnen Post teilen statt den ganzen Feed."
+        },
+        "ru": {
+          "date": "4 сентября 2026",
+          "title": "Ссылка на каждое объявление",
+          "body": "У каждого объявления теперь своя страница, так что можно поделиться одним постом, а не всей лентой."
+        },
+        "tr": {
+          "date": "4 Eylül 2026",
+          "title": "Her duyuruya bir bağlantı",
+          "body": "Her duyurunun artık kendi sayfası var, böylece akışın tamamı yerine tek bir gönderiyi paylaşabilirsin."
+        }
+      }
+    },
+    {
+      "date": "August 31, 2026",
+      "title": "A glossary of the club's words",
+      "body": "Collections now has a glossary: every word the club uses, from grab to rarity rank, on its own page with its facts and history. Across the site, the first mention of a term links to its entry.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "31 de ago. de 2026",
+          "title": "Um glossário das palavras do clube",
+          "body": "As Coleções agora têm um glossário: cada palavra que o clube usa, de grab a rank de raridade, numa página própria com fatos e história. Em todo o site, a primeira menção a um termo leva ao verbete dele."
+        },
+        "es": {
+          "date": "31 ago. 2026",
+          "title": "Un glosario con las palabras del club",
+          "body": "Colecciones tiene ahora un glosario: cada palabra que usa el club, de grab a rango de rareza, en su propia página con sus datos y su historia. En todo el sitio, la primera mención de un término enlaza a su entrada."
+        },
+        "fr": {
+          "date": "31 août 2026",
+          "title": "Un glossaire des mots du club",
+          "body": "Collections a maintenant un glossaire : chaque mot qu'utilise le club, de grab à rang de rareté, sur sa propre page avec ses faits et son histoire. Partout sur le site, la première mention d'un terme renvoie à sa fiche."
+        },
+        "de": {
+          "date": "31. August 2026",
+          "title": "Ein Glossar der Club-Begriffe",
+          "body": "Kollektionen hat jetzt ein Glossar: jedes Wort, das der Club nutzt, von Grab bis Seltenheitsrang, auf einer eigenen Seite mit Fakten und Geschichte. Auf der ganzen Seite verlinkt die erste Erwähnung eines Begriffs auf seinen Eintrag."
+        },
+        "ru": {
+          "date": "31 августа 2026",
+          "title": "Глоссарий слов клуба",
+          "body": "В «Коллекциях» теперь есть глоссарий: каждое слово, которым пользуется клуб, от граба до ранга редкости, на отдельной странице с фактами и историей. По всему сайту первое упоминание термина ведёт на его статью."
+        },
+        "tr": {
+          "date": "31 Ağustos 2026",
+          "title": "Kulübün kelimeleri için bir sözlük",
+          "body": "Koleksiyonlar'da artık bir sözlük var: kulübün kullandığı her kelime, grab'den nadirlik sırasına kadar, bilgileri ve geçmişiyle kendi sayfasında. Site genelinde bir terimin ilk geçtiği yer, onun sözlük kaydına bağlanır."
+        }
+      }
+    },
+    {
+      "date": "August 28, 2026",
+      "title": "A page for everything the club made",
+      "body": "Every release, item, trait and Creature now has its own page in Collections, and the pages link to each other: an item lists every release it came in, a Creature lists its traits. Each one has its own link, with a card that shows up when you share it.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "28 de ago. de 2026",
+          "title": "Uma página para tudo o que o clube criou",
+          "body": "Cada lançamento, item, trait e Creature agora tem sua própria página em Coleções, e as páginas se ligam umas às outras: um item lista todos os lançamentos em que apareceu, uma Creature lista seus traits. Cada uma tem seu próprio link, com um cartão que aparece quando você compartilha."
+        },
+        "es": {
+          "date": "28 ago. 2026",
+          "title": "Una página para todo lo que hizo el club",
+          "body": "Cada lanzamiento, item, trait y Creature tiene ahora su propia página en Colecciones, y las páginas se enlazan entre sí: un item lista cada lanzamiento en el que salió, una Creature lista sus traits. Cada una tiene su propio enlace, con una tarjeta que aparece cuando lo compartes."
+        },
+        "fr": {
+          "date": "28 août 2026",
+          "title": "Une page pour tout ce que le club a créé",
+          "body": "Chaque sortie, objet, trait et Creature a maintenant sa propre page dans Collections, et les pages sont liées entre elles : un objet liste chaque sortie où il est apparu, une Creature liste ses traits. Chacune a son propre lien, avec une carte qui s'affiche quand vous le partagez."
+        },
+        "de": {
+          "date": "28. August 2026",
+          "title": "Eine Seite für alles, was der Club gemacht hat",
+          "body": "Jedes Release, jedes Item, jeder Trait und jede Creature hat jetzt eine eigene Seite in Kollektionen, und die Seiten verlinken aufeinander: Ein Item listet jedes Release, in dem es kam, eine Creature listet ihre Traits. Jede hat einen eigenen Link, mit einer Karte, die erscheint, wenn du ihn teilst."
+        },
+        "ru": {
+          "date": "28 августа 2026",
+          "title": "Страница для всего, что сделал клуб",
+          "body": "У каждого релиза, предмета, трейта и существа теперь своя страница в «Коллекциях», и страницы ссылаются друг на друга: у предмета перечислены все релизы, в которых он выходил, у существа его трейты. У каждой своя ссылка и карточка, которая появляется, когда вы ею делитесь."
+        },
+        "tr": {
+          "date": "28 Ağustos 2026",
+          "title": "Kulübün yaptığı her şeye bir sayfa",
+          "body": "Her çıkışın, eşyanın, trait'in ve Creature'ın artık Koleksiyonlar'da kendi sayfası var ve sayfalar birbirine bağlanıyor: bir eşya geldiği her çıkışı, bir Creature trait'lerini listeler. Her birinin kendi bağlantısı ve paylaştığında görünen bir kartı var."
+        }
+      }
+    },
+    {
+      "date": "August 27, 2026",
+      "title": "Rarity on the Holders page",
+      "body": "The Holders page now shows where the rare ones sit: how many Legendary Creatures and Premium LAND plots there are and how many wallets hold them, plus how concentrated each collection is.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "27 de ago. de 2026",
+          "title": "Raridade na página Holders",
+          "body": "A página Holders agora mostra onde estão as raras: quantas Creatures Lendárias e lotes de LAND Premium existem e quantas carteiras os têm, além de quão concentrada está cada coleção."
+        },
+        "es": {
+          "date": "27 ago. 2026",
+          "title": "Rareza en la página de Holders",
+          "body": "La página de Holders ahora muestra dónde están las raras: cuántas Creatures Legendarias y parcelas de LAND Premium hay y cuántas wallets las tienen, además de lo concentrada que está cada colección."
+        },
+        "fr": {
+          "date": "27 août 2026",
+          "title": "La rareté sur la page Holders",
+          "body": "La page Holders montre maintenant où se trouvent les pièces rares : combien il y a de Creatures Légendaires et de parcelles LAND Premium et combien de portefeuilles les détiennent, plus le degré de concentration de chaque collection."
+        },
+        "de": {
+          "date": "27. August 2026",
+          "title": "Seltenheit auf der Holder-Seite",
+          "body": "Die Holder-Seite zeigt jetzt, wo die seltenen Stücke liegen: wie viele Legendäre Creatures und Premium-LAND-Grundstücke es gibt und wie viele Wallets sie halten, dazu, wie konzentriert jede Sammlung ist."
+        },
+        "ru": {
+          "date": "27 августа 2026",
+          "title": "Редкость на странице «Холдеры»",
+          "body": "Страница «Холдеры» теперь показывает, где лежат редкие: сколько существует легендарных существ и участков Premium LAND и сколько кошельков их держат, а также насколько сосредоточена каждая коллекция."
+        },
+        "tr": {
+          "date": "27 Ağustos 2026",
+          "title": "Holderlar sayfasında nadirlik",
+          "body": "Holderlar sayfası artık nadir olanların nerede olduğunu gösteriyor: kaç Efsanevi Creature ve Premium LAND arsası olduğu ve bunları kaç cüzdanın tuttuğu, ayrıca her koleksiyonun ne kadar az elde toplandığı."
+        }
+      }
+    },
+    {
+      "date": "August 25, 2026",
+      "title": "A front door for the club",
+      "body": "The home page now opens by telling you what the Creature Club is and what holding a Creature or LAND gets you, before it shows you around.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "25 de ago. de 2026",
+          "title": "Uma porta de entrada para o clube",
+          "body": "A página inicial agora começa dizendo o que é o Creature Club e o que ter uma Creature ou um LAND dá a você, antes de mostrar o resto."
+        },
+        "es": {
+          "date": "25 ago. 2026",
+          "title": "Una puerta de entrada al club",
+          "body": "La página de inicio ahora empieza contándote qué es el Creature Club y qué te da tener una Creature o LAND, antes de enseñarte el resto."
+        },
+        "fr": {
+          "date": "25 août 2026",
+          "title": "Un accueil pour le club",
+          "body": "La page d'accueil commence maintenant par vous dire ce qu'est le Creature Club et ce que vous apporte une Creature ou du LAND, avant de vous faire faire le tour."
+        },
+        "de": {
+          "date": "25. August 2026",
+          "title": "Ein Eingang für den Club",
+          "body": "Die Startseite erklärt dir jetzt zuerst, was der Creature Club ist und was dir eine Creature oder LAND bringt, bevor sie dich herumführt."
+        },
+        "ru": {
+          "date": "25 августа 2026",
+          "title": "Парадный вход в клуб",
+          "body": "Главная страница теперь сначала рассказывает, что такое Creature Club и что даёт владение существом или LAND, а уже потом показывает остальное."
+        },
+        "tr": {
+          "date": "25 Ağustos 2026",
+          "title": "Kulübe bir giriş",
+          "body": "Ana sayfa artık seni gezdirmeden önce Creature Club'ın ne olduğunu ve bir Creature ya da LAND tutmanın sana ne kazandırdığını anlatarak açılıyor."
+        }
+      }
+    },
+    {
+      "date": "August 24, 2026",
+      "title": "A better site on your phone",
+      "body": "A full pass on phones. A new app bar keeps the menu in reach, each page opens on its own content instead of the same banner, typing in a field no longer zooms the page on iPhone, and buttons are big enough to tap. A hidden row of language buttons that could switch your language by accident is gone too.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "24 de ago. de 2026",
+          "title": "Um site melhor no seu celular",
+          "body": "Uma revisão completa no celular. Uma nova barra de app deixa o menu ao alcance, cada página abre no próprio conteúdo em vez do mesmo banner, digitar num campo não dá mais zoom na página no iPhone, e os botões são grandes o bastante para tocar. Também sumiu uma fileira escondida de botões de idioma que podia trocar seu idioma sem querer."
+        },
+        "es": {
+          "date": "24 ago. 2026",
+          "title": "Un sitio mejor en tu móvil",
+          "body": "Una revisión completa en móviles. Una nueva barra de app mantiene el menú a mano, cada página se abre con su propio contenido en vez del mismo banner, escribir en un campo ya no amplía la página en iPhone, y los botones son lo bastante grandes para tocarlos. También desapareció una fila oculta de botones de idioma que podía cambiarte el idioma por accidente."
+        },
+        "fr": {
+          "date": "24 août 2026",
+          "title": "Un meilleur site sur votre téléphone",
+          "body": "Une révision complète sur téléphone. Une nouvelle barre d'app garde le menu à portée, chaque page s'ouvre sur son propre contenu au lieu de la même bannière, taper dans un champ ne zoome plus la page sur iPhone, et les boutons sont assez grands pour être touchés. Une rangée cachée de boutons de langue, qui pouvait changer votre langue par accident, a aussi disparu."
+        },
+        "de": {
+          "date": "24. August 2026",
+          "title": "Eine bessere Seite auf dem Handy",
+          "body": "Eine komplette Überarbeitung für Handys. Eine neue App-Leiste hält das Menü in Reichweite, jede Seite öffnet mit ihrem eigenen Inhalt statt mit demselben Banner, Tippen in ein Feld zoomt die Seite auf dem iPhone nicht mehr, und Buttons sind groß genug zum Antippen. Auch eine versteckte Reihe von Sprach-Buttons, die deine Sprache aus Versehen umstellen konnte, ist weg."
+        },
+        "ru": {
+          "date": "24 августа 2026",
+          "title": "Сайт на телефоне стал лучше",
+          "body": "Полная доработка для телефонов. Новая панель приложения держит меню под рукой, каждая страница открывается на своём содержимом, а не на одном и том же баннере, ввод в поле больше не увеличивает страницу на iPhone, а кнопки стали достаточно крупными для нажатия. Исчез и скрытый ряд кнопок языка, который мог случайно сменить ваш язык."
+        },
+        "tr": {
+          "date": "24 Ağustos 2026",
+          "title": "Telefonda daha iyi bir site",
+          "body": "Telefonlar için baştan sona bir elden geçirme. Yeni bir uygulama çubuğu menüyü el altında tutuyor, her sayfa aynı afiş yerine kendi içeriğiyle açılıyor, iPhone'da bir alana yazmak artık sayfayı yakınlaştırmıyor ve düğmeler dokunmaya yetecek kadar büyük. Dilini yanlışlıkla değiştirebilen gizli bir dil düğmeleri satırı da kaldırıldı."
+        }
+      }
+    },
+    {
+      "date": "August 23, 2026",
+      "title": "Gen 2, explained",
+      "body": "A new Gen 2 page under Roadmap answers what you actually get. Every Gen 1 Creature is owed a Gen 2 pet and every LAND plot a Gen 2 Creature, attached to what you already hold. It covers rarity, what's still undecided, and the questions holders keep asking.",
+      "tag": "update",
+      "i18n": {
+        "pt": {
+          "date": "23 de ago. de 2026",
+          "title": "Gen 2, explicada",
+          "body": "Uma nova página da Gen 2 em Roadmap responde o que você recebe de fato. Toda Creature Gen 1 tem direito a um pet Gen 2, e todo lote de LAND a uma Creature Gen 2, ligados ao que você já tem. Ela fala de raridade, do que ainda não foi decidido e das perguntas que os holders sempre fazem."
+        },
+        "es": {
+          "date": "23 ago. 2026",
+          "title": "Gen 2, explicada",
+          "body": "Una nueva página de Gen 2 dentro de Roadmap responde qué recibes de verdad. A cada Creature Gen 1 se le debe una mascota Gen 2 y a cada parcela de LAND una Creature Gen 2, unidas a lo que ya tienes. Cubre la rareza, lo que sigue sin decidirse y las preguntas que los holders repiten."
+        },
+        "fr": {
+          "date": "23 août 2026",
+          "title": "La Gen 2, expliquée",
+          "body": "Une nouvelle page Gen 2 dans Roadmap explique ce que vous recevez vraiment. Chaque Creature Gen 1 a droit à un pet Gen 2 et chaque parcelle LAND à une Creature Gen 2, rattachés à ce que vous détenez déjà. Elle couvre la rareté, ce qui n'est pas encore décidé et les questions que les holders posent sans cesse."
+        },
+        "de": {
+          "date": "23. August 2026",
+          "title": "Gen 2, erklärt",
+          "body": "Eine neue Seite unter Roadmap beantwortet, was du von Gen 2 wirklich bekommst. Jeder Gen-1-Creature steht ein Pet aus Gen 2 zu und jedem LAND-Grundstück eine Creature aus Gen 2, verknüpft mit dem, was du schon hältst. Sie erklärt die Seltenheit, was noch unentschieden ist, und die Fragen, die Holder immer wieder stellen."
+        },
+        "ru": {
+          "date": "23 августа 2026",
+          "title": "Gen 2 по-простому",
+          "body": "Новая страница Gen 2 в разделе «Роадмап» отвечает, что вы получите на самом деле. Каждому существу Gen 1 положен питомец Gen 2, а каждому участку LAND существо Gen 2, прикреплённые к тому, что у вас уже есть. Там же о редкости, о том, что ещё не решено, и о вопросах, которые холдеры задают снова и снова."
+        },
+        "tr": {
+          "date": "23 Ağustos 2026",
+          "title": "Gen 2, açık açık",
+          "body": "Yol Haritası altındaki yeni Gen 2 sayfası gerçekte ne aldığını yanıtlıyor. Her Gen 1 Creature'a bir Gen 2 pet, her LAND arsasına bir Gen 2 Creature borçlu ve bunlar zaten sahip olduğun şeye bağlı. Sayfa nadirliği, hâlâ karara bağlanmamış konuları ve holder'ların sürekli sorduğu soruları ele alıyor."
+        }
+      }
+    },
     {
       "date": "August 21, 2026",
       "title": "A roadmap for the Gen 2 pets",

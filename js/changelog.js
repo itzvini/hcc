@@ -31,6 +31,14 @@ function tr(entry, field) {
   return (lang !== 'en' && entry.i18n?.[lang]?.[field]) || entry[field] || '';
 }
 
+// The tag doubles as the CSS class, so the data keeps the English id and only the label
+// is translated. An unknown tag shows as written rather than as a raw i18n key.
+function tagLabel(tag) {
+  const key = `changelog.tag.${tag}`;
+  const label = t(key);
+  return label === key ? tag : label;
+}
+
 function renderSection(containerId, entries) {
   const el = document.getElementById(containerId);
   if (!el) return;
@@ -43,7 +51,7 @@ function renderSection(containerId, entries) {
       <div class="cl-date">${tr(e, 'date')}${i === 0 ? `<span class="cl-latest-badge">${t('changelog.latest')}</span>` : ''}</div>
       <div class="cl-title">${tr(e, 'title')}</div>
       ${e.body ? `<div class="cl-body">${tr(e, 'body')}</div>` : ''}
-      ${e.tag ? `<span class="cl-tag ${e.tag}">${e.tag}</span>` : ''}
+      ${e.tag ? `<span class="cl-tag ${e.tag}">${tagLabel(e.tag)}</span>` : ''}
     </div>
   `).join('');
 }

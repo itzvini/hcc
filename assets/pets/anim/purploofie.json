@@ -1,0 +1,76 @@
+{
+ "v": 3,
+ "w": 189,
+ "h": 225,
+ "cols": 10,
+ "density": 2,
+ "clips": {
+  "idle": {
+   "sheet": "purploofie-idle",
+   "count": 30,
+   "fps": 15.0,
+   "loop": true,
+   "blend": true
+  },
+  "jump": {
+   "sheet": "purploofie-jump",
+   "count": 27,
+   "fps": 30.0,
+   "loop": false,
+   "blend": false
+  },
+  "backflip": {
+   "sheet": "purploofie-backflip",
+   "count": 36,
+   "fps": 30.0,
+   "loop": false,
+   "blend": false
+  }
+ },
+ "faces": {
+  "eyes": {
+   "sheet": "purploofie-idle-eyes",
+   "x": 74,
+   "y": 138,
+   "w": 87,
+   "h": 50,
+   "cols": 10,
+   "every": [
+    2600,
+    6500
+   ],
+   "patterns": [
+    [
+     130
+    ],
+    [
+     120,
+     110,
+     130
+    ]
+   ]
+  },
+  "mouth": {
+   "sheet": "purploofie-idle-mouth",
+   "x": 96,
+   "y": 160,
+   "w": 48,
+   "h": 43,
+   "cols": 10,
+   "every": [
+    7000,
+    15000
+   ],
+   "patterns": [
+    [
+     170,
+     110,
+     170
+    ],
+    [
+     520
+    ]
+   ]
+  }
+ }
+}

@@ -257,6 +257,32 @@ h1 .pop { color: var(--hr-primary); }
 .pet-wrap:nth-child(4){animation-delay:.9s}
 .pet-wrap img, .pet-wrap svg { width: 100%; height: 100%; display: block; pointer-events: none; }
 .pet-wrap.is-jumping{animation:pet-jump .55s cubic-bezier(.28,.84,.42,1) !important}
+/* Animated header slimes (js/pet-anim.js): frames baked from the real Highrise skeleton.
+   Every slime shares one frame box with its ground point at (42px, 95px) in the 84x100 box,
+   so the still and the canvas sit in exactly the same place at any width. The numbers come
+   from tools/build-pet-sprites.py; re-run it and paste them here when the frame box changes.
+   The baked idle replaces the CSS bob, and the hop's lift is timed to the clip's squash:
+   take-off stretch by 0.07s, landing squash at 0.5s. */
+.pet-wrap.is-anim { position: relative; animation: none; will-change: transform; }   /* a standing layer: promoting a canvas mid-hop can flash it */
+.pet-wrap.is-anim .pet-frame { position: absolute; left: -13.006%; top: -6.458%; width: 112.500%; height: 112.500%; max-width: none; }
+.pet-wrap.is-anim.is-playing img.pet-frame { visibility: hidden; }
+.pet-wrap.is-anim.is-jumping { animation: pet-hop .9s linear !important; }
+@keyframes pet-hop {
+  0%, 6% { transform: translateY(0); animation-timing-function: cubic-bezier(.2,.75,.45,1); }
+  30% { transform: translateY(-22px); animation-timing-function: cubic-bezier(.55,0,.8,.35); }
+  52%, 100% { transform: translateY(0); }
+}
+/* The backflip (a clip the baker builds in code): it crouches until 0.2s, is in the air from
+   0.27s to 0.87s while it turns, then lands in a squash. */
+.pet-wrap.is-anim.is-flipping { animation: pet-flip 1.2s linear !important; }
+@keyframes pet-flip {
+  0%, 17% { transform: translateY(0); animation-timing-function: cubic-bezier(.2,.8,.4,1); }
+  47% { transform: translateY(-46px); animation-timing-function: cubic-bezier(.6,0,.8,.4); }
+  72%, 100% { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mascot-row .pet-wrap, .mascot-row .pet-wrap.is-jumping, .mascot-row .pet-wrap.is-flipping { animation: none !important; }
+}
 @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
 @keyframes pet-jump{0%{transform:translateY(0)}20%{transform:translateY(-20px)}45%{transform:translateY(-24px)}68%{transform:translateY(3px)}82%{transform:translateY(-8px)}100%{transform:translateY(0)}}
 

@@ -145,10 +145,37 @@ function railNames(ids) {
   return joinList((ids || []).map(id => { const k = `gm.geo.rail.${id}`; const s = t(k); return s === k ? id : s; }));
 }
 function fmtDate(iso) {
-  try { return new Date(`${iso}T12:00:00Z`).toLocaleDateString(lang(), { day: 'numeric', month: 'long', year: 'numeric' }); } catch { return iso; }
+  try {
+    const l = lang();
+    const s = new Date(`${iso}T12:00:00Z`).toLocaleDateString(l, { day: 'numeric', month: 'long', year: 'numeric' });
+    // French writes the first of the month as "1er"; Intl prints a bare "1".
+    return l === 'fr' ? s.replace(/^1 /, '1er ') : s;
+  } catch { return iso; }
+}
+// A curated date is ISO or a bare year (see the rules in region-curated.js). A year reads
+// the same in every language; a full date gets the reader's month name.
+function when(v) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? fmtDate(v) : v;
+}
+// Intl names countries but not US states, so those are i18n keys, gm.geo.st.<code>. English
+// prose keeps the generated name; a missing key falls back to it too, never to the raw key.
+function stateName(s, forLang) {
+  const en = US_STATES[s].n;
+  if ((forLang || lang()) === 'en') return en;
+  const k = `gm.geo.st.${s}`;
+  const v = t(k);
+  return v === k ? en : v;
+}
+// Regulator labels on local venues, same shape as railNames: an id with no key prints as
+// itself.
+function regLabel(id) {
+  if (!id) return '';
+  const k = `gm.geo.reg.${id}`;
+  const v = t(k);
+  return v === k ? id : v;
 }
 function placeName(c, s) {
-  return c === 'US' && s && US_STATES[s] ? US_STATES[s].n : countryName(c);
+  return c === 'US' && s && US_STATES[s] ? stateName(s) : countryName(c);
 }
 
 // ---------- the answer ----------
@@ -199,13 +226,13 @@ function binanceRow(c, s, mode, V) {
   }
   if (BINANCE.restricted.includes(c) && !BINANCE.sites[c]) return no();
   // An announced exit beats the signup list, which still carries both of them.
-  if (BINANCE.left[c]) return global('bn', { status: 'no', why: fmt('gm.geo.bn.left', { ...V, date: BINANCE.left[c] }), links: [] });
+  if (BINANCE.left[c]) return global('bn', { status: 'no', why: fmt('gm.geo.bn.left', { ...V, date: when(BINANCE.left[c]) }), links: [] });
   // The MiCA suspension beats it too, and for the same reason: the signup list still
   // carries all thirty EEA countries months after Binance switched them off.
-  if (BINANCE.mica.includes(c)) return global('bn', { status: 'no', why: fmt('gm.geo.bn.mica', { ...V, date: BINANCE.micaDate }), links: [] });
-  if (BINANCE.blocked[c]) return global('bn', { status: 'no', why: fmt('gm.geo.bn.blocked', { ...V, date: BINANCE.blocked[c] }), links: [] });
-  if (BINANCE.exiting[c]) return global('bn', { status: 'ltd', why: fmt('gm.geo.bn.exiting', { ...V, date: BINANCE.exiting[c], site: site.dom }), links: [binanceSite(c)] });
-  if (BINANCE.frozen[c]) return global('bn', { status: 'ltd', why: fmt('gm.geo.bn.frozen', { ...V, date: BINANCE.frozen[c] }), links: [binanceSite(c)] });
+  if (BINANCE.mica.includes(c)) return global('bn', { status: 'no', why: fmt('gm.geo.bn.mica', { ...V, date: when(BINANCE.micaDate) }), links: [] });
+  if (BINANCE.blocked[c]) return global('bn', { status: 'no', why: fmt('gm.geo.bn.blocked', { ...V, date: when(BINANCE.blocked[c]) }), links: [] });
+  if (BINANCE.exiting[c]) return global('bn', { status: 'ltd', why: fmt('gm.geo.bn.exiting', { ...V, date: when(BINANCE.exiting[c]), site: site.dom }), links: [binanceSite(c)] });
+  if (BINANCE.frozen[c]) return global('bn', { status: 'ltd', why: fmt('gm.geo.bn.frozen', { ...V, date: when(BINANCE.frozen[c]) }), links: [binanceSite(c)] });
   if (b.st === 'p2p') return global('bn', { status: 'ltd', why: fmt('gm.geo.bn.p2p', V), links: [binanceSite(c)] });
   if (b.st === 'ok') {
     const rails = b.rails && b.rails.length ? railNames(b.rails) : null;
@@ -283,7 +310,7 @@ function localRows(c, s, mode, V) {
     if (mode === 'funding' && l.buy === 0) return [];
     if (s && (l.notIn || []).includes(s)) return [];   // a venue its own state list rules out
     const link = pill({ href: `https://${l.d}`, pre: '', dom: l.d });
-    const base = { id: `loc:${l.d}`, kind: 'local', name: l.n, reg: l.reg, links: [link] };
+    const base = { id: `loc:${l.d}`, kind: 'local', name: l.n, reg: regLabel(l.reg), links: [link] };
     if (mode === 'funding' && l.wd === 0) return [{ ...base, status: 'no', why: fmt('gm.geo.loc.noWd', V), links: [] }];
     const rails = l.rails && l.rails.length ? railNames(l.rails) : null;
     const key = mode === 'cashout' ? (rails ? 'gm.geo.loc.sell' : 'gm.geo.loc.sellNoRails') : (rails ? 'gm.geo.loc.buy' : 'gm.geo.loc.buyNoRails');
@@ -406,10 +433,12 @@ function fillCountrySelect(sel) {
   sel.value = pick.c || '';
 }
 function fillStateSelect(sel) {
-  const states = Object.entries(US_STATES).sort((a, b) => a[1].n.localeCompare(b[1].n, 'en'));
+  const ui = uiLang();
+  const states = Object.keys(US_STATES).map(code => [code, stateName(code, ui)])
+    .sort((a, b) => a[1].localeCompare(b[1], ui));
   sel.replaceChildren(
     new Option(t('gm.geo.pickState'), '', true, !pick.s),
-    ...states.map(([code, st]) => new Option(st.n, code, false, code === pick.s)),
+    ...states.map(([code, n]) => new Option(n, code, false, code === pick.s)),
   );
   sel.value = pick.s || '';
 }

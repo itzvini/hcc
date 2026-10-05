@@ -9440,6 +9440,7 @@ const contentTypes = {
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
   '.webp': 'image/webp',
+  '.avif': 'image/avif',
   '.txt': 'text/plain; charset=utf-8',
   '.xml': 'application/xml; charset=utf-8'
 };
@@ -9462,7 +9463,7 @@ const TAB_ROUTES = new Set(['club', 'announcements', 'council', 'apply', 'polls'
   'holders', 'market', 'trade', 'profile', 'changelog', 'contribute', 'terms', 'privacy']);
 const SERVABLE_EXT = new Set([
   '.html', '.css', '.js', '.json',
-  '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp',
+  '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.avif',
   '.otf', '.ttf', '.woff', '.woff2', '.txt', '.xml',
 ]);
 
@@ -10570,7 +10571,7 @@ const server = http.createServer((request, response) => {
     // (that previously pinned media for a year). Binary media gets a short cache then
     // revalidates; everything that defines a "page" (html/css/js/json/svg) revalidates
     // every load so a new deploy is picked up immediately.
-    const media = new Set(['.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.otf', '.ttf', '.woff', '.woff2']);
+    const media = new Set(['.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.avif', '.otf', '.ttf', '.woff', '.woff2']);
     const cacheControl = media.has(extension)
       ? 'public, max-age=3600, must-revalidate'
       : 'no-cache';

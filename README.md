@@ -111,6 +111,54 @@ that rendered it — not by the central handler in `js/app.js`, which only catch
 prefixes, where a result can be any address on the site. That handler stands down on
 `event.defaultPrevented` so a result never lands two entries in the history.
 
+## Header slimes (baked from the real skeleton)
+
+The slimes under the hero title move with their real in-game animation, but the site never
+gets the rig. They are LAND-era "Slime Buddy" giveaway pets on `pet_slime_legendary`.
+
+1. **Bake, inside Highrise Studio.** `Assets/HCC/Editor/HccPetBaker.cs` in the Unity project
+   (menu HCC > Pet Animation Baker, in Play mode) loads each pet on Studio's outfit-editor
+   stage, steps through every clip a keyframe at a time and saves transparent PNGs plus a
+   `manifest.json` (frame size, ground point, fps) to `<project>/Renders/PetBake/`.
+   - **Faces.** Each slime's parts carry open and closed eyes and two mouths, which clips
+     show or hide. The game's main idle never changes them (only its 32-second nap does), so
+     the baker saves the idle, hop and backflip a second time with the closed eyes, the other
+     mouth, or both (`<clip>@eyes`, `@mouth`, `@eyes+mouth`). It flips the parts on the same
+     frame right before capturing, so a face frame matches its plain frame outside the face.
+   - **Backflip.** Not a Highrise clip: the baker writes it in code (`HccCustomClips.cs`, which
+     reaches Studio's internal clip factory by reflection, so a Studio upgrade may break it).
+     It probes the root bone to find the pet's middle, then turns the pet over backwards, seen
+     from the front: the pet shortens as it goes edge-on, its back comes round upside down, and
+     each side rides over the top of the body. `pet_slime_legendary` has no back art (in game
+     these slimes show a mirrored front when they face away), so the back is the front turned
+     over with the face hidden. It moves the root bone only, so the slime turns as one piece.
+   - **One frame late.** The rig shows a new pose one rendered frame after it's set, so baked
+     frame f holds clip frame f - 1. The baker allows for it wherever it changes something at
+     once (face parts, the side shown); anything counting baked frames counts from the PNGs.
+2. **Pack.** `python tools/build-pet-sprites.py "<project>/Renders/PetBake"` writes, per pet,
+   an idle sheet (every 2nd frame, 15 fps), a hop sheet and a backflip sheet (30 fps), each as
+   AVIF with a WebP fallback, a WebP still and a frame table, into `assets/pets/anim/`. Its
+   `TRACKS` pick which face each hop and backflip frame wears (eyes squeezed shut on landing,
+   braced before the flip; Snoozlepuff gasps and lands with heart eyes, which is what its
+   "closed" eyes are), so those expressions are in the sheets. For the idle it cuts the face
+   out of every frame, closed-eyed and other-mouthed, into small feathered crops (about 10 KB
+   a slime). `REST` sets the resting face: the open smile the header has always worn. All
+   pets share one frame box, so it prints the one CSS rule (`.pet-wrap.is-anim .pet-frame`) to
+   paste into `css/styles.css` when that box changes. Faces and tracks are tuned there without
+   baking again.
+3. **Play.** [js/pet-anim.js](js/pet-anim.js) loads the idle sheets once the page is idle, then
+   the face crops, the hop sheets the first time a pointer reaches the row and the backflip
+   sheets at the next idle moment after that, and draws them on a canvas. Hover hops a slime;
+   a click or tap flips it. The idle cross-fades between neighbouring frames with `lighter`
+   compositing, an exact blend of premultiplied pixels, so 15 fps still looks smooth. Every few
+   seconds it lays a face crop over the idle: a blink (sometimes two), or the smile closing for
+   a moment. Neither clip leaves the ground on its own: the height comes from the CSS `pet-hop`
+   (0.9s) and `pet-flip` (1.2s) keyframes, timed to each clip's take-off and landing.
+
+The still `<img>` is the first paint, the picture under `prefers-reduced-motion`, and what
+stays if a sheet fails to load. Page-load cost is about 120 KB of AVIF per slime; the hop
+and backflip sheets add about 110 KB and 140 KB per slime once a visitor reaches the row.
+
 ## Gen 2 roadmap (two boards)
 
 The Roadmap tab holds three sub-tabs: **Milestones** (`/roadmap`), the hand-maintained
