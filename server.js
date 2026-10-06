@@ -3,6 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const zlib = require('node:zlib');
+const os = require('node:os');
+const { execFile } = require('node:child_process');
 
 // Load .env into process.env if present, so the OpenSea key works no matter how the
 // server is launched (node server.js, npm start, IDE). No-op in production, where
@@ -8659,6 +8661,10 @@ const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|avif)(\?|$)/i;
 function isImageAttachment(att) {
   return /^image\//i.test(att?.content_type || '') || IMAGE_EXT_RE.test(att?.filename || att?.url || '');
 }
+const VIDEO_EXT_RE = /\.(mp4|m4v|webm|mov)(\?|$)/i;
+function isVideoAttachment(att) {
+  return /^video\//i.test(att?.content_type || '') || VIDEO_EXT_RE.test(att?.filename || att?.url || '');
+}
 
 function discordMessageUrl(messageId) {
   return `https://discord.com/channels/${DISCORD_GUILD_ID}/${ANNOUNCEMENTS_CHANNEL_ID}/${messageId}`;
@@ -8672,8 +8678,10 @@ function discordMessageUrl(messageId) {
 // (served by us, never expires). img-src 'self' already allows the same-origin URL.
 const MEDIA_ROUTE = '/api/announcements/media/';
 // Key is either a Discord attachment id (pure snowflake) or a `<messageId>-<index>` fallback
-// used when the payload carries no attachment id — both are digits/one hyphen.
-const MEDIA_PATH_RE = /^\/api\/announcements\/media\/\d{1,25}(?:-\d{1,3})?$/;
+// used when the payload carries no attachment id — both are digits/one hyphen. A video's
+// still frame is stored beside it under the same key plus `-p`.
+const MEDIA_KEY_SRC = '\\d{1,25}(?:-\\d{1,3})?(?:-p)?';
+const MEDIA_PATH_RE = new RegExp(`^\\/api\\/announcements\\/media\\/${MEDIA_KEY_SRC}$`);
 const MIRROR_MAX_BYTES = 25 * 1024 * 1024; // 25 MB — Discord's standard upload cap; covers big GIFs/hi-res PNGs.
 // Anything larger falls back to the (expiring) Discord URL rather than storing a huge blob.
 const MIRRORABLE_CT_RE = /^image\/(png|jpe?g|gif|webp|avif)$/i;
@@ -8696,32 +8704,150 @@ async function downloadImageBytes(url) {
   return { contentType: ct, bytes, size: bytes.length, etag };
 }
 
-// Mirror every image attachment on a normalized message, rewriting each url to our route.
-// Runs at ingest, before the row is stored, so the DB persists the permanent URL. Best
-// effort per image: a download failure leaves the original Discord URL in place (it still
-// works for ~24h) and logs, so one bad fetch never blocks the announcement from posting.
-// Already-mirrored attachments (a re-send or edit) skip the download entirely.
+// Videos get the same treatment as images, with their own ceiling: a 4K trait preview is
+// ~60 MB, and Discord lets this server upload far bigger than its 25 MB standard. Anything
+// past the cap stays on its (expiring) Discord link and logs, rather than filling the table.
+const VIDEO_MAX_BYTES = 200 * 1024 * 1024;
+const MIRRORABLE_VIDEO_CT_RE = /^video\/(mp4|webm|quicktime)$/i;
+
+// Same guarantees as downloadImageBytes: a vetted Discord URL, and the RESPONSE content-type
+// decides what gets stored. Read as a stream so the cap holds even when the CDN sends no
+// content-length.
+async function downloadVideoBytes(url) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 180000);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (!res.ok) throw new Error(`http ${res.status}`);
+    const ct = String(res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    if (!MIRRORABLE_VIDEO_CT_RE.test(ct)) throw new Error(`unexpected content-type: ${ct || 'none'}`);
+    if ((Number(res.headers.get('content-length')) || 0) > VIDEO_MAX_BYTES) throw new Error('too large (declared)');
+    const parts = [];
+    let total = 0;
+    for await (const chunk of res.body) {
+      total += chunk.length;
+      if (total > VIDEO_MAX_BYTES) { ctrl.abort(); throw new Error(`too large: over ${VIDEO_MAX_BYTES}`); }
+      parts.push(Buffer.from(chunk));
+    }
+    const bytes = Buffer.concat(parts, total);
+    if (!bytes.length) throw new Error('empty body');
+    const etag = '"' + crypto.createHash('sha256').update(bytes).digest('hex').slice(0, 32) + '"';
+    return { contentType: ct, bytes, size: bytes.length, etag };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// A still for the player. Discord's media proxy draws a video's FIRST frame when asked for an
+// image format, from the same signed URL. Plenty of clips fade in from black, and a black
+// poster is worse than none, so a JPEG this small for its pixel count (a black 1280x720
+// frame is ~15 KB, a real one several times that) is dropped. With no poster the page seeks
+// a few seconds in and shows that frame instead.
+const POSTER_MIN_BYTES_PER_PX = 0.025;
+
+// The better still: a frame from a few seconds in, drawn by ffmpeg when it's on the PATH
+// (nixpacks.toml adds it to the Railway build). Without ffmpeg this returns null for good
+// after the first try and the Discord still below is used instead. The clip goes to a temp
+// file because an MP4 can keep its index at the end, which ffmpeg can't reach from a pipe.
+const POSTER_AT_SECONDS = 3;
+let ffmpegMissing = false;
+function ffmpegFrame(file, at) {
+  return new Promise((resolve, reject) => {
+    execFile('ffmpeg', ['-v', 'error', '-ss', String(at), '-i', file, '-frames:v', '1',
+      '-vf', 'scale=1280:-2', '-q:v', '4', '-c:v', 'mjpeg', '-f', 'image2', 'pipe:1'],
+    { encoding: 'buffer', maxBuffer: 8 * 1024 * 1024, timeout: 30000, windowsHide: true },
+    (err, stdout) => (err ? reject(err) : resolve(stdout)));
+  });
+}
+async function ffmpegPoster(bytes, filename) {
+  if (ffmpegMissing || !bytes?.length) return null;
+  const ext = (/\.(mp4|m4v|webm|mov)$/i.exec(filename || '') || ['.mp4'])[0].toLowerCase();
+  const tmp = path.join(os.tmpdir(), `hcc-video-${crypto.randomBytes(6).toString('hex')}${ext}`);
+  try {
+    await fs.promises.writeFile(tmp, bytes);
+    // A clip shorter than POSTER_AT_SECONDS yields no frame there, so try near the start.
+    let jpeg = await ffmpegFrame(tmp, POSTER_AT_SECONDS);
+    if (!jpeg || jpeg.length < 1000) jpeg = await ffmpegFrame(tmp, 0.5);
+    if (!jpeg || jpeg.length < 1000) return null;
+    const etag = '"' + crypto.createHash('sha256').update(jpeg).digest('hex').slice(0, 32) + '"';
+    return { contentType: 'image/jpeg', bytes: jpeg, size: jpeg.length, etag };
+  } catch (err) {
+    if (err.code === 'ENOENT') ffmpegMissing = true;
+    else console.error('[announcements] ffmpeg poster failed:', err.message);
+    return null;
+  } finally {
+    fs.promises.unlink(tmp).catch(() => {});
+  }
+}
+
+async function fetchVideoPoster(src, att) {
+  const u = new URL(src);
+  u.host = 'media.discordapp.net';
+  const w = Math.min(1280, Number(att.width) || 1280);
+  const h = att.width && att.height ? Math.round(w * Number(att.height) / Number(att.width)) : Math.round(w * 9 / 16);
+  u.searchParams.set('format', 'jpeg');
+  u.searchParams.set('width', String(w));
+  u.searchParams.set('height', String(h));
+  const media = await downloadImageBytes(u.href);
+  return media.size < w * h * POSTER_MIN_BYTES_PER_PX ? null : media;
+}
+
+// Mirror every image and video attachment on a normalized message, rewriting each url to
+// our route. Runs at ingest, before the row is stored, so the DB persists the permanent URL.
+// Best effort per file: a download failure leaves the original Discord URL in place (it
+// still works for ~24h) and logs, so one bad fetch never blocks the announcement from
+// posting. Already-mirrored attachments (a re-send or edit) skip the download entirely.
 // NOTE: embed images (embeds[].image) still use their expiring Discord URL — announcements
 // here are native uploads, not link embeds, so this covers the reported case.
-async function mirrorAnnouncementImages(norm) {
+async function mirrorAnnouncementMedia(norm) {
   const atts = norm.attachments || [];
   for (let i = 0; i < atts.length; i++) {
     const att = atts[i];
-    if (!att || !isImageAttachment(att)) continue;
+    if (!att) continue;
+    const video = isVideoAttachment(att);
+    if (!video && !isImageAttachment(att)) continue;
     const src = safeDiscordImg(att.url);
     if (!src) continue;
-    // Prefer the Discord attachment id (stable across edits; a replaced image gets a new id
+    // Prefer the Discord attachment id (stable across edits; a replaced file gets a new id
     // → it re-mirrors). Fall back to `<messageId>-<index>` when the payload has no id, so a
     // missing field can NEVER silently no-op the mirror the way it did before.
     const key = att.id || `${norm.messageId}-${i}`;
+    let videoBytes = null; // kept for the still, so ffmpeg needn't read the clip back
     try {
       if (!(await db.announcementMediaExists(key))) {
-        const media = await downloadImageBytes(src);
-        await db.saveAnnouncementMedia({ id: key, messageId: norm.messageId, ...media });
+        if (video) {
+          const media = await downloadVideoBytes(src);
+          await db.saveAnnouncementVideo({ id: key, messageId: norm.messageId, ...media });
+          videoBytes = media.bytes;
+        } else {
+          await db.saveAnnouncementMedia({ id: key, messageId: norm.messageId, ...(await downloadImageBytes(src)) });
+        }
       }
       att.url = MEDIA_ROUTE + key; // point at our permanent copy (only reached once bytes are stored)
     } catch (err) {
-      console.error(`[announcements] image mirror failed for ${key}:`, err.message);
+      console.error(`[announcements] ${video ? 'video' : 'image'} mirror failed for ${key}:`, err.message);
+      continue;
+    }
+    if (!video) continue;
+    // The still is a nicety: its failure never touches the video itself. ffmpeg's frame
+    // first; a clip stored before ffmpeg was available is read back from the table for it.
+    const posterKey = `${key}-p`;
+    try {
+      if (!(await db.announcementMediaExists(posterKey))) {
+        let poster = null;
+        if (!ffmpegMissing) {
+          if (!videoBytes) {
+            const meta = await db.getAnnouncementMediaMeta(key);
+            if (meta?.chunk_size) videoBytes = await db.readAnnouncementMediaRange(key, 0, Number(meta.size) - 1, Number(meta.chunk_size));
+          }
+          poster = await ffmpegPoster(videoBytes, att.filename);
+        }
+        if (!poster) poster = await fetchVideoPoster(src, att);
+        if (poster) await db.saveAnnouncementMedia({ id: posterKey, messageId: norm.messageId, ...poster });
+      }
+      if (await db.announcementMediaExists(posterKey)) att.poster = MEDIA_ROUTE + posterKey;
+    } catch (err) {
+      console.error(`[announcements] poster failed for ${key}:`, err.message);
     }
   }
 }
@@ -8910,10 +9036,13 @@ async function announcementPageMeta(id, origin) {
   // Only a picture this server holds. Discord's own attachment URLs expire within a day,
   // and a card is scraped once and cached for everyone, so an expiring link would leave
   // a broken image on every share made after it.
-  const shot = (Array.isArray(row.attachments) ? row.attachments : [])
+  // A post whose only picture is a video borrows the video's stored still.
+  const atts = Array.isArray(row.attachments) ? row.attachments : [];
+  const shot = atts
     .filter(isImageAttachment)
     .map(a => safeFeedImg(a.url))
-    .find(u => u && MEDIA_PATH_RE.test(u));
+    .find(u => u && MEDIA_PATH_RE.test(u))
+    || atts.map(a => String(a.poster || '')).find(u => MEDIA_PATH_RE.test(u));
   return {
     title: !title || title === SITE_NAME ? SITE_NAME : `${title} · ${SITE_NAME}`,
     description: trimWords(body, 180) || trimWords(plainDiscord(row.content || ''), 180),
@@ -8928,6 +9057,13 @@ async function announcementPageMeta(id, origin) {
 function shapeAnnouncement(row) {
   const atts = Array.isArray(row.attachments) ? row.attachments : [];
   const attachments = atts.map(a => {
+    // A video plays inline only from our own copy: the page CSP (media falls back to 'self')
+    // won't load Discord's, and that link dies within a day anyway. An unmirrored video
+    // falls through to the file chip below.
+    if (isVideoAttachment(a) && MEDIA_PATH_RE.test(String(a.url || ''))) {
+      const poster = MEDIA_PATH_RE.test(String(a.poster || '')) ? a.poster : null;
+      return { type: 'video', url: a.url, poster, name: a.filename || '', width: a.width || null, height: a.height || null };
+    }
     if (isImageAttachment(a)) {
       const src = safeFeedImg(a.url);
       return src ? { type: 'image', url: src, name: a.filename || '', width: a.width || null, height: a.height || null } : null;
@@ -9008,19 +9144,96 @@ async function handleCollectionArt(request, response, variant, artId) {
   response.end(art.bytes);
 }
 
+// One `bytes=a-b` range (or `a-`, or the suffix form `-n`) against a file of `size` bytes.
+// null means "no usable range, send the whole file" (absent, malformed, or several ranges);
+// 'unsatisfiable' means a well-formed range that starts past the end, which gets a 416.
+function parseByteRange(header, size) {
+  const m = /^bytes=(\d*)-(\d*)$/.exec(String(header || '').trim());
+  if (!m || (m[1] === '' && m[2] === '')) return null;
+  let start, end;
+  if (m[1] === '') {
+    const n = Number(m[2]);
+    if (!n) return 'unsatisfiable';
+    start = Math.max(0, size - n);
+    end = size - 1;
+  } else {
+    start = Number(m[1]);
+    end = m[2] === '' ? size - 1 : Math.min(Number(m[2]), size - 1);
+  }
+  if (!(start <= end) || start >= size) return 'unsatisfiable';
+  return { start, end };
+}
+
+// A stored video. Browsers play these through Range requests (Safari will not play a video
+// served without them), so a ranged request gets a 206 for at most MEDIA_RANGE_CAP bytes and
+// the browser asks again for more; an open-ended `bytes=0-` is answered the same way. A plain
+// request streams the whole file a slice at a time, so no request ever holds the clip in
+// memory. Bytes per id never change, so the ETag revalidates like the images.
+const MEDIA_RANGE_CAP = 8 * 1024 * 1024;
+async function serveChunkedMedia(request, response, id, meta) {
+  const size = Number(meta.size);
+  const chunk = Number(meta.chunk_size);
+  const headers = {
+    'Content-Type': meta.content_type,
+    'Cache-Control': 'public, max-age=86400, must-revalidate',
+    'ETag': meta.etag,
+    'Accept-Ranges': 'bytes',
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': "default-src 'none'; sandbox",
+  };
+  const range = request.headers.range ? parseByteRange(request.headers.range, size) : null;
+  if (range === 'unsatisfiable') {
+    response.writeHead(416, { ...headers, 'Content-Range': `bytes */${size}` });
+    response.end();
+    return;
+  }
+  if (!range && request.headers['if-none-match'] === meta.etag) {
+    response.writeHead(304, headers);
+    response.end();
+    return;
+  }
+  if (range) {
+    const end = Math.min(range.end, range.start + MEDIA_RANGE_CAP - 1);
+    const body = request.method === 'HEAD' ? null : await db.readAnnouncementMediaRange(id, range.start, end, chunk);
+    response.writeHead(206, { ...headers, 'Content-Range': `bytes ${range.start}-${end}/${size}`, 'Content-Length': String(end - range.start + 1) });
+    response.end(body || undefined);
+    return;
+  }
+  response.writeHead(200, { ...headers, 'Content-Length': String(size) });
+  if (request.method === 'HEAD') { response.end(); return; }
+  let closed = false;
+  response.on('close', () => { closed = true; });
+  try {
+    for (let start = 0; start < size && !closed; start += MEDIA_RANGE_CAP) {
+      const end = Math.min(size - 1, start + MEDIA_RANGE_CAP - 1);
+      const buf = await db.readAnnouncementMediaRange(id, start, end, chunk);
+      if (!response.write(buf)) {
+        await new Promise(resolve => { response.once('drain', resolve); response.once('close', resolve); });
+      }
+    }
+    response.end();
+  } catch (err) {
+    console.error(`[announcements] video stream failed for ${id}:`, err.message);
+    response.destroy(err);
+  }
+}
+
 async function handleAnnouncementsApi(request, response, url) {
   const { pathname } = url;
 
   // Mirrored attachment image bytes, served from our own domain so they never expire the
   // way Discord's signed CDN URLs do. Bytes are immutable per attachment id; we still send
   // an ETag + must-revalidate (per the caching policy) so repeat loads 304 cheaply.
-  const mediaMatch = pathname.match(/^\/api\/announcements\/media\/(\d{1,25}(?:-\d{1,3})?)$/);
+  const mediaMatch = pathname.match(new RegExp(`^\\/api\\/announcements\\/media\\/(${MEDIA_KEY_SRC})$`));
   if (mediaMatch) {
-    if (request.method !== 'GET') { sendJson(response, 405, { error: 'Method not allowed.' }); return; }
+    if (request.method !== 'GET' && request.method !== 'HEAD') { sendJson(response, 405, { error: 'Method not allowed.' }); return; }
     const ip = clientIp(request);
     const wait = rateLimited(`ann-media:${ip}`, 1200, 60 * 1000); // generous — a full feed load is well under this
     if (wait) { sendJson(response, 429, { error: 'Too many requests.' }, { 'Retry-After': String(wait) }); return; }
 
+    const meta = await db.getAnnouncementMediaMeta(mediaMatch[1]);
+    if (!meta) { sendJson(response, 404, { error: 'Not found' }); return; }
+    if (meta.chunk_size) { await serveChunkedMedia(request, response, mediaMatch[1], meta); return; }
     const media = await db.getAnnouncementMedia(mediaMatch[1]);
     if (!media) { sendJson(response, 404, { error: 'Not found' }); return; }
     const headers = {
@@ -9036,7 +9249,7 @@ async function handleAnnouncementsApi(request, response, url) {
       return;
     }
     response.writeHead(200, { ...headers, 'Content-Length': String(media.size) });
-    response.end(media.bytes);
+    response.end(request.method === 'HEAD' ? undefined : media.bytes);
     return;
   }
 
@@ -9110,7 +9323,7 @@ async function handleAnnouncementsApi(request, response, url) {
       if (String(msg.channel_id) !== ANNOUNCEMENTS_CHANNEL_ID || msg.thread_id) { skipped++; continue; }
       if (!msg.timestamp) { skipped++; continue; }
       const norm = normalizeAnnouncementMessage(msg);
-      await mirrorAnnouncementImages(norm); // copy image bytes to our domain while Discord URLs are fresh
+      await mirrorAnnouncementMedia(norm); // copy image and video bytes to our domain while Discord URLs are fresh
       await db.upsertAnnouncement(norm);
       upserted++;
     }

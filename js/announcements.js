@@ -205,9 +205,26 @@ function avatarNode(author) {
   return fallback;
 }
 
+// A video plays from the copy this site keeps (Discord's own link dies within a day). With a
+// stored still it shows that and fetches nothing until played. Without one, because the clip
+// opened on black, wireVideos() seeks it a few seconds in once it scrolls into view.
+function videoNode(v) {
+  const ratio = v.width && v.height ? ` style="aspect-ratio:${Number(v.width)} / ${Number(v.height)}"` : '';
+  return `
+    <div class="ann-media is-single">
+      <div class="ann-video"${ratio}>
+        <video controls playsinline preload="none"${v.poster ? ` poster="${esc(v.poster)}"` : ' data-ann-preview'}
+          src="${esc(v.url)}" aria-label="${esc(v.name || t('ann.video'))}">
+          <a href="${esc(v.url)}">${esc(t('ann.videoOpen'))}</a>
+        </video>
+      </div>
+    </div>`;
+}
+
 function attachmentsNode(atts) {
   if (!atts?.length) return '';
   const images = atts.filter(a => a.type === 'image');
+  const videos = atts.filter(a => a.type === 'video');
   const files = atts.filter(a => a.type === 'file');
   const imgGrid = images.length ? `
     <div class="ann-media ${images.length === 1 ? 'is-single' : 'is-grid'}">
@@ -224,7 +241,45 @@ function attachmentsNode(atts) {
           <span class="ann-file-name">${esc(f.name)}</span>
         </a>`).join('')}
     </div>` : '';
-  return imgGrid + fileList;
+  return imgGrid + videos.map(videoNode).join('') + fileList;
+}
+
+// The preview frame for a video with no still. Nothing loads until the player is near the
+// screen; then it reads the clip's metadata, seeks to PREVIEW_AT seconds (a fifth of the way
+// in for a short clip) so the card shows a real frame, and the first press of play goes back
+// to the start.
+const PREVIEW_AT = 3;
+let videoObserver = null;
+function wireVideos(scope) {
+  videoObserver?.disconnect();
+  videoObserver = null;
+  const vids = scope.querySelectorAll('video[data-ann-preview]');
+  if (!vids.length) return;
+  const prime = v => {
+    v.removeAttribute('data-ann-preview');
+    let previewAt = 0;
+    v.addEventListener('loadedmetadata', () => {
+      previewAt = Math.min(PREVIEW_AT, (v.duration || 0) * 0.2);
+      if (previewAt > 0 && v.paused && v.currentTime < 0.1) v.currentTime = previewAt;
+    }, { once: true });
+    // WebKit reports the old time until a seek lands, so "still on the preview" means the
+    // preview seek is pending, or done, or never moved: anything but the reader scrubbing.
+    v.addEventListener('play', () => {
+      if (!previewAt) return;
+      if (v.seeking || v.currentTime < 0.1 || Math.abs(v.currentTime - previewAt) < 0.5) v.currentTime = 0;
+    }, { once: true });
+    v.preload = 'metadata';
+    v.load();
+  };
+  if (!('IntersectionObserver' in window)) { vids.forEach(prime); return; }
+  videoObserver = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (!e.isIntersecting) return;
+      videoObserver.unobserve(e.target);
+      prime(e.target);
+    });
+  }, { rootMargin: '200px' });
+  vids.forEach(v => videoObserver.observe(v));
 }
 
 function embedsNode(embeds, mentions) {
@@ -425,6 +480,7 @@ function render() {
   el.setAttribute('aria-busy', 'false');
   el.innerHTML = data.error ? errorView() : openId ? singleView(data) : listView(data);
   bind(el);
+  wireVideos(el);
   setIntro(!!openId && !data.error);
   if (!data.error) revealed = true;
   // A shared link should arrive with the post's own name in the tab, not the feed's.

@@ -9278,6 +9278,13 @@ a.perx-chip:hover {
 .ann-shot img { display: block; width: 100%; height: 100%; object-fit: cover; max-height: 440px; transition: transform .3s cubic-bezier(.2,.7,.2,1); }
 .ann-media.is-grid .ann-shot img { aspect-ratio: 16 / 10; }
 .ann-shot:hover img { transform: scale(1.03); }
+/* Video: letterboxed on the near-black token so a portrait or square clip still sits in a
+   tidy frame; the inline aspect-ratio comes from the upload's own size. */
+.ann-video {
+  position: relative; overflow: hidden; aspect-ratio: 16 / 9; max-height: 560px;
+  border-radius: var(--hr-radius-md); border: 1px solid var(--hr-line); background: var(--hr-blackfish);
+}
+.ann-video video { display: block; width: 100%; height: 100%; object-fit: contain; background: var(--hr-blackfish); }
 .ann-files { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
 .ann-file {
   display: inline-flex; align-items: center; gap: 8px; align-self: flex-start;

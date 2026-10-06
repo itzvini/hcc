@@ -1,0 +1,6 @@
+# Railway builds this repo with Nixpacks (railway.json). '...' keeps the default Node setup;
+# ffmpeg is added so the server can draw a still frame for each announcement video
+# (ffmpegPoster in server.js). Without it the server falls back to Discord's first-frame
+# thumbnail, which is black for any clip that fades in.
+[phases.setup]
+nixPkgs = ["...", "ffmpeg"]
