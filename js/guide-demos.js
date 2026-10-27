@@ -1666,6 +1666,166 @@ const PHONE_SETUP = {
   },
 };
 
+// =====================================================================================
+// UNLINK A ROOM — highrise.game inventory: parcel options, Unlink Room, confirm
+// =====================================================================================
+// Drawn after Highrise's own site (screens checked 2026-10-27). Its UI labels stay in
+// English, as the settings mock above does, because that's what the reader will see
+// there; the narration is ours and translated. The home page hero is placeholder bars
+// on purpose: the real one changes with every event and would date the demo.
+
+const UR_PARCEL = FIX_SLIMES[0];
+const UR_XY = UR_PARCEL.coords.replace(/[()]/g, '');
+const UR_ICON = {
+  dots: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>`,
+  home: `<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M12 3 2.5 11h2.8v9h5.2v-5.5h3V20h5.2v-9h2.8z"/></svg>`,
+  pin:  `<svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>`,
+  x:    `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>`,
+};
+
+// One scene, many states: which screen is up and which overlay is open. `hot` marks the
+// element the cursor rests on, for the reduced-motion scenes that have no cursor.
+function urState(stage, { scr = 'inv', menu = false, opts = false, dlg = false, toast = false, hot = null } = {}) {
+  stage.querySelector('[data-gd="hr"]').dataset.scr = scr;
+  stage.classList.toggle('ur-menu', menu);
+  stage.classList.toggle('ur-opts', opts);
+  stage.classList.toggle('ur-dlg', dlg);
+  stage.classList.toggle('ur-toast', toast);
+  stage.querySelectorAll('.gdemo-hr .is-hot').forEach(el => el.classList.remove('is-hot'));
+  if (hot) stage.querySelector(`[data-gd="${hot}"]`)?.classList.add('is-hot');
+  // The ⋯ button only shows while the card is hovered, so it stays up while its menu is.
+  stage.querySelector('[data-gd="hrcard"]').classList.toggle('is-hov', opts || hot === 'hrdots');
+}
+
+// The scene after step b has played (b = -1 is the untouched home page), and so the base
+// step b+1 starts from. Step 4's tap leaves its own dialog up; the toast is step 5's.
+const UR_END = [
+  { scr: 'inv' },
+  { opts: true },
+  { dlg: true },
+  {},
+  { toast: true },
+];
+// What each step looks like with no animation: the moment before its tap.
+const UR_SETTLE = [
+  { scr: 'home', menu: true, hot: 'hrinv' },
+  { opts: true, hot: 'hrdots' },
+  { opts: true, hot: 'hrunlink' },
+  { dlg: true, hot: 'hrconfirm' },
+  { toast: true },
+];
+
+const UNLINK_ROOM = {
+  title: 'gm.demo.title.unlinkRoom',
+  steps: [
+    { label: 'gm.demo.beat.inventory', cap: 'gm.demo.unlink.cap.s1' },
+    { label: 'gm.demo.beat.options',   cap: 'gm.demo.unlink.cap.s2' },
+    { label: 'gm.demo.beat.unlink',    cap: 'gm.demo.unlink.cap.s3' },
+    { label: 'gm.demo.beat.confirm',   cap: 'gm.demo.unlink.cap.s4' },
+    { label: 'gm.demo.beat.done',      cap: 'gm.demo.unlink.cap.s5' },
+  ],
+  stageHtml() {
+    const items = list => list.map(([label, gd]) => label === '-'
+      ? '<hr />'
+      : `<span${gd ? ` data-gd="${gd}"` : ''}>${label}</span>`).join('');
+    return `<div class="gdemo-hr" data-gd="hr" data-scr="home">
+      <div class="gdemo-hr-nav">
+        <span class="gdemo-hr-brand">HIGHRISE</span>
+        <span class="gdemo-hr-links"><span>Events</span><span>News</span><span>Shop</span><span>Rooms</span><span>Explore</span><span>Create</span></span>
+        <span class="gdemo-hr-coins"><i></i>12,480</span>
+        <span class="gdemo-hr-me" data-gd="hravatar"><span class="gdemo-hr-ava">${creatureSvg('#8561FF', 1)}</span>${ico('chevronDown', 12)}</span>
+      </div>
+      <div class="gdemo-hr-menu">${items([['@you'], ['Profile'], ['Inventory', 'hrinv'], ['Transaction History'], ['Settings'], ['-'], ['Log out']])}</div>
+      <div class="gdemo-hr-view is-home">
+        <div class="gdemo-hr-hero"><small></small><b></b><b></b><span class="gdemo-hr-cta"></span></div>
+        <div class="gdemo-hr-strip"><i></i><i></i><i></i><i></i></div>
+      </div>
+      <div class="gdemo-hr-view is-inv">
+        <div class="gdemo-hr-sub"><span>Profile</span><span class="is-on">Inventory</span><span>Transaction History</span><span>Settings</span></div>
+        <div class="gdemo-hr-h">INVENTORY</div>
+        <div class="gdemo-hr-tabs"><span class="is-on">LAND</span><span>Creatures</span><span>Clothes</span><span>Emotes</span><span>Furniture</span></div>
+        <div class="gdemo-hr-mine">MY LANDS<small>1</small></div>
+        <div class="gdemo-hr-cardwrap">
+          <div class="gdemo-hr-card" data-gd="hrcard">
+            <div class="gdemo-hr-art">
+              <span class="gdemo-hr-pet">${artImg(UR_PARCEL, 'slime', 0, 'gdemo-art')}</span>
+              <span class="gdemo-hr-mark">HIGHRISE</span>
+              <span class="gdemo-hr-dots" data-gd="hrdots">${UR_ICON.dots}</span>
+            </div>
+            <div class="gdemo-hr-cardbody">
+              <b>LAND ${UR_PARCEL.coords} ${UR_ICON.home}</b>
+              <span>Size: 1×1 <em>${UR_ICON.pin} ${UR_XY}</em></span>
+              <span class="gdemo-hr-wallet">In your Wallet</span>
+            </div>
+          </div>
+          <div class="gdemo-hr-opts">${items([['Edit LAND'], ['Unlink Room', 'hrunlink'], ['-'], ['Open in New Tab'], ['View on Map'], ['View on OpenSea'], ['Copy Link']])}</div>
+        </div>
+      </div>
+      <div class="gdemo-hr-dlg">
+        <div class="gdemo-hr-dlgcard">
+          <div class="gdemo-hr-dlghead"><b>ARE YOU SURE TO UNLINK THIS ROOM?</b>${UR_ICON.x}</div>
+          <span class="gdemo-hr-unlink" data-gd="hrconfirm">UNLINK</span>
+        </div>
+      </div>
+      <div class="gdemo-hr-toast"><span class="gdemo-hr-tick">${ico('check', 14)}</span><span>Room unlinked successfully</span>${UR_ICON.x}</div>
+    </div>`;
+  },
+  endState(ctx, b) {
+    urState(ctx.stage, b < 0 ? { scr: 'home' } : UR_END[b]);
+  },
+  settle(ctx, b) {
+    urState(ctx.stage, UR_SETTLE[b]);
+  },
+  async choreo(ctx, b) {
+    const { stage, go, click, sleep, ok, say } = ctx;
+    const q = gd => stage.querySelector(`[data-gd="${gd}"]`);
+    // Glide in, light the target up as a hover would, tap.
+    const tap = async gd => {
+      const el = q(gd);
+      await sleep(300); if (!ok()) return false;
+      await go(el); if (!ok()) return false;
+      el.classList.add('is-hot');
+      await click(el); if (!ok()) return false;
+      return true;
+    };
+    if (b === 0) {
+      // Home page: the avatar opens the account menu, and Inventory is in it. The page it
+      // opens is step 2's screen.
+      await say('gm.demo.n.urMenu');
+      if (!await tap('hravatar')) return;
+      stage.classList.add('ur-menu');
+      await sleep(500); if (!ok()) return;
+      if (!await tap('hrinv')) return;
+      await sleep(400);
+    } else if (b === 1) {
+      // Hovering the card is what brings the ⋯ button up, so the cursor visits the card
+      // first.
+      await say('gm.demo.n.urDots');
+      await sleep(300); if (!ok()) return;
+      await go(q('hrcard'), 600); if (!ok()) return;
+      q('hrcard').classList.add('is-hov');
+      await sleep(350); if (!ok()) return;
+      if (!await tap('hrdots')) return;
+      stage.classList.add('ur-opts');
+      await sleep(600);
+    } else if (b === 2) {
+      await say('gm.demo.n.urUnlink');
+      if (!await tap('hrunlink')) return;
+      await sleep(500);
+    } else if (b === 3) {
+      await say('gm.demo.n.urConfirm');
+      if (!await tap('hrconfirm')) return;
+      await sleep(500);
+    } else if (b === 4) {
+      // A reveal: the result arrives on its own. Watch, don't loop.
+      await sleep(500); if (!ok()) return;
+      stage.classList.add('ur-toast');
+      await say('gm.demo.n.urDone');
+      await sleep(600);
+    }
+  },
+};
+
 const DEMOS = {
   'trading-creatures': TRADING_CREATURES,
   'trading-land': TRADING_LAND,
@@ -1680,6 +1840,7 @@ const DEMOS = {
   'setup-phone': PHONE_SETUP,
   'ingame-creatures': makeIngameSpec('creatures'),
   'ingame-land': makeIngameSpec('land'),
+  'unlink-room': UNLINK_ROOM,
 };
 
 // --- Frame + driver -----------------------------------------------------------------

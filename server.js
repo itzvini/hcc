@@ -10082,7 +10082,7 @@ const SECTION_CARDS = {
   },
   "/guides/walkthroughs": {
     t: "Token Trove walkthroughs",
-    d: "Six walkthroughs, most with a video: link MetaMask, bridge ETH and IMX, buy, sell and transfer creatures, show them in Highrise, and mint LAND you bought with Deeds.",
+    d: "Seven walkthroughs, most with a video or a demo: link MetaMask, bridge ETH and IMX, buy, sell and transfer creatures, show them in Highrise, mint LAND you bought with Deeds, and unlink a room from it.",
     img: "/assets/og-guides.png",
   },
   "/guides/marketplace": {
@@ -10126,6 +10126,7 @@ const SECTION_CARDS = {
     img: "/assets/og-guides.png",
   },
   "/guides/walkthroughs/land": { tk: "guide.g6.h", dk: "guide.g6.p", img: "/assets/og-guides.png" },
+  "/guides/walkthroughs/unlink-room": { tk: "guide.g7.h", dk: "guide.g7.p", img: "/assets/og-guides.png" },
   "/guides/marketplace/setup": {
     tk: "gm.setup.h",
     ttpl: "Marketplace tour: {k}",

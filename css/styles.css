@@ -4089,6 +4089,175 @@ button.gm-geo-name:focus-visible { outline: 2px solid var(--hr-primary); outline
 .gdemo-app-linked { font-size: 12px; color: var(--hr-online); font-weight: 700; }
 .gdemo-app-linked code { font-family: ui-monospace, Menlo, monospace; color: var(--hr-fg-1); }
 
+/* highrise.game inventory mock (unlink-a-room demo). Drawn after Highrise's own site:
+   flat dark panels, caps headings, a mint confirm button. The stage's ur-* classes
+   open its menus, dialog and toast. */
+.gdemo-hr {
+  /* Side margins keep the stage's edge chevrons in the gutter, off the card and menus. */
+  position: relative; height: 100%; margin: 0 34px; overflow: hidden;
+  border-radius: var(--hr-radius-lg); border: 1px solid var(--hr-line-strong);
+  background: var(--hr-bg-1);
+}
+.gdemo-hr-nav {
+  display: flex; align-items: center; gap: 14px; height: 42px; padding: 0 12px 0 14px;
+  border-bottom: 1px solid var(--hr-line);
+}
+.gdemo-hr-brand { font: 900 15px/1 var(--hr-sans); letter-spacing: -.01em; color: var(--hr-fg-0); }
+.gdemo-hr-links { display: flex; gap: 12px; font: 700 11.5px/1 var(--hr-sans); color: var(--hr-fg-1); }
+.gdemo-hr-coins {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px;
+  border: 1px solid var(--hr-line-strong); border-radius: var(--hr-radius-sm);
+  font: 700 11px/1 var(--hr-sans); color: var(--hr-fg-0);
+}
+.gdemo-hr-coins i {
+  width: 10px; height: 10px; border-radius: 50%; background: var(--hr-banana);
+  box-shadow: inset -2px -2px 0 rgba(0,0,0,.2);
+}
+.gdemo-hr-me {
+  display: inline-flex; align-items: center; gap: 3px; padding: 2px 3px 2px 2px;
+  border: 1px solid transparent; border-radius: 9px; color: var(--hr-fg-2);
+  transition: border-color .2s;
+}
+.gdemo-hr-me.is-hot, .gdemo-stage.ur-menu .gdemo-hr-me { border-color: var(--hr-line-strong); }
+.gdemo-hr-me.is-press { transform: translateY(1px); }
+.gdemo-hr-ava {
+  width: 26px; height: 26px; border-radius: 7px; overflow: hidden;
+  display: grid; place-items: center; background: var(--hr-bg-3);
+}
+.gdemo-hr-ava .gdemo-art { width: 30px; height: 30px; background: transparent; }
+
+/* The two drop-down menus: the account menu under the avatar, the parcel's options. */
+.gdemo-hr-menu, .gdemo-hr-opts {
+  position: absolute; z-index: 6; min-width: 158px; padding: 5px 0;
+  display: flex; flex-direction: column;
+  border-radius: var(--hr-radius-md); border: 1px solid var(--hr-line-strong);
+  background: var(--hr-bg-2); box-shadow: var(--hr-shadow-3);
+  opacity: 0; transform: translateY(-6px); pointer-events: none;
+  transition: opacity .25s, transform .25s;
+}
+.gdemo-hr-menu { top: 46px; right: 10px; }
+.gdemo-hr-opts { top: 34px; left: 118px; }
+.gdemo-stage.ur-menu .gdemo-hr-menu, .gdemo-stage.ur-opts .gdemo-hr-opts { opacity: 1; transform: none; }
+.gdemo-hr-menu > span, .gdemo-hr-opts > span {
+  padding: 6px 13px; font: 700 11.5px/1.2 var(--hr-sans); color: var(--hr-fg-1);
+  transition: background .2s, color .2s;
+}
+.gdemo-hr-menu > span:first-child { color: var(--hr-fg-4); }
+.gdemo-hr-menu > span.is-hot, .gdemo-hr-opts > span.is-hot { background: rgba(255,255,255,.06); color: var(--hr-fg-0); }
+.gdemo-hr-menu > span.is-press, .gdemo-hr-opts > span.is-press { background: rgba(81,255,165,.12); color: var(--hr-primary); }
+.gdemo-hr-menu hr, .gdemo-hr-opts hr { border: 0; border-top: 1px solid var(--hr-line); margin: 4px 10px; }
+
+.gdemo-hr-view { display: none; padding: 14px 16px; }
+.gdemo-hr[data-scr="home"] .gdemo-hr-view.is-home,
+.gdemo-hr[data-scr="inv"] .gdemo-hr-view.is-inv { display: block; }
+.gdemo-hr-hero {
+  height: 240px; padding: 36px 24px; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 10px;
+  border-radius: var(--hr-radius-md);
+  background:
+    radial-gradient(260px 210px at 82% 42%, var(--hr-secondary-25), transparent 70%),
+    radial-gradient(200px 160px at 98% 92%, var(--hr-alert-15), transparent 70%),
+    var(--hr-bg-2);
+}
+.gdemo-hr-hero small { width: 74px; height: 8px; border-radius: 4px; background: var(--hr-alert); opacity: .7; }
+.gdemo-hr-hero b { width: 55%; height: 26px; border-radius: 6px; background: var(--hr-fg-1); opacity: .85; }
+.gdemo-hr-hero b + b { width: 38%; }
+.gdemo-hr-cta { margin-top: 12px; width: 120px; height: 32px; border-radius: 8px; background: var(--hr-primary); }
+.gdemo-hr-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; }
+.gdemo-hr-strip i { height: 40px; border-radius: 8px; background: var(--hr-bg-2); border-bottom: 2px solid var(--hr-line-strong); }
+
+.gdemo-hr-view.is-inv { padding-top: 8px; }
+.gdemo-hr-sub, .gdemo-hr-tabs { display: flex; gap: 4px; overflow: hidden; }
+.gdemo-hr-sub span, .gdemo-hr-tabs span {
+  padding: 5px 9px; border-radius: 7px; white-space: nowrap;
+  font: 700 11px/1 var(--hr-sans); color: var(--hr-fg-3);
+}
+.gdemo-hr-sub span.is-on, .gdemo-hr-tabs span.is-on { background: var(--hr-bg-3); color: var(--hr-fg-0); }
+.gdemo-hr-h { margin: 12px 0 9px; font: 900 24px/1 var(--hr-sans); letter-spacing: -.01em; color: var(--hr-fg-0); }
+.gdemo-hr-mine { margin: 12px 0 8px; font: 900 13px/1 var(--hr-sans); color: var(--hr-fg-0); }
+.gdemo-hr-mine small { display: block; margin-top: 3px; font-size: 10.5px; color: var(--hr-blueberry); }
+
+/* The parcel card. Its art is a drawn postcard: the parcel grid, the real Slime on it. */
+.gdemo-hr-cardwrap { position: relative; width: 168px; }
+.gdemo-hr-card {
+  overflow: hidden; border-radius: 10px;
+  border: 1px solid var(--hr-line-strong); background: var(--hr-bg-2);
+  transition: transform .25s, box-shadow .25s;
+}
+.gdemo-hr-card.is-hov { transform: translateY(-3px); box-shadow: var(--hr-shadow-2), 0 0 22px var(--hr-secondary-25); }
+.gdemo-hr-art {
+  position: relative; height: 100px;
+  background:
+    radial-gradient(70px 44px at 70% 30%, rgba(255,255,255,.75), transparent 70%),
+    repeating-linear-gradient(90deg, rgba(133,97,255,.3) 0 2px, transparent 2px 16px),
+    repeating-linear-gradient(0deg, rgba(133,97,255,.3) 0 2px, transparent 2px 16px),
+    linear-gradient(160deg, #F6D3F0, #CDB8FF 60%, #A9F5D3);
+}
+.gdemo-hr-pet { position: absolute; left: 4px; bottom: 2px; width: 54px; height: 54px; }
+.gdemo-hr-pet > * { width: 100%; height: 100%; object-fit: contain; background: transparent; }
+.gdemo-hr-mark { position: absolute; right: 8px; bottom: 6px; font: 900 9px/1 var(--hr-sans); color: var(--hr-secondary); }
+.gdemo-hr-dots {
+  position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%;
+  display: grid; place-items: center; color: #fff; background: rgba(20,19,23,.75);
+  opacity: 0; transition: opacity .2s, transform .2s;
+}
+.gdemo-hr-card.is-hov .gdemo-hr-dots { opacity: 1; }
+.gdemo-hr-dots.is-hot { box-shadow: 0 0 0 2px var(--hr-primary); }
+.gdemo-hr-dots.is-press { transform: scale(.9); }
+.gdemo-hr-cardbody { display: flex; flex-direction: column; gap: 6px; padding: 9px 11px 11px; }
+.gdemo-hr-cardbody b { display: flex; align-items: center; gap: 6px; font: 700 12px/1.2 var(--hr-sans); color: var(--hr-fg-0); }
+.gdemo-hr-cardbody > span {
+  display: flex; align-items: center; justify-content: space-between;
+  font: 500 10.5px/1 var(--hr-sans); color: var(--hr-fg-2);
+}
+.gdemo-hr-cardbody em { display: inline-flex; align-items: center; gap: 3px; font-style: normal; }
+.gdemo-hr-cardbody > .gdemo-hr-wallet {
+  justify-content: center; margin-top: 4px; padding: 7px 0;
+  border: 1px solid var(--hr-line-strong); border-radius: 8px; font-weight: 700;
+}
+
+.gdemo-hr-dlg {
+  position: absolute; inset: 0; z-index: 8; display: grid; place-items: center;
+  background: rgba(1,1,4,.55); backdrop-filter: blur(4px);
+  opacity: 0; pointer-events: none; transition: opacity .3s;
+}
+.gdemo-stage.ur-dlg .gdemo-hr-dlg { opacity: 1; }
+.gdemo-hr-dlgcard {
+  width: min(320px, 86%); padding: 16px; box-sizing: border-box;
+  border-radius: var(--hr-radius-md); border: 1px solid var(--hr-line-strong);
+  background: var(--hr-bg-2); box-shadow: var(--hr-shadow-3);
+  transform: translateY(10px) scale(.97); transition: transform .3s;
+}
+.gdemo-stage.ur-dlg .gdemo-hr-dlgcard { transform: none; }
+.gdemo-hr-dlghead {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+  margin-bottom: 12px; font: 900 13px/1.25 var(--hr-sans); color: var(--hr-fg-0);
+}
+.gdemo-hr-dlghead svg { flex: none; color: var(--hr-fg-2); }
+.gdemo-hr-unlink {
+  display: block; padding: 10px; border-radius: 8px; text-align: center;
+  font: 900 12px/1 var(--hr-sans); letter-spacing: .06em;
+  color: var(--hr-on-primary); background: var(--hr-primary);
+  transition: transform .2s, box-shadow .2s, filter .2s;
+}
+.gdemo-hr-unlink.is-hot { box-shadow: 0 0 18px var(--hr-primary-25); }
+.gdemo-hr-unlink.is-press { transform: translateY(1px); filter: brightness(.9); }
+
+.gdemo-hr-toast {
+  position: absolute; left: 50%; bottom: 14px; z-index: 7; min-width: 250px;
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+  border-radius: var(--hr-radius-md); border: 1px solid var(--hr-line-strong);
+  background: var(--hr-bg-2); box-shadow: var(--hr-shadow-3);
+  font: 700 12px/1.2 var(--hr-sans); color: var(--hr-fg-1);
+  opacity: 0; transform: translate(-50%, 12px); transition: opacity .35s, transform .35s;
+}
+.gdemo-stage.ur-toast .gdemo-hr-toast { opacity: 1; transform: translate(-50%, 0); }
+.gdemo-hr-tick {
+  width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center;
+  color: var(--hr-on-primary); background: var(--hr-online);
+}
+.gdemo-hr-toast > svg { margin-left: auto; color: var(--hr-fg-3); }
+
 /* Perks reveal (in-game demos) */
 .gdemo-perks {
   position: absolute; inset: 10px; z-index: 15; display: flex; flex-direction: column;
@@ -4449,6 +4618,10 @@ button.gm-geo-name:focus-visible { outline: 2px solid var(--hr-primary); outline
   .gdemo-modal .trade-modal-img { min-height: 0; height: 110px; }
   .gdemo-traits { display: none; }
   .gdemo-wallet { right: 8px; width: 220px; }
+  .gdemo-hr { margin: 0; }
+  .gdemo-hr-links, .gdemo-hr-sub span:nth-child(n+3) { display: none; }
+  .gdemo-hr-hero { height: 200px; }
+  .gdemo-hr-opts { left: 84px; }
   .gdemo-beat { padding: 4px 9px 4px 5px; }
   /* Replay + Back + Next + "Up next" is more than a narrow phone fits on one line. */
   .gdemo-ctrl { margin-left: 0; width: 100%; flex-wrap: wrap; row-gap: 8px; }
@@ -4461,6 +4634,8 @@ button.gm-geo-name:focus-visible { outline: 2px solid var(--hr-primary); outline
   .gdemo-cursor, .gdemo-replay, .gdemo-intro { display: none; }
   .gdemo-modal, .gdemo-wallet, .gdemo-success,
   .gdemo-modal .trade-modal-card.gdemo-card { transition: none; }
+  .gdemo-hr-menu, .gdemo-hr-opts, .gdemo-hr-card, .gdemo-hr-dots,
+  .gdemo-hr-dlg, .gdemo-hr-dlgcard, .gdemo-hr-toast { transition: none; }
 }
 
 /* anchors for smooth-scroll under the sticky tab bar */
