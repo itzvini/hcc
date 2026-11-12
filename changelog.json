@@ -1,6 +1,196 @@
 {
   "club": [
     {
+      "date": "November 10, 2026",
+      "title": "Creature backgrounds are in game",
+      "body": "Every Gen 1 Creature's set now includes a profile background that matches its Background Color trait: five colors, each with a Holographic version for the Holographic Creatures, and all ten are animated. LAND owners get backgrounds next, and the 1:1 Creatures will get their own, which may take a little longer.",
+      "tag": "announcement",
+      "i18n": {
+        "pt": {
+          "date": "10 de nov. de 2026",
+          "title": "Os fundos das Creatures chegaram ao jogo",
+          "body": "O set de cada Creature da Gen 1 agora inclui um fundo de perfil que combina com o trait Background Color dela: cinco cores, cada uma com uma versão Holographic para as Creatures Holographic, e os dez fundos são animados. Os donos de LAND recebem fundos em seguida, e as Creatures 1:1 vão ganhar os seus próprios, o que pode levar um pouco mais."
+        },
+        "es": {
+          "date": "10 nov. 2026",
+          "title": "Los fondos de las Creatures ya están en el juego",
+          "body": "El set de cada Creature de Gen 1 ahora incluye un fondo de perfil que combina con su trait Background Color: cinco colores, cada uno con una versión Holographic para las Creatures Holographic, y los diez fondos son animados. Los dueños de LAND recibirán fondos a continuación, y las Creatures 1:1 tendrán los suyos propios, lo que puede tardar un poco más."
+        },
+        "fr": {
+          "date": "10 nov. 2026",
+          "title": "Les fonds des Creatures sont en jeu",
+          "body": "Le set de chaque Creature Gen 1 inclut désormais un fond de profil assorti à son trait Background Color : cinq couleurs, chacune avec une version Holographic pour les Creatures Holographic, et les dix fonds sont animés. Les propriétaires de LAND recevront les leurs ensuite, et les Creatures 1:1 auront leurs propres fonds, ce qui peut prendre un peu plus de temps."
+        },
+        "de": {
+          "date": "10. November 2026",
+          "title": "Creature-Hintergründe sind im Spiel",
+          "body": "Das Set jeder Gen-1-Creature enthält jetzt einen Profilhintergrund passend zu ihrem Trait Background Color: fünf Farben, jede mit einer Holographic-Version für die Holographic Creatures, und alle zehn sind animiert. Als Nächstes bekommen LAND-Besitzer Hintergründe, und die 1:1-Creatures bekommen eigene, was etwas länger dauern kann."
+        },
+        "ru": {
+          "date": "10 ноября 2026",
+          "title": "Фоны для существ уже в игре",
+          "body": "Сет каждого существа Gen 1 теперь включает фон профиля под его трейт Background Color: пять цветов, у каждого есть версия Holographic для голографических существ, и все десять фонов анимированы. Следующими фоны получат владельцы LAND, а у существ 1:1 будут свои собственные, но на это может уйти чуть больше времени."
+        },
+        "tr": {
+          "date": "10 Kasım 2026",
+          "title": "Creature arka planları oyunda",
+          "body": "Her Gen 1 Creature'ın setinde artık Background Color trait'ine uyan bir profil arka planı var: beş renk, her birinin Holographic Creature'lar için bir Holographic versiyonu var ve on arka planın hepsi animasyonlu. Sırada LAND sahiplerinin arka planları var, 1:1 Creature'lar ise kendilerine özel arka planlar alacak, bu biraz daha uzun sürebilir."
+        }
+      }
+    },
+    {
+      "date": "October 31, 2026",
+      "title": "Halloween drop",
+      "body": "A small Halloween drop for holders: Autt's Electric Outlet and Plug costume, with a spare to gift a friend, plus three pieces of Doodle Kitchen furniture. After your feedback, Csarjavr's pumpkin bucket and two Creature lenses joined it the same night, and the lenses came back on November 2 in more sizes to fit more eyes.",
+      "tag": "announcement",
+      "i18n": {
+        "pt": {
+          "date": "31 de out. de 2026",
+          "title": "Drop de Halloween",
+          "body": "Um pequeno drop de Halloween para holders: a fantasia Electric Outlet e Plug, criada por Autt, com uma cópia extra para presentear um amigo, mais três móveis da Doodle Kitchen. Depois do seu feedback, o balde de abóbora criado por Csarjavr e duas lentes de Creature entraram no drop na mesma noite, e as lentes voltaram em 2 de novembro em mais tamanhos para servir em mais olhos."
+        },
+        "es": {
+          "date": "31 oct. 2026",
+          "title": "Drop de Halloween",
+          "body": "Un pequeño drop de Halloween para holders: el disfraz Electric Outlet y Plug, creado por Autt, con una copia extra para regalar a un amigo, más tres muebles de Doodle Kitchen. Tras tus comentarios, el cubo de calabaza creado por Csarjavr y dos lentes de Creature se sumaron esa misma noche, y las lentes volvieron el 2 de noviembre en más tamaños para adaptarse a más ojos."
+        },
+        "fr": {
+          "date": "31 oct. 2026",
+          "title": "Drop d'Halloween",
+          "body": "Un petit drop d'Halloween pour les holders : le costume Electric Outlet et Plug, imaginé par Autt, avec un exemplaire en plus à offrir à un ami, et trois meubles de Doodle Kitchen. Suite à vos retours, le seau citrouille imaginé par Csarjavr et deux lentilles Creature l'ont rejoint le soir même, et les lentilles sont revenues le 2 novembre en davantage de tailles, pour s'adapter à plus d'yeux."
+        },
+        "de": {
+          "date": "31. Oktober 2026",
+          "title": "Halloween-Drop",
+          "body": "Ein kleiner Halloween-Drop für Holder: das Kostüm Electric Outlet und Plug von Autt, mit einer zweiten Kopie zum Verschenken an einen Freund, dazu drei Möbelstücke von Doodle Kitchen. Nach deinem Feedback kamen noch am selben Abend der Kürbiseimer von Csarjavr und zwei Creature-Linsen dazu, und die Linsen kamen am 2. November in mehr Größen zurück, damit sie zu mehr Augen passen."
+        },
+        "ru": {
+          "date": "31 октября 2026",
+          "title": "Дроп на Хэллоуин",
+          "body": "Небольшой дроп на Хэллоуин для холдеров: костюм Electric Outlet и Plug от Autt с запасной копией, чтобы подарить другу, и три предмета мебели от Doodle Kitchen. После ваших отзывов в тот же вечер к нему добавились ведёрко-тыква от Csarjavr и две пары линз, а 2 ноября линзы вернулись в большем числе размеров, чтобы подходить к большему числу глаз."
+        },
+        "tr": {
+          "date": "31 Ekim 2026",
+          "title": "Cadılar Bayramı drop'u",
+          "body": "Holderlar için küçük bir Cadılar Bayramı drop'u: Autt'un tasarladığı Electric Outlet ve Plug kostümü, bir arkadaşına hediye etmen için ekstra bir kopyayla, ayrıca Doodle Kitchen'dan üç mobilya. Geri bildiriminden sonra aynı gece Csarjavr'ın balkabağı kovası ve iki Creature lensi eklendi, lensler de 2 Kasım'da daha fazla göze uysun diye daha fazla boyutla geri geldi."
+        }
+      }
+    },
+    {
+      "date": "October 30, 2026",
+      "title": "The Halloween grabs are out",
+      "body": "Two HCC grabs, Creature Feature and Wicked Ways, mix the top three themes from your poll: 90s Retro Halloween, Creepypasta, and Blood, Guts & Body Horror, with designs the art team picked from your Creature Creations. A spin costs 30 Creature Coins, far less than the last grab, with gold as the pricier option. Finish a grab to win its mythical background.",
+      "tag": "announcement",
+      "i18n": {
+        "pt": {
+          "date": "30 de out. de 2026",
+          "title": "Os grabs de Halloween chegaram",
+          "body": "Dois grabs do HCC, Creature Feature e Wicked Ways, misturam os três temas mais votados na sua enquete: 90s Retro Halloween, Creepypasta e Blood, Guts & Body Horror, com designs que o time de arte escolheu das suas Creature Creations. Um giro custa 30 Creature Coins, bem menos que no último grab, com o gold como opção mais cara. Complete um grab para ganhar o fundo mítico dele."
+        },
+        "es": {
+          "date": "30 oct. 2026",
+          "title": "Ya salieron los grabs de Halloween",
+          "body": "Dos grabs de HCC, Creature Feature y Wicked Ways, mezclan los tres temas más votados en tu encuesta: 90s Retro Halloween, Creepypasta y Blood, Guts & Body Horror, con diseños que el equipo de arte eligió de tus Creature Creations. Un giro cuesta 30 Creature Coins, mucho menos que en el último grab, con el gold como opción más cara. Completa un grab para ganar su fondo mítico."
+        },
+        "fr": {
+          "date": "30 oct. 2026",
+          "title": "Les grabs d'Halloween sont là",
+          "body": "Deux grabs HCC, Creature Feature et Wicked Ways, mélangent les trois thèmes arrivés en tête de votre sondage : 90s Retro Halloween, Creepypasta et Blood, Guts & Body Horror, avec des designs que l'équipe artistique a choisis parmi vos Creature Creations. Un tour coûte 30 Creature Coins, bien moins que pour le dernier grab, le gold restant l'option la plus chère. Terminez un grab pour gagner son fond mythique."
+        },
+        "de": {
+          "date": "30. Oktober 2026",
+          "title": "Die Halloween-Grabs sind da",
+          "body": "Zwei HCC-Grabs, Creature Feature und Wicked Ways, mischen die drei Top-Themen aus deiner Umfrage: 90s Retro Halloween, Creepypasta und Blood, Guts & Body Horror, mit Designs, die das Art-Team aus deinen Creature Creations ausgewählt hat. Ein Spin kostet 30 Creature Coins, viel weniger als beim letzten Grab, mit Gold als teurerer Option. Schließ einen Grab ab, um seinen mythischen Hintergrund zu gewinnen."
+        },
+        "ru": {
+          "date": "30 октября 2026",
+          "title": "Хэллоуинские grabs уже вышли",
+          "body": "Два grabs HCC, Creature Feature и Wicked Ways, смешивают три лидирующие темы вашего опроса: 90s Retro Halloween, Creepypasta и Blood, Guts & Body Horror, с дизайнами, которые арт-команда выбрала из ваших Creature Creations. Одна прокрутка стоит 30 Creature Coins, намного меньше, чем в прошлом grab, а gold остаётся более дорогим вариантом. Пройдите grab до конца, чтобы получить его мифический фон."
+        },
+        "tr": {
+          "date": "30 Ekim 2026",
+          "title": "Cadılar Bayramı grab'leri çıktı",
+          "body": "İki HCC grab'i, Creature Feature ve Wicked Ways, anketindeki en çok oy alan üç temayı karıştırıyor: 90s Retro Halloween, Creepypasta ve Blood, Guts & Body Horror; tasarımları da sanat ekibi senin Creature Creations gönderilerinden seçti. Bir çevirme 30 Creature Coins, önceki grab'den çok daha ucuz, gold ise daha pahalı seçenek olarak kalıyor. Bir grab'i tamamla ve mitik arka planını kazan."
+        }
+      }
+    },
+    {
+      "date": "October 26, 2026",
+      "title": "Creature Gold Bars are back",
+      "body": "For one week, October 26 to November 2, you could turn your Creature Coins into 1K and 5K Creature Gold Bars and trade them. A 10% tax went on the bars on day one to keep the Coin's value from crashing, and on October 28 the daily limit dropped to two 1K bars and one 5K bar.",
+      "tag": "announcement",
+      "i18n": {
+        "pt": {
+          "date": "26 de out. de 2026",
+          "title": "As Creature Gold Bars voltaram",
+          "body": "Por uma semana, de 26 de outubro a 2 de novembro, você pôde transformar suas Creature Coins em Creature Gold Bars de 1K e 5K e negociá-las. Uma taxa de 10% entrou nas barras já no primeiro dia, para o valor da Coin não despencar, e em 28 de outubro o limite diário caiu para duas barras de 1K e uma de 5K."
+        },
+        "es": {
+          "date": "26 oct. 2026",
+          "title": "Vuelven las Creature Gold Bars",
+          "body": "Durante una semana, del 26 de octubre al 2 de noviembre, pudiste convertir tus Creature Coins en Creature Gold Bars de 1K y 5K e intercambiarlas. El primer día se añadió un impuesto del 10% a las barras para que el valor de la Coin no se desplomara, y el 28 de octubre el límite diario bajó a dos barras de 1K y una de 5K."
+        },
+        "fr": {
+          "date": "26 oct. 2026",
+          "title": "Les Creature Gold Bars sont de retour",
+          "body": "Pendant une semaine, du 26 octobre au 2 novembre, vous pouviez convertir vos Creature Coins en Creature Gold Bars de 1K et 5K et les échanger. Une taxe de 10 % s'est ajoutée aux barres dès le premier jour pour éviter que la valeur de la Coin ne s'effondre, et le 28 octobre la limite quotidienne est passée à deux barres de 1K et une de 5K."
+        },
+        "de": {
+          "date": "26. Oktober 2026",
+          "title": "Die Creature Gold Bars sind zurück",
+          "body": "Eine Woche lang, vom 26. Oktober bis 2. November, konntest du deine Creature Coins in Creature Gold Bars zu 1K und 5K umwandeln und sie handeln. Schon am ersten Tag kam eine Steuer von 10 % auf die Barren, damit der Wert der Coin nicht abstürzt, und am 28. Oktober sank das Tageslimit auf zwei 1K-Barren und einen 5K-Barren."
+        },
+        "ru": {
+          "date": "26 октября 2026",
+          "title": "Creature Gold Bars вернулись",
+          "body": "Неделю, с 26 октября по 2 ноября, вы могли превращать свои Creature Coins в Creature Gold Bars по 1K и 5K и торговать ими. Уже в первый день на слитки ввели налог 10%, чтобы стоимость Coin не обвалилась, а 28 октября дневной лимит снизили до двух слитков по 1K и одного по 5K."
+        },
+        "tr": {
+          "date": "26 Ekim 2026",
+          "title": "Creature Gold Bars geri döndü",
+          "body": "Bir hafta boyunca, 26 Ekim'den 2 Kasım'a kadar, Creature Coins'ini 1K ve 5K'lık Creature Gold Bars'a çevirip takas edebildin. Coin'in değeri çökmesin diye ilk gün barlara %10 vergi eklendi, 28 Ekim'de de günlük limit iki 1K ve bir 5K bara indi."
+        }
+      }
+    },
+    {
+      "date": "October 17, 2026",
+      "title": "Dessert Slimes halfway there",
+      "body": "Gen 2 update #10: half of the Dessert Slimes' trait concepts are done, and the first sneak peek is a pancake head. One artist still covers both Gen 2 and HCC releases, so the Halloween grab comes first and the rest of the set follows right after.",
+      "tag": "announcement",
+      "i18n": {
+        "pt": {
+          "date": "17 de out. de 2026",
+          "title": "Dessert Slimes na metade",
+          "body": "Atualização #10 da Gen 2: metade dos conceitos de traits dos Dessert Slimes está pronta, e a primeira prévia é uma cabeça de panqueca. Um único artista ainda cuida da Gen 2 e dos lançamentos do HCC, então o grab de Halloween vem primeiro e o resto do set logo depois."
+        },
+        "es": {
+          "date": "17 oct. 2026",
+          "title": "Dessert Slimes a mitad de camino",
+          "body": "Actualización de Gen 2 #10: la mitad de los conceptos de traits de los Dessert Slimes está lista, y el primer adelanto es una cabeza de panqueque. Un solo artista sigue a cargo de Gen 2 y de los lanzamientos de HCC, así que el grab de Halloween va primero y el resto del set justo después."
+        },
+        "fr": {
+          "date": "17 oct. 2026",
+          "title": "Dessert Slimes à mi-chemin",
+          "body": "Mise à jour Gen 2 n° 10 : la moitié des concepts de traits des Dessert Slimes est terminée, et le premier aperçu est une tête en pancake. Un seul artiste gère toujours la Gen 2 et les sorties HCC, donc le grab d'Halloween passe d'abord et le reste du set suit juste après."
+        },
+        "de": {
+          "date": "17. Oktober 2026",
+          "title": "Dessert Slimes zur Hälfte fertig",
+          "body": "Update Nr. 10 zu Gen 2: Die Hälfte der Trait-Konzepte für die Dessert Slimes ist fertig, und der erste Sneak Peek ist ein Pfannkuchen-Kopf. Ein einziger Artist kümmert sich weiter um Gen 2 und die HCC-Releases, deshalb kommt zuerst der Halloween-Grab und gleich danach der Rest des Sets."
+        },
+        "ru": {
+          "date": "17 октября 2026",
+          "title": "Dessert Slimes готовы наполовину",
+          "body": "Обновление Gen 2 №10: готова половина концептов трейтов для Dessert Slimes, а первый тизер показывает голову-панкейк. Один художник по-прежнему ведёт и Gen 2, и релизы HCC, поэтому сначала идёт хэллоуинский grab, а сразу после него остальная часть набора."
+        },
+        "tr": {
+          "date": "17 Ekim 2026",
+          "title": "Dessert Slimes yarıya geldi",
+          "body": "Gen 2 güncellemesi #10: Dessert Slimes trait konseptlerinin yarısı tamamlandı ve ilk ön izleme bir pankek kafa. Hem Gen 2 hem de HCC çıkışlarıyla hâlâ tek bir sanatçı ilgileniyor, bu yüzden önce Cadılar Bayramı grab'i geliyor, setin geri kalanı hemen ardından."
+        }
+      }
+    },
+    {
       "date": "October 3, 2026",
       "title": "The Sushi Slimes are finished",
       "body": "Gen 2 update #9: the Sushi Slimes, the first Gen 2 pet set, are finished. The artist now works full time on the Dessert Slimes, and early sketches should follow soon. Work on Gen 2 is slower than anyone wants, and the updates keep coming every two weeks so you can see where it stands.",

@@ -1511,6 +1511,8 @@
   "col.cat.nose": "Nariz",
   "col.cat.pants": "Pantalones",
   "col.cat.room_floor": "Suelo de sala",
+  "col.cat.wall_entity": "Decoración de pared",
+  "col.cat.profile_background": "Fondo",
   "col.cat.set": "Set",
   "col.cat.container": "Huevo",
   "col.cat.pet": "Mascota",

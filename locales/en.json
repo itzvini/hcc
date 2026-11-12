@@ -1514,6 +1514,8 @@
   "col.cat.nose": "Nose",
   "col.cat.pants": "Pants",
   "col.cat.room_floor": "Room floor",
+  "col.cat.wall_entity": "Wall decor",
+  "col.cat.profile_background": "Background",
   "col.cat.set": "Set",
   "col.cat.container": "Egg",
   "col.cat.pet": "Pet",
