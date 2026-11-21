@@ -58,6 +58,16 @@ function petUrl(it) {
   const c = it?.coords;
   return Number.isInteger(c?.x) && Number.isInteger(c?.y) ? `/api/market/land/pet/${c.x}/${c.y}` : null;
 }
+// A LAND parcel's slime has a name of its own ("Bobboblob"), and holders know their parcels
+// by it sooner than by coordinates. Null for a Creature, and for a parcel whose slime the
+// catalogue has not read yet.
+function petNameOf(it) {
+  return coll === 'land' && it?.slimeName ? String(it.slimeName) : null;
+}
+// The short label a picker row wears: "#1234" for a Creature, "(199, 181)" for a parcel.
+function shortNameOf(it) {
+  return String(it?.name || '').replace(/^Highrise (Creature|LAND) /, '');
+}
 function tokenExplorerUrl(tokenId, c = coll) {
   return c === 'land'
     ? `https://opensea.io/assets/ethereum/${LAND_CONTRACT_L1}/${encodeURIComponent(tokenId)}`
@@ -104,6 +114,18 @@ import {
   isSigning as addFundsSigning, onBridgeDismissed as addFundsBridgeDismissed,
 } from './market/add-funds.js';
 import { coinIco, ico } from './market/core/icons.js';
+import { sk, skRegion, skSay } from './market/core/skel.js';
+// "Your collection": the value block at the top of the dashboard. Its own module, with its
+// own state; the shell paints it, mounts its chart after each paint, and routes its clicks.
+import {
+  portfolioHtml, mountPortfolio, holdPortfolio, maybeLoadPortfolio, refreshPortfolio, onPortfolioClick,
+  portfolioBusy,
+} from './market/portfolio.js';
+// "Your activity": both collections' history in one filterable list, its own module too.
+import {
+  activityHtml, holdActivity, mountActivity, maybeLoadActivity, refreshActivity, activityBusy,
+  onActivityClick, onActivityInput,
+} from './market/activity.js';
 
 /** The two funds views, and the shared truth about whether one is on screen. */
 const FUNDS_VIEWS = new Set(['add-funds', 'cash-out']);
@@ -517,13 +539,7 @@ const ACCEPT_BUSY = new Set(['prepare', 'approve', 'approveWait', 'fulfill', 'fu
 let owned = null;          // null = not loaded; [] = loaded, none
 let mine = null;           // null = not loaded; [] = loaded, none
 let sellerLoading = false;
-// Activity history ("History" tab): past buys, sales, transfers (+ Creature listing events).
-// Loaded lazily on first visit, separately from the seller hub — it's read-only by address.
-// NB: named histItems, NOT `history` — that would shadow the global window.history that
-// syncTradeUrl() relies on (a null shadow there silently broke collection switching).
-let histItems = null;      // null = not loaded; [] = loaded, none
-let historyLoading = false;
-let historyError = false;
+// The activity history (both collections, filterable) lives in js/market/activity.js.
 // Selection is multi-select (Set of stringified tokenIds), so the picker drives BOTH
 // single listings/transfers and Token-Trove-style mass ops. `sellSel`/`transferSel` stay as
 // the DERIVED single selection (the one token when exactly one is picked, else null) so every
@@ -1310,8 +1326,13 @@ function applyFilters(debounceMs = 0) {
 }
 
 function skeletons(n) {
-  return Array.from({ length: n }, () =>
-    `<div class="trade-tile trade-skel" aria-hidden="true"><div class="trade-tile-media"></div><div class="trade-tile-body"><span></span><span></span></div></div>`).join('');
+  // The sentence sits out of the grid's flow, so the tiles keep their columns.
+  return skSay(t('trade.browse.loadingMore')) + Array.from({ length: n }, (_, k) => {
+    const i = Math.floor(k / 4) + (k % 4);   // a diagonal wave across the rows
+    return `<div class="trade-tile trade-skel" aria-hidden="true" style="animation-delay:${k * 45}ms">
+      <div class="trade-tile-media">${sk('100%', '100%', { i, cls: 'is-fill' })}</div>
+      <div class="trade-tile-body">${sk('72%', 12, { i })}${sk('44%', 15, { i: i + 1 })}${sk('30%', 10, { i: i + 2 })}</div></div>`;
+  }).join('');
 }
 
 function rarityChip(rarity) {
@@ -1788,7 +1809,8 @@ function modalCardHtml() {
 
   const attrs = meta.attributes || meta.traits; // creatures vs LAND field name
   const traits = modalLoading
-    ? `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.modal.loading'))}</div>`
+    ? skRegion(t('trade.modal.loading'), `<div class="trade-modal-traits">${Array.from({ length: 8 }, (_, n) =>
+        `<div class="trade-trait is-sk">${sk('46%', 8, { i: n >> 1 })}${sk('74%', 13, { i: (n >> 1) + 1 })}</div>`).join('')}</div>`, 'sk-traits')
     : (attrs && attrs.length
         ? `<div class="trade-modal-traits">${attrs.map(a => {
             const pctStr = fmtTraitPct(traitPctOf(a.trait, a.value));
@@ -3597,6 +3619,10 @@ async function loadMyOffers({ force = false } = {}) {
     myOffersLoading = false;
   }
   patchCollStrip();
+  // The dashboard lists these too ("bids you have out"). It used to show them only when some
+  // other read happened to repaint it afterwards, so a bidder with no offers coming in never
+  // saw their own.
+  if (tradeTab === 'dashboard') patchDashboardView();
   if (myOffersAgain) { myOffersAgain = false; loadMyOffers({ force: true }); }
 }
 async function loadLandMyOffers({ force = false } = {}) {
@@ -4964,7 +4990,7 @@ function invActive() { return !!(invFlt.q || invFlt.traits.size); }
 // OR within a trait type, AND across types (skipType lets faceting count "if I also pick this").
 function invMatch(it, skipType) {
   if (invFlt.q) {
-    const hay = `${it.name || ''} ${it.tokenId} ${it.coords ? `${it.coords.x} ${it.coords.y}` : ''}`.toLowerCase();
+    const hay = `${it.slimeName || ''} ${it.name || ''} ${it.tokenId} ${it.coords ? `${it.coords.x} ${it.coords.y}` : ''}`.toLowerCase();
     if (!hay.includes(invFlt.q.toLowerCase())) return false;
   }
   for (const [type, vals] of invFlt.traits) {
@@ -5006,11 +5032,23 @@ function invRarityRank(it) {
 function invFilteredItems() {
   const items = invBase().filter(it => invMatch(it, null));
   const byNum = (a, b) => { try { const d = BigInt(a.tokenId) - BigInt(b.tokenId); return d < 0n ? -1 : d > 0n ? 1 : 0; } catch { return String(a.tokenId).localeCompare(String(b.tokenId)); } };
-  if (invFlt.sort === 'num-desc') items.sort((a, b) => byNum(b, a));
-  else if (invFlt.sort === 'rank') items.sort((a, b) => (invRarityRank(a) - invRarityRank(b)) || byNum(a, b));
+  // By the slime's name, the way a holder with a hundred parcels looks for one of them. A
+  // parcel with no name yet goes last either way round, so it never opens the list.
+  const byPet = dir => (a, b) => {
+    const x = petNameOf(a), y = petNameOf(b);
+    if (!x || !y) return x ? -1 : y ? 1 : byNum(a, b);
+    return dir * x.localeCompare(y, undefined, { sensitivity: 'base', numeric: true }) || byNum(a, b);
+  };
+  const sort = INV_PET_SORTS.has(invFlt.sort) && coll !== 'land' ? 'rank' : invFlt.sort;
+  if (sort === 'num-desc') items.sort((a, b) => byNum(b, a));
+  else if (sort === 'rank') items.sort((a, b) => (invRarityRank(a) - invRarityRank(b)) || byNum(a, b));
+  else if (sort === 'pet-asc') items.sort(byPet(1));
+  else if (sort === 'pet-desc') items.sort(byPet(-1));
   else items.sort(byNum); // num-asc
   return items;
 }
+// The sorts only LAND has: a Creature's name is its number, which the number sorts cover.
+const INV_PET_SORTS = new Set(['pet-asc', 'pet-desc']);
 
 function invRarityChipsHtml() {
   const facet = (invFacets || []).find(x => /rarity/i.test(x.type));
@@ -5107,12 +5145,15 @@ function invFilterSideHtml() {
 // The Sell/Transfer toolbar — same markup as the Buy toolbar (browseToolbarHtml), minus
 // the on-sale/all scope toggle. Search + inventory sorts + the mobile Filters button.
 function invToolbarHtml() {
-  const sorts = [['rank', 'sortRarity'], ['num-asc', 'sortNumAsc'], ['num-desc', 'sortNumDesc']];
+  const sorts = [['rank', 'sortRarity'],
+    ...(coll === 'land' ? [['pet-asc', 'sortPetAsc'], ['pet-desc', 'sortPetDesc']] : []),
+    ['num-asc', 'sortNumAsc'], ['num-desc', 'sortNumDesc']];
+  const searchLbl = t(skey('trade.filter.searchInv'));
   return `
   <div class="trade-toolbar">
     <label class="trade-flt-search">
       <svg class="trade-flt-sico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M16.5 16.5L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      <input id="inv-q" type="search" autocomplete="off" enterkeyhint="search" placeholder="${esc(t('trade.filter.searchInv'))}" value="${esc(invFlt.q)}" aria-label="${esc(t('trade.filter.searchInv'))}" />
+      <input id="inv-q" type="search" autocomplete="off" enterkeyhint="search" placeholder="${esc(searchLbl)}" value="${esc(invFlt.q)}" aria-label="${esc(searchLbl)}" />
     </label>
     <select id="inv-sort" class="seg-select trade-flt-sort" aria-label="${esc(t('trade.filter.sortAria'))}">
       ${sorts.map(([v, k]) => `<option value="${v}" ${invFlt.sort === v ? 'selected' : ''}>${esc(t('trade.filter.' + k))}</option>`).join('')}
@@ -6262,7 +6303,12 @@ function saleCardHtml(s, i = 0, swap = false) {
 
 function salesGridInnerHtml(swap = false) {
   if (salesLoading && !(salesItems && salesItems.length)) {
-    return `<div class="trade-grid-state"><span class="trade-mini-spin" aria-hidden="true"></span><p>${esc(t('trade.sales.loading'))}</p></div>`;
+    return skRegion(t('trade.sales.loading'), [0, 1, 2, 3, 4].map(n => `
+      <div class="trade-sale-card is-sk" style="animation-delay:${n * 60}ms">
+        ${sk('72px', 72, { i: n, shape: 'tile' })}
+        <span class="trade-sale-body">${sk(`${44 - (n % 3) * 6}%`, 14, { i: n })}${sk('min(260px, 80%)', 20, { i: n + 1, shape: 'pill' })}${sk('34%', 11, { i: n + 2 })}</span>
+        <span class="sk-end">${sk('88px', 17, { i: n })}${sk('56px', 11, { i: n + 1 })}</span>
+      </div>`).join(''), 'sk-sales');
   }
   if (salesError && !(salesItems && salesItems.length)) {
     return `<div class="trade-grid-state"><p>${esc(t('trade.sales.error'))}</p>
@@ -6320,7 +6366,8 @@ function notePendingOwned(it) {
   pendingOwned.push({
     coll, account, at: Date.now(),
     item: { tokenId: String(it.tokenId), name: it.name || `#${it.tokenId}`, image: it.image || null,
-            coords: it.coords || null, traits: it.traits || {}, rank: it.rank ?? null },
+            coords: it.coords || null, traits: it.traits || {}, rank: it.rank ?? null,
+            slimeName: it.slimeName || null },
   });
 }
 function dropPendingOwned(tokenId) {
@@ -6505,11 +6552,12 @@ function mineCardHtml({ live: l, older }) {
   return `
     <div class="trade-mine-item ${editing ? 'is-editing' : ''}">
       <div class="trade-mine-card">
-        ${coll === 'land' && petUrl(l)
+        <button type="button" class="trade-mine-art" data-act="asset-open" data-token="${esc(l.tokenId)}" data-coll="${esc(coll)}"
+          aria-label="${esc(t('trade.dash.openAria').replace('{name}', l.name || ''))}">${coll === 'land' && petUrl(l)
           ? `<img src="${esc(petUrl(l))}" ${l.image ? `data-fallback="${esc(l.image)}"` : ''} alt="" loading="lazy" />`
-          : (l.image ? `<img src="${esc(l.image)}" alt="" loading="lazy" />` : `<div class="trade-tile-noimg" aria-hidden="true">${ico('paw', 28)}</div>`)}
+          : (l.image ? `<img src="${esc(l.image)}" alt="" loading="lazy" />` : `<span class="trade-tile-noimg" aria-hidden="true">${ico('paw', 28)}</span>`)}</button>
         <div class="trade-mine-info">
-          <span class="trade-mine-title"><span class="trade-mine-name">${esc(l.name)}</span>${sourceChipHtml(l)}</span>
+          <span class="trade-mine-title"><button type="button" class="trade-mine-name asset-link" data-act="asset-open" data-token="${esc(l.tokenId)}" data-coll="${esc(coll)}">${esc(l.name)}</button>${sourceChipHtml(l)}</span>
           <span class="trade-mine-price">${esc(l.currency ? fmtListingLine(l) : fmtEthFiat(l.totalEth ?? l.priceEth))}</span>
           ${mineNetHtml(l)}
         </div>
@@ -6673,111 +6721,7 @@ function setEdit(phase, extra) {
   }
 }
 
-// --- Listing history (Creatures-only) -------------------------------------------------
-// A read-only record of the wallet's past listings: sold (FILLED), cancelled, or expired.
-// No actions — just a log — fetched lazily by address the first time the tab is opened.
-
-// Load history once, by address, for the active collection (Creatures → Immutable, LAND →
-// OpenSea). Read-only data, so it doesn't need the wallet on the collection's chain (unlike
-// the seller hub) — just a connected account. Guards against a stale resolve landing after a
-// collection switch.
-async function loadHistory() {
-  if (!account || historyLoading) return;
-  const startColl = coll;
-  historyLoading = true;
-  patchDashboardView();
-  try {
-    const r = await fetch(`${COLLECTIONS[startColl].api}/history/${account}`, { headers: { Accept: 'application/json' } })
-      .then(res => res.ok ? res.json() : null).catch(() => null);
-    if (coll !== startColl || !account) return; // user moved on while it was in flight
-    historyError = !r;
-    histItems = r && Array.isArray(r.items) ? r.items : (histItems || []);
-  } finally {
-    historyLoading = false;
-    patchDashboardView();
-  }
-}
-
-
-/**
- * What a past trade was worth, in the money it settled in and in the reader's currency AT
- * THE TIME — "0.1266 ETH (≈ US$ 313)" where the 313 is July's dollars, not today's.
- *
- * This line used to run through fmtEthFiat, which converts at the LIVE rate: the dollar
- * figure beside a months-old sale drifted every time ETH moved and never matched what the
- * trade was actually worth. The server now values each entry on its own day
- * (valueAtItsOwnDay) and this renders that, the same way the sales list already does.
- *
- * No rate for that day means no dollar figure — the native amount stands alone rather than
- * carrying a number we'd be guessing at.
- */
-function fmtHistoryPrice(h) {
-  const native = h.currency
-    ? fmtListingAmt({ currency: h.currency, totalAmt: h.priceAmt ?? h.priceEth, totalEth: h.priceEth })
-    : fmtEth(h.priceEth);
-  const fiat = fmtSaleFiat(h.priceUsd);
-  return fiat ? `${native} (${fiat})` : native;
-}
-
-// "Jun 12, 2026" in the user's locale — when the listing reached its terminal state.
-function fmtHistoryDate(iso) {
-  if (!iso) return '';
-  const ts = Date.parse(iso);
-  if (!Number.isFinite(ts)) return '';
-  try { return new Date(ts).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }); }
-  catch { return ''; }
-}
-
-// Each history entry's `kind` drives its badge label + colour. Trades (bought/sold) and
-// transfers (received/sent/minted) come from the on-chain activity feed; cancelled/expired
-// are Creature listing-lifecycle events (LAND history is trades + transfers only). See
-// getMyListingHistory (server.js) and myHistory (lib/land-market.js).
-const HISTORY_KIND = {
-  bought:    { key: 'trade.history.kind.bought',    cls: 'is-bought' },
-  sold:      { key: 'trade.history.kind.sold',      cls: 'is-sold' },
-  received:  { key: 'trade.history.kind.received',  cls: 'is-received' },
-  sent:      { key: 'trade.history.kind.sent',      cls: 'is-sent' },
-  minted:    { key: 'trade.history.kind.minted',    cls: 'is-minted' },
-  cancelled: { key: 'trade.history.kind.cancelled', cls: 'is-cancelled' },
-  expired:   { key: 'trade.history.kind.expired',   cls: 'is-expired' },
-};
-
-// One timeline entry: a kind-coloured node on the rail + the card row beside it. `i` drives
-// a staggered entrance reveal (capped so a long history doesn't crawl in).
-function historyCardHtml(h, i = 0) {
-  const k = HISTORY_KIND[h.kind] || { key: null, cls: '' };
-  // Secondary line: the trade price when there is one (bought/sold/listings), otherwise the
-  // counterparty for a plain transfer ("from 0x12…34" / "to 0x12…34").
-  let sub = '';
-  const amt = h.priceAmt ?? h.priceEth;
-  if (amt != null) {
-    sub = `<span class="trade-mine-price ${h.currency === 'usdc' ? 'is-usdc' : ''}">${esc(fmtHistoryPrice(h))}</span>`;
-  } else if (h.with) {
-    const lbl = t(h.kind === 'sent' ? 'trade.history.to' : 'trade.history.from');
-    sub = `<span class="trade-history-with">${esc(lbl)} <code>${esc(shortWallet(h.with))}</code></span>`;
-  }
-  const whenEsc = esc(fmtHistoryDate(h.at));
-  const txLink = h.tx
-    ? `<a href="${esc(txExplorerUrl(h.tx))}" target="_blank" rel="noopener" class="trade-history-tx">${esc(t('trade.history.tx'))} ${ico('external', 12)}</a>`
-    : '';
-  const metaLine = [whenEsc, txLink].filter(Boolean).join(' · ');
-  const delay = Math.min(i * 40, 400);
-  return `
-    <li class="trade-tl-item" style="animation-delay:${delay}ms">
-      <span class="trade-tl-dot ${k.cls}" aria-hidden="true"></span>
-      <div class="trade-mine-card trade-history-card">
-        ${coll === 'land' && petUrl(h)
-          ? `<img src="${esc(petUrl(h))}" ${h.image ? `data-fallback="${esc(h.image)}"` : ''} alt="" loading="lazy" />`
-          : (h.image ? `<img src="${esc(h.image)}" alt="" loading="lazy" />` : `<div class="trade-tile-noimg" aria-hidden="true">${ico('paw', 28)}</div>`)}
-        <div class="trade-mine-info">
-          <span class="trade-mine-name">${esc(h.name)}</span>
-          ${sub}
-          ${metaLine ? `<span class="trade-history-when">${metaLine}</span>` : ''}
-        </div>
-        <span class="trade-history-badge ${k.cls}">${esc(k.key ? t(k.key) : h.kind)}</span>
-      </div>
-    </li>`;
-}
+// The activity timeline (both collections, with filters) moved to js/market/activity.js.
 
 /* --- The dashboard --------------------------------------------------------------------
    A holder asked for this on Discord: "any way we could get an in-game message when we get
@@ -6907,8 +6851,9 @@ function queueOfferBadgeLoad() {
 
 function maybeLoadDashboard() {
   if (!account) return;
+  maybeLoadPortfolio();
   if (recvOffers === null && !recvError && !recvLoading) loadOffersReceived();
-  if (histItems === null && !historyLoading) loadHistory();
+  maybeLoadActivity();
   if (mine === null && !sellerLoading && onZk()) loadSellerData();
 }
 
@@ -6968,11 +6913,11 @@ function receivedCardHtml(o, i = 0, isNew = false) {
   const delay = Math.min(i * 45, 450);
   return `
     <li class="trade-dash-card ${isNew ? 'is-new' : ''}" style="animation-delay:${delay}ms">
-      <button class="trade-dash-art" type="button" data-act="dash-open" data-token="${esc(o.tokenId)}"
+      <button class="trade-dash-art" type="button" data-act="asset-open" data-token="${esc(o.tokenId)}" data-coll="creatures"
         aria-label="${esc(t('trade.dash.openAria').replace('{name}', o.name || ''))}">${art}</button>
       <div class="trade-dash-body">
         <div class="trade-dash-top">
-          <span class="trade-dash-item">${esc(o.name)}</span>
+          <button type="button" class="trade-dash-item asset-link" data-act="asset-open" data-token="${esc(o.tokenId)}" data-coll="creatures">${esc(o.name)}</button>
           ${isNew ? `<span class="trade-dash-newchip">${esc(t('trade.dash.new'))}</span>` : ''}
         </div>
         <span class="trade-dash-price ${o.currency === 'usdc' ? 'is-usdc' : ''}">${esc(fmtOfferLine(o))}</span>
@@ -6992,9 +6937,10 @@ function receivedCardHtml(o, i = 0, isNew = false) {
 
 // A headline number with its label. Values are small integers read straight from the book,
 // so they are stated rather than animated up — a count-up on "2 offers" is noise.
-function dashStatHtml(value, labelKey, accent = '') {
+const STAT_WAIT = Symbol('waiting');
+function dashStatHtml(value, labelKey, accent = '', i = 0) {
   return `<div class="trade-dash-stat" ${accent ? `style="--accent:${accent}"` : ''}>
-    <span class="trade-dash-statn">${esc(String(value))}</span>
+    <span class="trade-dash-statn">${value === STAT_WAIT ? sk('48px', 26, { i, cls: 'trade-dash-sk' }) : esc(String(value))}</span>
     <span class="trade-dash-statl">${esc(t(labelKey))}</span>
   </div>`;
 }
@@ -7006,16 +6952,20 @@ function dashStatsHtml() {
   // true and useful, where a bare dash above a full list just looks broken. What must never
   // appear is a plain 0 standing in for "we couldn't look".
   const partial = !!recvMeta?.partial;
-  const n = recvOffers === null ? '—'
+  // Still reading: shapes, not numbers. The held and listed counts ride on the same answer,
+  // and they used to read 0 until it came, and 0 when it failed: a confident wrong number.
+  const waiting = recvOffers === null && !recvError;
+  const counted = k => (recvMeta ? (recvMeta[k] ?? 0) : waiting ? STAT_WAIT : '—');
+  const n = recvOffers === null ? (waiting ? STAT_WAIT : '—')
     : partial ? (recvOffers.length ? `${recvOffers.length}+` : '—')
     : recvOffers.length;
   // The best offer is a superlative, so it needs the whole book to be true. Held back
   // whenever part of it is missing, however many rows we did read.
   const best = partial ? null : recvOffers?.[0];
   return `<div class="trade-dash-stats">
-    ${dashStatHtml(n, 'trade.dash.stat.offers', 'var(--hr-primary)')}
-    ${dashStatHtml(recvMeta?.ownedCount ?? 0, 'trade.dash.stat.held')}
-    ${dashStatHtml(recvMeta?.listedCount ?? 0, 'trade.dash.stat.listed', 'var(--hr-secondary)')}
+    ${dashStatHtml(n, 'trade.dash.stat.offers', 'var(--hr-primary)', 0)}
+    ${dashStatHtml(counted('ownedCount'), 'trade.dash.stat.held', '', 1)}
+    ${dashStatHtml(counted('listedCount'), 'trade.dash.stat.listed', 'var(--hr-secondary)', 2)}
     ${best ? `<div class="trade-dash-stat is-wide" style="--accent:var(--hr-accent)">
       <span class="trade-dash-statn is-amt ${best.currency === 'usdc' ? 'is-usdc' : ''}">${esc(fmtOfferLine(best))}</span>
       <span class="trade-dash-statl">${esc(t('trade.dash.stat.best'))}</span>
@@ -7029,7 +6979,12 @@ function dashOffersHtml() {
   if (recvOffers === null) {
     return recvError
       ? `<p class="trade-dash-err">${esc(t('trade.health.offersUnknown'))}</p>`
-      : `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.offers.loading'))}</div>`;
+      : skRegion(t('trade.offers.loading'), `<ul class="trade-dash-list">${[0, 1].map(n => `
+          <li class="trade-dash-card is-sk" style="animation-delay:${n * 80}ms">
+            ${sk('56px', 56, { i: n, shape: 'tile' })}
+            <span class="trade-dash-body">${sk('38%', 13, { i: n })}${sk('26%', 16, { i: n + 1 })}${sk('40%', 11, { i: n + 2 })}</span>
+            ${sk('96px', 38, { i: n, shape: 'pill' })}
+          </li>`).join('')}</ul>`, 'dash-sk');
   }
   const anyOffer = recvMeta?.collectionOffer;
   // The standing collection bid is an offer on every Creature you own, so it belongs here —
@@ -7088,7 +7043,10 @@ function dashMyOffersHtml() {
         ${myOffers.map(o => `
           <li class="trade-dash-mineitem ${o.funded === false ? 'is-unfunded' : ''}">
             ${o.funded === false ? `<span class="trade-myoffer-warn" title="${esc(t('trade.coll.unfunded'))}" aria-label="${esc(t('trade.coll.unfunded'))}">${ico('alert', 13)}</span>` : ''}
-            <span class="trade-dash-mineon">${esc(o.collection ? t('trade.coll.chipAny') : `#…${String(o.tokenId).slice(-4)}`)}</span>
+            ${o.collection
+              ? `<span class="trade-dash-mineon">${esc(t('trade.coll.chipAny'))}</span>`
+              : `<button type="button" class="trade-dash-mineon asset-link" data-act="asset-open" data-token="${esc(o.tokenId)}" data-coll="creatures"
+                  aria-label="${esc(t('trade.dash.openAria').replace('{name}', `#${o.tokenId}`))}">#…${esc(String(o.tokenId).slice(-4))}</button>`}
             <span class="trade-dash-price ${o.currency === 'usdc' ? 'is-usdc' : ''}">${esc(fmtOfferLine(o))}</span>
             <button class="trade-dash-cancel" data-act="cancel-offer" data-offer="${esc(o.offerId)}" type="button"
               ${acceptBusyId ? 'disabled' : ''}>${esc(t('trade.coll.cancel'))}</button>
@@ -7101,22 +7059,19 @@ function dashboardViewHtml() {
   // Read-only by address, so the wallet need only be connected. The offers block is
   // Creatures-only (zkEVM bids); LAND has no per-token book to read.
   if (!eth() || !account) return walletGateHtml();
-  const busy = recvLoading || historyLoading;
+  const busy = recvLoading || activityBusy() || portfolioBusy();
   const head = `
     <div class="trade-dash-head">
       <div>
         <h3 class="trade-dash-title">${esc(t('trade.dash.h'))}</h3>
         <p class="trade-dash-lead">${esc(t('trade.dash.lead'))}</p>
       </div>
-      <button class="apply-btn-ghost trade-refresh" data-act="dash-refresh" type="button" ${busy ? 'disabled' : ''}>${esc(t('trade.refresh'))}</button>
+      <button class="apply-btn-ghost trade-refresh dash-refresh${busy ? ' is-busy' : ''}" data-act="dash-refresh" type="button"
+        ${busy ? 'disabled aria-busy="true"' : ''}><span class="trade-mini-spin" aria-hidden="true"></span><span>${esc(t('trade.refresh'))}</span></button>
     </div>`;
-  const timeline = histItems === null
-    ? `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t('trade.history.loading'))}</div>`
-    : histItems.length
-      ? `<ol class="trade-timeline">${histItems.map((h, i) => historyCardHtml(h, i)).join('')}</ol>`
-      : `<p class="trade-form-p">${esc(t(historyError ? 'trade.history.error' : 'trade.history.none'))}</p>`;
   return `
     <div class="trade-dash">
+      ${safeSection(portfolioHtml)}
       ${head}
       ${dashStatsHtml()}
       ${acceptStatusHtml()}
@@ -7126,17 +7081,30 @@ function dashboardViewHtml() {
       </section>
       ${myListingsHtml()}
       ${dashMyOffersHtml()}
-      <section class="trade-dash-sec">
-        <h4 class="trade-dash-h">${esc(t('trade.history.h'))}</h4>
-        ${timeline}
-      </section>
+      ${safeSection(activityHtml)}
     </div>`;
+}
+
+/** The Refresh button only: the blocks that read on their own say when they start and stop. */
+function patchDashRefresh() {
+  const b = root()?.querySelector('.dash-refresh');
+  if (!b) return;
+  const busy = recvLoading || activityBusy() || portfolioBusy();
+  b.disabled = busy;
+  b.classList.toggle('is-busy', busy);
+  if (busy) b.setAttribute('aria-busy', 'true'); else b.removeAttribute('aria-busy');
 }
 
 function patchDashboardView() {
   const view = root()?.querySelector('#trade-view');
   if (!view || tradeTab !== 'dashboard') return;
+  // The value block outlives this rewrite when what it shows has not changed (see
+  // holdPortfolio): otherwise every offer or history read landing would redraw its chart.
+  const keptPf = holdPortfolio();
+  const keptAct = holdActivity();
   view.innerHTML = dashboardViewHtml();
+  mountPortfolio(keptPf);
+  mountActivity(keptAct);
   applyTradingPause();
   // Seen AFTER the paint, so the "New" chips in this render are the ones you just looked at.
   requestAnimationFrame(() => markOffersSeen());
@@ -7159,21 +7127,35 @@ function pickBarHtml(set) {
 // One multi-select tile: a checkbox overlay + is-sel highlight, membership from `set`.
 function pickTileHtml(o, act, set) {
   const on = set.has(String(o.tokenId));
+  const pet = petNameOf(o);
   const art = coll === 'land' && petUrl(o)
     ? `<img src="${esc(petUrl(o))}" ${o.image ? `data-fallback="${esc(o.image)}"` : ''} alt="" loading="lazy" />`
     : (o.image ? `<img src="${esc(o.image)}" alt="" loading="lazy" />` : `<div class="trade-tile-noimg" aria-hidden="true">${ico('paw', 28)}</div>`);
   return `
     <button class="trade-pick-tile ${on ? 'is-sel' : ''}" type="button"
       role="option" aria-selected="${on}"
-      data-act="${act}" data-token="${esc(o.tokenId)}" title="${esc(o.name)}">
+      data-act="${act}" data-token="${esc(o.tokenId)}" title="${esc(pet ? `${pet} · ${o.name}` : o.name)}">
       <span class="trade-pick-check" aria-hidden="true">${ico('check', 13)}</span>
       ${art}
-      <span>${esc(o.name.replace(/^Highrise (Creature|LAND) /, ''))}</span>
+      ${pet
+        ? `<span class="trade-pick-pet">${esc(pet)}</span><span class="trade-pick-at">${esc(shortNameOf(o))}</span>`
+        : `<span>${esc(shortNameOf(o))}</span>`}
     </button>`;
 }
 
+/* The picker while the wallet's holdings are read: its own grid of tiles, sweeping as a wave
+   from the top left, so the picks land exactly where the shapes were. */
+function pickerLoadingHtml() {
+  const tiles = Array.from({ length: 35 }, (_, k) => {
+    const i = Math.floor(k / 7) + (k % 7);
+    return `<span class="trade-pick-tile sk-pick-tile" style="animation-delay:${Math.min(k * 25, 400)}ms">${sk('100%', 'auto', { i, shape: 'sq' })}${sk('62%', 10, { i, cls: 'sk-pick-name' })}</span>`;
+  }).join('');
+  return skRegion(t(skey('trade.sell.loadingOwned')),
+    `<div class="trade-pick-bar">${sk('96px', 30, { shape: 'pill' })}</div><div class="trade-pick sk-pick">${tiles}</div>`, 'sk-picker');
+}
+
 function sellPickerHtml() {
-  if (owned === null) return `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t(skey('trade.sell.loadingOwned')))}</div>`;
+  if (owned === null) return pickerLoadingHtml();
   if (!invBase().length) return `<p class="trade-form-p">${esc(t(skey('trade.sell.none')))}</p>`;
   const sellable = invFilteredItems();
   if (!sellable.length) return `<p class="trade-form-p">${esc(t('trade.filter.invNone'))} <button type="button" class="trade-flt-clearall" data-act="inv-clear">${esc(t('trade.filter.clear'))}</button></p>`;
@@ -7858,8 +7840,12 @@ function sellViewHtml() {
  * one request at a time.
  */
 async function loadPriceGuide(tokenIds) {
+  // Capped HERE, not only in the query below: every id in `want` is marked answered when the
+  // reply lands, so one past the cap would be remembered as "nothing to say" without ever
+  // having been asked about, and its panel would stay blank for the session.
   const want = [...new Set(tokenIds.map(String))]
-    .filter(id => id && (!guideCache.has(id) || guideCache.get(id) === 'cold'));
+    .filter(id => id && (!guideCache.has(id) || guideCache.get(id) === 'cold'))
+    .slice(0, 100);
   if (!want.length) return;
   // A pick after the model was cold deserves a fresh ladder, not the exhausted one.
   if (want.some(id => guideCache.get(id) === 'cold')) guideTries = 0;
@@ -8001,13 +7987,16 @@ function guideFill(key, slots) {
 
 /** Which sales this estimate rests on, said as a count of the RIGHT sales, not the feed. */
 function guideBasisLine(c) {
+  // A set that sells often is read from its newest sales, and the line says so: "From 40
+  // sales" would claim that was every sale there has been.
+  const r = c.recent ? 'Recent' : '';
   if (c.kind === 'trait') {
-    return t('trade.guide.basisTrait').replace('{n}', c.n.toLocaleString()).replace('{trait}', c.label);
+    return t(`trade.guide.basisTrait${r}`).replace('{n}', c.n.toLocaleString()).replace('{trait}', c.label);
   }
   if (c.kind === 'tier') {
-    return t('trade.guide.basisTier').replace('{n}', c.n.toLocaleString()).replace('{tier}', c.label);
+    return t(`trade.guide.basisTier${r}`).replace('{n}', c.n.toLocaleString()).replace('{tier}', c.label);
   }
-  return t('trade.guide.basisMarket').replace('{n}', c.n.toLocaleString());
+  return t(`trade.guide.basisMarket${r}`).replace('{n}', c.n.toLocaleString());
 }
 
 /* The workings. Three short rows a seller can check against their own sense of the market:
@@ -8084,7 +8073,13 @@ function priceGuideHtml() {
   if (sellSel == null) return '';
   const g = guideCache.get(String(sellSel));
   if (g === 'busy' || g === undefined) {
-    return `<div class="trade-guide is-loading" id="trade-guide"><span class="trade-mini-spin" aria-hidden="true"></span>${esc(t('trade.guide.loading'))}</div>`;
+    // The panel's own shape: its heading, then the three prices it is working out.
+    return `<div class="trade-guide is-loading" id="trade-guide" role="status" aria-busy="true">
+      <div class="trade-guide-head"><span class="trade-guide-eyebrow">${ico('chart', 12)}${esc(t('trade.guide.h'))}</span></div>
+      <p class="sk-caption"><span class="sk-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${esc(t('trade.guide.loading'))}</span></p>
+      <div class="trade-guide-tiles" aria-hidden="true">${['is-quick', 'is-fair', 'is-patient'].map((c, n) => `
+        <div class="trade-guide-tile ${c} is-sk">${sk('70%', 9, { i: n })}${sk('84%', 17, { i: n + 1 })}${sk('50%', 10, { i: n + 2 })}${sk('40px', 22, { i: n + 2, shape: 'pill' })}</div>`).join('')}</div>
+    </div>`;
   }
   if (g === 'cold') return `<div class="trade-guide is-cold" id="trade-guide">${esc(t('trade.guide.cold'))}</div>`;
   if (!g) return `<div class="trade-guide" id="trade-guide"></div>`;
@@ -8105,7 +8100,7 @@ function priceGuideHtml() {
       <summary>${esc(t('trade.guide.more'))}</summary>
       <div class="trade-guide-evs">${guideEvidenceHtml(c)}</div>
       <p class="trade-guide-why">${guideWhyHtml(b)}</p>
-      <p class="trade-guide-method">${guideFill('trade.guide.method', {
+      <p class="trade-guide-method">${guideFill(b.unit === 'usd' ? 'trade.guide.method' : 'trade.guide.methodEth', {
         anchor: guideMoneyHtml(b.anchor),
         n: esc(b.anchorSales.toLocaleString()),
         days: esc(b.anchorDays),
@@ -8240,7 +8235,8 @@ function sellMassHtml() {
   const totalLine = massTotalLineHtml(total);
   const rows = items.map(it => {
     const k = String(it.tokenId);
-    const num = esc(it.name.replace(/^Highrise (Creature|LAND) /, '')); // name already carries "#1234"
+    const petName = petNameOf(it);
+    const num = esc(petName || shortNameOf(it)); // name already carries "#1234"
     const pet = coll === 'land' ? petUrl(it) : null;
     const src = pet || it.image;
     const fb = pet && it.image ? ` data-fallback="${esc(it.image)}"` : '';
@@ -8248,7 +8244,7 @@ function sellMassHtml() {
       : `<div class="trade-tile-noimg" aria-hidden="true">${ico(isLand ? 'map' : 'paw', 40)}</div>`;
     return `<div class="trade-mass-row">
       <div class="trade-mass-thumb">${art}</div>
-      <span class="trade-mass-num" title="${esc(it.name)}">${num}</span>
+      <span class="trade-mass-num" title="${esc(it.name)}">${num}${petName ? `<small>${esc(shortNameOf(it))}</small>` : ''}</span>
       <div class="trade-mass-price">
         <input type="text" inputmode="decimal" class="trade-mass-price-in" data-token="${esc(k)}"
           value="${esc(sellPrices.get(k) || '')}" placeholder="${esc(rowPh)}" aria-label="${esc(t('trade.sell.price'))} ${num}" />
@@ -8385,7 +8381,7 @@ function sellSplitHtml(raw) {
 // Picker of transferable Creatures (owned minus actively listed — transferring a
 // listed Creature would leave a phantom listing behind).
 function transferPickerHtml() {
-  if (owned === null) return `<div class="trade-modal-loading"><span class="trade-mini-spin" aria-hidden="true"></span> ${esc(t(skey('trade.sell.loadingOwned')))}</div>`;
+  if (owned === null) return pickerLoadingHtml();
   const base = invBase();
   const hiddenNote = owned.length > base.length
     ? `<p class="trade-form-p">${esc(t(skey('trade.transfer.listedNote')))}</p>` : '';
@@ -8708,8 +8704,9 @@ function transferSelectedHtml() {
     const fb = pet && it.image ? ` data-fallback="${esc(it.image)}"` : '';
     const art = src ? `<img class="${pet ? 'is-pet' : ''}" src="${esc(src)}"${fb} alt="" loading="lazy" />`
       : `<div class="trade-tile-noimg" aria-hidden="true">${ico(coll === 'land' ? 'map' : 'paw', 40)}</div>`;
-    const num = esc(it.name.replace(/^Highrise (Creature|LAND) /, ''));
-    return `<div class="trade-xfer-chip" title="${esc(it.name)}">
+    const petName = petNameOf(it);
+    const num = esc(petName || shortNameOf(it));
+    return `<div class="trade-xfer-chip" title="${esc(petName ? `${petName} · ${it.name}` : it.name)}">
       <div class="trade-xfer-thumb">${art}</div>
       <span class="trade-xfer-num">${num}</span>
       <button type="button" class="trade-xfer-rm" data-act="transfer-pick" data-token="${esc(it.tokenId)}" aria-label="${esc(t('trade.mass.remove'))}" title="${esc(t('trade.mass.remove'))}">×</button>
@@ -8883,7 +8880,8 @@ function sellSelectedHtml() {
     <div class="trade-sell-sel-media">${img}</div>
     <div class="trade-sell-sel-info">
       <span class="trade-sell-sel-label">${esc(t(skey('trade.sell.selected')))}</span>
-      <span class="trade-sell-sel-name">${esc(it.name)}</span>
+      <span class="trade-sell-sel-name">${esc(petNameOf(it) || it.name)}</span>
+      ${petNameOf(it) ? `<span class="trade-sell-sel-sub">${esc(it.name)}</span>` : ''}
       <div class="trade-sell-sel-tags">${rarityChip(rarity)}${rankChip(it.rank)}</div>
     </div>
     <button type="button" class="trade-sell-sel-clear" data-act="sell-pick" data-token="${esc(it.tokenId)}"
@@ -9764,6 +9762,10 @@ async function refreshBalance() {
 function render() {
   const el = root();
   if (!el) return;
+  // The value block and the activity list don't depend on the collection in view, so a
+  // collection switch on the dashboard must not redraw them: keep the live ones.
+  const keptPf = tradeTab === 'dashboard' ? holdPortfolio() : null;
+  const keptAct = tradeTab === 'dashboard' ? holdActivity() : null;
   // Command bar, two deliberate tiers so it never wraps awkwardly: the top row pairs the
   // collection switcher (left) with the wallet bar (right) — context + identity on opposite
   // ends — and the action tabs (+ safety pill) sit on their own row below, with the
@@ -9803,7 +9805,7 @@ function render() {
   // The dashboard is read-only by address — load it even when the wallet isn't on the
   // right chain. The offers book is fetched whether or not the tab is open, because the
   // unread badge on the nav is the point: an offer should find you, not wait to be found.
-  if (account && tradeTab === 'dashboard') maybeLoadDashboard();
+  if (account && tradeTab === 'dashboard') { mountPortfolio(keptPf); mountActivity(keptAct); maybeLoadDashboard(); }
   else queueOfferBadgeLoad();
   paintOfferBadges();
   // Sales History is public — no wallet needed. Load it the first time the tab is shown.
@@ -9880,6 +9882,8 @@ function onClick(e) {
   // switch from growing every time a feature moves out into its own module.
   const fundsAct = cashOutActs[act] || addFundsActs[act];
   if (fundsAct) return fundsAct(target);
+  if (onPortfolioClick(act, target)) return;
+  if (onActivityClick(act, target)) return;
   switch (act) {
     case 'health-retry':
       // Manual re-check from the banner. Reloads whichever books back this collection.
@@ -9902,43 +9906,7 @@ function onClick(e) {
       if (wantAll && !ALL_SCOPE_TABS.has(tradeTab)) return;
       if (want === (allMode() ? 'all' : coll)) return;
       if (!wantAll && !COLLECTIONS[want]) return;
-      // Both money views mean something different per collection: Add funds brings ETH onto
-      // Immutable zkEVM for Creatures but buys it on Ethereum for LAND, and Cash out moves
-      // ETH for one while unwrapping WETH for the other. So re-enter the flow from its
-      // chooser rather than leave the old collection's screen standing under the new
-      // collection's name — a member half-way through a zkEVM quote must not find it
-      // relabelled Ethereum.
-      const reenterFunds = onFundsView() ? tradeTab : null;
-      if (reenterFunds && !leaveFundsState()) return; // mid-signature — the switch waits
-      setBrowseAll(wantAll);
-      if (!wantAll) setColl(want);
-      else syncCollToChain(); // both chains are valid now — act on the one the wallet is on
-      resetPriceGuide(); // LAND must never be priced off Creature comparables
-      syncTradeUrl(); // ?coll=land belongs in the address: the LAND market is a linkable thing
-      if (reenterFunds === 'cash-out') enterCashOut({ step: 'intent' });
-      else if (reenterFunds === 'add-funds') enterAddFunds({ step: 'intent' });
-      try { localStorage.setItem('hcc-trade-coll', urlColl()); } catch { /* fine */ }
-      tokenOffers = null;
-      // Clear the "we already tried and failed" latches so switching INTO a collection
-      // always re-checks it. Without this, a market that recovered would still look dead
-      // until a hard reload. The health envelopes stay: they're per collection and the
-      // banner should reflect what we last knew about each.
-      tokenOffersError = false;
-      myOffersError = false;
-      landMyOffersError = false;
-      collOffersRetryAttempt = 0;
-      resetBrowseForView(); // clears the grid/filters; scope defaults per the new view
-      syncTradeUrl();
-      resetSellerState();
-      render();
-      // The new collection settles on a different chain — move the wallet there now,
-      // so the user doesn't land on a "wrong network" pill they have to tap themselves.
-      autoSwitchNetwork();
-      loadListings(true);
-      if (tradeTab === 'sales') loadSales(true);
-      if (coll === 'creatures') loadCollOffers(); else if (coll === 'land') loadLandCollOffers();
-      maybeLoadSeller();
-      return;
+      return switchCollection(want);
     }
     case 'sell-pick':
       toggleSellPick(target.dataset.token); // multi-select: toggle membership
@@ -9946,7 +9914,7 @@ function onClick(e) {
       sellPickOffers = null;
       // The whole picker in one call: the server prices a hundred assets in a few
       // milliseconds, so fetching them one pick at a time would only add round trips.
-      loadPriceGuide(pickerTokenIds());
+      loadPriceGuide(sellSel != null ? [String(sellSel), ...pickerTokenIds()] : pickerTokenIds());
       // Instant-sell-into-offers is a single-item action, Creatures-only.
       if (sellSel != null && coll === 'creatures') fetchSellPickOffers(sellSel);
       // Targeted patch (NOT a full re-render) so the picker's scroll position survives —
@@ -10008,15 +9976,15 @@ function onClick(e) {
     case 'edit-listing':   return openPriceEditor(target.dataset.listing);
     case 'edit-close':     return closePriceEditor();
     case 'dash-refresh': {
-      if (recvLoading && historyLoading) return;
+      if (recvLoading && activityBusy()) return;
       recvOffers = null; recvMeta = null; recvError = false;
-      histItems = null; historyError = false;
       patchDashboardView();
-      loadOffersReceived();
-      return loadHistory();
+      refreshPortfolio();
+      refreshActivity();
+      return loadOffersReceived();
     }
-    // Open the Creature an offer is on, so you can read its traits and rank before deciding.
-    case 'dash-open':      return openModal(target.dataset.token);
+    // Any asset shown on a page: open it, in its own collection.
+    case 'asset-open':     return openAsset(target.dataset.token, target.dataset.coll);
     // A collection bid is an offer on any one of yours, so taking it starts with picking which.
     case 'dash-sell':      return openTradeTab('sell');
     case 'accept-offer':   return askAccept(target.dataset.offer, target.dataset.token || undefined);
@@ -10294,6 +10262,7 @@ function onChange(e) {
   if (modalToken) patchModal();
 }
 function onInput(e) {
+  if (onActivityInput(e)) return;   // the activity search (it repaints its rows, not the box)
   // Their own typing wins over a restored recipient from here on (see transferSideHtml).
   if (e.target?.id === 'trade-to') { pendingRecipient = null; return queueTransferCheck(e.target.value); }
   // The money views own their amount boxes; each returns true when the event was theirs.
@@ -10369,13 +10338,72 @@ function onInput(e) {
     return applyFilters(400);
   }
 }
+/**
+ * Change the collection in view. `want` is 'creatures', 'land' or 'all'. `moveWallet: false`
+ * is for a switch the reader didn't ask for as such (opening an asset of the other
+ * collection): the page follows the asset, the wallet stays on its network.
+ */
+function switchCollection(want, { moveWallet = true } = {}) {
+  const wantAll = want === 'all';
+  // Both money views mean something different per collection: Add funds brings ETH onto
+  // Immutable zkEVM for Creatures but buys it on Ethereum for LAND, and Cash out moves
+  // ETH for one while unwrapping WETH for the other. So re-enter the flow from its
+  // chooser rather than leave the old collection's screen standing under the new
+  // collection's name — a member half-way through a zkEVM quote must not find it
+  // relabelled Ethereum.
+  const reenterFunds = onFundsView() ? tradeTab : null;
+  if (reenterFunds && !leaveFundsState()) return false; // mid-signature — the switch waits
+  setBrowseAll(wantAll);
+  if (!wantAll) setColl(want);
+  else syncCollToChain(); // both chains are valid now — act on the one the wallet is on
+  resetPriceGuide(); // LAND must never be priced off Creature comparables
+  syncTradeUrl(); // ?coll=land belongs in the address: the LAND market is a linkable thing
+  if (reenterFunds === 'cash-out') enterCashOut({ step: 'intent' });
+  else if (reenterFunds === 'add-funds') enterAddFunds({ step: 'intent' });
+  try { localStorage.setItem('hcc-trade-coll', urlColl()); } catch { /* fine */ }
+  tokenOffers = null;
+  // Clear the "we already tried and failed" latches so switching INTO a collection
+  // always re-checks it. Without this, a market that recovered would still look dead
+  // until a hard reload. The health envelopes stay: they're per collection and the
+  // banner should reflect what we last knew about each.
+  tokenOffersError = false;
+  myOffersError = false;
+  landMyOffersError = false;
+  collOffersRetryAttempt = 0;
+  resetBrowseForView(); // clears the grid/filters; scope defaults per the new view
+  syncTradeUrl();
+  resetSellerState();
+  render();
+  // The new collection settles on a different chain — move the wallet there now,
+  // so the user doesn't land on a "wrong network" pill they have to tap themselves.
+  // Not when the switch only came along with opening an asset to look at it: reading
+  // needs no network, and a wallet prompt nobody asked for reads as a scam.
+  if (moveWallet) autoSwitchNetwork();
+  loadListings(true);
+  if (tradeTab === 'sales') loadSales(true);
+  if (coll === 'creatures') loadCollOffers(); else if (coll === 'land') loadLandCollOffers();
+  maybeLoadSeller();
+  return true;
+}
+
+/**
+ * Open an asset from anywhere on a page, in its own collection: a row of your activity,
+ * your most valuable pieces, a listing, an offer. One of the other collection moves the page
+ * to that collection first, quietly, because the detail panel reads the collection in view.
+ */
+function openAsset(tokenId, c) {
+  if (!tokenId) return;
+  const target = COLLECTIONS[c] ? c : coll;
+  if (!allMode() && target !== coll && switchCollection(target, { moveWallet: false }) === false) return;
+  openDeepLink(String(tokenId), { coll: target });
+}
+
 function resetSellerState() {
   owned = null; mine = null; sellSel = null; sellState = null; cancelBusy = null;
   editSel = null; editPrice = ''; editState = null; cancelGasWei = null; cancelGasAt = 0; pendingListing = null; // per-wallet
   sellSet.clear(); transferSet.clear(); sellPrices.clear(); massState = null; // drop any selection/batch
   sellCurrency = 'eth'; // the only currency LAND can list in, and a clean default per collection
   offerCurrency = 'eth'; // ditto for offers, so a USDC pick on Creatures can't leak onto LAND
-  histItems = null; historyError = false; // per-collection; reload on demand
   // Offers received are keyed to the wallet that holds the Creatures, so a wallet switch
   // must drop them: showing the previous account's offers with THIS account's Accept button
   // is a trade nobody can make.
@@ -10579,6 +10607,8 @@ function restoreTradeScroll() {
 // import in the feature and disappears from this list; nothing else has to change.
 provide({
   render,
+  fmtListingAmt,
+  patchDashRefresh,
   setBridgeJob, trackBridge, runBridge, patchBridgeBanner,
   isCashout, isGasBridge, isOutBridge,
   bridgeCardHtml, bridgeStatusHtml, bridgeCoinHtml,

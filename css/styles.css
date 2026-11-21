@@ -5419,10 +5419,15 @@ footer { margin-top: 28px; }
    height, so everywhere this sits in a plain block instead of a flex row — the grid's
    "Loading recent sales…" state, the "still cataloguing" one — it collapsed to a 4px
    sliver of its own border, spinning a shape too thin to read as spinning. */
+/* A comet ring in the brand pair: a lavender tail running up to a mint head. Rotation only,
+   so it stays on the compositor; under reduced motion it stands as a still ring. */
 .trade-mini-spin {
-  display: inline-block; width: 16px; height: 16px; flex: 0 0 auto;
-  border: 2px solid var(--hr-line-strong); border-top-color: var(--hr-blueberry);
-  border-radius: 50%; animation: spin .8s linear infinite;
+  display: inline-block; width: 16px; height: 16px; flex: 0 0 auto; border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0deg 30deg,
+    color-mix(in srgb, var(--hr-secondary) 75%, transparent) 150deg, var(--hr-primary) 320deg, transparent 321deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  animation: spin .8s linear infinite;
 }
 
 .trade-passport-note { margin-top: 18px; font-size: 12.5px; color: var(--hr-fg-3); line-height: 1.55; }
@@ -6117,16 +6122,8 @@ body.trade-sheet-open { overflow: hidden; }
 .trade-rar[data-r="common"]    { background: var(--hr-salmon); color: var(--hr-fg-0); }
 
 /* Skeleton loading */
-.trade-skel { pointer-events: none; }
-.trade-skel .trade-tile-media,
-.trade-skel .trade-tile-body span {
-  background: linear-gradient(100deg, var(--hr-bg-3) 30%, var(--hr-bg-4) 50%, var(--hr-bg-3) 70%);
-  background-size: 200% 100%; animation: trade-shimmer 1.3s linear infinite;
-}
+.trade-skel { pointer-events: none; animation: skIn .4s ease both; }
 .trade-skel .trade-tile-body { gap: 8px; }
-.trade-skel .trade-tile-body span { height: 12px; border-radius: 4px; display: block; }
-.trade-skel .trade-tile-body span:last-child { width: 55%; }
-@keyframes trade-shimmer { to { background-position: -200% 0; } }
 
 .trade-loadmore { text-align: center; margin-top: 22px; }
 /* The Buy/Sell/Transfer tabs own the gap to the content (margin-bottom below), so the
@@ -6192,6 +6189,7 @@ body.trade-sheet-open { overflow: hidden; }
 .trade-sell-sel-info { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .trade-sell-sel-label { font-size: 9.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--hr-primary); }
 .trade-sell-sel-name { font-family: var(--hr-sans); font-weight: 800; font-size: 14px; color: var(--hr-fg-0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trade-sell-sel-sub { font-size: 11.5px; font-weight: 600; color: var(--hr-fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .trade-sell-sel-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 1px; }
 .trade-sell-sel-tags .trade-rar,
 .trade-sell-sel-tags .trade-rank { position: static; top: auto; left: auto; right: auto; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
@@ -6273,6 +6271,9 @@ body.trade-sheet-open { overflow: hidden; }
 .trade-pick-tile img { width: 100%; aspect-ratio: 1/1; object-fit: cover; display: block; }
 .trade-pick-tile .trade-tile-noimg { width: 100%; aspect-ratio: 1/1; font-size: 24px; }
 .trade-pick-tile span { font-size: 10.5px; font-weight: 700; color: var(--hr-fg-1); padding: 0 4px 6px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A LAND tile wears two lines: the slime's name, then where the parcel is. */
+.trade-pick-tile .trade-pick-pet { padding-bottom: 0; font-weight: 800; color: var(--hr-fg-0); }
+.trade-pick-tile .trade-pick-at { margin-top: -3px; font-size: 9.5px; font-weight: 600; color: var(--hr-fg-2); font-variant-numeric: tabular-nums; }
 /* Multi-select checkbox overlay (top-left) — empty box until picked, mint check when on. */
 .trade-pick-check {
   position: absolute; top: 6px; left: 6px; z-index: 2;
@@ -6312,6 +6313,7 @@ body.trade-sheet-open { overflow: hidden; }
 .trade-mass-thumb img.is-pet, .trade-mass-thumb img[data-fallback] { object-fit: contain; padding: 8%; box-sizing: border-box; }
 .trade-mass-thumb .trade-tile-noimg { width: 100%; height: 100%; display: grid; place-items: center; font-size: 18px; }
 .trade-mass-num { font-family: var(--hr-sans); font-weight: 800; font-size: 13px; color: var(--hr-fg-0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.trade-mass-num small { display: block; font-size: 10.5px; font-weight: 600; color: var(--hr-fg-2); overflow: hidden; text-overflow: ellipsis; }
 .trade-mass-price { display: flex; align-items: center; gap: 4px; }
 .trade-mass-price-in { width: 84px; text-align: right; }
 .trade-mass-unit { font-size: 11px; font-weight: 800; color: var(--hr-fg-3); }
@@ -6662,11 +6664,449 @@ a.trade-dash-who:hover { border-color: var(--hr-primary); background: rgba(81,25
 @keyframes dashShimmer { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
 @keyframes dashPulse { 0%, 100% { box-shadow: 0 0 0 3px rgba(81,255,165,.18); } 50% { box-shadow: 0 0 0 6px rgba(81,255,165,.06); } }
 
+/* --- Skeletons: the shape of what is coming (js/market/core/skel.js) ---------------------
+   One grey shape per line, picture or pill, each crossed by a soft brand-tinted shine. The
+   shine is a pseudo-element moving by transform, never an animated background, so a page of
+   them stays at 60fps; `--i` delays it per shape, which turns a block into one wave running
+   top to bottom with a rest between passes. */
+.sk {
+  position: relative; display: block; overflow: hidden; flex: 0 0 auto;
+  width: var(--w, 100%); max-width: 100%; height: var(--h, 12px);
+  border-radius: 7px; background: rgba(255,255,255,.06);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
+}
+.sk::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(100deg, transparent 18%, rgba(255,255,255,.06) 40%,
+    color-mix(in srgb, var(--hr-primary) 13%, transparent) 50%,
+    color-mix(in srgb, var(--hr-secondary) 10%, transparent) 60%, transparent 82%);
+  transform: translateX(-100%);
+  animation: skSweep 1.9s cubic-bezier(.45,.05,.25,1) infinite;
+  animation-delay: calc(var(--i, 0) * 110ms);
+}
+@keyframes skSweep { 0% { transform: translateX(-100%); } 55%, 100% { transform: translateX(100%); } }
+.sk.is-pill { border-radius: var(--hr-radius-pill); }
+.sk.is-round { border-radius: 50%; }
+.sk.is-tile { border-radius: var(--hr-radius-sm); }
+.sk.is-sq { height: auto; aspect-ratio: 1 / 1; border-radius: 0; }
+.sk.is-fill { width: 100%; height: 100%; border-radius: 0; }
+
+/* The sentence: three dots breathing in mint, a blend, and lavender, then the words. */
+.sk-region { animation: skIn .35s ease both; }
+.sk-caption { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; font-size: 12.5px; font-weight: 700; color: var(--hr-fg-2); }
+.sk-dots { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.sk-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--hr-primary); animation: skDot 1.2s ease-in-out infinite; }
+.sk-dots i:nth-child(2) { background: color-mix(in srgb, var(--hr-primary) 50%, var(--hr-secondary)); animation-delay: .15s; }
+.sk-dots i:nth-child(3) { background: var(--hr-secondary); animation-delay: .3s; }
+@keyframes skDot { 0%, 80%, 100% { transform: scale(.55); opacity: .4; } 40% { transform: scale(1); opacity: 1; } }
+@keyframes skIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes skPulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+.sk-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sk-end { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; flex: 0 0 auto; }
+
+/* Each skeleton borrows the real element's frame, and none of its hover: nothing here is
+   clickable yet, so nothing may look it. */
+.pf-loading .sk-shapes { display: flex; flex-direction: column; gap: 18px; }
+.pf-loading .pf-side { gap: 7px; }
+.pf-loading .pf-side:hover { transform: none; border-color: var(--hr-line); }
+.pf-loading .pf-side-top { margin-bottom: 2px; }
+.pf-loading .pf-sk-bar { margin-top: 6px; }
+.pf-loading .pf-sub { gap: 10px; }
+.pf-sk-h { margin-bottom: 10px; }
+/* One collection still pricing, the other in: the pending tile and the held chart slot. */
+.pf-side.is-pending .pf-side-sk { margin: 4px 0 3px; }
+.pf-side.is-pending .pf-sk-bar { margin-top: 8px; }
+.pf-side-note.is-waiting, .pf-partial.is-waiting { display: inline-flex; align-items: center; gap: 7px; }
+.pf-partial.is-waiting .sk-dots i { width: 5px; height: 5px; }
+.pf-sk-row { cursor: default; }
+.pf-sk-row:hover { transform: none; border-color: var(--hr-line); background: rgba(255,255,255,.035); }
+.pf-sk-row .pf-top-body { gap: 7px; }
+.pf-sk-canvas { overflow: hidden; border-radius: var(--hr-radius-md); }
+.pf-sk-chart { display: block; width: 100%; height: 100%; }
+.pf-sk-grid line { stroke: rgba(255,255,255,.06); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.pf-sk-line { fill: none; stroke: var(--hr-primary); stroke-opacity: .32; stroke-width: 2; vector-effect: non-scaling-stroke; animation: skPulse 2.4s ease-in-out infinite; }
+.pf-sk-area { animation: skPulse 2.4s ease-in-out infinite; }
+.pf-sk-canvas::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--hr-primary) 9%, transparent) 50%, transparent 70%);
+  transform: translateX(-100%); animation: skSweep 2.6s cubic-bezier(.45,.05,.25,1) .3s infinite;
+}
+
+.act-loading .sk-shapes { display: flex; flex-direction: column; gap: 12px; }
+.act-sk-bar .act-sk-search { flex: 1 1 220px; width: auto; }
+.act-sk-card { pointer-events: none; }
+.act-sk-card .act-open { cursor: default; }
+.act-sk-card .act-open .trade-mine-info { gap: 7px; }
+.act-sk-card .act-side { gap: 8px; }
+.act-sk-dot { animation: skPulse 1.6s ease-in-out infinite; }
+
+.dash-sk .trade-dash-card.is-sk { --accent: var(--hr-bg-4); pointer-events: none; }
+.trade-dash-card.is-sk .trade-dash-body { gap: 8px; }
+.trade-dash-sk { margin: 3px 0 1px; }
+
+/* More tiles than fit, clipped at the picker's own edge, so every visible row is whole at
+   any width instead of a fixed count leaving a half-empty last row. */
+.sk-picker .trade-pick { pointer-events: none; overflow: hidden; }
+.sk-pick-tile { cursor: default; gap: 8px; align-items: center; padding-bottom: 9px; }
+.sk-pick-tile .sk { padding: 0; }
+.sk-pick-tile:hover { transform: none; border-color: var(--hr-line); }
+
+.sk-traits .sk-shapes > .trade-modal-traits { margin: 0; }
+.trade-trait.is-sk { display: flex; flex-direction: column; gap: 7px; padding: 10px; }
+
+.sk-sales .sk-shapes { display: flex; flex-direction: column; gap: 12px; }
+.trade-sale-card.is-sk { pointer-events: none; animation: skIn .4s ease both; }
+.trade-sale-card.is-sk .trade-sale-body { gap: 8px; }
+
+.trade-guide.is-loading .sk-caption { margin: 2px 0 10px; font-size: 12px; }
+.trade-guide-tile.is-sk { gap: 6px; }
+
+/* A reload with figures on screen: a thin light runs along the top edge, nothing blanks. */
+.act { position: relative; }
+.pf.is-refreshing::after, .act.is-refreshing::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; z-index: 3; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--hr-primary) 40%, var(--hr-secondary) 62%, transparent);
+  transform: translateX(-100%); animation: skBar 1.2s cubic-bezier(.45,.05,.25,1) infinite;
+}
+.act.is-refreshing::after { top: -8px; border-radius: 2px; }
+.act.is-refreshing #act-list { opacity: .7; transition: opacity .2s ease; }
+@keyframes skBar { to { transform: translateX(100%); } }
+
+/* The dashboard's Refresh carries its own spinner while anything on the page is reading. */
+.dash-refresh { display: inline-flex; align-items: center; gap: 8px; }
+.dash-refresh .trade-mini-spin { display: none; width: 14px; height: 14px; }
+.dash-refresh.is-busy .trade-mini-spin { display: inline-block; }
+
+@media (max-width: 640px) {
+  .act-sk-bar > .sk:first-child { flex: 1 1 100%; width: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk::after, .pf-sk-canvas::after { animation: none; display: none; }
+  .sk-dots i { animation: none; transform: none; opacity: .85; }
+  .sk-region, .trade-skel, .trade-sale-card.is-sk, .act-sk-dot, .pf-sk-line, .pf-sk-area { animation: none; }
+  .pf.is-refreshing::after, .act.is-refreshing::after { animation: none; transform: none; opacity: .6; }
+  .act.is-refreshing #act-list { transition: none; }
+}
+
+/* --- Any asset on a page opens: text that is a button, without looking like a form control -- */
+.asset-link {
+  padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left;
+  cursor: pointer; text-decoration: underline; text-decoration-color: transparent;
+  text-underline-offset: 3px; transition: color .15s ease, text-decoration-color .15s ease;
+}
+.asset-link:hover { color: var(--hr-primary); text-decoration-color: currentColor; }
+.asset-link:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; border-radius: 4px; }
+button.trade-dash-item { max-width: 100%; }
+.trade-mine-art {
+  flex: 0 0 auto; display: block; padding: 0; border: 0; background: none; cursor: pointer;
+  border-radius: var(--hr-radius-sm); transition: transform .18s ease;
+}
+.trade-mine-art:hover { transform: scale(1.06); }
+.trade-mine-art:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; }
+.trade-mine-art img, .trade-mine-art .trade-tile-noimg { display: grid; place-items: center; }
+
+/* --- Your activity: both collections, three filters, every row opens its asset ----------- */
+.act { gap: 12px; }
+.act-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.act-counts { display: inline-flex; align-items: center; gap: 10px; }
+.act-count { font-size: 12px; font-weight: 800; color: var(--hr-fg-2); font-variant-numeric: tabular-nums; }
+.act-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.act-colls { flex: 0 0 auto; }
+.act-coll-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 13px; font-size: 12px; }
+.act-coll-btn .trade-coll-ico { width: 15px; height: 15px; border-radius: 4px; object-fit: cover; }
+.act-n {
+  min-width: 18px; padding: 1px 6px; border-radius: var(--hr-radius-pill);
+  font-size: 10.5px; font-weight: 900; line-height: 1.4; text-align: center; font-variant-numeric: tabular-nums;
+  background: rgba(255,255,255,.08); color: var(--hr-fg-2);
+}
+.act-coll-btn.is-active .act-n { background: rgba(0,0,0,.18); color: var(--hr-on-primary); }
+.act-search { flex: 1 1 220px; min-width: 0; }
+
+/* What happened: one chip per kind, each wearing its timeline colour. */
+.act-kinds { display: flex; flex-wrap: wrap; gap: 6px; }
+.act-kind {
+  --k: var(--hr-fg-2);
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  padding: 6px 8px 6px 11px; border-radius: var(--hr-radius-pill);
+  font-family: var(--hr-sans); font-size: 12px; font-weight: 800; color: var(--hr-fg-1);
+  border: 1px solid var(--hr-line); background: rgba(255,255,255,.035);
+  transition: border-color .15s ease, background .15s ease, color .15s ease, transform .15s ease;
+}
+.act-kind.is-sold { --k: var(--hr-primary); }
+.act-kind.is-bought { --k: var(--hr-secondary); }
+.act-kind.is-minted { --k: var(--hr-accent); }
+.act-kind.is-cancelled { --k: var(--hr-alert); }
+.act-kind-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--k); box-shadow: 0 0 8px color-mix(in srgb, var(--k) 55%, transparent); }
+.act-kind:hover:not(:disabled) { border-color: color-mix(in srgb, var(--k) 55%, transparent); transform: translateY(-1px); }
+.act-kind.is-on {
+  color: var(--hr-fg-0);
+  border-color: color-mix(in srgb, var(--k) 70%, transparent);
+  background: color-mix(in srgb, var(--k) 16%, transparent);
+}
+.act-kind.is-on .act-n { background: color-mix(in srgb, var(--k) 30%, transparent); color: var(--hr-fg-0); }
+.act-kind:disabled { opacity: .4; cursor: not-allowed; }
+.act-kind:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; }
+
+/* A month heading on the rail. */
+.act-month { position: relative; list-style: none; margin: 18px 0 10px; }
+.act-month:first-child { margin-top: 4px; }
+.act-month::before {
+  content: ""; position: absolute; left: -29px; top: 50%; width: 12px; height: 12px; transform: translateY(-50%);
+  border-radius: 50%; background: var(--hr-bg-1); border: 2px solid var(--hr-line-strong);
+}
+.act-month span { font-size: 11px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; color: var(--hr-fg-2); }
+
+/* A row: the left of the card opens the asset; the badge, collection and link sit beside it. */
+.act-card { align-items: stretch; gap: 12px; padding: 0; overflow: hidden; transition: border-color .18s ease, background .18s ease, transform .18s ease; }
+.act-card:hover { border-color: var(--hr-line-strong); background: rgba(255,255,255,.035); }
+.act-open {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 11px;
+  padding: 10px 4px 10px 12px; border: 0; background: none; font: inherit; color: inherit;
+  text-align: left; cursor: pointer; border-radius: var(--hr-radius-lg) 0 0 var(--hr-radius-lg);
+}
+.act-open:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: -2px; }
+.act-art { flex: 0 0 auto; width: 46px; height: 46px; border-radius: var(--hr-radius-sm); overflow: hidden; display: grid; place-items: center; background: var(--hr-bg-3); }
+.act-art img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 0; }
+.act-art img.is-pet { object-fit: contain; padding: 8%; box-sizing: border-box; background: var(--hr-bg-2); }
+.act-open .trade-mine-info { flex: 1 1 auto; gap: 1px; }
+.act-where { font-size: 11px; font-weight: 600; color: var(--hr-fg-2); font-variant-numeric: tabular-nums; }
+.act-go { flex: 0 0 auto; display: grid; place-items: center; color: var(--hr-fg-3); transition: transform .18s ease, color .18s ease; }
+.act-open:hover .act-go { color: var(--hr-primary); transform: translateX(3px); }
+.act-open:hover .trade-mine-name { color: var(--hr-primary); }
+.act-side {
+  flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 6px;
+  padding: 10px 12px 10px 0;
+}
+.act-side .trade-history-badge { margin-left: 0; align-self: flex-end; }
+.act-coll {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; color: var(--hr-fg-2);
+}
+.act-coll .trade-coll-ico { width: 14px; height: 14px; border-radius: 4px; object-fit: cover; }
+.act-coll.is-creatures { color: color-mix(in srgb, var(--hr-primary) 75%, var(--hr-fg-1)); }
+.act-coll.is-land { color: color-mix(in srgb, var(--hr-secondary) 70%, var(--hr-fg-0)); }
+.act-side .trade-history-tx { font-size: 11.5px; display: inline-flex; align-items: center; gap: 3px; }
+
+/* Rows that replace rows (a filter moved) fade in; only a fresh read or "Show more" makes an entrance. */
+.act-row.is-still { animation: none; }
+.act-row.is-swap { animation: actSwap .22s ease both; }
+@keyframes actSwap { from { opacity: .25; } to { opacity: 1; } }
+
+.act-note {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0;
+  font-size: 12px; font-weight: 600; line-height: 1.45; color: var(--hr-fg-3);
+}
+.act-note.is-warn { color: var(--hr-fg-1); }
+.act-note.is-warn svg { color: var(--hr-accent); flex: 0 0 auto; }
+.act-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 24px 16px;
+  border-radius: var(--hr-radius-lg); border: 1px dashed var(--hr-line-strong); text-align: center;
+}
+.act-empty p { margin: 0; font-size: 13px; font-weight: 700; color: var(--hr-fg-1); }
+.act-empty-ico { color: var(--hr-fg-3); }
+.act-more-wrap { display: flex; justify-content: center; margin-top: 6px; }
+
+@media (max-width: 640px) {
+  .act-colls { width: 100%; display: flex; }
+  .act-coll-btn { flex: 1 1 0; justify-content: center; min-width: 0; padding: 0 6px; }
+  .act-search { flex: 1 1 100%; }
+  .act-kinds { flex-wrap: nowrap; overflow-x: auto; margin: 0 -4px; padding: 2px 4px 6px; scrollbar-width: none; }
+  .act-kinds::-webkit-scrollbar { display: none; }
+  .act-kind { flex: 0 0 auto; }
+  .act-card { flex-wrap: wrap; gap: 0; }
+  .act-open { flex: 1 1 100%; padding-right: 12px; border-radius: var(--hr-radius-lg) var(--hr-radius-lg) 0 0; }
+  .act-side {
+    flex: 1 1 100%; flex-direction: row; align-items: center; justify-content: flex-start; flex-wrap: wrap;
+    gap: 8px 12px; padding: 0 12px 10px 69px;
+  }
+  .act-side .trade-history-badge { align-self: center; }
+  .act-side .trade-history-tx { margin-left: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .act-row.is-swap { animation: none; }
+  .act-kind, .act-card, .act-go, .trade-mine-art, .asset-link { transition: none; }
+  .act-kind:hover:not(:disabled), .act-open:hover .act-go, .trade-mine-art:hover { transform: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .trade-dash-stat, .trade-dash-card { animation: none; }
   .trade-dash-newchip, .trade-dash-badge { animation: none; }
   .trade-dash-card, .trade-dash-art, .trade-dash-who, .trade-dash-cancel { transition: none; }
   .trade-dash-card:hover, .trade-dash-art:hover, a.trade-dash-who:hover { transform: none; }
+}
+
+/* --- Your collection: the value block at the top of the dashboard ------------------------
+   The one showcase surface on this page, so it gets the full treatment: a frosted card over
+   a slow aurora in the three brand colours, a headline number that counts up, and a chart
+   that draws itself in. Everything that moves is transform or opacity, runs once per
+   answer (`.is-entering` is only on the first paint), and is off under reduced motion. */
+.pf {
+  position: relative; overflow: hidden; isolation: isolate;
+  display: flex; flex-direction: column; gap: 18px;
+  padding: 22px 24px 18px; border-radius: var(--hr-radius-xl);
+  border: 1px solid var(--hr-line-strong);
+  background: linear-gradient(180deg, rgba(40,39,45,.60), rgba(20,19,23,.82));
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 18px 48px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.07);
+}
+.pf-aurora {
+  position: absolute; z-index: -1; pointer-events: none;
+  inset: -30% -12% auto -12%; height: 120%;
+  background:
+    radial-gradient(36rem 15rem at 10% 20%, color-mix(in srgb, var(--hr-primary) 20%, transparent), transparent 62%),
+    radial-gradient(30rem 15rem at 90% 6%, color-mix(in srgb, var(--hr-secondary) 24%, transparent), transparent 64%),
+    radial-gradient(20rem 9rem at 62% 58%, color-mix(in srgb, var(--hr-accent) 6%, transparent), transparent 70%);
+  animation: pfDrift 18s ease-in-out infinite alternate;
+}
+@keyframes pfDrift {
+  from { transform: translate3d(-2%, 0, 0) scale(1); }
+  to   { transform: translate3d(3%, 4%, 0) scale(1.07); }
+}
+
+.pf-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 18px 26px; align-items: end; }
+.pf-headline { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pf-eyebrow {
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+  font-size: 10.5px; font-weight: 900; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--hr-primary);
+}
+.pf-total {
+  font-family: var(--hr-sans); font-size: 44px; font-weight: 900; line-height: 1.02; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+  color: var(--hr-fg-0);
+  background: linear-gradient(100deg, var(--hr-fg-0) 30%, color-mix(in srgb, var(--hr-primary) 70%, var(--hr-fg-0)) 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.pf-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 22px; }
+.pf-twin { font-size: 13.5px; font-weight: 800; color: var(--hr-fg-1); font-variant-numeric: tabular-nums; }
+.pf-change {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: var(--hr-radius-pill);
+  font-size: 11.5px; font-weight: 800; color: var(--hr-fg-1);
+  border: 1px solid var(--hr-line); background: rgba(255,255,255,.05);
+}
+.pf-change[hidden] { display: none; }
+.pf-change.is-up { color: var(--hr-primary); border-color: color-mix(in srgb, var(--hr-primary) 40%, transparent); background: color-mix(in srgb, var(--hr-primary) 10%, transparent); }
+.pf-change.is-down { color: var(--hr-alert); border-color: color-mix(in srgb, var(--hr-alert) 40%, transparent); background: color-mix(in srgb, var(--hr-alert) 10%, transparent); }
+.pf-change-arrow { font-size: 8.5px; line-height: 1; }
+.pf-partial {
+  padding: 3px 10px; border-radius: var(--hr-radius-pill);
+  font-size: 11px; font-weight: 800; color: var(--hr-accent);
+  border: 1px solid color-mix(in srgb, var(--hr-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--hr-accent) 8%, transparent);
+}
+
+/* One tile per collection: what it holds, what that is worth, and its share of the whole. */
+.pf-sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.pf-side {
+  --accent: var(--hr-primary);
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 12px 14px; border-radius: var(--hr-radius-lg);
+  border: 1px solid var(--hr-line);
+  background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.02));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+  transition: transform .18s ease, border-color .18s ease;
+}
+.pf-side::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(180px 90px at 100% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%);
+}
+.pf-side:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.pf-side-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pf-side-name { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--accent); }
+.pf-side-pct { font-size: 11px; font-weight: 800; color: var(--hr-fg-2); font-variant-numeric: tabular-nums; }
+.pf-side-val { font-size: 20px; font-weight: 900; line-height: 1.15; color: var(--hr-fg-0); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.pf-side-count { font-size: 12px; font-weight: 700; color: var(--hr-fg-2); }
+.pf-side-bar { display: block; height: 4px; margin-top: 8px; border-radius: var(--hr-radius-pill); background: rgba(255,255,255,.08); overflow: hidden; }
+.pf-side-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transform-origin: left center; }
+.pf-side-note { margin-top: 6px; font-size: 11px; font-weight: 600; line-height: 1.35; color: var(--hr-fg-3); }
+
+/* The year behind the number. */
+.pf-chart { display: flex; flex-direction: column; gap: 8px; }
+.pf-chart-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.pf-chart-cap { font-size: 12px; font-weight: 700; color: var(--hr-fg-2); }
+.pf-ranges .seg-btn { padding: 5px 11px; font-size: 11.5px; }
+.pf-canvas { position: relative; height: 220px; }
+
+/* The pieces that carry it. */
+.pf-h { margin: 0 0 8px; font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--hr-fg-2); }
+.pf-top-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; }
+.pf-top-list > li { min-width: 0; }
+.pf-top-row {
+  display: flex; align-items: center; gap: 11px; width: 100%; min-width: 0;
+  padding: 7px 10px 7px 7px; border-radius: var(--hr-radius-md);
+  border: 1px solid var(--hr-line); background: rgba(255,255,255,.035);
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+  transition: transform .18s ease, border-color .18s ease, background .18s ease;
+}
+.pf-top-row:hover { transform: translateY(-2px); border-color: var(--hr-line-strong); background: rgba(255,255,255,.06); }
+.pf-top-row:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 2px; }
+.pf-top-go { flex: 0 0 auto; display: grid; place-items: center; color: var(--hr-fg-3); transition: transform .18s ease, color .18s ease; }
+.pf-top-row:hover .pf-top-go { color: var(--hr-primary); transform: translateX(2px); }
+.pf-top-art {
+  flex: 0 0 auto; width: 42px; height: 42px; border-radius: var(--hr-radius-md); overflow: hidden;
+  display: grid; place-items: center; background: var(--hr-bg-3); border: 1px solid var(--hr-line);
+}
+.pf-top-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pf-top-art img.is-pet { object-fit: contain; padding: 10%; box-sizing: border-box; background: var(--hr-bg-2); }
+.pf-top-noimg { color: var(--hr-fg-3); display: grid; place-items: center; }
+.pf-top-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pf-top-name { font-size: 13px; font-weight: 800; color: var(--hr-fg-0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-top-sub { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 11px; font-weight: 600; color: var(--hr-fg-2); white-space: nowrap; overflow: hidden; }
+.pf-top-sub > span { overflow: hidden; text-overflow: ellipsis; }
+.pf-chip {
+  flex: 0 1 auto; padding: 1px 8px; border-radius: var(--hr-radius-pill);
+  font-size: 10.5px; font-weight: 800; color: var(--hr-secondary);
+  border: 1px solid color-mix(in srgb, var(--hr-secondary) 42%, transparent);
+  background: color-mix(in srgb, var(--hr-secondary) 12%, transparent);
+}
+.pf-chip.is-tier { color: var(--hr-accent); border-color: color-mix(in srgb, var(--hr-accent) 40%, transparent); background: color-mix(in srgb, var(--hr-accent) 9%, transparent); }
+.pf-top-val { flex: 0 0 auto; font-size: 13.5px; font-weight: 900; color: var(--hr-fg-0); font-variant-numeric: tabular-nums; }
+
+.pf-warn { display: flex; align-items: flex-start; gap: 7px; margin: 0; font-size: 12px; font-weight: 600; line-height: 1.45; color: var(--hr-accent); }
+.pf-warn svg { flex: 0 0 auto; margin-top: 2px; }
+.pf-warn span { color: var(--hr-fg-1); }
+.pf-foot { margin: 0; font-size: 11.5px; font-weight: 600; line-height: 1.45; color: var(--hr-fg-3); }
+
+/* Loading, failed, empty: three different answers that must not look alike. */
+.pf-state { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 13px; font-weight: 700; color: var(--hr-fg-1); }
+.pf-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.pf-empty-h { margin: 0; font-size: 18px; font-weight: 900; color: var(--hr-fg-0); }
+.pf-empty p { margin: 0; font-size: 13px; font-weight: 600; color: var(--hr-fg-2); max-width: 54ch; }
+
+/* The entrance, once per answer. */
+.pf.is-entering .pf-headline, .pf.is-entering .pf-side, .pf.is-entering .pf-chart, .pf.is-entering .pf-top-row { animation: dashRise .5s ease both; }
+.pf.is-entering .pf-side:nth-child(1) { animation-delay: 90ms; }
+.pf.is-entering .pf-side:nth-child(2) { animation-delay: 160ms; }
+.pf.is-entering .pf-chart { animation-delay: 220ms; }
+.pf.is-entering .pf-side-bar > span { animation: pfBar .8s cubic-bezier(.2,.7,.2,1) .25s both; }
+@keyframes pfBar { from { transform: scaleX(0); } }
+
+@media (max-width: 860px) {
+  .pf-head { grid-template-columns: minmax(0, 1fr); align-items: start; }
+}
+@media (max-width: 640px) {
+  .pf { padding: 18px 16px 14px; gap: 16px; border-radius: var(--hr-radius-lg); }
+  .pf-total { font-size: 34px; }
+  .pf-side { padding: 11px 12px; }
+  .pf-side-val { font-size: 17px; }
+  .pf-canvas { height: 180px; }
+  .pf-top-list { grid-template-columns: minmax(0, 1fr); }
+  .pf-ranges { width: 100%; display: flex; }
+  /* Height and type come from the site's own phone rule for .seg-btn (a 42px tap target). */
+  .pf-ranges .seg-btn { flex: 1 1 0; min-width: 0; padding: 0 4px; font-size: 12.5px; }
+}
+@media (max-width: 380px) {
+  .pf-sides { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pf-aurora { animation: none; }
+  .pf.is-entering .pf-headline, .pf.is-entering .pf-side, .pf.is-entering .pf-chart,
+  .pf.is-entering .pf-top-row, .pf.is-entering .pf-side-bar > span { animation: none; }
+  .pf-side, .pf-top-row, .pf-top-go { transition: none; }
+  .pf-side:hover, .pf-top-row:hover, .pf-top-row:hover .pf-top-go { transform: none; }
 }
 
 @media (max-width: 640px) {
@@ -6754,7 +7194,7 @@ a.trade-dash-who:hover { border-color: var(--hr-primary); background: rgba(81,25
   background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.02));
 }
 .trade-guide:empty { display: none; }
-.trade-guide.is-loading, .trade-guide.is-cold {
+.trade-guide.is-cold {
   display: flex; align-items: center; gap: 8px;
   font-size: 12px; color: var(--hr-fg-3);
 }

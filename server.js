@@ -32,6 +32,7 @@ const LS_LIMITS_TTL_MS = 5 * 60 * 1000;
 const LS_LIMITS_FAIL_MS = 60 * 1000;
 const creatureFallback = require('./lib/creature-fallback'); // Blockscout read-only browse fallback
 const slimeIndex = require('./lib/slime-index');
+const portfolio = require('./lib/portfolio');           // a wallet's holdings, day by day
 const imxArchive = require('./lib/imx-archive');        // pre-migration (StarkEx) Creature sales
 const { computeEligibility, BRACKETS } = require('./lib/eligibility');
 const { PROPOSITIONS, PROPOSITION_IDS } = require('./lib/propositions');
@@ -2046,8 +2047,10 @@ async function getMyListings(address) {
 //     same event as its 'sold' sale, so it's excluded here to avoid a duplicate row).
 // LAND has no equivalent maker-scoped feed (OpenSea returns only live orders), so the
 // History tab — and this function — are Creatures-only.
-const ACTIVITY_PAGES_MAX = 2; // newest ~200 activities — far more than the rendered cap
-const HISTORY_ITEMS_MAX = 80;
+const ACTIVITY_PAGES_MAX = 2; // newest ~200 activities
+// Sent in full and filtered on the page (collection, kind, search), so the cap is about what
+// a filter can still find rather than what fits on screen.
+const HISTORY_ITEMS_MAX = 150;
 
 /**
  * Put a dollar figure on a past trade using the rate that applied ON THE DAY IT HAPPENED,
@@ -2096,7 +2099,7 @@ function valueAtItsOwnDay(entry, daily, imxDaily) {
 async function fetchCreatureActivities(addr, maxPages = ACTIVITY_PAGES_MAX) {
   const acts = [];
   const saleTxs = new Set();
-  let failed = false;
+  let failed = false, truncated = false;
   try {
     let cursor = null, pages = 0;
     do {
@@ -2112,8 +2115,29 @@ async function fetchCreatureActivities(addr, maxPages = ACTIVITY_PAGES_MAX) {
       }
       cursor = body.page?.next_cursor ?? null;
     } while (cursor && ++pages < maxPages);
+    // Stopped by the page cap with more to read: the rows are the newest ones, not all of them.
+    truncated = Boolean(cursor);
   } catch (err) { failed = true; console.error('Creature activity feed failed:', err.message); }
-  return { acts, saleTxs, failed };
+  return { acts, saleTxs, failed, truncated };
+}
+
+/**
+ * Where each Creature actually went, by transaction: `${tx}:${tokenId}` -> { from, to }.
+ * Built from the transfer rows, which record the token's own movement and nothing else.
+ */
+function creatureNftFlow(acts) {
+  const flow = new Map();
+  for (const a of acts) {
+    if (a.type !== 'transfer') continue;
+    const tx = a.blockchain_metadata?.transaction_hash;
+    const tokenId = a.details?.asset?.token_id;
+    if (!tx || tokenId == null) continue;
+    flow.set(`${tx}:${tokenId}`, {
+      from: String(a.details.from || '').toLowerCase(),
+      to: String(a.details.to || '').toLowerCase(),
+    });
+  }
+  return flow;
 }
 
 async function getMyListingHistory(address) {
@@ -2121,6 +2145,7 @@ async function getMyListingHistory(address) {
 
   // 1) On-chain activity — one chronological (newest-first) feed, account-filtered.
   const { acts, saleTxs, failed: activityFailed } = await fetchCreatureActivities(addr);
+  const nftFlow = creatureNftFlow(acts);
 
   const entries = [];
   for (const a of acts) {
@@ -2131,7 +2156,15 @@ async function getMyListingHistory(address) {
       const asset = Array.isArray(d.asset) ? d.asset[0] : d.asset; // sale.asset is an array
       const tokenId = asset?.token_id;
       if (!tokenId) continue;
-      const isBuyer = (d.to || '').toLowerCase() === addr;
+      // Who bought is whoever the Creature went TO, read off its transfer in the same
+      // transaction. The sale row's own from/to are the order's maker and taker: the right
+      // way round for a filled listing, and backwards for a filled offer, where the maker
+      // is the bidder. Read straight, every offer taken showed as "sold" to the member who
+      // had just bought, and as "bought" to the one who had just sold.
+      const leg = tx ? nftFlow.get(`${tx}:${tokenId}`) : null;
+      const buyer = (leg ? leg.to : String(d.to || '').toLowerCase());
+      const seller = (leg ? leg.from : String(d.from || '').toLowerCase());
+      const isBuyer = buyer === addr;
       // Value the trade in the currency it actually settled in. This used to recognise ETH
       // and nothing else, so a USDC sale arrived with no price at all and the timeline
       // showed a bare "sold" with the amount missing beside it. IMX settles natively, with
@@ -2141,7 +2174,7 @@ async function getMyListingHistory(address) {
       const priceAmt = payCur && priceUnits ? unitsToAmount(priceUnits, payCur.decimals) : null;
       entries.push({ kind: isBuyer ? 'bought' : 'sold', tokenId, at, tx,
         currency: payCur?.key || null, priceAmt,
-        with: ((isBuyer ? d.from : d.to) || '').toLowerCase() || null });
+        with: (isBuyer ? seller : buyer) || null });
     } else if (a.type === 'transfer') {
       if (tx && saleTxs.has(tx)) continue; // NFT leg of a sale — already shown as bought/sold
       const tokenId = d.asset?.token_id;
@@ -2188,23 +2221,29 @@ async function getMyListingHistory(address) {
     });
   }
 
-  // Merge, newest-first, cap, then join token metadata in one batch.
-  const items = entries
+  // Merge, newest-first, cap, then name each token.
+  const dated = entries
     .filter(e => e.at)
-    .sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0))
-    .slice(0, HISTORY_ITEMS_MAX);
+    .sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0));
+  const items = dated.slice(0, HISTORY_ITEMS_MAX);
+  /* Names and images from the collection index when it is built, which costs nothing; only
+     the tokens it does not know go to Immutable, 25 to a call through the shared gate. With
+     the cap at 150 that difference is six calls on every dashboard open. */
+  const coll = getCollectionIndex();
+  const unknown = [...new Set(items.map(i => String(i.tokenId)))].filter(id => !coll?.byId.has(id));
   const [metaById, daily, imxDaily] = await Promise.all([
-    fetchCreatureMetaBatch([...new Set(items.map(i => String(i.tokenId)))]),
+    unknown.length ? fetchCreatureMetaBatch(unknown) : new Map(),
     getEthUsdDaily().catch(() => null),
     getImxUsdDaily().catch(() => null),
   ]);
   for (const it of items) {
-    const meta = metaById.get(String(it.tokenId)) || {};
+    const meta = coll?.byId.get(String(it.tokenId)) || metaById.get(String(it.tokenId)) || {};
     it.name = meta.name || `Highrise Creature #${it.tokenId}`;
     it.image = meta.image || null;
+    it.rarity = meta.rarity || null;
     valueAtItsOwnDay(it, daily, imxDaily);
   }
-  return { items };
+  return { items, more: dated.length > HISTORY_ITEMS_MAX };
 }
 
 async function getCreatureListings(cursor = '') {
@@ -3763,7 +3802,10 @@ function buildSalesView(feed, f, sortKey, meta, rate) {
  * folklore):
  *   - Tier is the one big lever. A Legendary Creature (76 of 11,111) sold at 6.8x the
  *     market's median sale; a premium LAND plot (571 of 3,140) at 3.1x a normal one over
- *     the last year, widening from 2.3x all-time.
+ *     the last year, widening from 2.3x all-time. (September 2026. By November it was 4.0x,
+ *     which is why a set is now read from its newest sales: see GUIDE_RECENT_SALES.)
+ *   - Both markets price in dollars and settle in ETH, so the model counts in dollars and
+ *     converts last: see GUIDE_USD_COVERAGE.
  *   - Statistical rarity RANK barely matters next to it, and only near the very top —
  *     within Epic, ranks 251-1000 fetch 1.05-1.36x and everything past ~2,000 fetches 1.00x.
  *   - The ordinary case is tight: 75% of Epic sales land within 15% of the median. Which is
@@ -3775,7 +3817,9 @@ function buildSalesView(feed, f, sortKey, meta, rate) {
  * SHAPE. The model is built once per feed snapshot and every asset is then a handful of map
  * lookups, so pricing a wallet of a hundred assets is one request and no extra scanning.
  */
-/* EVERY sale, not a recent window. Multiples are already expressed against the market's
+/* NO WINDOW OF TIME. (A set that trades often is read from its newest sales, counted in
+   sales rather than days: see GUIDE_RECENT_SALES. This note is why days are the wrong
+   measure.) Multiples are already expressed against the market's
    level at the time each sale happened, so a 2023 sale at 5x compares directly with today —
    and where both windows hold enough sales to check, the all-time median matches the
    three-year one (p10 0.94, p50 1.00, p90 1.04 across 344 trait values). A window costs
@@ -3840,10 +3884,53 @@ const GUIDE_WEEK_MS          = 7 * 86400000;
 const GUIDE_SMOOTH_WEEKS     = 6;       // the market's level at a moment: +/- 6 weeks around it
 const GUIDE_ANCHOR_MIN       = 30;      // widen the trailing window until it holds this many
 const GUIDE_ANCHOR_DAYS      = [60, 90, 120, 180, 270, 365];
+const GUIDE_LEVEL_WEEKS      = 54;      // a year of weekly readings, plus the week it starts in
 const GUIDE_MAX_TOKENS       = 120;     // one request per wallet, not one per asset
 const GUIDE_STALE_LISTING_D  = 60;      // listed longer than this without selling: the market has seen it
 const GUIDE_BEAR_TILT        = 0.88;    // and passed. Ask less.
 const GUIDE_BULL_TILT        = 1.12;    // nobody is selling one: ask more.
+/* THE MODEL COUNTS IN DOLLARS. Both collections are listed and settled in ETH, and both are
+   priced in dollars: sellers hold a dollar figure in their head and restate it in ETH as the
+   rate moves. Measured in November 2026, after ETH fell from about $2,700 to $1,600 in seven
+   weeks: a Standard plot's weekly median ran 0.078 -> 0.120 ETH over that stretch and stayed
+   between $194 and $238 the whole time. A holder reported a Premium plot quoted at a fair
+   price of 0.351 ETH while the cheapest one listed stood at 0.57 and the last had sold for
+   0.49: the model was restating two months of sales in ETH that no longer bought the same
+   thing.
+   Backtested by predicting every sale from the trailing median before it, once anchored in
+   ETH and once in dollars turned back into ETH at the rate on the day (median miss, then p75):
+     LAND Standard, 90 days    31.2% / 43.4%  ->   9.3% / 15.0%
+     LAND Standard, 3 years    18.0% / 32.8%  ->  11.1% / 22.4%
+     Creatures, 90 days        19.5% / 32.6%  ->   8.2% / 18.0%
+     Creatures, 3 years        19.0% / 42.9%  ->  12.5% / 28.5%
+   Dollars win in every window on both collections, so each sale is valued at the rate of its
+   own day, the market level and every multiple are worked out in dollars, and the answer is
+   turned into ETH last, at the rate of the moment someone asks. An estimate now moves with
+   ETH the way the market does, with no new sale needed to tell it.
+   The dollar model needs a rate for nearly every sale and one for today. Short of either it
+   falls back to counting in ETH, which is the old behaviour and still an answer. */
+const GUIDE_USD_COVERAGE     = 0.95;
+/* HOW A SET TRADES NOW, not on average since 2023. A multiple is stated against the market
+   of its own week, so an old sale and a new one compare, and for most trait values the old
+   ones say the same thing as the new. Not for a set the market is still repricing. A
+   Premium plot fetched 2.3x a Standard one in 2023, 2.8x in 2024, 3.1x in 2025 and 4.0x over
+   the twelve months to November 2026; the median of everything since launch still said
+   2.5x, and that quoted a Premium plot under any price one had fetched all year.
+   So a set is read from its newest forty sales. Counted in sales, not in days, which is what
+   keeps the rule above (no time window) intact: a set that has sold forty times or fewer
+   keeps every sale it has, and those are the rare ones a window of days would starve.
+   Walk-forward backtest, the model rebuilt each week from only the sales before it, with
+   the dollar change above (median miss, then p75, old -> new):
+     LAND, 1 year (792 sales)         17.8% / 34.7%  ->   8.0% / 17.7%
+       of which Premium (75)          37.1% / 61.5%  ->  16.5% / 26.7%   (low by 37% -> by 3%)
+     LAND, 3 years (2,112)            19.2% / 36.2%  ->  11.3% / 23.2%
+     Creatures, 1 year (607)          13.9% / 31.3%  ->   7.3% / 17.3%
+     Creatures, 2 years (1,328)       20.8% / 42.0%  ->  10.0% / 22.4%
+       of which trait-priced (~290)   36.5% / 70.0%  ->  23.4% / 44.3%
+   Twenty to a hundred sales all score within a point of each other; forty is the best on
+   LAND, where the repricing is. A 30-day anchor was tried too and lost to 60 on Creatures.
+   Legendary Creatures remain a guess either way: five sales in two years. */
+const GUIDE_RECENT_SALES     = 40;
 
 // The metadata attribute that carries the tier, on either collection.
 const GUIDE_TIER_ATTRS = new Set(['Rarity', 'Tier']);
@@ -3867,7 +3954,7 @@ function buildLevelCurve(rows) {
   for (const r of rows) {
     const w = Math.floor(r.ts / GUIDE_WEEK_MS);
     if (!byWeek.has(w)) byWeek.set(w, []);
-    byWeek.get(w).push(r.eth);
+    byWeek.get(w).push(r.v);
   }
   const weeks = [...byWeek.keys()].sort((a, b) => a - b);
   const level = new Map();
@@ -3931,20 +4018,38 @@ function buildPriceModel({ sales, lookup, tierOf, listings, items, rate, now = D
     const usd = s.priceUsd ?? (r0 > 0 ? eth * r0 : null);
     rows.push({ id: String(s.tokenId), ts, eth, usd: usd > 0 ? usd : null });
   }
+  /* Which money the model counts in (see GUIDE_USD_COVERAGE). `v` is each sale's value in
+     that unit; `eth` and `usd` stay on the row as the plain facts the panel quotes. */
+  const rateNow = rate ? rate(now) : null;
+  const dollarRows = rows.filter(r => r.usd > 0);
+  const unit = rateNow > 0 && dollarRows.length >= rows.length * GUIDE_USD_COVERAGE ? 'usd' : 'eth';
+  if (unit === 'usd') { rows.length = 0; rows.push(...dollarRows); }
+  for (const r of rows) r.v = unit === 'usd' ? r.usd : r.eth;
   if (rows.length < GUIDE_ANCHOR_MIN) return null;
   rows.sort((a, b) => a.ts - b.ts);
   const curve = buildLevelCurve(rows);
 
-  // The market NOW: a trailing window widened until it holds enough sales to mean something.
-  let anchor = null, anchorSales = 0, anchorDays = 0;
-  for (const days of GUIDE_ANCHOR_DAYS) {
-    const a = sortedNums(rows.filter(r => r.ts >= now - days * 86400000).map(r => r.eth));
-    if (a.length >= GUIDE_ANCHOR_MIN || days === GUIDE_ANCHOR_DAYS[GUIDE_ANCHOR_DAYS.length - 1]) {
-      anchor = pctile(a, .5); anchorSales = a.length; anchorDays = days;
+  // The market at a moment: a trailing window widened until it holds enough sales to mean
+  // something, and the widest one when none does.
+  const levelAsOf = t => {
+    let out = { v: null, n: 0, days: 0 };
+    for (const days of GUIDE_ANCHOR_DAYS) {
+      const lo = t - days * 86400000;
+      const a = sortedNums(rows.filter(r => r.ts >= lo && r.ts <= t).map(r => r.v));
+      out = { v: pctile(a, .5), n: a.length, days };
       if (a.length >= GUIDE_ANCHOR_MIN) break;
     }
-  }
+    return out;
+  };
+  const { v: anchor, n: anchorSales, days: anchorDays } = levelAsOf(now);
   if (!(anchor > 0)) return null;
+  /* The same reading, taken at each week of the last year: what this function would have
+     called "the market" had it been asked then. The collection-value chart prices a
+     wallet's past holdings with it, and because the last entry IS the anchor, that line
+     ends exactly on today's estimate instead of a hair to one side of it. */
+  const levels = [];
+  for (let t = now - GUIDE_LEVEL_WEEKS * GUIDE_WEEK_MS; t < now; t += GUIDE_WEEK_MS) levels.push({ t, v: levelAsOf(t).v });
+  levels.push({ t: now, v: anchor });
 
   // Comparables: the recent years, each sale as a multiple of the level around it.
   /* Each comparable keeps its DATE and the price actually paid, not only its multiple. The
@@ -3968,14 +4073,14 @@ function buildPriceModel({ sales, lookup, tierOf, listings, items, rate, now = D
         if (GUIDE_TIER_ATTRS.has(type)) continue;
         const k = `${type}:${value}`;
         if (!byTraitAll.has(k)) byTraitAll.set(k, []);
-        byTraitAll.get(k).push({ m: r.eth / lvl0, ts: r.ts, eth: r.eth, usd: r.usd });
+        byTraitAll.get(k).push({ m: r.v / lvl0, ts: r.ts, eth: r.eth, usd: r.usd });
       }
     }
     if (r.ts < since) continue;
     if (!meta) continue;
     const lvl = curve.at(r.ts);
     if (!(lvl > 0)) continue;
-    const e = { m: r.eth / lvl, ts: r.ts, eth: r.eth, usd: r.usd };
+    const e = { m: r.v / lvl, ts: r.ts, eth: r.eth, usd: r.usd };
     comps++; windowFrom = Math.min(windowFrom, r.ts);
     const tier = tierOf(meta);
     if (tier) { if (!byTier.has(tier)) byTier.set(tier, []); byTier.get(tier).push(e); }
@@ -4027,17 +4132,29 @@ function buildPriceModel({ sales, lookup, tierOf, listings, items, rate, now = D
   /* Everything the panel needs to say about one comparable set: where the middle is, how
      spread out it was, how many sold in the last year, and the most recent one — its date
      and the price actually paid. */
-  const stat = (entries, min) => {
-    if (entries.length < min) return null;
+  const stat = (all, min) => {
+    if (all.length < min) return null;
+    /* The newest GUIDE_RECENT_SALES of them, or every one when fewer have sold. The figures
+       below, the count included, describe the sales the estimate rests on: the panel prints
+       that count, and it must be the number of sales that were used. */
+    const entries = all.length > GUIDE_RECENT_SALES
+      ? all.slice().sort((x, y) => y.ts - x.ts).slice(0, GUIDE_RECENT_SALES)
+      : all;
     const a = sortedNums(entries.map(e => e.m));
     let last = entries[0], first = entries[0], sold12m = 0;
     for (const e of entries) {
       if (e.ts > last.ts) last = e;
       if (e.ts < first.ts) first = e;
-      if (e.ts >= year) sold12m++;
     }
+    // How many sold in the last year is a fact about the whole set, whichever window priced it.
+    for (const e of all) if (e.ts >= year) sold12m++;
     return {
       n: a.length, lo: pctile(a, .25), mid: pctile(a, .5), hi: pctile(a, .8),
+      // Every sale the set has ever had. The window above decides what the multiple IS;
+      // this says how sure we are that the set trades apart from the market at all, which
+      // is what shrinkage asks. Shrinking on the window's 40 took 9% off a claim that
+      // rests on hundreds of sales, and quoted Premium plots that much low.
+      nAll: all.length,
       // p10/p90, not the true ends. One fat-fingered listing in 2024 sent a Creature for
       // 0.0001 ETH, and quoting that as "what these sold for" describes a typo rather than
       // a market. The panel says "most sold between", and means it.
@@ -4069,7 +4186,10 @@ function buildPriceModel({ sales, lookup, tierOf, listings, items, rate, now = D
   }
 
   return {
-    anchor, anchorSales, anchorDays, floor, comps,
+    // `anchor` is in `unit`: dollars, or ETH when the dollar model could not be built.
+    // `ethUsd` is the rate at build, for a request that arrives without a live one.
+    unit, ethUsd: rateNow > 0 ? rateNow : null,
+    anchor, anchorSales, anchorDays, levels, floor, comps,
     windowFrom: Number.isFinite(windowFrom) ? windowFrom : null, windowTo: now,
     tiers, traits, tierFloor, listedByTrait, listedByTier, spread,
     population, traitPop, supply: (items || []).length,
@@ -4082,6 +4202,13 @@ function buildPriceModel({ sales, lookup, tierOf, listings, items, rate, now = D
   };
 }
 
+/** The model's market level in ETH at a given rate, or null when a dollar model has none. */
+function modelAnchorEth(model, ethUsd = null) {
+  if (model.unit !== 'usd') return model.anchor;
+  const rateNow = ethUsd > 0 ? ethUsd : model.ethUsd;
+  return rateNow > 0 ? model.anchor / rateNow : null;
+}
+
 /**
  * One asset's three numbers.
  *
@@ -4090,11 +4217,16 @@ function buildPriceModel({ sales, lookup, tierOf, listings, items, rate, now = D
  * the maximum rather than the product also stops a Legendary being counted twice, once for
  * its tier and again for the rare trait that put it in that tier.
  */
-function priceGuideFor(model, meta, tierOf) {
+function priceGuideFor(model, meta, tierOf, ethUsd = null) {
   if (!model || !meta) return null;
+  /* The market's level in ETH, at the rate of this moment. A dollar model is turned into ETH
+     here and nowhere earlier, so the same model answers correctly an hour later at a
+     different rate. Everything after this line is in ETH, because listings are. */
+  const anchorEth = modelAnchorEth(model, ethUsd);
+  if (!(anchorEth > 0)) return null;
   const tier = tierOf(meta);
   const tierStat = tier ? model.tiers.get(tier) : null;
-  let mult = tierStat ? shrinkMult(tierStat.mid, tierStat.n) : 1;
+  let mult = tierStat ? shrinkMult(tierStat.mid, tierStat.nAll) : 1;
   let stat = tierStat;
   /* Name the tier only when the tier is doing something. Epic is 99% of Creatures and
      standard is 82% of LAND, so "priced as Epic, which changes hands at about 1x the market"
@@ -4119,7 +4251,7 @@ function priceGuideFor(model, meta, tierOf) {
     const k = `${type}:${value}`;
     const st = model.traits.get(k);
     if (!st) continue;
-    const m = shrinkMult(st.mid, st.n);
+    const m = shrinkMult(st.mid, st.nAll);
     // Big enough to be worth saying, and bigger than what the tier already said.
     if (m < GUIDE_TRAIT_MIN_X || m <= mult) continue;
     if (!best || m > best.m) best = { type, value, st, m };
@@ -4155,7 +4287,7 @@ function priceGuideFor(model, meta, tierOf) {
   const spreadStat = stat || model.spread;
   const loR = spreadStat.mid > 0 ? spreadStat.lo / spreadStat.mid : .9;
   const hiR = spreadStat.mid > 0 ? spreadStat.hi / spreadStat.mid : 1.2;
-  let fair = model.anchor * mult;
+  let fair = anchorEth * mult;
 
   /* The floor rule. A top-tier asset is never quoted under three times the collection's
      cheapest listing, whatever the comparables say. Legendaries and premium plots sell in
@@ -4196,13 +4328,16 @@ function priceGuideFor(model, meta, tierOf) {
   const comparables = stat ? {
     kind: from.kind, label: from.label ?? null,
     n: stat.n, exists, sold12m: stat.sold12m,
+    // True when `n` is the newest sales of a set that has had more. The panel then says
+    // "the last 40 sales", because "40 sales" would read as all there have ever been.
+    recent: stat.n < stat.nAll,
     // True when this trait was too thinly traded since the launch year to speak for itself,
     // so its whole history answered instead. Worth saying: those sales are older, and the
     // market has generally learned to pay MORE for a chase trait since, not less.
     historic: stat.historic === true,
     fromTs: stat.firstTs, toTs: stat.lastTs,
     lastTs: stat.lastTs, lastEth: r(stat.lastEth), lastUsd: cents(stat.lastUsd),
-    low: r(model.anchor * stat.p10), typical: r(model.anchor * stat.mid), high: r(model.anchor * stat.p90),
+    low: r(anchorEth * stat.p10), typical: r(anchorEth * stat.mid), high: r(anchorEth * stat.p90),
     // Roughly how often one of these changes hands, over the span they actually cover.
     everyDays: stat.n > 1 && stat.lastTs > stat.firstTs
       ? Math.max(1, Math.round((stat.lastTs - stat.firstTs) / day / (stat.n - 1))) : null,
@@ -4211,7 +4346,7 @@ function priceGuideFor(model, meta, tierOf) {
   } : {
     kind: 'market', label: null, n: model.comps, exists: model.supply || null,
     sold12m: null, fromTs: model.windowFrom, toTs: model.windowTo,
-    lastTs: null, lastEth: null, lastUsd: null, low: null, typical: r(model.anchor), high: null,
+    lastTs: null, lastEth: null, lastUsd: null, low: null, typical: r(anchorEth), high: null,
     everyDays: null, listed: shelf.n, listedAgeDays: ageDays, listedOldestDays: oldestDays,
     shelfFloor: r(shelf.floor),
   };
@@ -4221,7 +4356,9 @@ function priceGuideFor(model, meta, tierOf) {
     basis: {
       from, mult: Math.round(mult * 100) / 100, liquidity, floored,
       tier: tier || null, topTier, comparables,
-      anchor: r(model.anchor), anchorSales: model.anchorSales, anchorDays: model.anchorDays,
+      anchor: r(anchorEth), anchorSales: model.anchorSales, anchorDays: model.anchorDays,
+      // Which money the model counted in. 'usd' lets the panel say so; 'eth' is the fallback.
+      unit: model.unit,
       floor: r(model.floor), rivalFloor: undercut ? r(rivalFloor) : null,
       rivalKind: (from.kind === 'trait' && shelf.floor > 0) ? 'trait'
         : (tier && model.tierFloor.get(tier)) ? 'tier' : 'collection',
@@ -4239,7 +4376,7 @@ function cachedPriceModel(kind, key, build) {
     const t0 = Date.now();
     slot.model = build();
     slot.key = key;
-    if (slot.model) console.log(`Price model (${kind}): ${slot.model.comps} comparables, anchor ${slot.model.anchor.toFixed(4)} ETH from ${slot.model.anchorSales} sales in ${slot.model.anchorDays}d, built in ${Date.now() - t0}ms.`);
+    if (slot.model) console.log(`Price model (${kind}): ${slot.model.comps} comparables, anchor ${slot.model.unit === 'usd' ? `$${slot.model.anchor.toFixed(2)}` : `${slot.model.anchor.toFixed(4)} ETH`} from ${slot.model.anchorSales} sales in ${slot.model.anchorDays}d, built in ${Date.now() - t0}ms.`);
   }
   return slot.model;
 }
@@ -4250,47 +4387,90 @@ const landTierOf = meta => {
   return t ? String(t) : null;
 };
 
-async function getCreaturePriceGuide(tokens) {
+/* Everything needed to price a token in one collection: the model, how to look a token up,
+   and the rate of the moment. `indexing` means the catalogue is still being read, which is
+   "ask again" and never "worth nothing". The price guide and the collection value both
+   price through here, so the two can never disagree about what an asset is worth. */
+async function creaturePricing() {
   const [feed, fx, daily, listIdx] = await Promise.all([
     getCreatureSalesWithArchive(), getMarketplaceFx(), getEthUsdDaily(), getBrowseIndex().catch(() => null),
   ]);
   const coll = getCollectionIndex();
-  if (!coll) return { indexing: true, guides: {} };
+  if (!coll) return { indexing: true };
   const rate = ts => (daily && ts ? daily.at(ts) : null) ?? fx.ethUsd ?? null;
+  const lookup = id => coll.byId.get(String(id)) || null;
   const model = cachedPriceModel('creatures',
     `${creatureSalesFeed.at}:${collectionIndex.at}:${feed.length}:${browseIndex.at}`,
     () => buildPriceModel({
-      sales: feed,
-      lookup: id => coll.byId.get(String(id)) || null,
-      tierOf: creatureTierOf,
+      sales: feed, lookup, tierOf: creatureTierOf,
       listings: listIdx?.items || [],
       items: coll.items,
       rate,
     }));
-  return shapeGuides(model, tokens, id => coll.byId.get(String(id)) || null, creatureTierOf, fx.ethUsd);
+  return { model, lookup, tierOf: creatureTierOf, ethUsd: fx.ethUsd ?? null, rate };
 }
 
-async function getLandPriceGuide(tokens) {
+/* LAND's catalogue while the slime sweep is still running. The sweep reads every parcel's
+   pet from Highrise, one call each, and takes a few minutes after every restart. Until it
+   lands, LAND could not be priced at all: the Sell form's guide stayed on its spinner and
+   the dashboard's collection value left LAND out. But the parcel list the sweep starts from
+   (one OpenSea crawl, cached for a day) already carries every parcel's tier, and tier is
+   what prices LAND: over the last year no LAND sale was priced on a slime trait. So until
+   the sweep lands, LAND is priced from tiers alone, and the full catalogue takes over the
+   moment it exists. */
+const landTierCatalogue = { at: 0, data: null };
+function landTierIndex() {
+  const list = landMarket.cachedParcelCoords();
+  if (!list?.items?.length) return null;
+  if (landTierCatalogue.at !== list.at) {
+    const items = list.items.map(c => ({
+      tokenId: String(c.tokenId), coords: { x: c.x, y: c.y }, parcelName: c.name || null,
+      slimeName: null, tier: c.tier || null, traits: c.tier ? { Tier: c.tier } : {},
+    }));
+    landTierCatalogue.data = { items, byToken: new Map(items.map(it => [it.tokenId, it])), builtAt: list.at, tiersOnly: true };
+    landTierCatalogue.at = list.at;
+  }
+  return landTierCatalogue.data;
+}
+
+async function landPricing() {
   const [feed, fx, daily, listings] = await Promise.all([
     getLandSalesFeed(), getMarketplaceFx(), getEthUsdDaily(), landListingsByToken().catch(() => new Map()),
   ]);
-  const index = slimeIndex.getSlimeIndex();
-  if (!index) return { indexing: true, guides: {} };
+  const index = slimeIndex.getSlimeIndex() || landTierIndex();
+  if (!index) return { indexing: true };
+  /* A listing's price in ETH. Our own book also holds USDC listings, whose `priceEth` is
+     null and whose `priceAmt` is dollars: reading that as ETH put a 925 USDC plot on the
+     shelf at 925 ETH. A dollar listing with no rate to convert it is left off the shelf. */
+  const listedEth = l => (l.currency === 'usdc'
+    ? (fx.ethUsd > 0 && l.priceAmt > 0 ? l.priceAmt / fx.ethUsd : null)
+    : (l.priceEth ?? l.priceAmt ?? null));
   const asListings = [...listings.values()].map(l => ({
-    tokenId: l.tokenId, totalEth: l.priceEth ?? l.priceAmt ?? null, listedAt: l.listedAt || 0,
+    tokenId: l.tokenId, totalEth: listedEth(l), listedAt: l.listedAt || 0,
   }));
   const rate = ts => (daily && ts ? daily.at(ts) : null) ?? fx.ethUsd ?? null;
+  const lookup = id => index.byToken.get(String(id)) || null;
   const model = cachedPriceModel('land',
-    `${landSalesFeed.at}:${index.builtAt}:${feed.length}:${asListings.length}`,
+    `${index.tiersOnly ? 'tiers' : 'slimes'}:${landSalesFeed.at}:${index.builtAt}:${feed.length}:${asListings.length}`,
     () => buildPriceModel({
-      sales: feed,
-      lookup: id => index.byToken.get(String(id)) || null,
-      tierOf: landTierOf,
+      sales: feed, lookup, tierOf: landTierOf,
       listings: asListings,
       items: index.items,
       rate,
     }));
-  return shapeGuides(model, tokens, id => index.byToken.get(String(id)) || null, landTierOf, fx.ethUsd);
+  return { model, lookup, tierOf: landTierOf, ethUsd: fx.ethUsd ?? null, rate };
+}
+
+async function getCreaturePriceGuide(tokens) {
+  const p = await creaturePricing();
+  if (p.indexing) return { indexing: true, guides: {} };
+  return shapeGuides(p.model, tokens, p.lookup, p.tierOf, p.ethUsd);
+}
+
+async function getLandPriceGuide(tokens) {
+  const p = await landPricing();
+  if (p.indexing) return { indexing: true, guides: {} };
+  return shapeGuides(p.model, tokens, p.lookup, p.tierOf, p.ethUsd);
 }
 
 /* A minute of caching is right for an estimate, and wrong for "ask me again": with
@@ -4308,7 +4488,7 @@ function shapeGuides(model, tokens, lookup, tierOf, ethUsd) {
   if (!model) return { guides, unavailable: true };
   for (const id of tokens) {
     const meta = lookup(id);
-    const g = priceGuideFor(model, meta, tierOf);
+    const g = priceGuideFor(model, meta, tierOf, ethUsd);
     if (!g) continue;
     const usd = v => (ethUsd && v > 0 ? Math.round(v * ethUsd * 100) / 100 : null);
     guides[id] = { ...g, usd: { quick: usd(g.quick), fair: usd(g.fair), patient: usd(g.patient) } };
@@ -4325,6 +4505,265 @@ function parseGuideTokens(searchParams) {
     }
   }
   return [...new Set(out)];
+}
+
+// ===================== Collection value: what a wallet's HCC is worth ====================
+/* A holder asked for it on Discord (November 2026): "a full on dashboard for your HCC
+   collection... 'Your collection value', show the value of the wallet over time."
+
+   The value today is the price guide's fair price, summed over what the wallet holds in
+   both collections. It goes through the same pricing the Sell form uses, so the figure on
+   the dashboard and the one beside a listing can never disagree about an asset.
+
+   The value over time prices what the wallet HELD on each day at that day's market (see
+   lib/portfolio.js for the walk). It covers twelve months and no more, on purpose: the
+   Creature activity feed begins at the July 2025 move to zkEVM, and a year stays inside
+   what that feed can state exactly. Reaching back into the Immutable X years would mean
+   stitching a second history onto the first across the migration mint, and a chart that
+   guesses is worse than one that starts later.
+
+   Three honesty rules, the same ones every other market read here follows:
+     - A side we could not read is `unavailable`, never an empty wallet. The total is then
+       marked partial, and the chart is left out rather than drawn from half the holdings.
+     - A history cut short by a page cap is trusted only back to its oldest row.
+     - Moves that contradict the holdings mean a move is missing: the chart is still
+       drawn, and `exact` says it is no longer certain.
+
+   Public on-chain data by address, like the wallet browse: what an address holds and when
+   it moved. Nothing here joins a wallet to a person. Estate-locked LAND is not counted;
+   it sits in the estate contract, where the wallet's own token list cannot see it. */
+const PORTFOLIO_DAYS           = 365;
+const PORTFOLIO_TTL_MS         = 90 * 1000;   // long enough to cover a reload, short enough to follow a trade
+const PORTFOLIO_TOP            = 6;
+const PORTFOLIO_ACTIVITY_PAGES = 6;           // ~600 Creature moves, far past a year for any holder
+const PORTFOLIO_CACHE_MAX      = 300;
+const portfolioCache = new Map();             // address -> { at, data }
+
+/**
+ * A wallet's Creature arrivals and departures, read off the zkEVM activity feed.
+ *
+ * Transfers only. Every change of holder is a transfer, a sale included, and a transfer's
+ * from/to are the token's own. A sale row's from/to are the order's maker and taker, which
+ * run backwards for a filled offer: counted from those, three wallets in the first
+ * fourteen tested "sold" Creatures they had just bought, and the walk caught it as moves
+ * that contradicted the holdings.
+ */
+function creatureMovesOf(addr, acts) {
+  const moves = [];
+  for (const a of acts) {
+    if (a.type !== 'transfer') continue;
+    const d = a.details || {};
+    const ts = Date.parse(a.updated_at || a.indexed_at || '') || 0;
+    if (!ts || d.asset?.token_id == null) continue;
+    const to = String(d.to || '').toLowerCase(), from = String(d.from || '').toLowerCase();
+    if (to === from) continue;
+    const dir = to === addr ? 'in' : from === addr ? 'out' : null;
+    if (dir) moves.push({ ts, tokenId: String(d.asset.token_id), dir });
+  }
+  return moves;
+}
+
+const LAND_MOVE_DIR = { bought: 'in', received: 'in', minted: 'in', sold: 'out', sent: 'out' };
+
+/**
+ * One collection's half of a wallet: what it holds, what each piece is worth, and what it
+ * held on each day of the last year. Never throws. `state` says how far it got:
+ *   ok           holdings read and priced
+ *   indexing     holdings read, the catalogue behind the prices still loading
+ *   unpriced     holdings read, no price model to be had just now
+ *   unavailable  holdings could not be read at all
+ */
+async function portfolioSide(kind, addr, now) {
+  const isLand = kind === 'land';
+  const side = { state: 'ok', count: 0, priced: 0, fairEth: 0, quickEth: 0, truncated: false, tiers: [] };
+  const none = state => ({ side: { ...side, state }, assets: [], history: null });
+  if (isLand && !landMarket.configured()) return none('unavailable');
+
+  const [ownedR, pricingR, movesR] = await Promise.allSettled([
+    isLand
+      ? landOwnedOnChain(addr)
+          .catch(() => landMarket.ownedLand(addr).then(d => d.items || []))
+          .then(items => ({ items, truncated: false }))
+      : getOwnedCreatures(addr),
+    isLand ? landPricing() : creaturePricing(),
+    isLand
+      ? landMarket.walletEventsFull(addr).then(({ entries, truncated }) => ({
+          truncated,
+          moves: entries
+            .map(e => ({ ts: Date.parse(e.at) || 0, tokenId: String(e.tokenId), dir: LAND_MOVE_DIR[e.kind] || null }))
+            .filter(m => m.ts && m.dir),
+        }))
+      : fetchCreatureActivities(addr, PORTFOLIO_ACTIVITY_PAGES).then(({ acts, failed, truncated }) => {
+          if (failed) throw new Error('activity feed unavailable');
+          return { truncated, moves: creatureMovesOf(addr, acts) };
+        }),
+  ]);
+
+  if (ownedR.status !== 'fulfilled') {
+    console.error(`Collection value: ${kind} holdings failed:`, ownedR.reason?.message);
+    return none('unavailable');
+  }
+  const owned = ownedR.value;
+  side.count = owned.items.length;
+  side.truncated = !!owned.truncated;
+
+  const pricing = pricingR.status === 'fulfilled' ? pricingR.value : null;
+  if (pricingR.status !== 'fulfilled') console.error(`Collection value: ${kind} pricing failed:`, pricingR.reason?.message);
+  if (!pricing || pricing.indexing || !pricing.model) {
+    return { side: { ...side, state: pricing?.indexing ? 'indexing' : 'unpriced' }, assets: [], history: null };
+  }
+
+  const { model, lookup, tierOf, ethUsd } = pricing;
+  const anchorEth = modelAnchorEth(model, ethUsd);
+  if (!(anchorEth > 0)) return { side: { ...side, state: 'unpriced' }, assets: [], history: null };
+  const guides = new Map();   // a token is priced once, whether it is held now or was held in March
+  const guideOf = id => {
+    if (!guides.has(id)) {
+      const meta = lookup(id);
+      guides.set(id, meta ? priceGuideFor(model, meta, tierOf, ethUsd) : null);
+    }
+    return guides.get(id);
+  };
+
+  const assets = [];
+  const byTier = new Map();
+  for (const it of owned.items) {
+    const id = String(it.tokenId);
+    const g = guideOf(id);
+    if (!g || !(g.fair > 0)) continue;   // not in the catalogue yet: held, counted, not priced
+    const meta = lookup(id);
+    const tier = tierOf(meta) || null;
+    side.priced++;
+    side.fairEth += g.fair;
+    side.quickEth += g.quick > 0 ? g.quick : g.fair;
+    const acc = byTier.get(tier) || { tier, count: 0, fairEth: 0 };
+    acc.count++; acc.fairEth += g.fair;
+    byTier.set(tier, acc);
+    // A parcel is known by its slime's name; the coordinates say which parcel it is.
+    const pet = isLand ? (meta.slimeName || null) : null;
+    assets.push({
+      coll: kind, tokenId: id,
+      name: pet || it.name || meta.name || `#${id}`,
+      parcel: pet ? (it.name || meta.parcelName || null) : null,
+      image: it.image || meta.image || null,
+      coords: it.coords || meta.coords || null,
+      tier, fairEth: g.fair,
+      // What sets its price, when something does: the trait or tier the guide priced it on.
+      why: g.basis.from.kind === 'market' ? null : { kind: g.basis.from.kind, label: g.basis.from.label },
+    });
+  }
+  side.tiers = [...byTier.values()].sort((a, b) => b.fairEth - a.fairEth);
+
+  let history = null;
+  if (movesR.status === 'fulfilled') {
+    const { moves, truncated } = movesR.value;
+    const { days, conflicts } = portfolio.holdingsByDay({
+      held: owned.items.map(i => String(i.tokenId)),
+      moves,
+      // An asset's worth as a multiple of the market: today's estimate over today's market.
+      weightOf: id => { const g = guideOf(String(id)); return g && g.fair > 0 ? g.fair / anchorEth : null; },
+      from: now - PORTFOLIO_DAYS * portfolio.DAY_MS, to: now,
+    });
+    history = {
+      unit: model.unit, conflicts,
+      since: portfolio.reliableSince(moves, truncated || side.truncated),
+      days: days.map(d => ({ t: d.t, n: d.n, v: d.weight * (portfolio.levelAt(model.levels, d.t) || 0) })),
+    };
+  } else {
+    console.error(`Collection value: ${kind} moves failed:`, movesR.reason?.message);
+  }
+  return { side, assets, history };
+}
+
+async function getPortfolio(addr) {
+  const hit = portfolioCache.get(addr);
+  if (hit && Date.now() - hit.at < PORTFOLIO_TTL_MS) return hit.data;
+
+  const now = Date.now();
+  const [fx, daily, creatures, land] = await Promise.all([
+    getMarketplaceFx().catch(() => ({ ethUsd: null, fxRates: null })),
+    getEthUsdDaily().catch(() => null),
+    portfolioSide('creatures', addr, now),
+    portfolioSide('land', addr, now),
+  ]);
+  const ethUsd = fx.ethUsd > 0 ? fx.ethUsd : null;
+  const rateAt = ts => (daily && ts ? daily.at(ts) : null) || ethUsd;
+  const usdOf = eth => (ethUsd && eth > 0 ? round2(eth * ethUsd) : (ethUsd ? 0 : null));
+
+  const both = [['creatures', creatures], ['land', land]];
+  const sides = {};
+  for (const [k, r] of both) {
+    const s = r.side;
+    sides[k] = {
+      state: s.state, count: s.count, priced: s.priced, truncated: s.truncated,
+      fairEth: round6(s.fairEth), fairUsd: usdOf(s.fairEth),
+      tiers: s.tiers.map(x => ({ tier: x.tier, count: x.count, fairEth: round6(x.fairEth), fairUsd: usdOf(x.fairEth) })),
+    };
+  }
+  const priced = both.map(([, r]) => r).filter(r => r.side.state === 'ok');
+  const fairEth = priced.reduce((n, r) => n + r.side.fairEth, 0);
+  const quickEth = priced.reduce((n, r) => n + r.side.quickEth, 0);
+
+  // The chart needs BOTH collections priced and both histories read. Drawn from one side of
+  // two, it shows half a collection under a headline that says it is only part of one, and
+  // the first version did exactly that while LAND's prices were still loading.
+  let series = null;
+  if (priced.length === both.length && priced.every(r => r.history)) {
+    const hist = priced.map(r => r.history);
+    const since = Math.max(0, ...hist.map(h => h.since));
+    const points = [];
+    for (let i = 0; i < hist[0].days.length; i++) {
+      const t = hist[0].days[i].t;
+      if (t < since) continue;
+      const r = rateAt(t);
+      let usd = 0, n = 0, ok = true;
+      for (const h of hist) {
+        const d = h.days[i];
+        n += d.n;
+        if (h.unit === 'usd') usd += d.v;
+        else if (r > 0) usd += d.v * r;     // a model that counted in ETH: dollars at that day's rate
+        else ok = false;
+      }
+      if (ok) points.push({ t, usd: round2(usd), eth: r > 0 ? round6(usd / r) : null, n });
+    }
+    // The last point is today, and today's figure is the headline. State it once, exactly.
+    if (points.length) {
+      const last = points[points.length - 1];
+      last.eth = round6(fairEth);
+      if (ethUsd) last.usd = round2(fairEth * ethUsd);
+    }
+    series = {
+      points,
+      // Where the line starts later than a year back because the history was cut short.
+      since: since > now - PORTFOLIO_DAYS * portfolio.DAY_MS ? since : null,
+      exact: hist.every(h => h.conflicts === 0),
+    };
+  }
+
+  const data = {
+    at: now, ethUsd, fxRates: fx.fxRates || null,
+    total: {
+      // Held in every collection we could read, priced or not.
+      count: both.reduce((n, [, r]) => n + (r.side.state === 'unavailable' ? 0 : r.side.count), 0),
+      priced: priced.reduce((n, r) => n + r.side.priced, 0),
+      fairEth: round6(fairEth), fairUsd: usdOf(fairEth),
+      quickEth: round6(quickEth), quickUsd: usdOf(quickEth),
+    },
+    // True when a collection is missing from the total, so the page can say which.
+    partial: both.some(([, r]) => r.side.state !== 'ok'),
+    sides,
+    top: [...creatures.assets, ...land.assets]
+      .sort((a, b) => b.fairEth - a.fairEth).slice(0, PORTFOLIO_TOP)
+      .map(a => ({ ...a, fairEth: round6(a.fairEth), fairUsd: usdOf(a.fairEth) })),
+    series,
+  };
+  // Hold a complete answer only. One taken mid-index would keep a wallet reading "still
+  // loading" for a minute and a half after the catalogue came up.
+  if (!data.partial) {
+    if (portfolioCache.size >= PORTFOLIO_CACHE_MAX) portfolioCache.clear();
+    portfolioCache.set(addr, { at: now, data });
+  }
+  return data;
 }
 
 async function getCreatureSalesHistory(searchParams) {
@@ -5489,6 +5928,23 @@ async function handleMarketplaceApi(request, response, url) {
 
   // The seller's own Creatures (sell picker) and active listings (My listings).
   // Public on-chain data; the address is the caller's own connected wallet.
+  // What a wallet's Creatures and LAND are worth, today and across the last year.
+  const portfolioMatch = pathname.match(/^\/api\/market\/portfolio\/(0x[0-9a-f]{40})$/);
+  if (portfolioMatch) {
+    // Several upstream reads per wallet, so it gets its own modest budget (the reply is
+    // also held for a minute and a half, which covers a reload).
+    const pWait = rateLimited(`mktport:${ip}`, 20, 60 * 1000);
+    if (pWait) { sendJson(response, 429, { error: 'rate_limited' }, { 'Retry-After': String(pWait) }); return; }
+    try {
+      const data = await getPortfolio(portfolioMatch[1]);
+      sendJson(response, 200, data, { 'Cache-Control': 'no-store' }, { request, compress: true }); // wallet-keyed
+    } catch (err) {
+      console.error('Collection value failed:', err.message);
+      sendJson(response, 503, { error: 'unavailable' }, { 'Cache-Control': 'no-store' });
+    }
+    return;
+  }
+
   const ownedMatch = pathname.match(/^\/api\/market\/creatures\/(owned|mine)\/(0x[0-9a-f]{40})$/);
   if (ownedMatch) {
     const data = ownedMatch[1] === 'owned'
@@ -6762,6 +7218,9 @@ async function handleMarketplaceApi(request, response, url) {
       const s = sidx.byToken.get(String(it.tokenId));
       it.traits = s?.traits || {};
       it.rank = s?.rank ?? null;
+      // The slime's own name ("Bobboblob"). Holders know their parcels by it, so the pickers
+      // show it, search it and sort by it. Null until the sweep has reached the parcel.
+      it.slimeName = s?.slimeName || null;
       if (!it.coords && s?.coords) it.coords = s.coords;
       // Chain items carry a placeholder "#id" name — swap in the familiar "(x, y)" one.
       if (s?.coords && /#\d+$/.test(it.name || '')) it.name = `Highrise LAND (${s.coords.x}, ${s.coords.y})`;
@@ -7075,10 +7534,21 @@ async function handleMarketplaceApi(request, response, url) {
         landMarket.myHistory(landHistoryMatch[1]),
         getEthUsdDaily().catch(() => null),
       ]);
+      // Each parcel by its slime's name, as the pickers and the collection value know it,
+      // with the coordinates kept beside it to say which parcel it is.
+      const sidx = slimeIndex.getSlimeIndex();
       for (const it of (hist.items || [])) {
         it.currency = it.priceEth != null ? 'eth' : null;
         it.priceAmt = it.priceEth;
         valueAtItsOwnDay(it, daily);
+        const s = sidx?.byToken.get(String(it.tokenId));
+        if (s) {
+          it.slimeName = s.slimeName || null;
+          it.parcel = s.parcelName || it.name || null;
+          it.tier = s.tier || null;
+          if (!it.coords && s.coords) it.coords = s.coords;
+        }
+        if (!it.coords) it.coords = coordsFromLandTokenId(it.tokenId);
       }
       sendJson(response, 200, hist, { 'Cache-Control': 'no-store' });
     } catch (err) {
@@ -10702,7 +11172,8 @@ const server = http.createServer((request, response) => {
   }
 
   if (request.url.startsWith('/api/market/creatures') || request.url.startsWith('/api/market/land')
-      || request.url.startsWith('/api/market/all') || request.url.startsWith('/api/market/onramp')) {
+      || request.url.startsWith('/api/market/all') || request.url.startsWith('/api/market/onramp')
+      || request.url.startsWith('/api/market/portfolio/')) {
     const url = parseRequestUrl(request);
     if (!url) { sendJson(response, 400, { error: 'bad_request' }); return; }
     handleMarketplaceApi(request, response, url).catch(err => {
