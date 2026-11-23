@@ -3931,6 +3931,35 @@ const GUIDE_USD_COVERAGE     = 0.95;
    LAND, where the repricing is. A 30-day anchor was tried too and lost to 60 on Creatures.
    Legendary Creatures remain a guess either way: five sales in two years. */
 const GUIDE_RECENT_SALES     = 40;
+/* HOW SURE THE GUIDE IS, said in one word. The rules follow the walk-forward backtest above
+   rather than a formula of their own:
+     high    priced at the market or on a tier, from 30 or more sales with 10 in the last
+             year. That is the ordinary Creature and the ordinary plot, which miss by 7 to 8%
+             at the median.
+     medium  everything between. A trait-priced Creature lands here however often its trait
+             sells: those miss by 23% at the median, because the trait is one of thirteen.
+     low     fewer than 10 sales behind it, fewer than 3 in the last year, a trait read from
+             its launch-year history, a price the floor rule had to lift, or a one-of-one.
+             Legendary sits here: one sale in the year to November 2026. */
+const GUIDE_CONF_HIGH_SALES  = 30;
+const GUIDE_CONF_HIGH_YEAR   = 10;
+const GUIDE_CONF_LOW_SALES   = 10;
+const GUIDE_CONF_LOW_YEAR    = 3;
+/* THE PATIENT PRICE LOOKS AT THE SHELF. It used to be the fair price times the set's own
+   spread and nothing else, so a Creature with Pink Neon Horns was told $347 was worth waiting
+   for while the cheapest other one listed asked $694. A buyer who wants one cannot pay less
+   than the cheapest on the shelf, so when that sits above the patient price the patient
+   price moves up, to just under it. Two limits keep an asking price from being read as a
+   sale. It never passes what the best one in ten of these sold for (the set's p90). And a
+   shelf the market has looked at for two months and left is no evidence at all, so a stale
+   one moves nothing. There are no past order books to backtest this against; the cap is
+   what keeps it a small, safe move. */
+const GUIDE_SHELF_UNDERCUT   = 0.98;
+/* A one-of-one sale under the market's own level at the time is not a price anyone agreed
+   for one. A one-of-one went for $88 in May 2022, the same day and price as another
+   Legendary: a move between wallets. It stays out of the list the panel shows. */
+const GUIDE_UNIQUE_MIN_X     = 1;
+const GUIDE_UNIQUE_SHOWN     = 5;
 
 // The metadata attribute that carries the tier, on either collection.
 const GUIDE_TIER_ATTRS = new Set(['Rarity', 'Tier']);
@@ -3982,7 +4011,7 @@ function buildLevelCurve(rows) {
  * Everything the guide needs about a collection, worked out once. `sales` are the shaped
  * rows the history already builds; `lookup` and `tierOf` say which asset each one was.
  */
-function buildPriceModel({ sales, lookup, tierOf, listings, items, rate, now = Date.now() }) {
+function buildPriceModel({ sales, lookup, tierOf, listings, items, rate, uniqueTrait = null, now = Date.now() }) {
   /* How many of each tier and each trait value EXIST. "Twelve sold in three years" means one
      thing when 130 exist and quite another when 9 do, and the seller can only judge the
      estimate if they can see which. */
@@ -4185,6 +4214,41 @@ function buildPriceModel({ sales, lookup, tierOf, listings, items, rate, now = D
     if (scarcest && supply > 0 && scarcest[1] / supply <= GUIDE_TOP_TIER_SHARE) topTier = scarcest[0];
   }
 
+  /* Each asset's own most recent sale, the launch year included. The estimate is not built
+     from it (one sale of one asset, often years old), but it is the first thing a seller
+     looks for, and a panel that leaves it out reads as not knowing it happened. */
+  const ownSales = new Map();
+  for (const r of rows) {
+    const prev = ownSales.get(r.id);
+    ownSales.set(r.id, { ts: r.ts, eth: r.eth, usd: r.usd, n: (prev?.n || 0) + 1 });
+  }
+
+  /* ONE-OF-ONES. Ten Creatures were drawn as characters rather than assembled from shared
+     traits, and the catalogue shows it: each carries an Outfit no other Creature has. They
+     sit in the top tier, but they are not what the top tier's sales describe. Three have
+     ever sold on the open market, none since August 2023, at 1.05x, 2.3x and 3.5x what the
+     other Legendaries fetched at the time. Too few and too old to price from, and far too
+     wide to average, so the guide does not pretend: a one-of-one is quoted the top tier's
+     figure as the least to ask, and shown its own sale and the others'. Found by rule
+     (top tier, and the only holder of its `uniqueTrait` value), never by a list of ids. */
+  const unique = new Set();
+  if (uniqueTrait && topTier) {
+    for (const it of items || []) {
+      const v = it.traits?.[uniqueTrait];
+      if (v != null && tierOf(it) === topTier && traitPop.get(`${uniqueTrait}:${v}`) === 1) unique.add(String(it.tokenId));
+    }
+  }
+  const uniqueSales = [];
+  if (unique.size) {
+    for (const r of rows) {
+      if (!unique.has(r.id)) continue;
+      const lvl = curve.at(r.ts);
+      if (!(lvl > 0) || r.v / lvl < GUIDE_UNIQUE_MIN_X) continue;
+      uniqueSales.push({ id: r.id, label: lookup(r.id)?.traits?.[uniqueTrait] ?? null, ts: r.ts, eth: r.eth, usd: r.usd });
+    }
+    uniqueSales.sort((a, b) => b.ts - a.ts);
+  }
+
   return {
     // `anchor` is in `unit`: dollars, or ETH when the dollar model could not be built.
     // `ethUsd` is the rate at build, for a request that arrives without a live one.
@@ -4198,6 +4262,7 @@ function buildPriceModel({ sales, lookup, tierOf, listings, items, rate, now = D
        years), so picking by observed multiple handed the title to whichever tier had enough
        sales to measure — which is the common one, every time. */
     topTier,
+    ownSales, unique, uniqueSales,
     builtAt: now,
   };
 }
@@ -4245,8 +4310,13 @@ function priceGuideFor(model, meta, tierOf, ethUsd = null) {
                     is measurably zero, so a common trait can never be the reason.
        MATERIAL   — at least 15% above the market. "1x the market" is not a reason.
        EVIDENCED  — sold enough times to mean it, and the count is printed either way. */
+  // Whether this is one of the one-of-ones (see `unique` in buildPriceModel). Its traits are
+  // skipped below: every part belongs to it alone, so a "trait" here is this one Creature's
+  // sale history under another name, which the panel shows as what it is.
+  const id = meta.tokenId != null ? String(meta.tokenId) : null;
+  const isUnique = !!(id && model.unique?.has(id));
   let best = null;
-  for (const [type, value] of Object.entries(meta.traits || {})) {
+  for (const [type, value] of Object.entries(isUnique ? {} : meta.traits || {})) {
     if (GUIDE_TIER_ATTRS.has(type)) continue;
     const k = `${type}:${value}`;
     const st = model.traits.get(k);
@@ -4316,7 +4386,31 @@ function priceGuideFor(model, meta, tierOf, ethUsd = null) {
   const undercut = rivalFloor > 0 && quick > rivalFloor * 0.98;
   if (undercut) quick = rivalFloor * 0.98;
   if (topTier && model.floor > 0) quick = Math.max(quick, model.floor * GUIDE_TOP_TIER_FLOOR_X * loR);
-  const patient = fair * hiR;
+  let patient = fair * hiR;
+  // The shelf above the patient price (see GUIDE_SHELF_UNDERCUT): move up to just under the
+  // cheapest rival, never past what the best one in ten sold for, never on a stale shelf.
+  let patientShelf = null;
+  const p90R = stat && stat.mid > 0 && stat.p90 > 0 ? stat.p90 / stat.mid : null;
+  const staleShelf = ageDays != null && ageDays >= GUIDE_STALE_LISTING_D;
+  /* And only for a set with enough sales to have a spread worth the name. Four sales of a
+     tail put its "best one in ten" at 4.5x its middle, and the first run of this rule told
+     a $368 Creature that $1,201 was worth waiting for. */
+  const spreadKnown = stat && stat.n >= GUIDE_CONF_LOW_SALES && sold12m >= GUIDE_CONF_LOW_YEAR;
+  if (rivalFloor > 0 && p90R && spreadKnown && !staleShelf && !floored) {
+    const reach = Math.min(rivalFloor * GUIDE_SHELF_UNDERCUT, fair * p90R);
+    if (reach > patient * 1.01) { patient = reach; patientShelf = rivalFloor; }
+  }
+
+  const ownSale = id ? model.ownSales?.get(id) || null : null;
+
+  /* One word for how far to trust it (see GUIDE_CONF_HIGH_SALES). `evN` and `evYear` are the
+     sales the number rests on: the set's own, or the market's when nothing set this asset
+     apart, where the anchor's count is the honest one. */
+  const evN = stat && from.kind !== 'market' ? stat.n : model.anchorSales;
+  const evYear = stat && from.kind !== 'market' ? sold12m : model.anchorSales;
+  let confidence = 'medium';
+  if (isUnique || floored || stat?.historic || evN < GUIDE_CONF_LOW_SALES || evYear < GUIDE_CONF_LOW_YEAR) confidence = 'low';
+  else if (from.kind !== 'trait' && evN >= GUIDE_CONF_HIGH_SALES && evYear >= GUIDE_CONF_HIGH_YEAR) confidence = 'high';
 
   const r = v => (v > 0 ? Math.round(v * 1e6) / 1e6 : null);
   const cents = v => (v > 0 ? Math.round(v * 100) / 100 : null);
@@ -4351,9 +4445,26 @@ function priceGuideFor(model, meta, tierOf, ethUsd = null) {
     shelfFloor: r(shelf.floor),
   };
 
+  const sale = s => ({ ts: s.ts, eth: r(s.eth), usd: cents(s.usd) });
   return {
-    quick: r(quick), fair: r(fair), patient: r(patient),
+    /* A one-of-one gets one number, the least to ask. A quick price for the rarest thing in
+       the collection is a fire-sale price by another name, and a patient one would claim to
+       know a ceiling that three old sales cannot show. */
+    quick: isUnique ? null : r(quick), fair: r(fair), patient: isUnique ? null : r(patient),
     basis: {
+      confidence,
+      // The asset's own last sale: when, for what, and how many times it has sold in all.
+      own: ownSale ? { ...sale(ownSale), n: ownSale.n } : null,
+      // Set for a one-of-one: how many exist, and the sales any of them has had, this one's
+      // left out because `own` already says it.
+      unique: isUnique ? {
+        exists: model.unique.size,
+        sold: new Set(model.uniqueSales.map(s => s.id)).size,   // Creatures, not sales
+        sales: model.uniqueSales.filter(s => s.id !== id).slice(0, GUIDE_UNIQUE_SHOWN)
+          .map(s => ({ ...sale(s), label: s.label })),
+      } : null,
+      // The cheapest rival's price, when it lifted the patient price; null when it did not.
+      patientShelf: !isUnique && patientShelf ? r(patientShelf) : null,
       from, mult: Math.round(mult * 100) / 100, liquidity, floored,
       tier: tier || null, topTier, comparables,
       anchor: r(anchorEth), anchorSales: model.anchorSales, anchorDays: model.anchorDays,
@@ -4406,6 +4517,7 @@ async function creaturePricing() {
       listings: listIdx?.items || [],
       items: coll.items,
       rate,
+      uniqueTrait: 'Outfit',
     }));
   return { model, lookup, tierOf: creatureTierOf, ethUsd: fx.ethUsd ?? null, rate };
 }

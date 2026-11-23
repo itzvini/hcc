@@ -7986,7 +7986,13 @@ function guideFill(key, slots) {
 }
 
 /** Which sales this estimate rests on, said as a count of the RIGHT sales, not the feed. */
-function guideBasisLine(c) {
+function guideBasisLine(c, b) {
+  // A one-of-one has no set to be read from, and the line says that instead of counting
+  // the Legendary sales its floor was borrowed from.
+  if (b?.unique) {
+    return t('trade.guide.basisUnique')
+      .replace('{exists}', b.unique.exists.toLocaleString()).replace('{n}', b.unique.sold.toLocaleString());
+  }
   // A set that sells often is read from its newest sales, and the line says so: "From 40
   // sales" would claim that was every sale there has been.
   const r = c.recent ? 'Recent' : '';
@@ -8003,8 +8009,26 @@ function guideBasisLine(c) {
    what comparable assets actually fetched, how often one changes hands, and what is sitting
    unsold right now. Someone who can see the evidence can decide how much to trust the number,
    which is the whole point of showing it. */
-function guideEvidenceHtml(c) {
+function guideEvidenceHtml(c, b) {
   const rows = [];
+  /* This asset's own last sale comes first: it is what a seller looks for before anything
+     else. A plain fact like the set's last sale below, so it wears the dollars of its day. */
+  if (b?.own?.ts) {
+    rows.push([t('trade.guide.evOwn'), guideFill('trade.guide.evLastV', {
+      price: guideMoneyHtml(b.own.eth, b.own.usd ?? null), ago: esc(guideAgo(b.own.ts)),
+    })]);
+  }
+  // A one-of-one: what the others went for, each a fact with its own date.
+  if (b?.unique) {
+    rows.push([t('trade.guide.evUnique'), b.unique.sales.length
+      ? b.unique.sales.map(s => guideFill('trade.guide.evUniqueV', {
+          name: esc(s.label || ''), price: guideMoneyHtml(s.eth, s.usd ?? null), ago: esc(guideAgo(s.ts)),
+        })).join('<br>')
+      : esc(t('trade.guide.evUniqueNone'))]);
+    // Every row after this describes the tier the floor was borrowed from, and says so:
+    // "last one sold" straight under the one-of-ones would read as one of them.
+    if (c.label) rows.push([null, guideFill('trade.guide.evTierHead', { tier: esc(c.label) })]);
+  }
   if (c.low != null && c.high != null) {
     rows.push([t('trade.guide.evSold'), guideFill('trade.guide.evSoldV', {
       low: guideMoneyHtml(c.low), typical: guideMoneyHtml(c.typical), high: guideMoneyHtml(c.high),
@@ -8036,10 +8060,14 @@ function guideEvidenceHtml(c) {
         days: esc(c.listedOldestDays ?? 0),
       })
     : esc(t('trade.guide.evShelfNone'))]);
-  return rows.map(([k, v]) => `<div class="trade-guide-ev">
+  return rows.map(([k, v]) => k == null ? `<div class="trade-guide-ev-head">${v}</div>` : `<div class="trade-guide-ev">
     <span class="trade-guide-ev-k">${esc(k)}</span>
     <span class="trade-guide-ev-v">${v}</span></div>`).join('');
 }
+
+// The server's three confidence words. Checked before one becomes part of a class name or
+// a copy key, so an unknown value shows nothing.
+const GUIDE_CONF = new Set(['high', 'medium', 'low']);
 
 /** How the three numbers were arrived at, in a sentence. */
 function guideWhyHtml(b) {
@@ -8061,11 +8089,19 @@ function guideWhyHtml(b) {
     bits.push(guideFill('trade.guide.whyScarce', { sold: esc(b.liquidity.sold12m) }));
   }
   if (b.floored) bits.push(esc(t('trade.guide.whyFloor')));
-  if (b.rivalFloor) {
-    bits.push(guideFill(b.rivalKind === 'trait' ? 'trade.guide.whyShelfTrait' : 'trade.guide.whyShelf',
-      { price: guideMoneyHtml(b.rivalFloor) }));
+  if (b.unique) {
+    // One number, and whose number it is: the tier's, offered as the least to ask.
+    bits.push(guideFill('trade.guide.whyUnique', { tier: esc(b.tier || '') }));
+  } else {
+    if (b.rivalFloor) {
+      bits.push(guideFill(b.rivalKind === 'trait' ? 'trade.guide.whyShelfTrait' : 'trade.guide.whyShelf',
+        { price: guideMoneyHtml(b.rivalFloor) }));
+    }
+    if (b.patientShelf) bits.push(guideFill('trade.guide.whyPatientShelf', { price: guideMoneyHtml(b.patientShelf) }));
+    if (c.n < 10) bits.push(guideFill('trade.guide.whyThin', { n: esc(c.n) }));
   }
-  if (c.n < 10) bits.push(guideFill('trade.guide.whyThin', { n: esc(c.n) }));
+  // Last, the one-word verdict from the head of the panel, with its reason.
+  if (GUIDE_CONF.has(b.confidence)) bits.push(esc(t(`trade.guide.confWhy.${b.confidence}`)));
   return bits.join(' ');
 }
 
@@ -8084,27 +8120,35 @@ function priceGuideHtml() {
   if (g === 'cold') return `<div class="trade-guide is-cold" id="trade-guide">${esc(t('trade.guide.cold'))}</div>`;
   if (!g) return `<div class="trade-guide" id="trade-guide"></div>`;
   const b = g.basis, c = b.comparables;
-  const thin = c.n < 10 ? ' is-thin' : '';
+  // The banana border follows the confidence word, so the two can never disagree. A reply
+  // from before the word existed falls back to the old count.
+  const conf = GUIDE_CONF.has(b.confidence) ? b.confidence : null;
+  const thin = (conf ? conf === 'low' : c.n < 10) ? ' is-thin' : '';
+  const confChip = conf
+    ? `<span class="trade-guide-conf is-${conf}">${esc(t(`trade.guide.conf.${conf}`))}</span>` : '';
+  // A one-of-one gets one tile: the least to ask, and no quick or patient price beside it.
+  const tiles = b.unique
+    ? guideTileHtml('floor', g.fair, g.usd.fair, 'is-fair')
+    : guideTileHtml('quick', g.quick, g.usd.quick, 'is-quick')
+      + guideTileHtml('fair', g.fair, g.usd.fair, 'is-fair')
+      + guideTileHtml('patient', g.patient, g.usd.patient, 'is-patient');
   return `<div class="trade-guide${thin}" id="trade-guide">
     <div class="trade-guide-head">
       <span class="trade-guide-eyebrow">${ico('chart', 12)}${esc(t('trade.guide.h'))}</span>
       <span class="trade-beta-chip is-mini">${esc(t('trade.guide.beta'))}</span>
+      ${confChip}
     </div>
-    <p class="trade-guide-note">${esc(guideBasisLine(c))}</p>
-    <div class="trade-guide-tiles">
-      ${guideTileHtml('quick', g.quick, g.usd.quick, 'is-quick')}
-      ${guideTileHtml('fair', g.fair, g.usd.fair, 'is-fair')}
-      ${guideTileHtml('patient', g.patient, g.usd.patient, 'is-patient')}
-    </div>
+    <p class="trade-guide-note">${esc(guideBasisLine(c, b))}</p>
+    <div class="trade-guide-tiles${b.unique ? ' is-one' : ''}">${tiles}</div>
     <details class="trade-guide-more">
       <summary>${esc(t('trade.guide.more'))}</summary>
-      <div class="trade-guide-evs">${guideEvidenceHtml(c)}</div>
+      <div class="trade-guide-evs">${guideEvidenceHtml(c, b)}</div>
       <p class="trade-guide-why">${guideWhyHtml(b)}</p>
       <p class="trade-guide-method">${guideFill(b.unit === 'usd' ? 'trade.guide.method' : 'trade.guide.methodEth', {
         anchor: guideMoneyHtml(b.anchor),
         n: esc(b.anchorSales.toLocaleString()),
         days: esc(b.anchorDays),
-      })}</p>
+      })} ${esc(t('trade.guide.vsSales'))}</p>
     </details>
     <p class="trade-guide-caveat">${esc(t(coll === 'land' ? 'trade.guide.caveatLand' : 'trade.guide.caveat'))}</p>
   </div>`;
