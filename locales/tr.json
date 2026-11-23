@@ -666,6 +666,8 @@
   "trade.guide.whyTrait": "Fiyatı {trait} belirledi: bu trait piyasanın yaklaşık {x} katına el değiştiriyor.",
   "trade.guide.whyTier": "{tier} olarak fiyatlandı: bu seviye piyasanın yaklaşık {x} katına el değiştiriyor.",
   "trade.guide.whyMarket": "Bunda fiyatı ne yukarı ne aşağı oynatan bir şey yok, bu yüzden piyasa fiyatından fiyatlandı.",
+  "trade.guide.whyDriftDown": "Piyasanın kendisi son zamanlarda olağan seviyesinin yaklaşık %{pct} altında seyrediyor ve fiyat da onu aşağı doğru izliyor.",
+  "trade.guide.whyDriftUp": "Piyasanın kendisi son zamanlarda olağan seviyesinin yaklaşık %{pct} üstünde seyrediyor ve fiyat da onu yukarı doğru izliyor.",
   "trade.guide.whySlow": "Birkaç tanesi satışta ve bir yıldır hiçbiri satılmadı, en eskisi {days} gündür bekliyor; bu yüzden fiyat biraz daha düşük.",
   "trade.guide.whyScarce": "Neredeyse hiç çıkmıyor: bütün yıl {sold} tane satıldı ve bugün hiçbiri satışta değil, bu yüzden fiyat biraz daha yüksek.",
   "trade.guide.whyFloor": "Geçmişin zayıf bir dönemi ne derse desin, fiyat asla tabanın üç katının altında verilmez.",

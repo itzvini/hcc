@@ -666,6 +666,8 @@
   "trade.guide.whyTrait": "Precio según su {trait}, que cambia de manos a unas {x}x el mercado.",
   "trade.guide.whyTier": "Precio como {tier}, que cambia de manos a unas {x}x el mercado.",
   "trade.guide.whyMarket": "Nada de esta mueve el precio ni hacia arriba ni hacia abajo, así que su precio es el del mercado.",
+  "trade.guide.whyDriftDown": "El propio mercado ha estado últimamente un {pct}% por debajo de su nivel habitual, y el precio lo sigue a la baja.",
+  "trade.guide.whyDriftUp": "El propio mercado ha estado últimamente un {pct}% por encima de su nivel habitual, y el precio lo sigue al alza.",
   "trade.guide.whySlow": "Hay varias en venta y ninguna se ha vendido en un año, la más antigua lleva {days} días, así que pide un poco menos.",
   "trade.guide.whyScarce": "Casi nunca aparece una: {sold} vendidas en todo el año y ninguna en venta hoy, así que pide un poco más.",
   "trade.guide.whyFloor": "Nunca por debajo de tres veces el mínimo, diga lo que diga un tramo flojo del historial.",

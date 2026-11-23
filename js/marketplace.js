@@ -8079,6 +8079,10 @@ function guideWhyHtml(b) {
     bits.push(guideFill('trade.guide.whyTier', { tier: esc(b.from.label), x: esc(b.mult) }));
   } else {
     bits.push(esc(t('trade.guide.whyMarket')));
+    // The market has moved lately and the estimate went with it. Said as that, in percent,
+    // never as a multiple of a tier that nearly every asset is in.
+    const pct = b.drift > 0 ? Math.round(Math.abs(b.drift - 1) * 100) : 0;
+    if (pct >= 1) bits.push(guideFill(b.drift < 1 ? 'trade.guide.whyDriftDown' : 'trade.guide.whyDriftUp', { pct: esc(pct) }));
   }
   if (b.liquidity.state === 'slow') {
     bits.push(guideFill('trade.guide.whySlow', {

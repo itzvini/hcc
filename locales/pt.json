@@ -666,6 +666,8 @@
   "trade.guide.whyTrait": "Preço baseado no trait {trait}, que troca de mãos a cerca de {x}x o mercado.",
   "trade.guide.whyTier": "Preço como {tier}, que troca de mãos a cerca de {x}x o mercado.",
   "trade.guide.whyMarket": "Nada neste item mexe no preço para cima nem para baixo, então ele sai pelo preço de mercado.",
+  "trade.guide.whyDriftDown": "O próprio mercado tem ficado cerca de {pct}% abaixo do seu nível habitual, e o preço acompanha para baixo.",
+  "trade.guide.whyDriftUp": "O próprio mercado tem ficado cerca de {pct}% acima do seu nível habitual, e o preço acompanha para cima.",
   "trade.guide.whySlow": "Vários estão anunciados e nenhum vendeu em um ano, o mais antigo no ar há {days} dias, então este pede um pouco menos.",
   "trade.guide.whyScarce": "Quase nenhum aparece: {sold} vendidos no ano todo e nenhum anunciado hoje, então este pede um pouco mais.",
   "trade.guide.whyFloor": "Nunca sugerimos menos de três vezes o piso, diga o que disser um trecho curto de histórico.",

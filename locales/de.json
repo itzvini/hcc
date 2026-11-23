@@ -666,6 +666,8 @@
   "trade.guide.whyTrait": "Bewertet nach {trait}, das etwa zum {x}-Fachen des Marktes den Besitzer wechselt.",
   "trade.guide.whyTier": "Bewertet als {tier}, das etwa zum {x}-Fachen des Marktes den Besitzer wechselt.",
   "trade.guide.whyMarket": "Nichts an diesem Stück bewegt den Preis nach oben oder unten, es ist also zum Marktpreis bewertet.",
+  "trade.guide.whyDriftDown": "Der Markt selbst lag zuletzt etwa {pct} % unter seinem üblichen Niveau, und der Preis folgt ihm nach unten.",
+  "trade.guide.whyDriftUp": "Der Markt selbst lag zuletzt etwa {pct} % über seinem üblichen Niveau, und der Preis folgt ihm nach oben.",
   "trade.guide.whySlow": "Mehrere sind gelistet und keins wurde in einem Jahr verkauft, das älteste seit {days} Tagen, deshalb ist dieser Preis etwas niedriger.",
   "trade.guide.whyScarce": "Fast keins kommt auf den Markt: {sold} im ganzen Jahr verkauft und heute keins gelistet, deshalb ist dieser Preis etwas höher.",
   "trade.guide.whyFloor": "Nie unter dem Dreifachen des Mindestpreises angesetzt, egal was eine dünne Datenlage sagt.",

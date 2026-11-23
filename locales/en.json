@@ -669,6 +669,8 @@
   "trade.guide.whyTrait": "Priced on its {trait}, which changes hands at about {x}x the market.",
   "trade.guide.whyTier": "Priced as {tier}, which changes hands at about {x}x the market.",
   "trade.guide.whyMarket": "Nothing about this one moves the price either way, so it is priced at the market.",
+  "trade.guide.whyDriftDown": "The market itself has run about {pct}% under its usual level lately, and the price follows it down.",
+  "trade.guide.whyDriftUp": "The market itself has run about {pct}% over its usual level lately, and the price follows it up.",
   "trade.guide.whySlow": "Several are listed and none has sold in a year, the oldest up {days} days, so this asks a little less.",
   "trade.guide.whyScarce": "Almost none come up: {sold} sold all year and none is listed today, so this asks a little more.",
   "trade.guide.whyFloor": "Never quoted under three times the floor, whatever a thin patch of history says.",

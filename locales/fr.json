@@ -666,6 +666,8 @@
   "trade.guide.whyTrait": "Prix fondé sur son trait {trait}, qui change de mains à environ {x} fois le marché.",
   "trade.guide.whyTier": "Prix fondé sur son tier {tier}, qui change de mains à environ {x} fois le marché.",
   "trade.guide.whyMarket": "Rien chez celle-ci ne fait bouger le prix dans un sens ou dans l'autre, elle est donc au prix du marché.",
+  "trade.guide.whyDriftDown": "Le marché lui-même est resté environ {pct} % sous son niveau habituel ces derniers temps, et le prix le suit à la baisse.",
+  "trade.guide.whyDriftUp": "Le marché lui-même est resté environ {pct} % au-dessus de son niveau habituel ces derniers temps, et le prix le suit à la hausse.",
   "trade.guide.whySlow": "Plusieurs sont en vente et aucune ne s'est vendue en un an, la plus ancienne en ligne depuis {days} jours, ce prix demande donc un peu moins.",
   "trade.guide.whyScarce": "Il n'en sort presque jamais : {sold} vendues sur toute l'année et aucune en vente aujourd'hui, ce prix demande donc un peu plus.",
   "trade.guide.whyFloor": "Jamais proposé sous trois fois le plancher, quoi que dise un historique trop maigre.",

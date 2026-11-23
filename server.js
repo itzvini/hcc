@@ -3880,6 +3880,37 @@ const shrinkMult = (mult, n) => 1 + (mult - 1) * (n / (n + GUIDE_SHRINK_K));
    are the crowd, and the crowd is what the floor rule measures AGAINST. */
 const GUIDE_TOP_TIER_SHARE   = 0.33;
 const GUIDE_TOP_TIER_FLOOR_X = 3;       // a top-tier asset is never quoted under 3x the floor
+const GUIDE_CROWD_TIER_SHARE = 0.5;     // the tier most of the collection is in is not a reason for a price
+/* THE SELL FORM'S SUGGESTIONS SIT 3% ABOVE THE MEASURED MARKET, ON PURPOSE. The guide is
+   built from past sales, and its own advice becomes the next sales: a seller who takes the
+   lowest of the three prices lists under the market's middle, that sale pulls the middle
+   down, and the next seller is quoted lower still. Sellers do take the low one. Of the
+   ordinary Creatures sold in the twelve weeks before the guide shipped, 25% went at or under
+   what it would have called the quick price; of those sold since, 49% (65 and 63 sales, so
+   a signal and not a proof). A guide that only ever follows the market down can only help
+   it fall, so the suggestions lean the other way by a little.
+   Three points, because that is what the lean can bear. The quick price runs at 95% of the
+   fair one in the middle case, so with the lift the lowest suggestion lands about 2% under
+   the measured market where it used to land 5% under. Cost, on the last year's 608 sales:
+   the median miss goes from 7.2% to 7.8%, and the fair price moves from 1.8% under the
+   middle sale to 1.1% over it. At 5% the miss is 9.5%.
+   It is a policy about ADVICE, not a measurement, so three things hold:
+     - It applies to the Sell form's reply only. The collection value on the dashboard is a
+       valuation and stays on the measured figure.
+     - Nothing the panel states as fact is lifted: what these sold for, the market's level,
+       a trait's multiple. Only the suggested prices move.
+     - The panel does not mention it, and the reply carries no field for it. A line saying
+       so was built and taken out the same day to keep the panel clean (the owner's call).
+       So the tiles sit 3% above the market times the multiple the workings quote; this
+       comment is where that is written down.
+     - It goes in before the shelf rules. A quick price that had to undercut the cheapest
+       listing still undercuts it; lifting it after would quote a "sell this week" price
+       above the one a buyer can already take.
+   The lift compounds: each round of sales made at lifted prices raises the level the next
+   round is lifted from. That is the point of it, and it is also the thing to watch. The
+   backtest harness measures the unlifted model, so if its "which way it leans" figure for
+   recent sales climbs past about +5%, buyers are not following and this should come down. */
+const GUIDE_SELLER_LIFT      = 1.03;
 const GUIDE_WEEK_MS          = 7 * 86400000;
 const GUIDE_SMOOTH_WEEKS     = 6;       // the market's level at a moment: +/- 6 weeks around it
 const GUIDE_ANCHOR_MIN       = 30;      // widen the trailing window until it holds this many
@@ -4282,7 +4313,7 @@ function modelAnchorEth(model, ethUsd = null) {
  * the maximum rather than the product also stops a Legendary being counted twice, once for
  * its tier and again for the rare trait that put it in that tier.
  */
-function priceGuideFor(model, meta, tierOf, ethUsd = null) {
+function priceGuideFor(model, meta, tierOf, ethUsd = null, { lift = 1 } = {}) {
   if (!model || !meta) return null;
   /* The market's level in ETH, at the rate of this moment. A dollar model is turned into ETH
      here and nowhere earlier, so the same model answers correctly an hour later at a
@@ -4299,7 +4330,18 @@ function priceGuideFor(model, meta, tierOf, ethUsd = null) {
      colour, one step up. Under 5% either way, the honest answer is that nothing about this
      one moves the price. */
   const tierMatters = tierStat != null && Math.abs(mult - 1) >= 0.05;
-  let from = tierMatters ? { kind: 'tier', label: tier } : { kind: 'market' };
+  /* And never name the crowd's tier at all, however far its multiple sits from 1. That
+     multiple is the newest forty sales against the market's level around each of them, so
+     when prices are moving it drifts: over a two-year walk-forward the model priced "as
+     Epic" at anything from 0.75x to 1.16x in 228 of 1,325 sales. The number is right to
+     use. It is a correction for where the market has gone lately, and fixing Epic at 1x
+     worsened those sales from a 12.3% median miss to 16.8%. But "priced as Epic, which
+     changes hands at about 0.75x the market" calls a falling market a property of the
+     tier. So the multiple is kept, the asset is reported as priced at the market, and
+     `drift` carries the figure for the panel to describe as what it is. */
+  const crowdTier = !!tier && model.supply > 0 && (model.population.get(tier) || 0) / model.supply > GUIDE_CROWD_TIER_SHARE;
+  const tierMult = mult;
+  let from = tierMatters && !crowdTier ? { kind: 'tier', label: tier } : { kind: 'market' };
   if (!tierMatters) stat = tierStat; // the spread still comes from its own tier's sales
 
   /* The trait that carries this asset — the BIGGEST claim it can make, never a blend: a
@@ -4357,7 +4399,10 @@ function priceGuideFor(model, meta, tierOf, ethUsd = null) {
   const spreadStat = stat || model.spread;
   const loR = spreadStat.mid > 0 ? spreadStat.lo / spreadStat.mid : .9;
   const hiR = spreadStat.mid > 0 ? spreadStat.hi / spreadStat.mid : 1.2;
-  let fair = anchorEth * mult;
+  // `lift` is the Sell form's lean (see GUIDE_SELLER_LIFT), 1 for every other caller. It
+  // enters here and nowhere else, so the quick and patient prices carry it and the facts
+  // quoted beside them (built from `anchorEth` alone) do not.
+  let fair = anchorEth * mult * lift;
 
   /* The floor rule. A top-tier asset is never quoted under three times the collection's
      cheapest listing, whatever the comparables say. Legendaries and premium plots sell in
@@ -4397,7 +4442,8 @@ function priceGuideFor(model, meta, tierOf, ethUsd = null) {
      a $368 Creature that $1,201 was worth waiting for. */
   const spreadKnown = stat && stat.n >= GUIDE_CONF_LOW_SALES && sold12m >= GUIDE_CONF_LOW_YEAR;
   if (rivalFloor > 0 && p90R && spreadKnown && !staleShelf && !floored) {
-    const reach = Math.min(rivalFloor * GUIDE_SHELF_UNDERCUT, fair * p90R);
+    // The p90 cap is a fact about past sales, so it is taken from the unlifted figure.
+    const reach = Math.min(rivalFloor * GUIDE_SHELF_UNDERCUT, (fair / lift) * p90R);
     if (reach > patient * 1.01) { patient = reach; patientShelf = rivalFloor; }
   }
 
@@ -4408,9 +4454,14 @@ function priceGuideFor(model, meta, tierOf, ethUsd = null) {
      apart, where the anchor's count is the honest one. */
   const evN = stat && from.kind !== 'market' ? stat.n : model.anchorSales;
   const evYear = stat && from.kind !== 'market' ? sold12m : model.anchorSales;
+  /* The crowd tier's multiple, when it moved the price 5% or more and no trait took over:
+     how far recent sales sit from the market's level (see `crowdTier`). A market on the
+     move is harder to call, and measurably: those sales missed by 12.3% at the median
+     against 7.3% for the rest of the ordinary ones, so they are medium, not high. */
+  const drift = from.kind === 'market' && tierMatters && crowdTier ? tierMult : null;
   let confidence = 'medium';
   if (isUnique || floored || stat?.historic || evN < GUIDE_CONF_LOW_SALES || evYear < GUIDE_CONF_LOW_YEAR) confidence = 'low';
-  else if (from.kind !== 'trait' && evN >= GUIDE_CONF_HIGH_SALES && evYear >= GUIDE_CONF_HIGH_YEAR) confidence = 'high';
+  else if (from.kind !== 'trait' && drift == null && evN >= GUIDE_CONF_HIGH_SALES && evYear >= GUIDE_CONF_HIGH_YEAR) confidence = 'high';
 
   const r = v => (v > 0 ? Math.round(v * 1e6) / 1e6 : null);
   const cents = v => (v > 0 ? Math.round(v * 100) / 100 : null);
@@ -4465,6 +4516,8 @@ function priceGuideFor(model, meta, tierOf, ethUsd = null) {
       } : null,
       // The cheapest rival's price, when it lifted the patient price; null when it did not.
       patientShelf: !isUnique && patientShelf ? r(patientShelf) : null,
+      // How far recent sales sit from the market's level, as a multiple; null when under 5%.
+      drift: drift != null ? Math.round(drift * 100) / 100 : null,
       from, mult: Math.round(mult * 100) / 100, liquidity, floored,
       tier: tier || null, topTier, comparables,
       anchor: r(anchorEth), anchorSales: model.anchorSales, anchorDays: model.anchorDays,
@@ -4501,7 +4554,9 @@ const landTierOf = meta => {
 /* Everything needed to price a token in one collection: the model, how to look a token up,
    and the rate of the moment. `indexing` means the catalogue is still being read, which is
    "ask again" and never "worth nothing". The price guide and the collection value both
-   price through here, so the two can never disagree about what an asset is worth. */
+   price through here, so the two can never disagree about what an asset is worth. The one
+   difference is deliberate: the Sell form's suggestions carry GUIDE_SELLER_LIFT, which is
+   advice to a seller, and the collection value does not, because it is a valuation. */
 async function creaturePricing() {
   const [feed, fx, daily, listIdx] = await Promise.all([
     getCreatureSalesWithArchive(), getMarketplaceFx(), getEthUsdDaily(), getBrowseIndex().catch(() => null),
@@ -4600,7 +4655,9 @@ function shapeGuides(model, tokens, lookup, tierOf, ethUsd) {
   if (!model) return { guides, unavailable: true };
   for (const id of tokens) {
     const meta = lookup(id);
-    const g = priceGuideFor(model, meta, tierOf, ethUsd);
+    // The Sell form's reply, so the suggestions carry the seller lift. The collection value
+    // prices through priceGuideFor too and passes none.
+    const g = priceGuideFor(model, meta, tierOf, ethUsd, { lift: GUIDE_SELLER_LIFT });
     if (!g) continue;
     const usd = v => (ethUsd && v > 0 ? Math.round(v * ethUsd * 100) / 100 : null);
     guides[id] = { ...g, usd: { quick: usd(g.quick), fair: usd(g.fair), patient: usd(g.patient) } };
