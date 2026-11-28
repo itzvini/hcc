@@ -632,6 +632,23 @@ h1 .pop { color: var(--hr-primary); }
 }
 .guide-room p { flex: 1 1 220px; font-size: 13px; line-height: 1.5; color: var(--hr-fg-1); }
 .guide-room .room-link { margin-top: 0; }
+.guide-room .room-art { --room-size: 48px; }
+
+/* The room's own animated icon (assets/club-room.webp, from Highrise's room preview)
+   on a rounded tile. Each <picture> swaps in the still PNG under reduced motion. */
+.room-art {
+  --room-size: 56px;
+  display: block; flex: none; overflow: hidden;
+  width: var(--room-size); height: var(--room-size);
+  border-radius: var(--hr-radius-lg);
+  border: 1px solid color-mix(in srgb, var(--hr-primary) 35%, transparent);
+  box-shadow: 0 0 18px var(--hr-primary-25), inset 0 1px 0 rgba(255,255,255,.08);
+  background: #0d0421; /* the icon's own navy, so the tile never flashes grey while loading */
+}
+.room-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* In the overview perk grid it takes the icon-disc slot (sized by .perk .ico) */
+.perk .ico.room-art { overflow: hidden; }
+.perk .ico.room-art img { width: 100%; height: 100%; filter: none; }
 @media (prefers-reduced-motion: reduce) {
   .room-link { transition: none; }
   .room-link:hover { transform: none; }
@@ -1039,6 +1056,8 @@ details .faq-body p { padding: 0; }
   opacity: .72; transition: opacity .15s ease;
 }
 .footer-mk img { width: 100%; height: 100%; object-fit: contain; display: block; }
+/* The Club Room icon brings its own navy tile: no white backing, edge to edge */
+.footer-mk.is-room { padding: 0; background: none; overflow: hidden; }
 .footer-col.is-ext a:hover .footer-mk { opacity: 1; }
 
 /* --- base bar --- */
@@ -9605,12 +9624,46 @@ textarea.appf-input { resize: vertical; min-height: 92px; line-height: 1.5; }
    white for legible contrast on the dark chip. */
 .perx-chip-discord img { width: 15px; filter: invert(1); }
 
-/* Chips that are links (Club Room / Discord) get an interactive lift */
+/* Chips that are links (Discord) get an interactive lift */
 a.perx-chip { transition: transform .2s, border-color .2s, background .2s; }
 a.perx-chip:hover {
   color: var(--hr-fg-0); transform: translateY(-2px);
   border-color: color-mix(in srgb, var(--accent) 50%, transparent);
   background: rgba(0,0,0,.42);
+}
+
+/* Members-only spaces: the Club Room preview tile above the Discord chip */
+.perx-spaces { margin-top: auto; padding-top: 8px; display: flex; flex-direction: column; gap: 10px; }
+.perx-spaces .perx-chips { margin-top: 0; padding-top: 0; }
+.room-card {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px 10px 10px;
+  border-radius: var(--hr-radius-lg);
+  background: linear-gradient(135deg, rgba(81,255,165,.08), rgba(133,97,255,.13)), rgba(0,0,0,.32);
+  border: 1px solid color-mix(in srgb, var(--hr-primary) 25%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 6px 18px rgba(0,0,0,.28);
+  color: var(--hr-fg-1);
+  transition: transform .2s, border-color .2s, box-shadow .2s;
+}
+.room-card .room-art { --room-size: 60px; }
+.room-card-txt { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.room-card-eye {
+  font: 800 9.5px/1 var(--hr-sans); color: var(--hr-primary);
+  letter-spacing: var(--hr-tracking-caps); text-transform: uppercase;
+}
+.room-card-name { font: 800 14.5px/1.2 var(--hr-sans); color: var(--hr-fg-0); }
+.room-card-go { font: 700 12px/1 var(--hr-sans); color: var(--hr-fg-2); transition: color .2s; }
+.room-card-go::after { content: " ↗"; font-weight: 900; color: var(--hr-primary); }
+.room-card:hover {
+  color: var(--hr-fg-1); transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--hr-primary) 55%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.09), 0 10px 26px var(--hr-primary-25);
+}
+.room-card:hover .room-card-go { color: var(--hr-fg-0); }
+.room-card:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  .room-card, .room-card-go { transition: none; }
+  .room-card:hover { transform: none; }
 }
 
 /* Mint CTA pill (jumps to the calculator) */
