@@ -606,6 +606,37 @@ h1 .pop { color: var(--hr-primary); }
 .perk h4 { font: 700 15px/1.3 var(--hr-sans); color: var(--hr-fg-0); margin-bottom: 4px; }
 .perk p  { font-size: 13px; color: var(--hr-fg-2); }
 
+/* Creature Club Room invite: one glass pill, used on the overview perk card and at
+   the end of the link-your-Creatures guide. Mint ring and arrow on hover. */
+.room-link {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-top: 14px; padding: 8px 14px 8px 9px;
+  border-radius: var(--hr-radius-pill);
+  background: linear-gradient(135deg, rgba(81,255,165,.10), rgba(133,97,255,.10)), rgba(0,0,0,.32);
+  border: 1px solid color-mix(in srgb, var(--hr-primary) 28%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 4px 14px rgba(0,0,0,.25);
+  font: 700 12.5px/1 var(--hr-sans); color: var(--hr-fg-0);
+  transition: transform .2s, border-color .2s, box-shadow .2s;
+}
+.room-link img { width: 18px; height: 18px; object-fit: contain; flex: none; }
+.room-link::after { content: "↗"; font-weight: 900; color: var(--hr-primary); }
+.room-link:hover {
+  color: var(--hr-fg-0); transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--hr-primary) 60%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 8px 22px var(--hr-primary-25);
+}
+.room-link:focus-visible { outline: 2px solid var(--hr-primary); outline-offset: 3px; }
+.guide-room {
+  margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--hr-line);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+}
+.guide-room p { flex: 1 1 220px; font-size: 13px; line-height: 1.5; color: var(--hr-fg-1); }
+.guide-room .room-link { margin-top: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .room-link { transition: none; }
+  .room-link:hover { transform: none; }
+}
+
 /* ---------- TOPIC ICONS (branded line-art on an accent-tinted disc) ----------
    Replaces emoji for the club's info topics. Each carrier sets --accent /
    --accent-soft inline so the glow matches the icon's own colour. */
